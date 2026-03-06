@@ -62,6 +62,14 @@ except ImportError as e:
     _MYCELIUM_OK = False
     log.warning("bifrost_local: mycelium unavailable: %s", e)
 
+try:
+    from war_room import metabolic as _metabolic
+    _METABOLIC_OK = True
+except ImportError as e:
+    _metabolic = None
+    _METABOLIC_OK = False
+    log.warning("bifrost_local: metabolic unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -121,6 +129,11 @@ def register_routes(handler_class, config):
             def _patched_emit(event, payload, source_node=None):
                 import threading
                 _orig_emit(event, payload, source_node or "")
+                # === METABOLIC: count every hook event ===
+                if _METABOLIC_OK:
+                    _metabolic.record_hook_event()
+                    if event == "task:complete":
+                        _metabolic.record_task_complete()
                 if not _PHEROMONE_OK:
                     return
                 def _drop_path():
@@ -179,6 +192,8 @@ def register_routes(handler_class, config):
             self._respond(code, data)
         elif self.path == "/mycelium" and _MYCELIUM_OK:
             self._respond(200, _mycelium.status())
+        elif self.path == "/metabolic-rate" and _METABOLIC_OK:
+            self._respond(200, _metabolic.get_rate())
         else:
             _orig_get(self)
 
@@ -197,6 +212,9 @@ def register_routes(handler_class, config):
 
             if self.path == "/memory-sync" and _MEMORY_OK:
                 code, data = _mq.handle_upsert(body)
+                if _METABOLIC_OK and code == 200:
+                    written = data.get("upserted", 0) if isinstance(data, dict) else 0
+                    _metabolic.record_memory_write(written)
                 self._respond(code, data)
             elif self.path == "/explain" and _explain:
                 code, data = _explain.handle(body)
