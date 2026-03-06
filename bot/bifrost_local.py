@@ -57,9 +57,11 @@ def register_routes(handler_class, config):
     _wire_security(handler_class, config)
     _wire_agent_docs(handler_class, config)
     _wire_metrics_shared_state(handler_class, config)
+    _wire_stand(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
              "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
-             "/reload-personality, /catch-up, /watchdog-status, /shutdown, /rate-limit-status")
+             "/reload-personality, /catch-up, /watchdog-status, /shutdown, "
+             "/rate-limit-status, /stand, /stand-status, /stand-whispers")
     # Pin models in VRAM — runs in background so startup isn't blocked
     import threading
     ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
@@ -73,6 +75,12 @@ def register_routes(handler_class, config):
         log.info("[bifrost_local] Rate limiter initialized")
     except Exception as e:
         log.warning("[bifrost_local] Rate limiter unavailable: %s", e)
+    # Start The Stand — silent background security checker
+    try:
+        import stand as _stand  # type: ignore
+        _stand.start(ollama_base)
+    except Exception as e:
+        log.warning("[bifrost_local] The Stand unavailable: %s", e)
 
 
 def _warmup_models(ollama_base: str = "http://127.0.0.1:11434"):
@@ -1157,3 +1165,63 @@ def _wire_metrics_shared_state(handler_class, config):
     handler_class.do_GET  = do_GET_ms
     handler_class.do_POST = do_POST_ms
     log.info("[bifrost_local] metrics + shared_state routes wired (%d peers)", len(peer_urls))
+
+
+# ---------------------------------------------------------------------------
+# The Stand — silent background security/hallucination checker
+# POST /stand           -- submit an /ask response for background checking
+# GET  /stand-status    -- thread alive, queue depth, whisper count
+# GET  /stand-whispers  -- read active (unconsumed) warnings
+# ---------------------------------------------------------------------------
+
+def _wire_stand(handler_class, config):
+    """Wire The Stand routes."""
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    def do_GET_stand(self):
+        if self.path == "/stand-status":
+            try:
+                import stand as _s  # type: ignore
+                _json_respond(self, 200, _s.status())
+            except ImportError:
+                _json_respond(self, 503, {"error": "stand module not loaded"})
+        elif self.path == "/stand-whispers":
+            try:
+                import stand as _s  # type: ignore
+                whispers = _s.read_whispers()
+                _json_respond(self, 200, {
+                    "whispers": whispers,
+                    "count":    len(whispers),
+                })
+            except ImportError:
+                _json_respond(self, 503, {"error": "stand module not loaded"})
+        else:
+            prev_get(self)
+
+    def do_POST_stand(self):
+        if self.path == "/stand":
+            try:
+                length   = int(self.headers.get("Content-Length", 0))
+                body     = json.loads(self.rfile.read(length)) if length else {}
+                response = body.get("response", "").strip()
+                context  = body.get("context", "")
+                node     = body.get("from", body.get("node", "unknown"))
+                if not response:
+                    _json_respond(self, 400, {"error": "response field required"}); return
+                import stand as _s  # type: ignore
+                _s.submit(response, context=context, node=node)
+                _json_respond(self, 202, {
+                    "status":      "queued",
+                    "queue_depth": _s._queue.qsize(),
+                })
+            except ImportError:
+                _json_respond(self, 503, {"error": "stand module not loaded"})
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+        else:
+            prev_post(self)
+
+    handler_class.do_GET  = do_GET_stand
+    handler_class.do_POST = do_POST_stand
+    log.info("[bifrost_local] The Stand wired: /stand, /stand-status, /stand-whispers")
