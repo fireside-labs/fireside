@@ -86,6 +86,22 @@ except ImportError as e:
     _DJ_OK = False
     log.warning("bifrost_local: dream_journal unavailable: %s", e)
 
+try:
+    from war_room import plasticity as _plasticity
+    _PLASTICITY_OK = True
+except ImportError as e:
+    _plasticity = None
+    _PLASTICITY_OK = False
+    log.warning("bifrost_local: plasticity unavailable: %s", e)
+
+try:
+    from war_room import confidence as _confidence
+    _CONFIDENCE_OK = True
+except ImportError as e:
+    _confidence = None
+    _CONFIDENCE_OK = False
+    log.warning("bifrost_local: confidence unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -248,6 +264,10 @@ def register_routes(handler_class, config):
             lim = int((qs.get("limit") or ["20"])[0])
             ev  = (qs.get("event") or [""])[0]
             self._respond(200, _dj.get_journal(limit=lim, event_filter=ev))
+        elif self.path == "/plasticity" and _PLASTICITY_OK:
+            self._respond(200, _plasticity.get_plasticity())
+        elif self.path == "/confidence" and _CONFIDENCE_OK:
+            self._respond(200, _confidence.get_confidence())
         else:
             _orig_get(self)
 
