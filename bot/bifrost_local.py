@@ -570,13 +570,29 @@ def _handle_absorb(handler, config, freya_base: str, ollama_base: str):
             dead_node=dead_node,
             memory_query_base=freya_base,
         )
-        _json_respond(handler, 200, {
-            "status":         "absorbing",
-            "dead_node":      dead_node,
-            "snapshot_age_s": round(ctx.get("snapshot_age") or 0),
+        # Audit log
+        _audit("hydra:absorb", dead_node, "warning", {
+            "absorbed_by":      "thor",
+            "snapshot_age_s":   round(ctx.get("snapshot_age") or 0),
             "absorption_status": ctx.get("status"),
-            "roles":          h.status_report()["roles"],
-            "system_prompt":  ctx.get("system_prompt_injection", "")[:200],
+            "trigger":          "manual",
+        })
+        # Drop danger pheromone on the dead node's /health resource
+        try:
+            import watchdog as _wd  # type: ignore
+            _wd._drop_pheromone(
+                freya_base, dead_node, "danger", 0.75,
+                f"manual absorb: {dead_node} unreachable"
+            )
+        except Exception:
+            pass
+        _json_respond(handler, 200, {
+            "status":            "absorbing",
+            "dead_node":         dead_node,
+            "snapshot_age_s":    round(ctx.get("snapshot_age") or 0),
+            "absorption_status": ctx.get("status"),
+            "roles":             h.status_report()["roles"],
+            "system_prompt":     ctx.get("system_prompt_injection", "")[:200],
         })
     except Exception as e:
         log.error("[hydra] /absorb error: %s", e)
@@ -600,6 +616,15 @@ def _handle_release(handler):
         _json_respond(handler, 400, {"error": "node required"}); return
 
     h.release_role(node)
+    # Audit log + reliable pheromone on release
+    _audit("hydra:release", node, "info", {
+        "released_by": "thor", "trigger": "manual",
+    })
+    try:
+        import watchdog as _wd  # type: ignore
+        _wd._drop_pheromone(freya_base, node, "reliable", 0.6, f"role released: {node}")
+    except Exception:
+        pass
     _json_respond(handler, 200, {
         "status": "released",
         "node":   node,
