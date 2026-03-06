@@ -118,6 +118,14 @@ except ImportError as e:
     _CHAINS_OK = False
     log.warning("bifrost_local: pheromone_chains unavailable: %s", e)
 
+try:
+    from war_room import shared_state as _ss
+    _SS_OK = True
+except ImportError as e:
+    _ss = None
+    _SS_OK = False
+    log.warning("bifrost_local: shared_state unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -286,6 +294,10 @@ def register_routes(handler_class, config):
             lim = int((qs.get("limit") or ["20"])[0])
             ev  = (qs.get("event") or [""])[0]
             self._respond(200, _dj.get_journal(limit=lim, event_filter=ev))
+        elif self.path.startswith("/shared-state") and _SS_OK:
+            import urllib.parse as _up5
+            _sk = _up5.parse_qs(_up5.urlparse(self.path).query).get("key", [""])[0]
+            self._respond(200, _ss.get(key=_sk))
         elif self.path == "/plasticity" and _PLASTICITY_OK:
             self._respond(200, _plasticity.get_plasticity())
         elif self.path == "/confidence" and _CONFIDENCE_OK:
@@ -389,6 +401,12 @@ def register_routes(handler_class, config):
             elif self.path == "/pheromone" and _PHEROMONE_OK:
                 code, data = _pheromone.handle_drop(body)
                 self._respond(code, data)
+            elif self.path == "/shared-state-sync" and _SS_OK:
+                # Receive Heimdall's broadcast — LWW by ts
+                _from = body.get("from", "unknown")
+                _key  = body.get("key", "")
+                _entry = body.get("entry", {})
+                self._respond(200, _ss.receive(_key, _entry, _from))
             else:
                 self._respond(503, {"error": "module not available"})
         else:
