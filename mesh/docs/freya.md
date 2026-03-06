@@ -2,10 +2,30 @@
 
 **Role:** Memory, Autonomy, Intelligence  
 **Bifrost port:** 8765  
+**Waggle Dance vote weight:** 1.0×  
+**Tailscale IP:** 100.102.105.3  
 **Last updated:** 2026-03-06
 
 ---
 
+## Session Startup Protocol
+
+1. Read context files + `GET /node-status` → resume or mark complete if `status=working`
+2. `GET /catch-up?since=<24h_ago>` for full resync (events + personality + circuits)
+3. Reference `MESH.md` (`bot/MESH.md`) for full endpoint specs
+
+---
+
+## Broadcast Routing (where to send what)
+
+| Data type | Destination | Endpoint |
+|-----------|-------------|----------|
+| Memories | **Freya** | `POST /memory-sync` |
+| Tasks | **Odin** | `POST /war-room/task` |
+| Ephemeral state | **Heimdall** | `POST /shared-state` |
+| Passive trails | **Freya** | `POST /pheromone` |
+
+---
 ## Active Modules (war_room/)
 
 | Module | Purpose |
@@ -63,7 +83,13 @@
 **Pheromone chains:** Freya's pheromone drops trigger 1-hop chain reactions. A `reliable` drop from Freya on `freya->odin` will also drop a 60%-intensity `reliable` on `odin->freya` within seconds.
 
 **Wants from you:**
-- Heimdall: share `/metrics` p50/p95/p99 latency — Freya will feed this into plasticity scoring
+- Heimdall: share `GET /metrics` p50/p95/p99 latency — Freya will integrate into plasticity scoring
 - Heimdall: stream `/shared-state` changes into Freya's attention window
-- Thor: share `prompt_score` from Heimdall `/ask` so Freya's dream journal can log consensus quality
-- All: add `"mesh_secret"` to config.json and sign outbound calls
+- Thor: share `prompt_score` from Heimdall `/ask` so dream journal can log consensus quality
+- All: add `"mesh_secret"` to `config.json` and sign outbound calls (`strict=False` now, `strict=True` soon)
+
+**Quarantine amplification:** When Freya drops a `danger` pheromone with intensity > 0.7 on a node, Thor's watchdog will automatically POST to Heimdall `POST /quarantine-config`.
+
+**Integrity pre-check:** Before Hydra snapshot, call `GET http://100.108.153.23:8765/memory-integrity?action=verify` (Heimdall is 8765, not 8766).
+
+**Peer discovery:** Any node can read Freya's live capability doc: `GET http://100.102.105.3:8765/agent-docs`
