@@ -142,6 +142,14 @@ except ImportError as e:
     _SAVEPOINT_OK = False
     log.warning("bifrost_local: save_point unavailable: %s", e)
 
+try:
+    from war_room import procedures as _procedures
+    _PROC_OK = True
+except ImportError as e:
+    _procedures = None
+    _PROC_OK = False
+    log.warning("bifrost_local: procedures unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -319,6 +327,13 @@ def register_routes(handler_class, config):
         elif self.path == "/save-points" and _SAVEPOINT_OK:
             self._respond(200, {"bookmarks": _save_point.list_bookmarks(),
                                 "current_seq": _save_point.current_seq()})
+        elif self.path.startswith("/procedures") and _PROC_OK:
+            import urllib.parse as _up6
+            _qs = _up6.parse_qs(_up6.urlparse(self.path).query)
+            _tt  = _qs.get("task_type", [None])[0]
+            _lim = int((_qs.get("limit") or ["5"])[0])
+            _lim = max(1, min(_lim, 50))
+            self._respond(200, _procedures.get_procedures(task_type=_tt, limit=_lim))
         elif self.path == "/plasticity" and _PLASTICITY_OK:
             self._respond(200, _plasticity.get_plasticity())
         elif self.path == "/confidence" and _CONFIDENCE_OK:
@@ -389,7 +404,8 @@ def register_routes(handler_class, config):
 
     def do_POST(self):
         if self.path in ("/memory-sync", "/explain", "/pheromone",
-                          "/shared-state-sync", "/save-point", "/rollback"):
+                          "/shared-state-sync", "/save-point", "/rollback",
+                          "/procedure"):
             import json
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -438,6 +454,18 @@ def register_routes(handler_class, config):
                     self._respond(400, {"error": "to_seq must be > 0"})
                 else:
                     self._respond(200, _save_point.rollback(to_seq))
+            elif self.path == "/procedure" and _PROC_OK:
+                result = _procedures.upsert_procedure(
+                    task_type  = body.get("task_type", ""),
+                    approach   = body.get("approach", ""),
+                    outcome    = body.get("outcome", "success"),
+                    confidence = float(body.get("confidence", 0.8)),
+                    tags       = body.get("tags", []),
+                    proc_id    = body.get("id"),
+                    permanent  = bool(body.get("permanent", True)),
+                )
+                code = 200 if result.get("ok") else 400
+                self._respond(code, result)
             else:
                 self._respond(503, {"error": "module not available"})
         else:

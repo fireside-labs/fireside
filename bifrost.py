@@ -1065,8 +1065,19 @@ class BifrostHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args): log.debug(fmt, *args)
 
     def do_GET(self):
+        # --- Exact-match simple routes ---
+        _simple = {
+            "/commands":          lambda: self._respond(200, _load_commands()),
+            "/cluster-status":    lambda: self._respond(200, _cluster_status()),
+            "/node-status":       lambda: self._respond(200, _read_node_status()),
+            "/workspace-manifest":lambda: self._respond(200, _build_manifest(SYNC_LOCAL_WORKSPACE)),
+        }
+        if self.path in _simple:
+            _simple[self.path]()
+            return
+
+        # --- /health — needs Ollama probe ---
         if self.path == "/health":
-            # Enhanced health with Ollama load for dynamic routing
             load_info = {"ollama_available": False}
             try:
                 with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=2) as r:
@@ -1080,91 +1091,74 @@ class BifrostHandler(BaseHTTPRequestHandler):
                     }
             except Exception:
                 pass
-            self._respond(200, {
-                "status": "ok", "node": THIS_NODE, "platform": sys.platform,
-                "war_room": WAR_ROOM_AVAILABLE,
-                "load": load_info,
-            })
-        elif self.path == "/commands":
-            self._respond(200, _load_commands())
-        elif self.path == "/cluster-status":
-            self._respond(200, _cluster_status())
-        elif self.path.startswith("/leaderboard"):
-            self._respond(*_compute_leaderboard())
-        elif self.path.startswith("/memory-query"):
+            self._respond(200, {"status": "ok", "node": THIS_NODE, "platform": sys.platform,
+                                "war_room": WAR_ROOM_AVAILABLE, "load": load_info})
+            return
+
+        # --- HTML file routes ---
+        _html = {
+            "/dashboard":  "dashboard.html",
+            "/taskboard":  "taskboard.html",
+            "/guild-hall": "guild_hall.html",
+        }
+        if self.path in _html:
+            f = BASE / _html[self.path]
+            if f.exists():
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(f.read_bytes())
+            else:
+                self._respond(404, {"error": f"{_html[self.path]} not found"})
+            return
+
+        # --- /workspace-file?path=... ---
+        if self.path.startswith("/workspace-file"):
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            rel = params.get("path", [""])[0]
+            if not rel:
+                self._respond(400, {"error": "missing path param"}); return
+            target = SYNC_LOCAL_WORKSPACE / rel.replace("/", os.sep)
+            if target.exists() and target.is_file():
+                self._respond(200, {"path": rel, "data_b64": base64.b64encode(target.read_bytes()).decode()})
+            else:
+                self._respond(404, {"error": f"file not found: {rel}"})
+            return
+
+        # --- Memory proxy routes (non-master nodes forward to Freya) ---
+        if self.path.startswith("/memory-query"):
             if THIS_NODE == MEMORY_MASTER:
-                # Master node: let bifrost_local.py handle it (or return 503 if not loaded)
                 self._respond(503, {"error": "memory master must serve via bifrost_local.py"})
             else:
                 qs = self.path.split("?", 1)[1] if "?" in self.path else ""
                 self._respond(200, _proxy_memory_query(qs))
-        elif self.path.startswith("/memory-info"):
+            return
+        if self.path.startswith("/memory-info"):
             if THIS_NODE == MEMORY_MASTER:
                 self._respond(503, {"error": "memory master must serve via bifrost_local.py"})
             else:
                 self._respond(200, _proxy_memory_query("__info__"))
+            return
 
         # --- Valhalla War Room GET routes ---
-        elif self.path.startswith("/war-room/read") and _war_room_routes:
-            code, data = _war_room_routes.handle_read(self.path)
-            self._respond(code, data)
-        elif self.path.startswith("/war-room/tasks") and _war_room_routes:
-            code, data = _war_room_routes.handle_get_tasks(self.path)
-            self._respond(code, data)
-        elif self.path == "/war-room/summary" and _war_room_routes:
-            code, data = _war_room_routes.handle_summary()
-            self._respond(code, data)
-        elif self.path == "/ask/info" and _war_room_routes:
-            code, data = _war_room_routes.handle_ask_info()
-            self._respond(code, data)
-        elif self.path == "/node-status":
-            self._respond(200, _read_node_status())
-        elif self.path == "/dashboard":
-            dash = BASE / "dashboard.html"
-            if dash.exists():
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(dash.read_bytes())
-            else:
-                self._respond(404, {"error": "dashboard.html not found"})
-        elif self.path == "/taskboard":
-            tb = BASE / "taskboard.html"
-            if tb.exists():
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(tb.read_bytes())
-            else:
-                self._respond(404, {"error": "taskboard.html not found"})
-        elif self.path == "/guild-hall":
-            gh = BASE / "guild_hall.html"
-            if gh.exists():
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(gh.read_bytes())
-            else:
-                self._respond(404, {"error": "guild_hall.html not found"})
-        elif self.path == "/workspace-manifest":
-            # Serve Odin's workspace manifest (all tracked file hashes)
-            manifest = _build_manifest(SYNC_LOCAL_WORKSPACE)
-            self._respond(200, manifest)
-        elif self.path.startswith("/workspace-file"):
-            # Serve a specific workspace file
-            parsed = urllib.parse.urlparse(self.path)
-            params = urllib.parse.parse_qs(parsed.query)
-            rel = params.get("path", [""])[0]
-            if not rel:
-                self._respond(400, {"error": "missing path param"})
-            else:
-                target = SYNC_LOCAL_WORKSPACE / rel.replace("/", os.sep)
-                if target.exists() and target.is_file():
-                    self._respond(200, {"path": rel, "data_b64": base64.b64encode(target.read_bytes()).decode()})
-                else:
-                    self._respond(404, {"error": f"file not found: {rel}"})
-        else:
-            self._respond(404, {"error": "not found"})
+        if _war_room_routes:
+            _wr_exact = {
+                "/war-room/summary": lambda: _war_room_routes.handle_summary(),
+                "/ask/info":         lambda: _war_room_routes.handle_ask_info(),
+            }
+            if self.path in _wr_exact:
+                code, data = _wr_exact[self.path]()
+                self._respond(code, data); return
+            if self.path.startswith("/war-room/tasks"):
+                code, data = _war_room_routes.handle_get_tasks(self.path)
+                self._respond(code, data); return
+            if self.path.startswith("/war-room/read"):
+                code, data = _war_room_routes.handle_read(self.path)
+                self._respond(code, data); return
+        if self.path.startswith("/leaderboard"):
+            self._respond(*_compute_leaderboard()); return
+
+        self._respond(404, {"error": "not found"})
 
     def do_POST(self):
         try:
@@ -1500,7 +1494,7 @@ def _check_single_instance():
 class TaskPoller:
     """Background daemon that polls War Room for tasks assigned to this node."""
 
-    POLL_INTERVAL = 300  # 5 minutes
+    POLL_INTERVAL = 60  # 1 minute — responsive task pickup
     _active_tasks: set  # track in-flight task IDs
 
     def __init__(self, node_name: str, port: int = LISTEN_PORT):

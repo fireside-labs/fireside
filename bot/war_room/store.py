@@ -241,6 +241,37 @@ class WarRoomStore:
             self._save_tasks()
             return task
 
+    def delete_task(self, task_id: str) -> dict:
+        """Permanently remove a task from the board. Returns the deleted task."""
+        with self._lock:
+            task = self._tasks.pop(task_id, None)
+            if task is None:
+                raise KeyError(f"Task {task_id} not found")
+            parent_id = task.get("parent_id")
+            if parent_id and parent_id in self._tasks:
+                subs = self._tasks[parent_id].setdefault("subtask_ids", [])
+                if task_id in subs:
+                    subs.remove(task_id)
+            self._save_tasks()
+            return task
+
+    def delete_message(self, msg_id: str) -> dict:
+        """Permanently remove a message. Returns the deleted message."""
+        with self._lock:
+            msg = self._messages.pop(msg_id, None)
+            if msg is None:
+                raise KeyError(f"Message {msg_id} not found")
+            self._save_messages()
+            return msg
+
+    def clear_messages(self) -> int:
+        """Delete all messages. Returns count deleted."""
+        with self._lock:
+            count = len(self._messages)
+            self._messages.clear()
+            self._save_messages()
+            return count
+
     def get_tasks(
         self,
         status: Optional[str] = None,

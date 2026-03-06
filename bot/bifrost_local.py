@@ -25,7 +25,7 @@ if str(BASE) not in sys.path:
 def register_routes(handler_class, config):
     """Called by bifrost._load_local_extensions() at startup."""
     _wire_memory(handler_class)
-    log.info("[bifrost_local] Freya extensions registered: /memory-sync /memory-query /memory-info /shared-state-sync /shared-state")
+    log.info("[bifrost_local] Freya extensions registered: /memory-sync /memory-query /memory-info")
 
 
 def _wire_memory(handler_class):
@@ -40,46 +40,17 @@ def _wire_memory(handler_class):
     original_do_get  = handler_class.do_GET
     original_do_post = handler_class.do_POST
 
-    # Load shared_state module once — use importlib to avoid sys.path issues after self-update re-exec
-    try:
-        import importlib.util as _ilu
-        _ss_path = BASE / "war_room" / "shared_state.py"
-        _ss_spec = _ilu.spec_from_file_location("war_room.shared_state", str(_ss_path))
-        _ss = _ilu.module_from_spec(_ss_spec)
-        _ss_spec.loader.exec_module(_ss)
-        log.info("[bifrost_local] shared_state loaded from %s", _ss_path)
-    except Exception as e:
-        log.warning("[bifrost_local] shared_state unavailable: %s", e)
-        _ss = None
-
     def do_GET_extended(self):
         if self.path.startswith("/memory-query"):
             _handle_memory_query(self, _mq)
         elif self.path.startswith("/memory-info"):
             _handle_memory_info(self, _mq)
-        elif self.path.startswith("/shared-state") and _ss is not None:
-            from urllib.parse import urlparse, parse_qs
-            _key = parse_qs(urlparse(self.path).query).get("key", [""])[0]
-            _json_respond(self, 200, _ss.get(key=_key))
         else:
             original_do_get(self)
 
     def do_POST_extended(self):
         if self.path == "/memory-sync":
             _handle_memory_write(self, _mq)
-        elif self.path == "/shared-state-sync":
-            if _ss is None:
-                _json_respond(self, 503, {"error": "shared_state module not loaded"})
-                return
-            import json as _j
-            _length = int(self.headers.get("Content-Length", 0))
-            _body   = _j.loads(self.rfile.read(_length))
-            _result = _ss.receive(
-                key       = _body.get("key", ""),
-                entry     = _body.get("entry", {}),
-                from_node = _body.get("from", "unknown"),
-            )
-            _json_respond(self, 200, _result)
         else:
             original_do_post(self)
 
@@ -138,8 +109,8 @@ def _handle_memory_write(handler, mq):
 
 
 def _json_respond(handler, code, data):
-    body = json.dumps(data).encode()
+    body = json.dumps(data, ensure_ascii=False).encode('utf-8')
     handler.send_response(code)
-    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.end_headers()
     handler.wfile.write(body)
