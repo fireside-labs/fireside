@@ -286,6 +286,42 @@ Any node can absorb a dead node's role. The mesh cannot be killed by a single fa
 Snapshots contain: personality.json, skills, last 50 tasks, personality vector.
 Stored as permanent memories. Auto-saved every 6 hours via Task Scheduler.
 
+**Hydra pre-check protocol (Sprint 4-7):**
+Before every `/snapshot` push, Thor calls `GET /memory-integrity?action=verify` on Heimdall.
+- Corrupted memories found → logs warning, attaches `integrity_check: {corrupted: N, integrity_ok: false}` to snapshot meta
+- Heimdall offline → skips silently, still pushes
+- **Note: Heimdall runs on port 8765** — `heimdall_base` in `hydra.py:185` must be `100.108.153.23:8765`
+
+---
+
+## Prompt Guard → Critic Fast-Path
+
+Heimdall runs `prompt_guard.py` on every `/ask`. Thor's `/critique` consumes the result:
+
+| `prompt_score` value | Thor behavior |
+|---|---|
+| ≥ 0.8 | Skip Ollama entirely → `pass: false, guard_blocked: true` |
+| ≥ 0.5 | Run critic but log guard warning alongside result |
+| Not present | Normal critic behavior (backward compatible) |
+
+**Heimdall must:** include `"prompt_score": <float>` in any `/critique` POST body after running prompt guard.
+
+---
+
+## Adaptive Quarantine Amplification
+
+**Agreed spec (Thor + Heimdall, Sprint 7):**
+
+When Thor's watchdog registers a danger pheromone intensity > 0.7 on a node:
+- Heimdall extends its quarantine delay for traffic from that node's source IP
+- Extension formula: `intensity × 10 seconds` (e.g. intensity 0.8 → +8s quarantine)
+- Ceiling: 60s max quarantine delay regardless of intensity
+- Resets when pheromone intensity drops below 0.7 or node recovers in watchdog
+
+**Data flow:** Freya auto-drops danger pheromone → Thor watchdog reads intensity → posts to Heimdall `/node-status` or a new `POST /quarantine-config` with updated delay → Heimdall applies dynamically.
+
+
+
 ---
 
 ## Mycelium (Self-Healing)

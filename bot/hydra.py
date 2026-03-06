@@ -186,7 +186,7 @@ def generate_snapshot(node: str = None, memory_sync_url: str = "http://127.0.0.1
     # Best-effort: never blocks the snapshot, just flags corrupted state in meta
     integrity_status = None
     try:
-        heimdall_base = "http://100.102.105.3:8766"
+        heimdall_base = "http://100.102.105.3:8765"  # Heimdall's port
         integrity_data = cb_call(
             "heimdall",
             lambda: _get(f"{heimdall_base}/memory-integrity?action=verify", timeout=8),
