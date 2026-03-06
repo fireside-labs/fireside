@@ -348,6 +348,8 @@ class HookEngine:
                 self._handler_heimdall_audit(event, payload, source_node)
             elif handler == "memory_write":
                 self._handler_memory_write(event, payload, source_node)
+            elif handler == "crispr_extract":
+                self._handler_crispr_extract(event, payload, source_node)
             elif handler == "log_only":
                 log.info("[hook] %s from %s: %s", event, source_node, payload)
             else:
@@ -450,6 +452,50 @@ class HookEngine:
             log.info("[hook:memory_write] Wrote memory for %s: %s", source_node, text[:60])
         except Exception as e:
             log.debug("[hook:memory_write] %s", e)
+
+    def _handler_crispr_extract(self, event: str, payload: dict, source_node: str):
+        """CRISPR: extract a reusable pattern from successful task completions
+        and inject it as a permanent shared memory for all agents."""
+        detail = payload.get("detail") or payload.get("message") or payload.get("task") or ""
+        if not detail or len(detail) < 20:
+            return  # Too short to extract a meaningful pattern
+        # Ask local model to extract a reusable pattern
+        prompt = (
+            f"Extract a reusable lesson from this completed task. "
+            f"Format EXACTLY as: WHEN <situation> DO <approach> BECAUSE <reason>\n\n"
+            f"Completed task by {source_node}: {detail[:500]}\n\n"
+            f"Return ONLY the single-line WHEN/DO/BECAUSE pattern. No explanation."
+        )
+        try:
+            ask_body = json.dumps({
+                "from": "system", "prompt": prompt,
+                "system": "You extract reusable patterns. Return only WHEN/DO/BECAUSE format.",
+                "model": "local", "max_tokens": 200,
+            }).encode()
+            req = urllib.request.Request(
+                "http://127.0.0.1:8765/ask", data=ask_body,
+                headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=45) as r:
+                result = json.loads(r.read())
+                pattern = result.get("response", "").strip()
+            if not pattern or len(pattern) < 15:
+                return
+            # Write as permanent CRISPR memory
+            mem_body = json.dumps({"memories": [{
+                "node": source_node,
+                "content": f"[CRISPR] {pattern}",
+                "importance": 0.95,
+                "tags": ["crispr", "skill-transfer", "permanent"],
+                "permanent": True,
+            }]}).encode()
+            url = _memory_master_url("/memory-sync")
+            req2 = urllib.request.Request(
+                url, data=mem_body,
+                headers={"Content-Type": "application/json"}, method="POST")
+            urllib.request.urlopen(req2, timeout=10)
+            log.info("[hook:crispr] Extracted pattern from %s: %s", source_node, pattern[:80])
+        except Exception as e:
+            log.debug("[hook:crispr] %s", e)
 
 
 _hooks = HookEngine()
@@ -962,9 +1008,24 @@ class BifrostHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
+            # Enhanced health with Ollama load for dynamic routing
+            load_info = {"ollama_available": False}
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=2) as r:
+                    ps = json.loads(r.read())
+                    models = ps.get("models", [])
+                    load_info = {
+                        "ollama_available": True,
+                        "models_loaded": len(models),
+                        "active_models": [m.get("name", "?") for m in models],
+                        "total_vram_gb": sum(m.get("size_vram", 0) for m in models) / (1024**3),
+                    }
+            except Exception:
+                pass
             self._respond(200, {
                 "status": "ok", "node": THIS_NODE, "platform": sys.platform,
                 "war_room": WAR_ROOM_AVAILABLE,
+                "load": load_info,
             })
         elif self.path == "/commands":
             self._respond(200, _load_commands())
