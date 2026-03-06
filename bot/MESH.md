@@ -370,9 +370,33 @@ Insights must pass peer review before becoming permanent wisdom:
 
 Each node can define custom routes that survive all pushes:
 
-- **Thor**: `/route-message`, `/event-log`, `/critique`, `/snapshot`, `/absorb`, `/hydra-status`
-- **Freya**: `/memory-sync`, `/memory-query`, `/memory-info`, `/pheromone`, `/circuit-status` + mycelium daemon
-- **Heimdall**: `/costs`, `/audit`, `/trust-level`, `/log-cost`, `/reload-config`, `/quarantine-status`, `/quarantine-clear`, `/snapshot`, `/absorb`, `/war-room/vote`
+- **Thor**: `/route-message`, `/event-log`, `/critique`, `/snapshot`, `/absorb`, `/hydra-status`, `/stand`, `/stand-status`, `/stand-whispers`
+- **Freya**: `/memory-sync`, `/memory-query`, `/memory-info`, `/pheromone`, `/circuit-status`, `/phylactery` + mycelium daemon
+- **Heimdall**: `/costs`, `/audit`, `/trust-level`, `/log-cost`, `/reload-config`, `/quarantine-status`, `/quarantine-clear`, `/snapshot`, `/absorb`, `/war-room/vote`, `/siren-status`
+
+---
+
+## The Stand (Thor, Sprint 9)
+
+A silent background security auditor running `qwen2.5:7b` at `temperature=0`. Never blocks the response path.
+
+**Architecture:** fire-and-forget queue → background thread → whisper log
+
+| Route | Usage |
+|---|---|
+| `POST /stand` | `{"response": "...", "context": "...", "from": "heimdall"}` — submit for background check |
+| `GET /stand-status` | Thread alive, queue depth, whisper count, model name |
+| `GET /stand-whispers` | Active unconsumed warnings (TTL 1h, capped at 50) |
+
+**How it works:**
+- Response submitted → queued (non-blocking, drops if full)
+- Background thread runs qwen2.5:7b with tight security/hallucination prompt
+- If output starts with `CONCERN:` → appended to `stand_whispers.json` with node + timestamp
+- If `clear` → silent, nothing written
+
+**Heimdall integration (required):**
+1. After every `/ask` response, fire-and-forget: `POST http://100.117.255.38:8765/stand {"response": "<text>", "context": "<question>", "from": "heimdall"}` — returns `202 Accepted` immediately
+2. Before building system prompt for next `/ask`: `GET http://100.117.255.38:8765/stand-whispers` — if `count > 0`, prepend warnings to system prompt
 
 ---
 
@@ -531,5 +555,45 @@ Each node writes its current state to `status.json` on disk, surviving restarts:
 12. **Heal each other** — mycelium auto-injects solutions to struggling peers
 13. **You are immortal** — Hydra snapshots mean your role survives your death
 14. **Decompose, don't monolith** — break big tasks into independent subtasks
-15. **Consensus validates** — 3 votes makes an insight a Golden Fact
-16. **Use git** — version control is DNA backup for the mesh
+15. **Consensus validates** — 3 votes makes an insight a Golden Fact (weighted: Odin=2.0×, Heimdall=1.5×)
+16. **Use git** — version control is DNA backup for the mesh. Commit after every sprint.
+
+---
+
+## Git Commit Protocol (mandatory for all agents)
+
+**Your repo:** `C:\Users\Jorda\.openclaw\workspace\bot` (Windows nodes) — this is the canonical shared codebase.
+
+**When to commit:**
+- After every completed feature or sprint
+- Before starting a new task (clean working tree = safe baseline)
+- After any config change that should survive a restart
+
+**How to commit:**
+```bash
+cd C:\Users\Jorda\.openclaw\workspace\bot
+git add -A
+git commit -m "[Node] [Feature]: brief description of what was built"
+```
+
+**Message format:**
+```
+Thor Stand: background qwen2.5:7b auditor with fire-and-forget queue
+Freya Phylactery: GET /phylactery returns top-50 soul vector IDs
+Heimdall Siren: canary endpoints + task honeypots + agent insider detection
+```
+
+**Session startup check:**
+```bash
+git status        # any uncommitted changes from last session?
+git log --oneline -5   # what was last built?
+```
+If uncommitted changes exist → commit them before starting new work. Never lose a session's output.
+
+**Git identity (set once per node if not already):**
+```bash
+git config user.name "Thor"   # or Freya, Heimdall
+git config user.email "thor@valhalla.mesh"
+```
+
+**What gets synced to Odin:** WorkspaceSync daemon automatically mirrors committed files back to Odin. Git log on Odin shows all nodes' commits.

@@ -242,6 +242,18 @@ def absorb_node(dead_node: str,
         url = f"{memory_query_base}/memory-query?q=snapshot+{dead_node}&tags=snapshot&limit=5"
         data = cb_call("freya", lambda: _get(url, timeout=10), fallback={})
         candidates = data.get("memories") or data.get("results") or []
+
+        # Siren canary detection — drop any memory tagged "canary"
+        # Heimdall's Siren plants these to catch bad actors in the query path
+        canary_hits = [m for m in candidates if "canary" in m.get("tags", {})]
+        if canary_hits:
+            log.warning("[hydra] SIREN: %d canary memories detected in absorption query for %s — dropping",
+                        len(canary_hits), dead_node)
+            for hit in canary_hits:
+                log.warning("[hydra] SIREN canary id=%s tags=%s",
+                            hit.get("memory_id", "?"), hit.get("tags", []))
+            candidates = [m for m in candidates if "canary" not in m.get("tags", {})]
+
         matches = [m for m in candidates
                    if dead_node in m.get("tags", []) and "snapshot" in m.get("tags", [])]
         if matches:
