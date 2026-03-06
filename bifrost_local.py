@@ -110,6 +110,14 @@ except ImportError as e:
     _SKILLS_OK = False
     log.warning("bifrost_local: skills unavailable: %s", e)
 
+try:
+    from war_room import pheromone_chains as _chains
+    _CHAINS_OK = True
+except ImportError as e:
+    _chains = None
+    _CHAINS_OK = False
+    log.warning("bifrost_local: pheromone_chains unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -191,6 +199,9 @@ def register_routes(handler_class, config):
                                 reason = f"task:complete — {detail[:80]}"
                             )
                             log.debug("[slime] reliable on %s", path)
+                            # Chain reaction
+                            if _CHAINS_OK:
+                                _chains.trigger_chain(_pheromone, path, "reliable", 0.6, node_a)
                         elif event in ("node:error", "sync:failed", "model:fallback"):
                             error = (payload.get("error") or
                                      payload.get("reason") or event)
@@ -202,6 +213,9 @@ def register_routes(handler_class, config):
                                 reason = f"{event} — {str(error)[:80]}"
                             )
                             log.debug("[slime] danger on %s", path)
+                            # Chain reaction
+                            if _CHAINS_OK:
+                                _chains.trigger_chain(_pheromone, path, "danger", 0.5, node_a)
                         elif event == "ask:success":
                             detail = payload.get("model") or payload.get("detail") or ""
                             _pheromone.drop(
@@ -280,6 +294,23 @@ def register_routes(handler_class, config):
             import urllib.parse as _up2
             _cat = _up2.parse_qs(_up2.urlparse(self.path).query).get("category", [""])[0]
             self._respond(200, _skills.get_skills(category=_cat))
+        elif self.path.startswith("/memory-provenance") and _MEMORY_OK:
+            import urllib.parse as _up3
+            _mid = _up3.parse_qs(_up3.urlparse(self.path).query).get("id", [""])[0]
+            if not _mid:
+                self._respond(400, {"error": "id parameter required"})
+            else:
+                # Search for memories that contain derived_from:<id> or reference it in tags
+                _tag = f"derived_from:{_mid}"
+                _res = _mq.query_memories(_tag, limit=20)
+                _derived = [m for m in _res.get("memories", [])
+                            if any(_mid in str(t) for t in (m.get("tags") or []))
+                            or _tag in m.get("content", "")]
+                self._respond(200, {
+                    "source_id":   _mid,
+                    "derived":     _derived,
+                    "total":       len(_derived),
+                })
         else:
             _orig_get(self)
 
