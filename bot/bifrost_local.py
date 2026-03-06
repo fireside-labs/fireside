@@ -52,6 +52,35 @@ def register_routes(handler_class, config):
     _wire_critique(handler_class, config)
     _wire_hydra(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, /critique, /snapshot, /absorb, /hydra-status")
+    # Pin models in VRAM — runs in background so startup isn't blocked
+    import threading
+    ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
+    threading.Thread(target=_warmup_models, args=(ollama_base,), daemon=True).start()
+
+
+def _warmup_models(ollama_base: str = "http://127.0.0.1:11434"):
+    """
+    Keep qwen3.5:35b and nomic-embed-text pinned in VRAM.
+    keep_alive=-1 means Ollama never unloads them.
+    """
+    import time
+    time.sleep(5)   # let bifrost finish starting before hammering Ollama
+    models = [
+        ("qwen3.5:35b",        {"model": "qwen3.5:35b",        "prompt": ".", "keep_alive": -1, "stream": False}),
+        ("nomic-embed-text",   {"model": "nomic-embed-text",   "prompt": ".", "keep_alive": -1}),
+    ]
+    for name, payload in models:
+        endpoint = f"{ollama_base}/api/generate" if name != "nomic-embed-text" else f"{ollama_base}/api/embeddings"
+        try:
+            data = json.dumps(payload).encode()
+            req = urllib.request.Request(endpoint, data=data,
+                                         headers={"Content-Type": "application/json"},
+                                         method="POST")
+            with urllib.request.urlopen(req, timeout=120) as r:
+                r.read()
+            log.info("[bifrost_local] Model pinned in VRAM: %s (keep_alive=-1)", name)
+        except Exception as e:
+            log.warning("[bifrost_local] Could not warm up %s: %s", name, e)
 
 
 # ---------------------------------------------------------------------------
