@@ -54,15 +54,23 @@ def register_routes(handler_class, config):
     _wire_hydra(handler_class, config)
     _wire_hardening(handler_class, config)
     _wire_watchdog_shutdown(handler_class, config)
+    _wire_security(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
              "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
-             "/reload-personality, /catch-up, /watchdog-status, /shutdown")
+             "/reload-personality, /catch-up, /watchdog-status, /shutdown, /rate-limit-status")
     # Pin models in VRAM — runs in background so startup isn't blocked
     import threading
     ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
     threading.Thread(target=_warmup_models, args=(ollama_base,), daemon=True).start()
     # Start watchdog — auto-absorb dead peers
     _start_watchdog(config)
+    # Init rate limiter
+    try:
+        import rate_limiter as _rl  # type: ignore
+        _rl.init(config)
+        log.info("[bifrost_local] Rate limiter initialized")
+    except Exception as e:
+        log.warning("[bifrost_local] Rate limiter unavailable: %s", e)
 
 
 def _warmup_models(ollama_base: str = "http://127.0.0.1:11434"):
@@ -910,3 +918,80 @@ def _handle_shutdown(handler, config):
         os._exit(0)
 
     threading.Thread(target=_deferred_shutdown, daemon=True, name="shutdown").start()
+
+
+# ---------------------------------------------------------------------------
+# Sprint 6: Rate Limiting + HMAC Signing
+# GET  /rate-limit-status  -- bucket states for all active IPs
+# POST routes wrapped with token bucket (per source IP) and HMAC soft-verify
+# ---------------------------------------------------------------------------
+
+# Routes that get rate-limited and their RPM caps (from rate_limiter defaults)
+_RATE_LIMITED_POSTS = {"/critique", "/route-message", "/snapshot", "/absorb"}
+# Routes that get HMAC soft-verified (log warning but allow if no sig present)
+_SIGNED_POSTS = {"/absorb", "/absorb/release", "/shutdown", "/snapshot"}
+
+
+def _wire_security(handler_class, config):
+    """Layer rate limiting and HMAC verification over the existing POST handler."""
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    def do_GET_sec(self):
+        if self.path == "/rate-limit-status":
+            try:
+                import rate_limiter as _rl  # type: ignore
+                rl = _rl.get()
+                _json_respond(self, 200, rl.status() if rl else {"error": "not initialized"})
+            except ImportError:
+                _json_respond(self, 503, {"error": "rate_limiter not available"})
+        else:
+            prev_get(self)
+
+    def do_POST_sec(self):
+        # Derive client IP
+        client_ip = (getattr(self, "client_address", ("unknown",))[0])
+        path      = self.path.split("?")[0]
+
+        # --- Rate limiting ---
+        if path in _RATE_LIMITED_POSTS:
+            try:
+                import rate_limiter as _rl  # type: ignore
+                rl = _rl.get()
+                if rl:
+                    allowed, info = rl.check(path, client_ip)
+                    if not allowed:
+                        _json_respond(self, 429, {
+                            "error":         "rate limit exceeded",
+                            "retry_after_s": info.get("retry_after_s", 60),
+                            "route":         path,
+                            "limit_rpm":     info.get("capacity"),
+                        })
+                        return
+            except Exception as e:
+                log.debug("[security] Rate limiter check failed: %s", e)
+
+        # --- HMAC soft-verify (log warning, don't block yet) ---
+        if path in _SIGNED_POSTS:
+            try:
+                # Peek at body without consuming it from the stream
+                length = int(self.headers.get("Content-Length", 0))
+                if length > 0:
+                    body = self.rfile.read(length)
+                    # Re-inject body so downstream handler can read it
+                    import io
+                    self.rfile = io.BytesIO(body)
+                    from signing import verify_or_log  # type: ignore
+                    sender = verify_or_log(self, body, config)
+                    log.debug("[security] %s from %s (sig=%s)",
+                              path, sender,
+                              "present" if self.headers.get("X-Bifrost-Sig") else "absent")
+            except Exception as e:
+                log.debug("[security] Signing check error: %s", e)
+
+        prev_post(self)
+
+    handler_class.do_GET  = do_GET_sec
+    handler_class.do_POST = do_POST_sec
+    log.info("[bifrost_local] Security: rate limiting on %s, HMAC soft-verify on %s",
+             sorted(_RATE_LIMITED_POSTS), sorted(_SIGNED_POSTS))
