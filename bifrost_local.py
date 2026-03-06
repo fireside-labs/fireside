@@ -543,6 +543,33 @@ def register_routes(handler_class, config):
                     _orig_post(self)  # let Bifrost process the task normally
                 except Exception:
                     _orig_post(self)
+            elif self.path == "/war-room/complete" and _PROC_OK:
+                # Intercept to auto-record procedures on task completion
+                import io as _io3, json as _json3
+                try:
+                    length3 = int(self.headers.get("Content-Length", 0))
+                    body_bytes3 = self.rfile.read(length3) if length3 else b"{}"
+                    self.rfile = _io3.BytesIO(body_bytes3)
+                    try:
+                        _comp = _json3.loads(body_bytes3)
+                        _approach  = (_comp.get("approach") or "").strip()
+                        _task_type = (_comp.get("task_type") or "").strip()
+                        _outcome   = _comp.get("status", "completed")
+                        if _approach and _task_type:
+                            _procedures.auto_record(
+                                task_type  = _task_type,
+                                approach   = _approach,
+                                outcome    = "success" if _outcome == "completed" else _outcome,
+                                confidence = 0.8,
+                                tags       = _comp.get("tags", []),
+                            )
+                            log.info("[auto_record] procedure captured: %s → %.40s",
+                                     _task_type, _approach)
+                    except Exception as _ar_ex:
+                        log.debug("[auto_record] skip (non-critical): %s", _ar_ex)
+                    _orig_post(self)
+                except Exception:
+                    _orig_post(self)
             else:
                 _orig_post(self)
 

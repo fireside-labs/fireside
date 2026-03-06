@@ -1065,6 +1065,16 @@ class BifrostHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args): log.debug(fmt, *args)
 
     def do_GET(self):
+        try:
+            self._do_GET_inner()
+        except Exception as e:
+            log.exception("Unhandled error in do_GET %s: %s", self.path, e)
+            try:
+                self._respond(500, {"error": str(e)})
+            except Exception:
+                pass
+
+    def _do_GET_inner(self):
         # --- Exact-match simple routes ---
         _simple = {
             "/commands":          lambda: self._respond(200, _load_commands()),

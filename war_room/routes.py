@@ -11,6 +11,9 @@ from urllib.parse import parse_qs, urlparse
 from .store import WarRoomStore
 from .ask import AskHandler
 
+from .node_state import write_node_status
+
+
 log = logging.getLogger("war-room.routes")
 
 
@@ -62,6 +65,13 @@ class WarRoomRoutes:
         """GET /ask/info — returns this node's model capabilities."""
         return 200, self.ask.info()
 
+    def handle_tombstones(self, path: str) -> tuple[int, dict]:
+        """GET /war-room/tombstones?since=<iso> — returns deleted IDs since timestamp."""
+        from urllib.parse import urlparse, parse_qs
+        params = parse_qs(urlparse(path).query)
+        since = params.get("since", [None])[0]
+        return 200, self.store.get_tombstones(since=since)
+
     # ------------------------------------------------------------------
     # POST handlers — take body dict, return (status_code, response_dict)
     # ------------------------------------------------------------------
@@ -73,9 +83,16 @@ class WarRoomRoutes:
         if missing:
             return 400, {"error": f"Missing required fields: {missing}"}
 
+        # --- Semantic routing via Thor's /route-message ---
+        # If sender didn't specify a `to` target, ask Thor's router
+        # which agents should receive this message based on semantic match.
+        to_field = body.get("to", "")
+        if not to_field or to_field == "all":
+            to_field = self._semantic_route(body)
+
         msg = self.store.post_message(
             from_agent=body["from"],
-            to=body.get("to", "all"),
+            to=to_field,
             msg_type=body.get("type", "update"),
             subject=body.get("subject", ""),
             body=body["body"],
@@ -85,6 +102,33 @@ class WarRoomRoutes:
                  msg["from"], msg["to"], msg["type"], msg["subject"])
         return 200, msg
 
+    def _semantic_route(self, body: dict) -> str:
+        """Ask Thor's semantic router for the best target agents.
+        Returns comma-separated agent names, or 'all' on failure."""
+        import json
+        import urllib.request
+        THOR_ROUTE_URL = "http://100.117.255.38:8765/route-message"
+        try:
+            payload = json.dumps({
+                "from": body.get("from", "unknown"),
+                "body": body.get("body", ""),
+                "subject": body.get("subject", ""),
+            }).encode()
+            req = urllib.request.Request(
+                THOR_ROUTE_URL, data=payload,
+                headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=3) as r:
+                result = json.loads(r.read())
+                targets = result.get("targets", [])
+                if targets:
+                    routed = ",".join(targets)
+                    log.info("[semantic-route] %s -> %s", body.get("from"), routed)
+                    return routed
+        except Exception as e:
+            log.debug("[semantic-route] Thor unreachable, broadcasting: %s", e)
+        return "all"
+
+
     def handle_post_task(self, body: dict) -> tuple[int, dict]:
         """POST /war-room/task"""
         required = ["title", "posted_by"]
@@ -92,16 +136,82 @@ class WarRoomRoutes:
         if missing:
             return 400, {"error": f"Missing required fields: {missing}"}
 
+        decompose = body.get("decompose", False)
         task = self.store.post_task(
             title=body["title"],
             description=body.get("description", ""),
             posted_by=body["posted_by"],
             assigned_to=body.get("assigned_to"),
             affinity=body.get("affinity"),
+            decompose=decompose,
+            parent_id=body.get("parent_id"),
         )
-        log.info("Task posted: %s by %s (affinity: %s)",
-                 task["title"], task["posted_by"], task.get("affinity"))
+        log.info("Task posted: %s by %s (decompose: %s)",
+                 task["title"], task["posted_by"], decompose)
+
+        # Octopus: if decompose=true, auto-generate subtasks in background
+        if decompose and not body.get("parent_id"):
+            import threading
+            threading.Thread(
+                target=self._auto_decompose,
+                args=(task,),
+                daemon=True,
+                name=f"decompose-{task['id']}"
+            ).start()
+
         return 200, task
+
+    def _auto_decompose(self, parent_task: dict):
+        """Break a task into 3-5 subtasks using /ask, then post them as children."""
+        import json
+        import urllib.request
+        prompt = (
+            f"Break this task into 3-5 concrete subtasks. "
+            f"Return ONLY a JSON array of objects with 'title' and 'description' fields.\n\n"
+            f"Task: {parent_task['title']}\n"
+            f"Description: {parent_task.get('description', 'No description')}\n\n"
+            f"Example: [{{'title':'Step 1','description':'Do X'}},{{'title':'Step 2','description':'Do Y'}}]"
+        )
+        try:
+            ask_body = json.dumps({
+                "from": parent_task["posted_by"],
+                "prompt": prompt,
+                "system": "You are a task planner. Return only valid JSON. No markdown, no explanation.",
+                "model": "local",
+                "max_tokens": 1000,
+            }).encode()
+            req = urllib.request.Request(
+                "http://127.0.0.1:8765/ask",
+                data=ask_body,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=60) as r:
+                result = json.loads(r.read())
+                response_text = result.get("response", "[]")
+                # Extract JSON array from response
+                start = response_text.find("[")
+                end = response_text.rfind("]") + 1
+                if start >= 0 and end > start:
+                    subtasks = json.loads(response_text[start:end])
+                else:
+                    subtasks = []
+
+            for sub in subtasks[:5]:
+                self.store.post_task(
+                    title=sub.get("title", "Subtask"),
+                    description=sub.get("description", ""),
+                    posted_by=parent_task["posted_by"],
+                    assigned_to=parent_task.get("assigned_to"),
+                    affinity=parent_task.get("affinity", []),
+                    parent_id=parent_task["id"],
+                )
+            log.info("[octopus] Decomposed '%s' into %d subtasks",
+                     parent_task["title"], len(subtasks[:5]))
+        except Exception as e:
+            log.error("[octopus] Failed to decompose task '%s': %s",
+                      parent_task["title"], e)
+
 
     def handle_claim_task(self, body: dict) -> tuple[int, dict]:
         """POST /war-room/claim"""
@@ -113,6 +223,10 @@ class WarRoomRoutes:
         try:
             task = self.store.claim_task(task_id, agent_id)
             log.info("Task %s claimed by %s", task_id, agent_id)
+            try:
+                write_node_status("working", last_task=task.get("title", task_id), detail=f"Claimed task: {task.get('title', '')}")
+            except Exception as _e:
+                log.debug("node_status update failed: %s", _e)
             return 200, task
         except KeyError as e:
             return 404, {"error": str(e)}
@@ -122,7 +236,15 @@ class WarRoomRoutes:
             return 409, {"error": str(e)}
 
     def handle_complete_task(self, body: dict) -> tuple[int, dict]:
-        """POST /war-room/complete"""
+        """POST /war-room/complete
+
+        Required: task_id, agent_id
+        Optional: result, task_type, approach
+          task_type  - category of skill used (e.g. "debugging", "crispr_prompt")
+          approach   - 1-3 sentence methodology summary
+          These two fields are passed through in the response so that
+          Freya's bifrost_local.py can intercept them for procedural memory.
+        """
         task_id = body.get("task_id", "")
         agent_id = body.get("agent_id", "")
         result = body.get("result", "")
@@ -132,6 +254,15 @@ class WarRoomRoutes:
         try:
             task = self.store.complete_task(task_id, agent_id, result)
             log.info("Task %s completed by %s", task_id, agent_id)
+            # Attach procedural fields so bifrost_local intercepts can learn
+            if body.get("task_type"):
+                task["task_type"] = body["task_type"]
+            if body.get("approach"):
+                task["approach"] = body["approach"]
+            try:
+                write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
+            except Exception as _e:
+                log.debug("node_status update failed: %s", _e)
             return 200, task
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}
@@ -147,6 +278,10 @@ class WarRoomRoutes:
         try:
             task = self.store.update_task_status(task_id, status, agent_id)
             log.info("Task %s status -> %s by %s", task_id, status, agent_id)
+            try:
+                write_node_status(status, last_task=task.get("title", task_id))
+            except Exception as _e:
+                log.debug("node_status update failed: %s", _e)
             return 200, task
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}
@@ -157,3 +292,64 @@ class WarRoomRoutes:
         if "error" in result:
             return 500, result
         return 200, result
+
+    def handle_delete_task(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/delete-task"""
+        task_id = body.get("task_id", "")
+        if not task_id:
+            return 400, {"error": "task_id required"}
+        try:
+            task = self.store.delete_task(task_id)
+            log.info("Task deleted: %s (%s)", task_id, task.get("title", "?"))
+            return 200, {"deleted": task}
+        except KeyError as e:
+            return 404, {"error": str(e)}
+
+    def handle_delete_message(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/delete-message"""
+        msg_id = body.get("msg_id", "")
+        if not msg_id:
+            return 400, {"error": "msg_id required"}
+        try:
+            msg = self.store.delete_message(msg_id)
+            log.info("Message deleted: %s", msg_id)
+            return 200, {"deleted": msg}
+        except KeyError as e:
+            return 404, {"error": str(e)}
+
+    def handle_clear_messages(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/clear-messages"""
+        count = self.store.clear_messages()
+        log.info("Cleared %d messages", count)
+        return 200, {"cleared": count}
+
+    def handle_summon(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/summon — notify all agents to check the board."""
+        import json
+        import urllib.request
+        message = body.get("message", "Check the War Room board — new tasks posted.")
+        nodes = {
+            "thor": "100.117.255.38",
+            "freya": "100.102.105.3",
+            "heimdall": "100.108.153.23",
+        }
+        results = {}
+        for name, ip in nodes.items():
+            try:
+                payload = json.dumps({
+                    "from": "odin",
+                    "message": f"[SUMMON] {message}",
+                    "urgency": "high",
+                }).encode()
+                req = urllib.request.Request(
+                    f"http://{ip}:8765/notify",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    results[name] = "notified"
+            except Exception as e:
+                results[name] = f"unreachable: {e}"
+        log.info("[summon] Results: %s", results)
+        return 200, {"summoned": results, "message": message}
