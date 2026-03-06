@@ -177,6 +177,8 @@ def register_routes(handler_class, config):
         elif self.path.startswith("/pheromone") and _PHEROMONE_OK:
             code, data = _pheromone.handle_smell(self.path)
             self._respond(code, data)
+        elif self.path == "/mycelium" and _MYCELIUM_OK:
+            self._respond(200, _mycelium.status())
         else:
             _orig_get(self)
 
