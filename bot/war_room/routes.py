@@ -11,6 +11,12 @@ from urllib.parse import parse_qs, urlparse
 from .store import WarRoomStore
 from .ask import AskHandler
 
+# Import node status writer for auto-updating on task events
+try:
+    from bifrost import _write_node_status
+except ImportError:
+    def _write_node_status(status, last_task=None, detail=None): pass
+
 log = logging.getLogger("war-room.routes")
 
 
@@ -213,6 +219,7 @@ class WarRoomRoutes:
         try:
             task = self.store.claim_task(task_id, agent_id)
             log.info("Task %s claimed by %s", task_id, agent_id)
+            _write_node_status("working", last_task=task.get("title", task_id), detail=f"Claimed task: {task.get('title', '')}")
             return 200, task
         except KeyError as e:
             return 404, {"error": str(e)}
@@ -232,6 +239,7 @@ class WarRoomRoutes:
         try:
             task = self.store.complete_task(task_id, agent_id, result)
             log.info("Task %s completed by %s", task_id, agent_id)
+            _write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
             return 200, task
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}
@@ -247,6 +255,7 @@ class WarRoomRoutes:
         try:
             task = self.store.update_task_status(task_id, status, agent_id)
             log.info("Task %s status -> %s by %s", task_id, status, agent_id)
+            _write_node_status(status, last_task=task.get("title", task_id))
             return 200, task
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}
@@ -257,3 +266,64 @@ class WarRoomRoutes:
         if "error" in result:
             return 500, result
         return 200, result
+
+    def handle_delete_task(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/delete-task"""
+        task_id = body.get("task_id", "")
+        if not task_id:
+            return 400, {"error": "task_id required"}
+        try:
+            task = self.store.delete_task(task_id)
+            log.info("Task deleted: %s (%s)", task_id, task.get("title", "?"))
+            return 200, {"deleted": task}
+        except KeyError as e:
+            return 404, {"error": str(e)}
+
+    def handle_delete_message(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/delete-message"""
+        msg_id = body.get("msg_id", "")
+        if not msg_id:
+            return 400, {"error": "msg_id required"}
+        try:
+            msg = self.store.delete_message(msg_id)
+            log.info("Message deleted: %s", msg_id)
+            return 200, {"deleted": msg}
+        except KeyError as e:
+            return 404, {"error": str(e)}
+
+    def handle_clear_messages(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/clear-messages"""
+        count = self.store.clear_messages()
+        log.info("Cleared %d messages", count)
+        return 200, {"cleared": count}
+
+    def handle_summon(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/summon — notify all agents to check the board."""
+        import json
+        import urllib.request
+        message = body.get("message", "Check the War Room board — new tasks posted.")
+        nodes = {
+            "thor": "100.117.255.38",
+            "freya": "100.102.105.3",
+            "heimdall": "100.108.153.23",
+        }
+        results = {}
+        for name, ip in nodes.items():
+            try:
+                payload = json.dumps({
+                    "from": "odin",
+                    "message": f"[SUMMON] {message}",
+                    "urgency": "high",
+                }).encode()
+                req = urllib.request.Request(
+                    f"http://{ip}:8765/notify",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    results[name] = "notified"
+            except Exception as e:
+                results[name] = f"unreachable: {e}"
+        log.info("[summon] Results: %s", results)
+        return 200, {"summoned": results, "message": message}

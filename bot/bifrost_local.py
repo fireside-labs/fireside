@@ -16,6 +16,7 @@ Routes registered here:
 import json
 import logging
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -51,7 +52,8 @@ def register_routes(handler_class, config):
     _wire_route_message(handler_class, config)
     _wire_critique(handler_class, config)
     _wire_hydra(handler_class, config)
-    log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, /critique, /snapshot, /absorb, /hydra-status")
+    _wire_hardening(handler_class, config)
+    log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, /critique, /snapshot, /absorb, /hydra-status, /circuit-status, /reload-personality, /catch-up")
     # Pin models in VRAM — runs in background so startup isn't blocked
     import threading
     ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
@@ -554,4 +556,120 @@ def _handle_release(handler):
         "status": "released",
         "node":   node,
         "roles":  h.status_report()["roles"],
+    })
+
+
+# ---------------------------------------------------------------------------
+# GET /circuit-status — Expose all circuit breaker states
+# POST /reload-personality — Hot-reload personality.json without restart
+# GET  /catch-up?since=<ts> — Re-sync endpoint for nodes returning from offline
+# ---------------------------------------------------------------------------
+
+def _wire_hardening(handler_class, config):
+    """Inject hardening utility routes."""
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    def do_GET_hardening(self):
+        if self.path == "/circuit-status":
+            _handle_circuit_status(self)
+        elif self.path.startswith("/catch-up"):
+            _handle_catch_up(self)
+        else:
+            prev_get(self)
+
+    def do_POST_hardening(self):
+        if self.path == "/reload-personality":
+            _handle_reload_personality(self)
+        else:
+            prev_post(self)
+
+    handler_class.do_GET  = do_GET_hardening
+    handler_class.do_POST = do_POST_hardening
+    log.info("[bifrost_local] Hardening routes: /circuit-status, /reload-personality, /catch-up")
+
+
+def _handle_circuit_status(handler):
+    """GET /circuit-status — all circuit breaker states."""
+    try:
+        from circuit_breaker import all_states  # type: ignore
+        _json_respond(handler, 200, {"breakers": all_states()})
+    except ImportError:
+        _json_respond(handler, 503, {"error": "circuit_breaker module not available"})
+
+
+def _handle_reload_personality(handler):
+    """POST /reload-personality — hot-reload personality.json into memory cache."""
+    global _personality
+    try:
+        from personality import reload as p_reload, get_context  # type: ignore
+        p_reload()   # clears cache + re-reads disk
+        new_ctx = get_context()
+        _personality = new_ctx
+        p = new_ctx
+        log.info("[bifrost_local] Personality reloaded — temp=%.2f top_p=%.2f",
+                 p['ollama_params']['temperature'], p['ollama_params']['top_p'])
+        _json_respond(handler, 200, {
+            "status":        "reloaded",
+            "traits":        p['traits'],
+            "ollama_params": p['ollama_params'],
+        })
+    except Exception as e:
+        log.error("[bifrost_local] /reload-personality error: %s", e)
+        _json_respond(handler, 500, {"error": str(e)})
+
+
+def _handle_catch_up(handler):
+    """
+    GET /catch-up?since=<unix_ts>
+    Returns everything significant that happened since ts:
+      - recent event-log entries
+      - current personality
+      - hydra status
+      - circuit breaker states
+    For nodes returning after downtime — one call to re-sync.
+    """
+    from urllib.parse import urlparse, parse_qs
+    params = parse_qs(urlparse(handler.path).query)
+    since  = float(params.get("since", ["0"])[0])
+
+    # Event log since ts
+    events = []
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:8765/event-log?limit=100", timeout=5
+        ) as r:
+            data = json.loads(r.read())
+            events = [e for e in data.get("events", []) if e.get("ts", 0) >= since]
+    except Exception:
+        pass
+
+    # Current personality
+    personality = _personality or {}
+
+    # Hydra status
+    hydra_status = {}
+    try:
+        from hydra import status_report  # type: ignore
+        hydra_status = status_report()
+    except Exception:
+        pass
+
+    # Circuit breaker states
+    cb_states = {}
+    try:
+        from circuit_breaker import all_states  # type: ignore
+        cb_states = all_states()
+    except Exception:
+        pass
+
+    _json_respond(handler, 200, {
+        "since":         since,
+        "event_count":   len(events),
+        "events":        events[:50],
+        "personality":   personality,
+        "hydra":         hydra_status,
+        "circuit_breakers": cb_states,
+        "node":          "thor",
+        "ts":            time.time(),
     })

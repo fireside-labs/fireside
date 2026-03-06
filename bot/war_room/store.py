@@ -258,6 +258,33 @@ class WarRoomStore:
             tasks = [t for t in tasks if t.get("updated", "") > since]
         return tasks
 
+    def delete_task(self, task_id: str) -> dict:
+        """Delete a task by ID. Returns the deleted task."""
+        with self._lock:
+            task = self._tasks.pop(task_id, None)
+            if not task:
+                raise KeyError(f"Task {task_id} not found")
+            self._save_tasks()
+            return task
+
+    def delete_message(self, msg_id: str) -> dict:
+        """Delete a message by ID. Returns the deleted message."""
+        with self._lock:
+            for i, m in enumerate(self._messages):
+                if m.get("id") == msg_id:
+                    msg = self._messages.pop(i)
+                    self._save_messages()
+                    return msg
+            raise KeyError(f"Message {msg_id} not found")
+
+    def clear_messages(self) -> int:
+        """Clear all messages. Returns count deleted."""
+        with self._lock:
+            count = len(self._messages)
+            self._messages = []
+            self._save_messages()
+            return count
+
     def merge_tasks(self, remote_tasks: dict[str, dict]) -> int:
         """Merge tasks from a remote node. Latest 'updated' wins. Returns count of updates."""
         updated_count = 0

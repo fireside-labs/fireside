@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valhalla — Guild Hall</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0a0e14;
+            --surface: #11151c;
+            --border: #1e2530;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --accent: #60a5fa;
+            --green: #34d399;
+            --red: #f87171;
+            --amber: #fbbf24;
+            --violet: #a78bfa;
+            --glass: rgba(17, 21, 28, 0.85);
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 1rem 1.5rem;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.2rem;
+        }
+
+        .header h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .header h1 span {
+            color: var(--amber);
+        }
+
+        .header-right {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.ok {
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+        }
+
+        .status-dot.err {
+            background: var(--red);
+        }
+
+        #clock {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        /* Buttons */
+        .btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 0.35em 0.8em;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+
+        .btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn.danger:hover {
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .btn.success {
+            border-color: var(--green);
+            color: var(--green);
+        }
+
+        .btn.summon {
+            background: linear-gradient(135deg, #1e1b4b, #312e81);
+            border-color: var(--violet);
+            color: var(--violet);
+        }
+
+        .btn.summon:hover {
+            box-shadow: 0 0 12px rgba(167, 139, 250, 0.3);
+        }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 900px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Panels */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.9rem;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.6rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .panel-count {
+            font-size: 0.65rem;
+            background: var(--bg);
+            padding: 0.1em 0.5em;
+            border-radius: 99px;
+            color: var(--muted);
+        }
+
+        /* Node cards */
+        .node-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--bg);
+            font-size: 0.78rem;
+        }
+
+        .node-row:last-child {
+            border-bottom: none;
+        }
+
+        .node-name {
+            font-weight: 600;
+            min-width: 70px;
+            text-transform: capitalize;
+        }
+
+        .node-pill {
+            font-size: 0.6rem;
+            font-weight: 600;
+            padding: 0.15em 0.5em;
+            border-radius: 99px;
+            text-transform: uppercase;
+        }
+
+        .node-pill.online {
+            background: #052e16;
+            color: var(--green);
+        }
+
+        .node-pill.offline {
+            background: #450a0a;
+            color: var(--red);
+        }
+
+        .node-pill.pending {
+            background: #422006;
+            color: var(--amber);
+        }
+
+        .node-meta {
+            color: var(--muted);
+            font-size: 0.7rem;
+            flex: 1;
+        }
+
+        .node-actions {
+            display: flex;
+            gap: 0.3rem;
+        }
+
+        /* Task cards */
+        .task-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 0.55rem 0.7rem;
+            margin-bottom: 0.45rem;
+            font-size: 0.78rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .task-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .task-card.open {
+            border-left: 3px solid var(--amber);
+        }
+
+        .task-card.in_progress,
+        .task-card.claimed {
+            border-left: 3px solid var(--green);
+        }
+
+        .task-card.done {
+            border-left: 3px solid var(--border);
+            opacity: 0.5;
+        }
+
+        .task-card.blocked {
+            border-left: 3px solid var(--red);
+        }
+
+        .task-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .task-title {
+            font-weight: 600;
+            margin-bottom: 0.15rem;
+        }
+
+        .task-meta {
+            font-size: 0.68rem;
+            color: var(--muted);
+        }
+
+        .agent-tag {
+            display: inline-block;
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 0.1em 0.4em;
+            border-radius: 3px;
+            text-transform: uppercase;
+            margin-right: 0.2em;
+        }
+
+        .agent-tag.odin {
+            background: #1e3a5f;
+            color: var(--accent);
+        }
+
+        .agent-tag.thor {
+            background: #14532d;
+            color: var(--green);
+        }
+
+        .agent-tag.freya {
+            background: #3b0764;
+            color: var(--violet);
+        }
+
+        .agent-tag.heimdall {
+            background: #7f1d1d;
+            color: var(--red);
+        }
+
+        .task-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        /* Message rows */
+        .msg-row {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.35rem 0;
+            border-bottom: 1px solid var(--bg);
+            font-size: 0.75rem;
+            align-items: flex-start;
+        }
+
+        .msg-row:last-child {
+            border-bottom: none;
+        }
+
+        .msg-from {
+            font-weight: 600;
+            color: var(--accent);
+            min-width: 55px;
+        }
+
+        .msg-body {
+            flex: 1;
+            color: var(--text);
+            word-break: break-word;
+        }
+
+        .msg-ts {
+            color: var(--muted);
+            font-size: 0.65rem;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        .msg-del {
+            cursor: pointer;
+            color: var(--muted);
+            font-size: 0.65rem;
+        }
+
+        .msg-del:hover {
+            color: var(--red);
+        }
+
+        /* Forms */
+        .form-row {
+            display: flex;
+            gap: 0.4rem;
+            margin-top: 0.5rem;
+        }
+
+        .form-row input,
+        .form-row select,
+        .form-row textarea {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.35em 0.6em;
+            border-radius: 5px;
+            font-size: 0.72rem;
+            font-family: inherit;
+        }
+
+        .form-row input,
+        .form-row textarea {
+            flex: 1;
+        }
+
+        .form-row textarea {
+            resize: vertical;
+            min-height: 32px;
+        }
+
+        /* Pheromone pills */
+        .phero-row {
+            font-size: 0.72rem;
+            padding: 0.3rem 0;
+            border-bottom: 1px solid var(--bg);
+        }
+
+        .phero-type {
+            font-weight: 600;
+        }
+
+        .phero-type.reliable {
+            color: var(--green);
+        }
+
+        .phero-type.danger {
+            color: var(--red);
+        }
+
+        .phero-type.slow {
+            color: var(--amber);
+        }
+
+        .phero-type.experimental {
+            color: var(--violet);
+        }
+
+        /* Empty */
+        .empty {
+            color: var(--muted);
+            text-align: center;
+            padding: 0.8rem;
+            font-size: 0.75rem;
+        }
+
+        /* Scroll */
+        .scroll-box {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .scroll-box::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .scroll-box::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 2px;
+        }
+
+        /* Modal overlay */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            background: var(--surface);
+            border: 1px solid var(--green);
+            color: var(--green);
+            padding: 0.6em 1em;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        .toast.error {
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        /* Full width panel */
+        .full {
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>⚔️ <span>Guild Hall</span> — Valhalla War Room</h1>
+        <div class="header-right">
+            <span id="clock"></span>
+            <button class="btn summon" onclick="summon()" title="Notify all agents">📯 Summon All</button>
+            <button class="btn" onclick="refresh()">↻ Refresh</button>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- NODES -->
+        <div class="panel" id="nodes-panel">
+            <div class="panel-header">
+                <span class="panel-title">⚡ Nodes</span>
+                <span class="panel-count" id="nodes-count">—</span>
+            </div>
+            <div id="nodes"></div>
+        </div>
+
+        <!-- TASKS -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">📋 Tasks</span>
+                <span class="panel-count" id="task-count">—</span>
+            </div>
+            <div class="scroll-box" id="tasks"></div>
+            <div class="form-row">
+                <input type="text" id="new-task-title" placeholder="New task title…">
+                <select id="new-task-agent">
+                    <option value="">Assign to…</option>
+                    <option value="odin">Odin</option>
+                    <option value="thor">Thor</option>
+                    <option value="freya">Freya</option>
+                    <option value="heimdall">Heimdall</option>
+                </select>
+                <button class="btn success" onclick="postTask()">+ Add</button>
+            </div>
+        </div>
+
+        <!-- MESSAGES -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">💬 Messages</span>
+                <div>
+                    <span class="panel-count" id="msg-count">—</span>
+                    <button class="btn danger" onclick="clearMessages()" title="Clear all"
+                        style="margin-left:0.3rem;font-size:0.6rem;">🗑</button>
+                </div>
+            </div>
+            <div class="scroll-box" id="messages"></div>
+            <div class="form-row">
+                <input type="text" id="new-msg" placeholder="Post a message…">
+                <select id="new-msg-to">
+                    <option value="all">All</option>
+                    <option value="thor">Thor</option>
+                    <option value="freya">Freya</option>
+                    <option value="heimdall">Heimdall</option>
+                </select>
+                <button class="btn success" onclick="postMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- PHEROMONES -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">🍄 Pheromones</span>
+                <span class="panel-count" id="phero-count">—</span>
+            </div>
+            <div class="scroll-box" id="pheromones"></div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const ODIN = `http://${location.hostname}:8765`;
+        const NODES = [
+            { name: 'odin', ip: '100.105.27.121', role: 'Orchestrator' },
+            { name: 'thor', ip: '100.117.255.38', role: 'Backend Architect' },
+            { name: 'freya', ip: '100.102.105.3', role: 'Frontend Designer' },
+            { name: 'heimdall', ip: '100.108.153.23', role: 'Security Auditor' },
+        ];
+
+        // Utilities
+        const ago = ts => {
+            if (!ts) return '';
+            const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+            if (s < 60) return s + 's';
+            if (s < 3600) return Math.floor(s / 60) + 'm';
+            if (s < 86400) return Math.floor(s / 3600) + 'h';
+            return Math.floor(s / 86400) + 'd';
+        };
+
+        function toast(msg, isError) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.className = 'toast show' + (isError ? ' error' : '');
+            setTimeout(() => el.className = 'toast', 2500);
+        }
+
+        async function api(path, body) {
+            const r = await fetch(`${ODIN}${path}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+            return r.json();
+        }
+
+        function agentTag(name) {
+            if (!name) return '';
+            const cls = ['odin', 'thor', 'freya', 'heimdall'].includes(name.toLowerCase()) ? name.toLowerCase() : '';
+            return `<span class="agent-tag ${cls}">${name}</span>`;
+        }
+
+        // --- Node Status ---
+        async function loadNodes() {
+            const container = document.getElementById('nodes');
+            let online = 0;
+            const results = await Promise.allSettled(NODES.map(async n => {
+                try {
+                    const r = await fetch(`http://${n.ip}:8765/health`, { signal: AbortSignal.timeout(4000) });
+                    const d = await r.json();
+                    return { ...n, status: 'online', models: d.load?.active_models || [], vram: d.load?.total_vram_gb, war_room: d.war_room };
+                } catch { return { ...n, status: 'offline' }; }
+            }));
+            const nodes = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+            online = nodes.filter(n => n.status === 'online').length;
+            document.getElementById('nodes-count').textContent = `${online}/${nodes.length} online`;
+
+            container.innerHTML = nodes.map(n => `
+    <div class="node-row">
+      <span class="status-dot ${n.status === 'online' ? 'ok' : 'err'}"></span>
+      <span class="node-name">${n.name}</span>
+      <span class="node-pill ${n.status}">${n.status}</span>
+      <span class="node-meta">${n.models ? n.models.join(', ') : n.role}${n.vram ? ' · ' + n.vram.toFixed(1) + 'GB' : ''}</span>
+      <div class="node-actions">
+        ${n.status === 'online' && n.name !== 'odin' ? `<button class="btn" onclick="restartNode('${n.ip}')" title="Restart Bifrost">⟳</button>` : ''}
+      </div>
+    </div>`).join('');
+        }
+
+        async function restartNode(ip) {
+            if (!confirm('Restart this node?')) return;
+            try {
+                await fetch(`http://${ip}:8765/self-update`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                toast('Restart signal sent');
+            } catch (e) { toast('Failed: ' + e.message, true); }
+        }
+
+        // --- Tasks ---
+        async function loadTasks() {
+            try {
+                const r = await fetch(`${ODIN}/war-room/tasks?raw=true`);
+                const data = await r.json();
+                const tasks = Object.values(data).sort((a, b) => {
+                    const order = { blocked: -2, open: -1, in_progress: 0, claimed: 0, done: 1 };
+                    return (order[a.status] || 0) - (order[b.status] || 0);
+                });
+                document.getElementById('task-count').textContent = tasks.length;
+                const el = document.getElementById('tasks');
+                if (!tasks.length) { el.innerHTML = '<div class="empty">No tasks</div>'; return; }
+                el.innerHTML = tasks.map(t => `
+      <div class="task-card ${t.status || 'open'}">
+        <div class="task-info">
+          <div class="task-title">${t.title || t.id}</div>
+          <div class="task-meta">
+            ${agentTag(t.assigned_to || t.claimed_by || '')}
+            <span>${t.status || 'open'}</span> · ${ago(t.updated_at || t.created_at)}
+            ${t.result ? ' · ✓ done' : ''}
+            ${t.decompose ? ' · 🐙' : ''}
+          </div>
+        </div>
+        <div class="task-actions">
+          ${t.status !== 'done' ? `<button class="btn" onclick="forceComplete('${t.id}')" title="Force complete">✓</button>` : ''}
+          <button class="btn danger" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
+        </div>
+      </div>`).join('');
+            } catch (e) { document.getElementById('tasks').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+        }
+
+        async function postTask() {
+            const title = document.getElementById('new-task-title').value.trim();
+            if (!title) return;
+            const agent = document.getElementById('new-task-agent').value;
+            const body = { title, posted_by: 'odin', description: title };
+            if (agent) body.assigned_to = agent;
+            await api('/war-room/task', body);
+            document.getElementById('new-task-title').value = '';
+            toast('Task posted'); loadTasks();
+        }
+
+        async function deleteTask(id) {
+            if (!confirm('Delete this task?')) return;
+            await api('/war-room/delete-task', { task_id: id });
+            toast('Task deleted'); loadTasks();
+        }
+
+        async function forceComplete(id) {
+            await api('/war-room/complete', { task_id: id, agent_id: 'odin', result: 'Force-completed by Odin' });
+            toast('Task completed'); loadTasks();
+        }
+
+        // --- Messages ---
+        async function loadMessages() {
+            try {
+                const r = await fetch(`${ODIN}/war-room/read?limit=30`);
+                const msgs = await r.json();
+                document.getElementById('msg-count').textContent = msgs.length;
+                const el = document.getElementById('messages');
+                if (!msgs.length) { el.innerHTML = '<div class="empty">No messages</div>'; return; }
+                el.innerHTML = msgs.slice(0, 30).map(m => `
+      <div class="msg-row">
+        <span class="msg-from">${m.from || '?'}</span>
+        <span class="msg-body">${(m.body || '').substring(0, 200)}</span>
+        <span class="msg-ts">${ago(m.timestamp)}</span>
+        <span class="msg-del" onclick="deleteMsg('${m.id}')" title="Delete">✕</span>
+      </div>`).join('');
+            } catch (e) { document.getElementById('messages').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+        }
+
+        async function postMessage() {
+            const body = document.getElementById('new-msg').value.trim();
+            if (!body) return;
+            const to = document.getElementById('new-msg-to').value;
+            await api('/war-room/post', { from_agent: 'odin', to, body, type: 'directive' });
+            document.getElementById('new-msg').value = '';
+            toast('Message sent'); loadMessages();
+        }
+
+        async function deleteMsg(id) {
+            await api('/war-room/delete-message', { msg_id: id });
+            loadMessages();
+        }
+
+        async function clearMessages() {
+            if (!confirm('Clear ALL messages?')) return;
+            await api('/war-room/clear-messages', {});
+            toast('Messages cleared'); loadMessages();
+        }
+
+        // --- Pheromones ---
+        async function loadPheromones() {
+            try {
+                const r = await fetch(`http://100.102.105.3:8765/pheromone?prefix=1&resource=`, { signal: AbortSignal.timeout(4000) });
+                const data = await r.json();
+                const trails = data.trails || data;
+                const el = document.getElementById('pheromones');
+                if (!trails || !trails.length) { el.innerHTML = '<div class="empty">No pheromones</div>'; document.getElementById('phero-count').textContent = '0'; return; }
+                document.getElementById('phero-count').textContent = trails.length;
+                el.innerHTML = trails.slice(0, 20).map(p => `
+      <div class="phero-row">
+        <span class="phero-type ${p.type || ''}">${p.type || '?'}</span>
+        <b>${p.resource || '?'}</b> by ${p.node || '?'}
+        · intensity ${(p.intensity || 0).toFixed(2)}
+        ${p.reason ? ` · "${p.reason}"` : ''}
+      </div>`).join('');
+            } catch {
+                document.getElementById('pheromones').innerHTML = '<div class="empty">Freya offline — no pheromone data</div>';
+            }
+        }
+
+        // --- Summon ---
+        async function summon() {
+            const msg = prompt('Summon message:', 'Check the War Room board — new tasks posted.');
+            if (!msg) return;
+            const result = await api('/war-room/summon', { message: msg });
+            const summoned = result.summoned || {};
+            const summary = Object.entries(summoned).map(([k, v]) => `${k}: ${v}`).join(', ');
+            toast(`Summoned → ${summary}`);
+        }
+
+        // --- Main loop ---
+        async function refresh() {
+            await Promise.all([loadNodes(), loadTasks(), loadMessages(), loadPheromones()]);
+        }
+
+        function updateClock() {
+            document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+        }
+
+        refresh();
+        updateClock();
+        setInterval(refresh, 30000);
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+
+</html>

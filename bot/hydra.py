@@ -35,6 +35,12 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+try:
+    from circuit_breaker import call as cb_call  # type: ignore
+except ImportError:
+    def cb_call(node, fn, fallback=None):  # graceful no-op if CB not available
+        return fn()
+
 log = logging.getLogger("hydra")
 BASE = Path(__file__).parent
 
@@ -97,7 +103,9 @@ def _embed(text: str, ollama_base: str = "http://127.0.0.1:11434") -> list[float
 def _recent_tasks(limit: int = 50) -> list[dict]:
     """Pull last N completed task events from local event log."""
     try:
-        data = _get(f"http://127.0.0.1:8765/event-log?event_type=task:complete&limit={limit}")
+        data = cb_call("localhost", lambda: _get(
+            f"http://127.0.0.1:8765/event-log?event_type=task:complete&limit={limit}"
+        ), fallback={})
         return [
             {"content": e.get("payload", {}).get("summary", ""),
              "ts": e.get("ts", 0)}
@@ -174,9 +182,9 @@ def generate_snapshot(node: str = None, memory_sync_url: str = "http://127.0.0.1
         },
     }
 
-    # Push to memory-sync
+    # Push to memory-sync — use circuit breaker on Freya
     try:
-        result = _post(memory_sync_url, {"memories": [snapshot]})
+        result = cb_call("freya", lambda: _post(memory_sync_url, {"memories": [snapshot]}))
         log.info("[hydra] Snapshot pushed for node=%s -> %s", node, result)
     except Exception as e:
         log.error("[hydra] Failed to push snapshot: %s", e)
@@ -200,20 +208,18 @@ def absorb_node(dead_node: str,
 
     snapshot = None
 
-    # Try Freya's /memory-query first
+    # Try Freya's /memory-query first — wrapped in circuit breaker
     try:
         url = f"{memory_query_base}/memory-query?q=snapshot+{dead_node}&tags=snapshot&limit=5"
-        data = _get(url, timeout=10)
+        data = cb_call("freya", lambda: _get(url, timeout=10), fallback={})
         candidates = data.get("memories") or data.get("results") or []
-        # Filter to snapshots for this specific dead node
         matches = [m for m in candidates
                    if dead_node in m.get("tags", []) and "snapshot" in m.get("tags", [])]
         if matches:
-            # Use most recent
             snapshot = sorted(matches, key=lambda x: x.get("ts", 0), reverse=True)[0]
             log.info("[hydra] Found snapshot for %s on Freya", dead_node)
     except Exception as e:
-        log.warning("[hydra] Freya unreachable: %s — trying local", e)
+        log.warning("[hydra] Freya unreachable (CB): %s — trying local", e)
 
     # Fallback: check local memory-sync store
     if not snapshot and fallback_local:

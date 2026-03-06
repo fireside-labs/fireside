@@ -322,6 +322,44 @@ def _proxy_memory_query(query_string: str) -> dict:
         return {"error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# Node Status — persistent heartbeat file for session-spanning task awareness
+# Agents read this at startup to know what they were last doing.
+# Updated automatically on task claim/complete/status-change.
+# ---------------------------------------------------------------------------
+
+_STATUS_FILE = BASE / "status.json"
+
+def _read_node_status() -> dict:
+    """Read the current node status from status.json."""
+    try:
+        if _STATUS_FILE.exists():
+            return json.loads(_STATUS_FILE.read_text())
+    except Exception:
+        pass
+    return {"node": THIS_NODE, "status": "idle", "last_task": None, "updated": None}
+
+def _write_node_status(status: str, last_task: str = None, detail: str = None):
+    """Write the current node status to status.json."""
+    import time
+    from datetime import datetime, timezone
+    current = _read_node_status()
+    current.update({
+        "node": THIS_NODE,
+        "status": status,
+        "updated": datetime.now(timezone.utc).isoformat(),
+        "updated_ts": time.time(),
+    })
+    if last_task is not None:
+        current["last_task"] = last_task
+    if detail is not None:
+        current["detail"] = detail[:300]
+    try:
+        _STATUS_FILE.write_text(json.dumps(current, indent=2))
+    except Exception as e:
+        log.warning("[status] write failed: %s", e)
+
+
 class HookEngine:
     """Fire registered handlers when mesh events occur."""
 
@@ -1059,6 +1097,8 @@ class BifrostHandler(BaseHTTPRequestHandler):
         elif self.path == "/ask/info" and _war_room_routes:
             code, data = _war_room_routes.handle_ask_info()
             self._respond(code, data)
+        elif self.path == "/node-status":
+            self._respond(200, _read_node_status())
         elif self.path == "/dashboard":
             dash = BASE / "dashboard.html"
             if dash.exists():
@@ -1077,6 +1117,15 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 self.wfile.write(tb.read_bytes())
             else:
                 self._respond(404, {"error": "taskboard.html not found"})
+        elif self.path == "/guild-hall":
+            gh = BASE / "guild_hall.html"
+            if gh.exists():
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(gh.read_bytes())
+            else:
+                self._respond(404, {"error": "guild_hall.html not found"})
         elif self.path == "/workspace-manifest":
             # Serve Odin's workspace manifest (all tracked file hashes)
             manifest = _build_manifest(SYNC_LOCAL_WORKSPACE)
@@ -1099,10 +1148,12 @@ class BifrostHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         # Original Bifrost routes
-        bifrost_routes = ("/request", "/propose-command", "/receive-files", "/fetch-file", "/execute", "/proposal-result", "/self-update", "/hook", "/notify", "/memory-sync")
+        bifrost_routes = ("/request", "/propose-command", "/receive-files", "/fetch-file", "/execute", "/proposal-result", "/self-update", "/hook", "/notify", "/memory-sync", "/node-status")
         # War Room routes
         war_room_routes = ("/war-room/post", "/war-room/task", "/war-room/claim",
-                           "/war-room/complete", "/war-room/status", "/ask")
+                           "/war-room/complete", "/war-room/status", "/ask",
+                           "/war-room/delete-task", "/war-room/delete-message",
+                           "/war-room/clear-messages", "/war-room/summon")
         all_routes = bifrost_routes + war_room_routes
 
         if self.path not in all_routes:
@@ -1121,6 +1172,10 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 "/war-room/complete": _war_room_routes.handle_complete_task,
                 "/war-room/status": _war_room_routes.handle_update_status,
                 "/ask": _war_room_routes.handle_ask,
+                "/war-room/delete-task": _war_room_routes.handle_delete_task,
+                "/war-room/delete-message": _war_room_routes.handle_delete_message,
+                "/war-room/clear-messages": _war_room_routes.handle_clear_messages,
+                "/war-room/summon": _war_room_routes.handle_summon,
             }.get(self.path)
             if wr_handler:
                 code, data = wr_handler(body)
@@ -1139,6 +1194,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
             "/hook":        self._handle_hook,
             "/notify":      self._handle_notify,
             "/memory-sync": self._handle_memory_sync,
+            "/node-status": self._handle_node_status_post,
         }.get(self.path)
         if handler:
             handler(body)
@@ -1172,6 +1228,16 @@ class BifrostHandler(BaseHTTPRequestHandler):
         text = f"{header}\n\n{message}"
         ok = _send_telegram_rest(text)
         self._respond(200 if ok else 502, {"status": "sent" if ok else "failed", "from": sender})
+
+    def _handle_node_status_post(self, body: dict):
+        """Update this node's status.
+        Body: { "status": "working", "last_task": "Fix CSS bug", "detail": "..." }
+        """
+        status = body.get("status", "idle")
+        last_task = body.get("last_task")
+        detail = body.get("detail")
+        _write_node_status(status, last_task, detail)
+        self._respond(200, _read_node_status())
 
     def _handle_memory_sync(self, body: dict):
         """Write a memory to the canonical shared store (Freya by default).
@@ -1346,6 +1412,11 @@ async def on_startup(app: Application):
         _overseer.start()
     if _workspace_sync:
         _workspace_sync.start()
+    # Start task poller
+    if WAR_ROOM_AVAILABLE:
+        global _task_poller
+        _task_poller = TaskPoller(THIS_NODE)
+        _task_poller.start()
     log.info("Bifrost v5 FULL mode ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
 
 def _load_local_extensions():
@@ -1383,6 +1454,127 @@ def _check_single_instance():
         raise SystemExit(1)
 
 # ---------------------------------------------------------------------------
+# Task Poller — auto-process assigned tasks from War Room
+# ---------------------------------------------------------------------------
+
+class TaskPoller:
+    """Background daemon that polls War Room for tasks assigned to this node."""
+
+    POLL_INTERVAL = 300  # 5 minutes
+    _active_tasks: set  # track in-flight task IDs
+
+    def __init__(self, node_name: str, port: int = LISTEN_PORT):
+        self.node = node_name
+        self.base = f"http://127.0.0.1:{port}"
+        self._active_tasks = set()
+        self._thread = None
+
+    def start(self):
+        self._thread = threading.Thread(target=self._loop, daemon=True, name="task-poller")
+        self._thread.start()
+        log.info("[task-poller] Started for '%s' (every %ds)", self.node, self.POLL_INTERVAL)
+
+    def _loop(self):
+        import time
+        time.sleep(30)  # initial delay — let server finish starting
+        while True:
+            try:
+                self._poll()
+            except Exception as e:
+                log.error("[task-poller] Error: %s", e)
+            time.sleep(self.POLL_INTERVAL)
+
+    def _poll(self):
+        """Check for open tasks assigned to this node."""
+        import urllib.request
+        url = f"{self.base}/war-room/tasks?assigned_to={self.node}&status=open"
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=5) as r:
+                tasks = json.loads(r.read())
+        except Exception:
+            return  # server not ready or no war room
+
+        if isinstance(tasks, dict):
+            tasks = list(tasks.values())
+
+        for task in tasks:
+            tid = task.get("id", "")
+            if not tid or tid in self._active_tasks:
+                continue
+            # Don't auto-process decompose parent tasks (octopus handles those)
+            if task.get("decompose"):
+                continue
+            self._active_tasks.add(tid)
+            threading.Thread(
+                target=self._process_task, args=(task,), daemon=True,
+                name=f"task-worker-{tid[:8]}"
+            ).start()
+
+    def _process_task(self, task: dict):
+        """Claim → process via /ask → complete."""
+        import urllib.request
+        tid = task["id"]
+        title = task.get("title", "untitled")
+        desc = task.get("description", title)
+        log.info("[task-poller] Processing: %s (%s)", title, tid[:8])
+
+        try:
+            # 1. Claim the task
+            self._post(f"{self.base}/war-room/claim", {
+                "task_id": tid, "agent_id": self.node
+            })
+
+            # 2. Update status to in_progress
+            self._post(f"{self.base}/war-room/status", {
+                "task_id": tid, "agent_id": self.node, "status": "in_progress"
+            })
+
+            # 3. Process via /ask
+            prompt = (
+                f"You have been assigned a task from the War Room.\n"
+                f"Task: {title}\n"
+                f"Description: {desc}\n\n"
+                f"Complete this task thoroughly. Provide your result."
+            )
+            result_data = self._post(f"{self.base}/ask", {
+                "prompt": prompt, "model": "local"
+            })
+            result_text = result_data.get("response", result_data.get("answer", str(result_data)))
+
+            # 4. Complete the task
+            self._post(f"{self.base}/war-room/complete", {
+                "task_id": tid,
+                "agent_id": self.node,
+                "result": result_text[:2000]  # cap result size
+            })
+            log.info("[task-poller] Completed: %s (%s)", title, tid[:8])
+
+        except Exception as e:
+            log.error("[task-poller] Failed task %s: %s", tid[:8], e)
+            # Mark blocked so it shows up in Guild Hall
+            try:
+                self._post(f"{self.base}/war-room/status", {
+                    "task_id": tid, "agent_id": self.node,
+                    "status": "blocked", "reason": str(e)[:200]
+                })
+            except Exception:
+                pass
+        finally:
+            self._active_tasks.discard(tid)
+
+    def _post(self, url: str, body: dict) -> dict:
+        import urllib.request
+        req = urllib.request.Request(
+            url, data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.loads(r.read())
+
+_task_poller = None
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1404,6 +1596,11 @@ def main():
             _overseer.start()
         if _workspace_sync:
             _workspace_sync.start()
+        # Start task poller
+        if WAR_ROOM_AVAILABLE:
+            global _task_poller
+            _task_poller = TaskPoller(THIS_NODE)
+            _task_poller.start()
         log.info("Bifrost v5 SEND-ONLY ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
         _event_loop.run_forever()
         return
