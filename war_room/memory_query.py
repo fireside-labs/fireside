@@ -18,7 +18,8 @@ Schema (locked by Odin, extended by Freya):
     "importance": float,
     "ts":        int,
     "shared":    bool,
-    "permanent": bool   # Deep Convictions — never pruned or consolidated
+    "permanent": bool,   # Deep Convictions — never pruned or consolidated
+    "valence":   float   # -1.0 (failure/pain) to +1.0 (success/triumph). Auto-detected.
 }
 """
 
@@ -105,6 +106,51 @@ def _cosine_sim(a: list, b: list) -> float:
     return dot / (norm_a * norm_b)
 
 
+# ---------------------------------------------------------------------------
+# Valence auto-detection
+# ---------------------------------------------------------------------------
+
+_POSITIVE_WORDS = {
+    "success", "succeeded", "fixed", "resolved", "working", "works", "complete",
+    "completed", "solved", "achieved", "optimized", "improved", "faster", "reliable",
+    "approved", "deployed", "shipped", "passing", "correct", "accurate", "efficient",
+    "done", "ready", "stable", "healthy", "confirmed", "verified", "learned",
+}
+
+_NEGATIVE_WORDS = {
+    "error", "failed", "failure", "broken", "crash", "bug", "issue", "problem",
+    "timeout", "refused", "rejected", "blocked", "unavailable", "slow", "corrupt",
+    "exception", "traceback", "panic", "lost", "missing", "wrong", "incorrect",
+    "deprecated", "forbidden", "denied", "unsafe", "danger", "leaked", "breach",
+}
+
+
+def _detect_valence(content: str) -> float:
+    """
+    Auto-detect emotional valence from content keywords.
+    Returns float in [-1.0, +1.0].
+
+    Score = (positive_hits - negative_hits) / total_hits, clamped.
+    """
+    words = set(content.lower().split())
+    pos = len(words & _POSITIVE_WORDS)
+    neg = len(words & _NEGATIVE_WORDS)
+    total = pos + neg
+    if total == 0:
+        return 0.0   # neutral
+    raw = (pos - neg) / total
+    return max(-1.0, min(1.0, raw))
+
+
+def _valence_label(v: float) -> str:
+    """Human-readable sentiment label for a valence score."""
+    if v >= 0.5:  return "triumph"
+    if v >= 0.15: return "positive"
+    if v > -0.15: return "neutral"
+    if v > -0.5:  return "negative"
+    return "failure"
+
+
 def upsert_memories(memories: list[dict]) -> dict:
     """
     Upsert a batch of memories into local LanceDB.
@@ -136,21 +182,32 @@ def upsert_memories(memories: list[dict]) -> dict:
             pa.field("ts",        pa.int64()),
             pa.field("shared",    pa.bool_()),
             pa.field("permanent", pa.bool_()),   # Deep Convictions — never pruned
+            pa.field("valence",   pa.float32()),  # -1.0 (failure) to +1.0 (triumph)
         ])
 
         rows = []
         for m in memories:
+            content = m["content"]
+            # Valence: explicit field > permanent default > auto-detect
+            if "valence" in m:
+                valence = float(m["valence"])
+            elif m.get("permanent", False):
+                valence = 1.0   # permanent convictions are always positive
+            else:
+                valence = _detect_valence(content)
+
             rows.append({
                 "memory_id": m["memory_id"],
                 "node":      m["node"],
                 "agent":     m.get("agent", m["node"]),
-                "content":   m["content"],
+                "content":   content,
                 "embedding": [float(x) for x in m["embedding"]],
                 "tags":      m.get("tags", []),
                 "importance":float(m.get("importance", 1.0)),
                 "ts":        int(m.get("ts", 0)),
                 "shared":    bool(m.get("shared", True)),
                 "permanent": bool(m.get("permanent", False)),
+                "valence":   max(-1.0, min(1.0, valence)),
             })
 
         table_names = db.table_names()
@@ -158,6 +215,15 @@ def upsert_memories(memories: list[dict]) -> dict:
             tbl = db.create_table(TABLE_NAME, data=rows, schema=schema)
         else:
             tbl = db.open_table(TABLE_NAME)
+            # Schema migration: add valence column if missing (old tables)
+            existing_cols = {f.name for f in tbl.schema}
+            if "valence" not in existing_cols:
+                try:
+                    import pyarrow as pa
+                    tbl.add_columns({"valence": "cast(0.0 as float)"})
+                    log.info("Schema migration: added valence column to existing memory table")
+                except Exception as me:
+                    log.warning("Could not add valence column (non-fatal): %s", me)
             # LanceDB merge_insert upserts on memory_id
             tbl.merge_insert("memory_id") \
                .when_matched_update_all() \
@@ -261,6 +327,11 @@ def query_memories(
             r.pop("_distance", None)
             if decay and "_decay_score" in r:
                 r["decay_score"] = round(r.pop("_decay_score", 0.0), 4)
+            # Ensure valence is present (old rows pre-dating the schema have no column)
+            if "valence" not in r or r["valence"] is None:
+                r["valence"] = _detect_valence(r.get("content", ""))
+            r["valence"]   = round(float(r["valence"]), 3)
+            r["sentiment"]  = _valence_label(r["valence"])
             clean.append(r)
 
         # === REINFORCEMENT: boost importance of retrieved memories ===

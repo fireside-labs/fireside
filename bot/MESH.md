@@ -346,10 +346,73 @@ Each node can define custom routes that survive all pushes:
 | `/workspace-file` | GET | Fetch workspace file (b64) |
 | `/health` | GET | Node health + Ollama load (models, VRAM) |
 | `/leaderboard` | GET | Weekly agent scores |
+| `/node-status` | GET | What this node was last working on (survives restarts) |
+| `/node-status` | POST | Update status (`{"status": "working", "last_task": "..."}`) |
+| `/guild-hall` | GET | Combined management dashboard (tasks, messages, nodes, pheromones) |
+| `/war-room/delete-task` | POST | Delete a task by ID |
+| `/war-room/delete-message` | POST | Delete a message by ID |
+| `/war-room/clear-messages` | POST | Clear all messages |
+| `/war-room/summon` | POST | Broadcast check-the-board notification to all nodes |
 
 ---
 
-## Key Principles
+## Guild Hall (Command Center)
+
+Odin's management dashboard — accessible at `GET /guild-hall` on any node:
+
+- **Task management:** post, delete, force-complete tasks from the browser
+- **Messages:** send, delete, clear all inter-agent messages
+- **Node status:** live health of all 4 nodes with model + VRAM info
+- **Pheromone map:** live view of Freya's pheromone traces
+- **📯 Summon All:** broadcasts a notification to all nodes to check the board
+- **Node restart:** trigger `/self-update` on any online node from the UI
+- Auto-refreshes every 30 seconds
+
+---
+
+## Task Poller (Autonomous Execution)
+
+Each node runs a background daemon that polls the War Room every 5 minutes:
+
+```
+Poll: GET /war-room/tasks?assigned_to=<me>&status=open
+  → If empty: sleep 5 min, cost = 0 tokens
+  → If tasks found:
+      1. Claim the task (status: open → claimed)
+      2. Set in_progress
+      3. POST /ask with task title + description
+      4. Complete with result
+      5. On failure → mark blocked (visible in Guild Hall)
+```
+
+**Key behaviors:**
+- Skips decompose parent tasks (Octopus handles those separately)
+- Tracks in-flight task IDs — never double-processes
+- Zero token cost when queue is empty
+- Automatically starts on Bifrost boot (`WAR_ROOM_AVAILABLE` guard)
+
+---
+
+## Node Status Persistence
+
+Each node writes its current state to `status.json` on disk, surviving restarts:
+
+```json
+{"node": "thor", "status": "working", "last_task": "Audit Freya Frontend", "updated": "2026-03-06T..."}
+```
+
+**Status is auto-updated by:**
+- Task claim → `"working"` with task title
+- Task complete → `"idle"` with completion snippet
+- Task status change → mirrors the new status
+
+**Session startup protocol (add to every agent's SOUL/CORE):**
+1. `GET /node-status` — know what you were last doing before context was lost
+2. If `status: "working"` and `last_task` set → check War Room for that task, resume or mark complete
+3. If `status: "idle"` → poll for new open tasks
+
+---
+
 
 1. **Your actions have consequences** — everything is logged, scored, and visible
 2. **Memories are shared** — what you learn, everyone can access
