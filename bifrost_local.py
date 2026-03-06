@@ -200,6 +200,9 @@ def register_routes(handler_class, config):
                 self._respond(503, {"error": "circuit breaker not available"})
         elif self.path == "/memory-info" and _MEMORY_OK:
             self._respond(200, _mq.info())
+        elif self.path == "/memory-health" and _MEMORY_OK:
+            code, data = _mq.handle_health()
+            self._respond(code, data)
         elif self.path.startswith("/memory-query") and _MEMORY_OK:
             # Record query for attention gradient BEFORE responding
             if _ATTENTION_OK:

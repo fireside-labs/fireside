@@ -481,3 +481,147 @@ def info() -> dict:
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+def handle_health() -> tuple:
+    """
+    GET /memory-health — full decay dashboard.
+
+    Returns health metrics for every memory in the mesh:
+      - total / permanent / mortal counts
+      - importance histogram (0-0.2, 0.2-0.4, 0.4-0.6, 0.6-0.8, 0.8-1.0)
+      - decay score distribution (same buckets)
+      - at_risk: mortal memories with decay_score < 0.2
+      - valence breakdown (triumph/positive/neutral/negative/failure)
+      - top_tags: most common tags
+      - oldest / newest memory timestamps
+      - mesh_health_score: 0-100 composite vitality index
+    """
+    try:
+        tbl = _get_table()
+        if tbl is None:
+            return 503, {"error": "memory table not initialised yet"}
+
+        # Pull all rows — exclude embedding blob to keep response fast
+        all_rows = tbl.search([0.0] * 768).limit(10000).to_list()
+        if not all_rows:
+            return 200, {"total": 0, "message": "no memories stored yet"}
+
+        total      = len(all_rows)
+        permanent  = [r for r in all_rows if r.get("permanent", False)]
+        mortal     = [r for r in all_rows if not r.get("permanent", False)]
+        now        = time.time()
+
+        # ── Importance histogram ────────────────────────────────────────────
+        imp_buckets = {"0.0-0.2": 0, "0.2-0.4": 0, "0.4-0.6": 0,
+                       "0.6-0.8": 0, "0.8-1.0": 0}
+        importances = []
+        for r in all_rows:
+            imp = float(r.get("importance", 0.5))
+            importances.append(imp)
+            if   imp < 0.2: imp_buckets["0.0-0.2"] += 1
+            elif imp < 0.4: imp_buckets["0.2-0.4"] += 1
+            elif imp < 0.6: imp_buckets["0.4-0.6"] += 1
+            elif imp < 0.8: imp_buckets["0.6-0.8"] += 1
+            else:           imp_buckets["0.8-1.0"] += 1
+
+        avg_importance = round(sum(importances) / total, 3)
+
+        # ── Decay score distribution (mortal only) ──────────────────────────
+        decay_buckets = {"0.0-0.2": 0, "0.2-0.4": 0, "0.4-0.6": 0,
+                         "0.6-0.8": 0, "0.8-1.0": 0}
+        decay_scores  = []
+        at_risk       = []   # decay_score < 0.2 — close to fading
+        for r in mortal:
+            ds = _decay_score(float(r.get("importance", 0.5)), int(r.get("ts", 0)))
+            decay_scores.append(ds)
+            if   ds < 0.2: decay_buckets["0.0-0.2"] += 1
+            elif ds < 0.4: decay_buckets["0.2-0.4"] += 1
+            elif ds < 0.6: decay_buckets["0.4-0.6"] += 1
+            elif ds < 0.8: decay_buckets["0.6-0.8"] += 1
+            else:          decay_buckets["0.8-1.0"] += 1
+            if ds < 0.2:
+                at_risk.append({
+                    "memory_id": r.get("memory_id", ""),
+                    "content":   (r.get("content") or "")[:80],
+                    "node":      r.get("node", "?"),
+                    "decay_score": round(ds, 4),
+                    "importance":  round(float(r.get("importance", 0)), 3),
+                    "age_days":    round((now - int(r.get("ts", now))) / 86400, 1),
+                })
+        at_risk.sort(key=lambda x: x["decay_score"])
+
+        avg_decay = round(sum(decay_scores) / len(decay_scores), 3) if decay_scores else 1.0
+
+        # ── Valence breakdown ───────────────────────────────────────────────
+        valence_dist = {"triumph": 0, "positive": 0, "neutral": 0,
+                        "negative": 0, "failure": 0}
+        valences = []
+        for r in all_rows:
+            v = float(r.get("valence", 0.0))
+            valences.append(v)
+            valence_dist[_valence_label(v)] += 1
+        avg_valence = round(sum(valences) / total, 3) if valences else 0.0
+
+        # ── Tag histogram ───────────────────────────────────────────────────
+        tag_counts: dict = {}
+        for r in all_rows:
+            tags = r.get("tags") or []
+            for t in (tags if isinstance(tags, list) else []):
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:15]
+
+        # ── Timestamps ─────────────────────────────────────────────────────
+        timestamps = [int(r.get("ts", now)) for r in all_rows if r.get("ts")]
+        oldest_days = round((now - min(timestamps)) / 86400, 1) if timestamps else 0
+        newest_days = round((now - max(timestamps)) / 86400, 1) if timestamps else 0
+
+        # ── Mesh health score (0-100) ───────────────────────────────────────
+        # High importance + high decay + positive valence + few at-risk = healthy
+        imp_score    = avg_importance * 40           # max 40
+        decay_score_n = avg_decay * 35               # max 35
+        valence_score = (avg_valence + 1) / 2 * 15  # -1..+1 → 0..15
+        risk_penalty  = min(20, len(at_risk) * 2)   # -2 per at-risk, max -20
+        mesh_health_score = max(0, min(100, round(
+            imp_score + decay_score_n + valence_score - risk_penalty, 1)))
+
+        if   mesh_health_score >= 80: health_label = "thriving"
+        elif mesh_health_score >= 60: health_label = "healthy"
+        elif mesh_health_score >= 40: health_label = "stressed"
+        elif mesh_health_score >= 20: health_label = "degraded"
+        else:                         health_label = "critical"
+
+        return 200, {
+            "mesh_health_score": mesh_health_score,
+            "health_label":      health_label,
+            "decay_lambda":      _DECAY_LAMBDA,
+            "counts": {
+                "total":     total,
+                "permanent": len(permanent),
+                "mortal":    len(mortal),
+                "at_risk":   len(at_risk),
+            },
+            "importance": {
+                "avg":        avg_importance,
+                "histogram":  imp_buckets,
+            },
+            "decay": {
+                "avg_score":  avg_decay,
+                "histogram":  decay_buckets,
+                "at_risk":    at_risk[:10],   # top 10 most-at-risk
+            },
+            "valence": {
+                "avg":        avg_valence,
+                "overall":    _valence_label(avg_valence),
+                "breakdown":  valence_dist,
+            },
+            "top_tags":   [{"tag": t, "count": c} for t, c in top_tags],
+            "age": {
+                "oldest_memory_days": oldest_days,
+                "newest_memory_days": newest_days,
+            },
+        }
+    except Exception as e:
+        log.error("memory-health failed: %s", e)
+        return 500, {"error": str(e)}
+
