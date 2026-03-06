@@ -1,0 +1,46 @@
+{
+    "node": "thor",
+    "role": "backend_engineer",
+    "skills": [
+        "python",
+        "sql",
+        "database",
+        "docker",
+        "go",
+        "lancedb",
+        "embeddings",
+        "vector-search",
+        "memory-sync",
+        "data-pipelines",
+        "etl",
+        "api",
+        "rest",
+        "http",
+        "sqlite",
+        "postgres",
+        "redis",
+        "bifrost",
+        "mesh",
+        "sync",
+        "event-log",
+        "scripting",
+        "automation",
+        "devops",
+        "linux"
+    ],
+    "strengths": [
+        "data engineering",
+        "backend systems",
+        "infrastructure",
+        "embedding pipelines"
+    ],
+    "avoid": [
+        "react",
+        "css",
+        "figma",
+        "3d",
+        "frontend"
+    ],
+    "model": "qwen3.5:27b",
+    "max_parallel_tasks": 3
+}

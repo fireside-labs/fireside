@@ -1,0 +1,69 @@
+{
+  "30fac957": {
+    "caller": "odin",
+    "command": "ping",
+    "params": {}
+  },
+  "6639d040": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "72682234": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "b1e68d50": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "e7e9edac": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "325f89f5": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "8281f4aa": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "a2c4abdc": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "e965b29c": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "8e142d90": {
+    "caller": "odin",
+    "command": "ping"
+  },
+  "5c806e14": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "568e5629": {
+    "caller": "odin",
+    "command": "ping"
+  },
+  "68d4cbf0": {
+    "caller": "odin",
+    "command": "ping"
+  },
+  "807b97ab": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall"
+  },
+  "9ad89b60": {
+    "caller": "odin",
+    "command": "copy_output_to_heimdall",
+    "params": {}
+  },
+  "0ff8a8a3": {
+    "caller": "odin",
+    "command": "ping",
+    "params": {}
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "31e07df5": {
+    "caller": "odin",
+    "name": "dummy",
+    "definition": {
+      "type": "ping"
+    }
+  }
+}

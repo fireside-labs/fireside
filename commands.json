@@ -1,0 +1,9 @@
+{
+  "list_thor_output": {
+    "description": "List files in Thor's output folder",
+    "execute_on": "thor",
+    "type": "script",
+    "script": "C:\\Users\\Jorda\\.openclaw\\workspace\\bot\\bot\\ls_output.py",
+    "allowed_callers": ["odin"]
+  }
+}
