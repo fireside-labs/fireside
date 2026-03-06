@@ -457,6 +457,32 @@ def handle_upsert(body: dict) -> tuple:
         if batch_permanent:
             m["permanent"] = True
 
+        # ── Seasonal tagging: stamp temporal context into tags ──────────────
+        import datetime as _dt
+        _now     = _dt.datetime.now()
+        _hour    = _now.hour
+        _month   = _now.month
+        _week    = _now.isocalendar()[1]
+        _tod     = ("morning"   if  5 <= _hour < 12 else
+                    "afternoon" if 12 <= _hour < 17 else
+                    "evening"   if 17 <= _hour < 21 else
+                    "night")
+        _season  = ("winter" if _month in (12, 1, 2) else
+                    "spring" if _month in (3, 4, 5) else
+                    "summer" if _month in (6, 7, 8) else
+                    "autumn")
+        _dow     = _now.strftime("%A").lower()   # e.g. "thursday"
+        _temporal_tags = [_tod, _dow, _season,
+                          f"week:{_week}",
+                          f"temporal:{_now.strftime('%Y-%W')}"]
+        existing_tags = m.get("tags") or []
+        if isinstance(existing_tags, str):
+            import json as _json
+            try: existing_tags = _json.loads(existing_tags)
+            except Exception: existing_tags = [existing_tags]
+        m["tags"] = list(dict.fromkeys(list(existing_tags) + _temporal_tags))
+        # ────────────────────────────────────────────────────────────────────
+
         enriched.append(m)
 
     if not enriched:

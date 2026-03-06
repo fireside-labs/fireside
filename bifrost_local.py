@@ -102,6 +102,14 @@ except ImportError as e:
     _CONFIDENCE_OK = False
     log.warning("bifrost_local: confidence unavailable: %s", e)
 
+try:
+    from war_room import skills as _skills
+    _SKILLS_OK = True
+except ImportError as e:
+    _skills = None
+    _SKILLS_OK = False
+    log.warning("bifrost_local: skills unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -268,6 +276,10 @@ def register_routes(handler_class, config):
             self._respond(200, _plasticity.get_plasticity())
         elif self.path == "/confidence" and _CONFIDENCE_OK:
             self._respond(200, _confidence.get_confidence())
+        elif self.path.startswith("/skills") and _SKILLS_OK:
+            import urllib.parse as _up2
+            _cat = _up2.parse_qs(_up2.urlparse(self.path).query).get("category", [""])[0]
+            self._respond(200, _skills.get_skills(category=_cat))
         else:
             _orig_get(self)
 
