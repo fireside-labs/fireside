@@ -63,6 +63,15 @@ _running = False
 _vaccines: dict = {}   # {symptom_fingerprint: {cure_ids, efficacy, hit_count, last_used}}
 _vaccine_lock = threading.Lock()
 
+# Circuit breaker registry — initialised in start()
+try:
+    from war_room.circuit import CircuitBreakerRegistry
+    _cb: Optional[CircuitBreakerRegistry] = None
+    _CB_OK = True
+except ImportError:
+    _CB_OK = False
+    _cb = None
+
 
 # ---------------------------------------------------------------------------
 # Vaccine store — persistent immune memory
@@ -199,12 +208,20 @@ def _query_memory_by_id(memory_id: str) -> list:
 
 def start(nodes: dict) -> None:
     """Start the mycelium background thread. Called from register_routes()."""
-    global _HEIMDALL_AUDIT_URL, _thread, _running
+    global _HEIMDALL_AUDIT_URL, _thread, _running, _cb
 
     heimdall = nodes.get("heimdall", {})
     ip   = heimdall.get("ip", "100.108.153.23")
     port = heimdall.get("port", 8765)
     _HEIMDALL_AUDIT_URL = f"http://{ip}:{port}/audit"
+
+    # Arm circuit breaker for all peer nodes + local Bifrost
+    if _CB_OK:
+        peer_nodes = {name: cfg for name, cfg in nodes.items()
+                      if isinstance(cfg, dict)}
+        peer_nodes["local"] = {"ip": "localhost", "port": 8765}
+        _cb = CircuitBreakerRegistry(peer_nodes)
+        log.info("[mycelium] Circuit breaker armed for: %s", list(peer_nodes.keys()))
 
     _load_vaccines()
 
@@ -300,17 +317,26 @@ def _fetch_audit_events() -> Optional[list]:
     """GET Heimdall's /audit endpoint. Returns list of events or None on failure."""
     if not _HEIMDALL_AUDIT_URL:
         return None
+    # Circuit breaker: skip the call entirely if Heimdall is tripped
+    if _CB_OK and _cb is not None:
+        if not _cb.allow("heimdall"):
+            log.debug("[mycelium] Circuit OPEN for heimdall — skipping audit fetch")
+            return None
     try:
         params = urllib.parse.urlencode({"severity": "high", "limit": 50})
         url    = f"{_HEIMDALL_AUDIT_URL}?{params}"
         req    = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=8) as r:
             data = json.loads(r.read())
+            if _CB_OK and _cb is not None:
+                _cb.success("heimdall")
             if isinstance(data, list):
                 return data
             return data.get("events") or data.get("logs") or []
     except Exception as e:
         log.debug("[mycelium] Heimdall audit fetch failed: %s", e)
+        if _CB_OK and _cb is not None:
+            _cb.failure("heimdall")
         return None
 
 
@@ -415,20 +441,30 @@ def _heal(node: str, events: list) -> None:
 
 def _query_memory(topic: str) -> list:
     """Query local /memory-query for successful memories related to topic."""
+    if _CB_OK and _cb is not None and not _cb.allow("local"):
+        log.debug("[mycelium] Circuit OPEN for local — skipping memory query")
+        return []
     try:
         params = urllib.parse.urlencode({"q": topic, "node": "all", "limit": 5,
                                          "min_importance": "0.6"})
         url = f"{_LOCAL_URL}/memory-query?{params}"
         with urllib.request.urlopen(url, timeout=15) as r:
             data = json.loads(r.read())
+            if _CB_OK and _cb is not None:
+                _cb.success("local")
             return data.get("results", [])
     except Exception as e:
         log.debug("[mycelium] Memory query failed for '%s': %s", topic[:40], e)
+        if _CB_OK and _cb is not None:
+            _cb.failure("local")
         return []
 
 
 def _post_memory(payload: dict) -> bool:
     """POST a healing memory to local /memory-sync."""
+    if _CB_OK and _cb is not None and not _cb.allow("local"):
+        log.debug("[mycelium] Circuit OPEN for local — skipping memory inject")
+        return False
     try:
         body = json.dumps(payload).encode()
         req  = urllib.request.Request(
@@ -436,9 +472,13 @@ def _post_memory(payload: dict) -> bool:
             headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req, timeout=20) as r:
             resp = json.loads(r.read())
+            if _CB_OK and _cb is not None:
+                _cb.success("local")
             return resp.get("upserted", 0) > 0
     except Exception as e:
         log.debug("[mycelium] Memory inject failed: %s", e)
+        if _CB_OK and _cb is not None:
+            _cb.failure("local")
         return False
 
 
@@ -460,6 +500,7 @@ def status() -> dict:
         "healing_limit":     HEALING_LIMIT,
         "heimdall_url":      _HEIMDALL_AUDIT_URL,
         "healed_this_cycle": list(_healed_this_cycle),
+        "circuit_breaker":   _cb.status_all() if (_CB_OK and _cb is not None) else "unavailable",
         "immune_memory": {
             "vaccines":          total_vaccines,
             "avg_efficacy":      round(avg_efficacy, 3),
