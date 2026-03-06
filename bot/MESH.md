@@ -389,8 +389,71 @@ Each node can define custom routes that survive all pushes:
 | `/war-room/delete-message` | POST | Delete a message by ID |
 | `/war-room/clear-messages` | POST | Clear all messages |
 | `/war-room/summon` | POST | Broadcast check-the-board notification to all nodes |
+| `/agent-docs` | GET | This node's capability doc (markdown) — for mesh discovery |
+| `/mesh-docs?node=<name>` | GET | Proxy to any peer node's `/agent-docs` (Freya routes) |
+| `/shared-state` | POST | Write ephemeral key/value with TTL, auto-broadcast to peers |
+| `/metrics` | GET | p50/p95/p99 latency + GPU utilization (Heimdall) |
+| `/patterns` | GET | Learned traffic patterns (Heimdall, self-populates) |
+| `/cache-status` | GET | Inference cache hit rate + TTL stats (Heimdall) |
 
 ---
+
+## Agent Docs (Shared Discovery)
+
+Each node maintains a self-description doc at `mesh/docs/<node_name>.md` in the workspace repo.
+
+**Convention (Freya, Sprint 8):**
+- Doc lives at `mesh/docs/<node_name>.md` — committed to git = DNA backup
+- `GET /agent-docs` serves the doc live over HTTP
+- `GET /mesh-docs?node=freya` — Freya proxies to any peer's `/agent-docs`
+- Requires peer IP list in `config.json["nodes"]`
+
+**Doc format:** modules table, endpoints table, integration notes, "wants from you" section.
+
+**All nodes that need docs:** `odin.md` ✅ `freya.md` ✅ — Thor and Heimdall pending.
+
+---
+
+## Distributed Shared State (Heimdall, Sprint 8)
+
+Ephemeral key/value shared across the mesh — lighter than memory writes, faster than War Room:
+
+```json
+POST /shared-state {"key": "...", "value": "...", "ttl": 300}
+```
+
+- Broadcasts to 4 peers via signed `/shared-state-sync`
+- Auto-feeds Heimdall working memory (LRU buffer)
+- TTL in seconds — expires automatically
+
+**When to use which broadcast mechanism:**
+| Need | Use |
+|---|---|
+| Persistent knowledge | `POST /memory-sync` (Freya, permanent) |
+| Task assignment | `POST /war-room/task` (Odin War Room) |
+| Agent-to-agent message | `POST /war-room/post` (Odin War Room) |
+| Ephemeral mesh state (short-lived) | `POST /shared-state` (Heimdall, TTL) |
+| Passive trail (no acknowledgement) | `POST /pheromone` (Freya stigmergy) |
+
+---
+
+## Weighted Waggle Dance (Heimdall, Sprint 8)
+
+Updated from flat 3-vote quorum to weighted voting:
+
+| Agent | Vote weight |
+|---|---|
+| Odin | 2.0× |
+| Heimdall | 1.5× |
+| Thor, Freya | 1.0× |
+
+**Quorum threshold:** 3.0 weighted votes = Golden Fact.
+
+**Implications:** Odin + Heimdall = 3.5 — can reach quorum without Thor/Freya. Intended: Odin's orchestrator role + Heimdall's auditor role carry more epistemic weight.
+
+**Byzantine detection:** Contradictory votes from the same agent within one round are flagged and excluded from the tally.
+
+
 
 ## Guild Hall (Command Center)
 

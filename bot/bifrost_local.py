@@ -56,6 +56,7 @@ def register_routes(handler_class, config):
     _wire_watchdog_shutdown(handler_class, config)
     _wire_security(handler_class, config)
     _wire_agent_docs(handler_class, config)
+    _wire_metrics_shared_state(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
              "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
              "/reload-personality, /catch-up, /watchdog-status, /shutdown, /rate-limit-status")
@@ -341,7 +342,8 @@ def _handle_critique(handler, config):
     """POST /critique — shadow critic endpoint."""
     import threading
     import urllib.request as _req
-
+    _t0 = time.time()
+    _err = False
     try:
         length = int(handler.headers.get("Content-Length", 0))
         body   = json.loads(handler.rfile.read(length)) if length else {}
@@ -1053,3 +1055,105 @@ def _wire_agent_docs(handler_class, config):
 
     handler_class.do_GET = do_GET_agentdocs
     log.info("[bifrost_local] /agent-docs wired -> %s", _AGENT_DOC_PATH)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 8: Performance Metrics + Distributed Shared State
+# GET  /metrics             -- p50/p95/p99 latency + GPU stats
+# POST /shared-state        -- set key/value, broadcast to peers
+# GET  /shared-state        -- read key(s)
+# POST /shared-state-sync   -- receive peer broadcast (Heimdall compatible)
+# ---------------------------------------------------------------------------
+
+_INSTRUMENTED_POSTS = {"/critique", "/route-message", "/snapshot", "/absorb"}
+
+
+def _wire_metrics_shared_state(handler_class, config):
+    """Add metrics + shared state routes, instrument POST latency."""
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    # Build peer URL list from config
+    this_node  = config.get("node_name", "thor")
+    peer_urls  = []
+    for name, ncfg in config.get("nodes", {}).items():
+        if name != this_node and ncfg.get("ip"):
+            peer_urls.append(f"http://{ncfg['ip']}:{ncfg.get('port', 8765)}")
+
+    def do_GET_ms(self):
+        if self.path == "/metrics":
+            try:
+                import metrics as _m  # type: ignore
+                _json_respond(self, 200, _m.snapshot())
+            except ImportError:
+                _json_respond(self, 503, {"error": "metrics module not loaded"})
+        elif self.path.startswith("/shared-state"):
+            try:
+                import shared_state as _ss  # type: ignore
+                from urllib.parse import urlparse, parse_qs
+                qs  = parse_qs(urlparse(self.path).query)
+                key = qs.get("key", [None])[0]
+                _json_respond(self, 200, {"state": _ss.get(key), "key": key})
+            except ImportError:
+                _json_respond(self, 503, {"error": "shared_state module not loaded"})
+        else:
+            prev_get(self)
+
+    def do_POST_ms(self):
+        path = self.path.split("?")[0]
+
+        if path == "/shared-state":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body   = json.loads(self.rfile.read(length)) if length else {}
+                key    = body.get("key", "")
+                value  = body.get("value")
+                ttl    = body.get("ttl")
+                if not key:
+                    _json_respond(self, 400, {"error": "key required"}); return
+                import shared_state as _ss  # type: ignore
+                _ss.set_local(key, value, ttl=ttl, source="self")
+                _ss.broadcast(key, value, ttl=ttl,
+                              peer_urls=peer_urls, config=config)
+                _json_respond(self, 200, {"status": "ok", "key": key,
+                                          "peers_notified": len(peer_urls)})
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif path == "/shared-state-sync":
+            # Receive peer broadcast (Heimdall compatible)
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body   = json.loads(self.rfile.read(length)) if length else {}
+                key    = body.get("key", "")
+                value  = body.get("value")
+                ttl    = body.get("ttl")
+                source = body.get("from", "unknown")
+                if not key:
+                    _json_respond(self, 400, {"error": "key required"}); return
+                import shared_state as _ss  # type: ignore
+                _ss.set_local(key, value, ttl=ttl, source=source)
+                log.info("[shared_state] sync received: %s from %s", key, source)
+                _json_respond(self, 200, {"status": "accepted", "key": key})
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        else:
+            # Instrument latency on key routes
+            if path in _INSTRUMENTED_POSTS:
+                import time as _time
+                t0 = _time.monotonic()
+                try:
+                    prev_post(self)
+                finally:
+                    try:
+                        import metrics as _m  # type: ignore
+                        _m.record(path, _time.monotonic() - t0)
+                    except Exception:
+                        pass
+            else:
+                prev_post(self)
+
+    handler_class.do_GET  = do_GET_ms
+    handler_class.do_POST = do_POST_ms
+    log.info("[bifrost_local] metrics + shared_state routes wired (%d peers)", len(peer_urls))
