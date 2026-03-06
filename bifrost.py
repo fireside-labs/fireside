@@ -43,6 +43,19 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("bifrost")
 
+# Windows cp1252 charmap fix — force UTF-8 on stdout/stderr so log messages
+# containing non-ASCII (em-dash, arrows, emoji from agent memory) don't crash threads
+if sys.platform == "win32":
+    import io
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "buffer"):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    # Also fix the logging handler stream
+    for _h in logging.root.handlers:
+        if hasattr(_h, "stream") and hasattr(_h.stream, "buffer"):
+            _h.stream = io.TextIOWrapper(_h.stream.buffer, encoding="utf-8", errors="replace")
+
 # Valhalla War Room — peer-to-peer agent mesh
 try:
     from war_room import WarRoomStore, GossipSync, AskHandler
@@ -1154,6 +1167,16 @@ class BifrostHandler(BaseHTTPRequestHandler):
             self._respond(404, {"error": "not found"})
 
     def do_POST(self):
+        try:
+            self._do_POST_inner()
+        except Exception as _top_e:
+            log.error("[do_POST] Top-level crash on %s: %s", self.path, _top_e, exc_info=True)
+            try:
+                self._respond(500, {"error": "server error", "detail": str(_top_e)})
+            except Exception:
+                pass
+
+    def _do_POST_inner(self):
         # Original Bifrost routes
         bifrost_routes = ("/request", "/propose-command", "/receive-files", "/fetch-file", "/execute", "/proposal-result", "/self-update", "/hook", "/notify", "/memory-sync", "/node-status")
         # War Room routes
@@ -1172,21 +1195,29 @@ class BifrostHandler(BaseHTTPRequestHandler):
 
         # --- War Room POST routes ---
         if self.path in war_room_routes and _war_room_routes:
-            wr_handler = {
-                "/war-room/post": _war_room_routes.handle_post_message,
-                "/war-room/task": _war_room_routes.handle_post_task,
-                "/war-room/claim": _war_room_routes.handle_claim_task,
-                "/war-room/complete": _war_room_routes.handle_complete_task,
-                "/war-room/status": _war_room_routes.handle_update_status,
-                "/ask": _war_room_routes.handle_ask,
-                "/war-room/delete-task": _war_room_routes.handle_delete_task,
-                "/war-room/delete-message": _war_room_routes.handle_delete_message,
-                "/war-room/clear-messages": _war_room_routes.handle_clear_messages,
-                "/war-room/summon": _war_room_routes.handle_summon,
-            }.get(self.path)
+            # Use string names + getattr so missing optional methods only error
+            # if that specific path is called — not on every other request
+            wr_map = {
+                "/war-room/post": "handle_post_message",
+                "/war-room/task": "handle_post_task",
+                "/war-room/claim": "handle_claim_task",
+                "/war-room/complete": "handle_complete_task",
+                "/war-room/status": "handle_update_status",
+                "/ask": "handle_ask",
+                "/war-room/delete-task": "handle_delete_task",
+                "/war-room/delete-message": "handle_delete_message",
+                "/war-room/clear-messages": "handle_clear_messages",
+                "/war-room/summon": "handle_summon",
+            }
+            method_name = wr_map.get(self.path)
+            wr_handler = getattr(_war_room_routes, method_name, None) if method_name else None
             if wr_handler:
-                code, data = wr_handler(body)
-                self._respond(code, data)
+                try:
+                    code, data = wr_handler(body)
+                    self._respond(code, data)
+                except Exception as _e:
+                    log.error("[war-room] POST %s handler crashed: %s", self.path, _e, exc_info=True)
+                    self._respond(500, {"error": "internal handler error", "detail": str(_e)})
                 return
 
         # --- Original Bifrost POST routes ---
@@ -1396,9 +1427,9 @@ class BifrostHandler(BaseHTTPRequestHandler):
         self._respond(200, {"status": "pending", "request_id": request_id})
 
     def _respond(self, code, data):
-        body = json.dumps(data).encode()
+        body = json.dumps(data, ensure_ascii=False).encode('utf-8')
         self.send_response(code)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

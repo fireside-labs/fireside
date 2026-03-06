@@ -11,11 +11,8 @@ from urllib.parse import parse_qs, urlparse
 from .store import WarRoomStore
 from .ask import AskHandler
 
-# Import node status writer for auto-updating on task events
-try:
-    from bifrost import _write_node_status
-except ImportError:
-    def _write_node_status(status, last_task=None, detail=None): pass
+from .node_state import write_node_status
+
 
 log = logging.getLogger("war-room.routes")
 
@@ -219,7 +216,10 @@ class WarRoomRoutes:
         try:
             task = self.store.claim_task(task_id, agent_id)
             log.info("Task %s claimed by %s", task_id, agent_id)
-            _write_node_status("working", last_task=task.get("title", task_id), detail=f"Claimed task: {task.get('title', '')}")
+            try:
+                write_node_status("working", last_task=task.get("title", task_id), detail=f"Claimed task: {task.get('title', '')}")
+            except Exception as _e:
+                log.debug("node_status update failed: %s", _e)
             return 200, task
         except KeyError as e:
             return 404, {"error": str(e)}
@@ -239,7 +239,10 @@ class WarRoomRoutes:
         try:
             task = self.store.complete_task(task_id, agent_id, result)
             log.info("Task %s completed by %s", task_id, agent_id)
-            _write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
+            try:
+                write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
+            except Exception as _e:
+                log.debug("node_status update failed: %s", _e)
             return 200, task
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}
@@ -255,7 +258,10 @@ class WarRoomRoutes:
         try:
             task = self.store.update_task_status(task_id, status, agent_id)
             log.info("Task %s status -> %s by %s", task_id, status, agent_id)
-            _write_node_status(status, last_task=task.get("title", task_id))
+            try:
+                write_node_status(status, last_task=task.get("title", task_id))
+            except Exception as _e:
+                log.debug("node_status update failed: %s", _e)
             return 200, task
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}

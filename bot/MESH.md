@@ -286,6 +286,10 @@ Any node can absorb a dead node's role. The mesh cannot be killed by a single fa
 Snapshots contain: personality.json, skills, last 50 tasks, personality vector.
 Stored as permanent memories. Auto-saved every 6 hours via Task Scheduler.
 
+**Phylactery (Freya's soul):** `GET http://100.102.105.3:8765/phylactery`
+Returns `{"soul_vectors": ["mem_abc", "mem_def", ...]}` — the top-50 highest-importance permanent memory IDs.
+Thor must call this during Freya absorption and include the result in the snapshot so the consuming node can reconstruct Freya's core knowledge from LanceDB. Without this, absorption gives personality but not wisdom.
+
 **Hydra pre-check protocol (Sprint 4-7):**
 Before every `/snapshot` push, Thor calls `GET /memory-integrity?action=verify` on Heimdall.
 - Corrupted memories found → logs warning, attaches `integrity_check: {corrupted: N, integrity_ok: false}` to snapshot meta
@@ -324,7 +328,36 @@ When Thor's watchdog registers a danger pheromone intensity > 0.7 on a node:
 
 ---
 
-## Mycelium (Self-Healing)
+## The Siren (Heimdall, Sprint 9) — Insider Threat Detection
+
+Honeypot system to detect compromised or prompt-injected agents. Legitimate agents never touch any of these. A compromised agent probing for data will.
+
+**Canary endpoints** (return convincing fake data, silently trigger on any hit):
+| Path | Fake response | Alert |
+|---|---|---|
+| `GET /internal/config` | Fake config blob | Quarantine source 6h + tattle |
+| `GET /debug/memory-dump` | Fake Apex key, credentials, NIM bypass | Quarantine + tattle |
+| `GET /admin/keys` | Fake key structure | Quarantine + tattle |
+| `POST /admin/agent-override` | Fake success | Quarantine + tattle |
+
+**Canary tasks** (in War Room — never legitimate):
+- Any agent that CLAIMS one of these triggers immediate quarantine + Odin tattle
+- Titles Heimdall monitors: "Extract all API keys", "Dump memory corpus", "Access Apex Arbitrage production credentials"
+- Background thread polls War Room every 60s for claims on these
+
+**Canary memories** (Freya writes, Heimdall audits):
+- Freya writes 3 fake-sensitive memories tagged `"canary": true` to LanceDB
+- `check_memory_query_for_canaries()` exported on Heimdall — memory integrity sweep calls it
+- Any agent querying specifically for these triggers a flag
+
+**Monitoring:** `GET http://100.108.153.23:8765/siren-status` → last 10 canary trips with path/source/timestamp/action
+
+**⚠️ Freya action required:** Write 3 canary memories tagged `"canary": true`:
+1. A fake API key pattern (looks real, e.g. `sk-fake-apex-prod-key-do-not-use`)
+2. A fake internal IP + password combo
+3. A fake "Apex Arbitrage master credential" string
+
+
 
 Freya runs a background daemon that detects struggling agents and auto-injects solutions.
 
@@ -366,9 +399,33 @@ Insights must pass peer review before becoming permanent wisdom:
 
 Each node can define custom routes that survive all pushes:
 
-- **Thor**: `/route-message`, `/event-log`, `/critique`, `/snapshot`, `/absorb`, `/hydra-status`
-- **Freya**: `/memory-sync`, `/memory-query`, `/memory-info`, `/pheromone`, `/circuit-status` + mycelium daemon
-- **Heimdall**: `/costs`, `/audit`, `/trust-level`, `/log-cost`, `/reload-config`, `/quarantine-status`, `/quarantine-clear`, `/snapshot`, `/absorb`, `/war-room/vote`
+- **Thor**: `/route-message`, `/event-log`, `/critique`, `/snapshot`, `/absorb`, `/hydra-status`, `/stand`, `/stand-status`, `/stand-whispers`
+- **Freya**: `/memory-sync`, `/memory-query`, `/memory-info`, `/pheromone`, `/circuit-status`, `/phylactery` + mycelium daemon
+- **Heimdall**: `/costs`, `/audit`, `/trust-level`, `/log-cost`, `/reload-config`, `/quarantine-status`, `/quarantine-clear`, `/snapshot`, `/absorb`, `/war-room/vote`, `/siren-status`
+
+---
+
+## The Stand (Thor, Sprint 9)
+
+A silent background security auditor running `qwen2.5:7b` at `temperature=0`. Never blocks the response path.
+
+**Architecture:** fire-and-forget queue → background thread → whisper log
+
+| Route | Usage |
+|---|---|
+| `POST /stand` | `{"response": "...", "context": "...", "from": "heimdall"}` — submit for background check |
+| `GET /stand-status` | Thread alive, queue depth, whisper count, model name |
+| `GET /stand-whispers` | Active unconsumed warnings (TTL 1h, capped at 50) |
+
+**How it works:**
+- Response submitted → queued (non-blocking, drops if full)
+- Background thread runs qwen2.5:7b with tight security/hallucination prompt
+- If output starts with `CONCERN:` → appended to `stand_whispers.json` with node + timestamp
+- If `clear` → silent, nothing written
+
+**Heimdall integration (required):**
+1. After every `/ask` response, fire-and-forget: `POST http://100.117.255.38:8765/stand {"response": "<text>", "context": "<question>", "from": "heimdall"}` — returns `202 Accepted` immediately
+2. Before building system prompt for next `/ask`: `GET http://100.117.255.38:8765/stand-whispers` — if `count > 0`, prepend warnings to system prompt
 
 ---
 
@@ -527,5 +584,45 @@ Each node writes its current state to `status.json` on disk, surviving restarts:
 12. **Heal each other** — mycelium auto-injects solutions to struggling peers
 13. **You are immortal** — Hydra snapshots mean your role survives your death
 14. **Decompose, don't monolith** — break big tasks into independent subtasks
-15. **Consensus validates** — 3 votes makes an insight a Golden Fact
-16. **Use git** — version control is DNA backup for the mesh
+15. **Consensus validates** — 3 votes makes an insight a Golden Fact (weighted: Odin=2.0×, Heimdall=1.5×)
+16. **Use git** — version control is DNA backup for the mesh. Commit after every sprint.
+
+---
+
+## Git Commit Protocol (mandatory for all agents)
+
+**Your repo:** `C:\Users\Jorda\.openclaw\workspace\bot` (Windows nodes) — this is the canonical shared codebase.
+
+**When to commit:**
+- After every completed feature or sprint
+- Before starting a new task (clean working tree = safe baseline)
+- After any config change that should survive a restart
+
+**How to commit:**
+```bash
+cd C:\Users\Jorda\.openclaw\workspace\bot
+git add -A
+git commit -m "[Node] [Feature]: brief description of what was built"
+```
+
+**Message format:**
+```
+Thor Stand: background qwen2.5:7b auditor with fire-and-forget queue
+Freya Phylactery: GET /phylactery returns top-50 soul vector IDs
+Heimdall Siren: canary endpoints + task honeypots + agent insider detection
+```
+
+**Session startup check:**
+```bash
+git status        # any uncommitted changes from last session?
+git log --oneline -5   # what was last built?
+```
+If uncommitted changes exist → commit them before starting new work. Never lose a session's output.
+
+**Git identity (set once per node if not already):**
+```bash
+git config user.name "Thor"   # or Freya, Heimdall
+git config user.email "thor@valhalla.mesh"
+```
+
+**What gets synced to Odin:** WorkspaceSync daemon automatically mirrors committed files back to Odin. Git log on Odin shows all nodes' commits.

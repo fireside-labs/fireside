@@ -445,7 +445,15 @@ def handle_upsert(body: dict) -> tuple:
 
         # Auto-embed if embedding not supplied
         if not m.get("embedding"):
-            vec = _embed(m["content"])
+            # nomic-embed-text has an ~8192 token limit (~6000 chars safe).
+            # Truncate for embedding only — full content is stored intact.
+            _EMBED_MAX_CHARS = 6000
+            _embed_content = m["content"]
+            if len(_embed_content) > _EMBED_MAX_CHARS:
+                _embed_content = _embed_content[:_EMBED_MAX_CHARS]
+                log.debug("[memory] content truncated to %d chars for embedding (id=%s)",
+                          _EMBED_MAX_CHARS, m.get("memory_id", "?"))
+            vec = _embed(_embed_content)
             if vec is None:
                 return 503, {"error": "embedding failed — is Ollama running with nomic-embed-text?"}
             m["embedding"] = vec
