@@ -462,9 +462,67 @@ def handle_upsert(body: dict) -> tuple:
     if not enriched:
         return 400, {"error": "no valid memories after normalisation"}
 
+    # ── Contradiction detection ──────────────────────────────────────────────
+    all_contradictions = []
+    try:
+        from war_room import contradiction as _cd
+        tbl = _get_table()
+        if tbl is not None:
+            for m in enriched:
+                emb  = m.get("embedding")
+                cont = m.get("content", "")
+                val  = float(m.get("valence") or _detect_valence(cont))
+                # Skip short or system-generated content
+                if not emb or len(cont) < 20:
+                    continue
+                tags = m.get("tags") or []
+                if "mycelium" in tags or "healing" in tags:
+                    continue
+                # Search for top 5 most similar existing memories
+                try:
+                    candidates = tbl.search(emb).limit(6).to_list()
+                except Exception:
+                    candidates = []
+                suspects = _cd.check(cont, val, emb, candidates, _cosine_sim)
+                for s in suspects:
+                    s["new_memory"] = m.get("memory_id", "?")
+                    all_contradictions.append(s)
+
+        if all_contradictions:
+            log.warning("[contradiction] %d conflict(s) detected during upsert",
+                        len(all_contradictions))
+            # Journal high-confidence contradictions
+            try:
+                from war_room import dream_journal as _dj
+                for c in all_contradictions[:3]:
+                    if c["confidence"] >= 0.6:
+                        _dj._write_entry({
+                            "id":       _dj._make_id(),
+                            "ts":       _time.time(),
+                            "ts_human": _dj._ts_human(),
+                            "event":    "contradiction",
+                            "summary":  (
+                                f"Contradiction ({c['conflict_type']}): "
+                                f"'{c['new_text'][:60]}' conflicts with "
+                                f"'{c['existing_text'][:60]}' "
+                                f"(confidence {c['confidence']:.2f})"
+                            ),
+                            "detail":   c,
+                            "valence":  -0.4,
+                        })
+            except Exception as ex:
+                log.debug("contradiction journal failed: %s", ex)
+    except Exception as ex:
+        log.debug("contradiction scan skipped: %s", ex)
+    # ────────────────────────────────────────────────────────────────────────
+
     result = upsert_memories(enriched)
     code = 500 if "error" in result else 200
+    if all_contradictions and code == 200:
+        result["contradictions"] = all_contradictions
+        result["contradiction_count"] = len(all_contradictions)
     return code, result
+
 
 
 def info() -> dict:
