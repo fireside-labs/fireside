@@ -286,6 +286,10 @@ Any node can absorb a dead node's role. The mesh cannot be killed by a single fa
 Snapshots contain: personality.json, skills, last 50 tasks, personality vector.
 Stored as permanent memories. Auto-saved every 6 hours via Task Scheduler.
 
+**Phylactery (Freya's soul):** `GET http://100.102.105.3:8765/phylactery`
+Returns `{"soul_vectors": ["mem_abc", "mem_def", ...]}` — the top-50 highest-importance permanent memory IDs.
+Thor must call this during Freya absorption and include the result in the snapshot so the consuming node can reconstruct Freya's core knowledge from LanceDB. Without this, absorption gives personality but not wisdom.
+
 **Hydra pre-check protocol (Sprint 4-7):**
 Before every `/snapshot` push, Thor calls `GET /memory-integrity?action=verify` on Heimdall.
 - Corrupted memories found → logs warning, attaches `integrity_check: {corrupted: N, integrity_ok: false}` to snapshot meta

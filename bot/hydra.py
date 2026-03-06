@@ -275,6 +275,22 @@ def absorb_node(dead_node: str,
         absorbed_tasks       = []
         absorbed_vector      = []
 
+    # Phylactery — fetch Freya's soul_vectors (top 50 importance>=0.9 memory IDs)
+    # These let the absorbing node pull her actual wisdom from LanceDB directly
+    soul_vectors = []
+    try:
+        phylactery_data = cb_call(
+            "freya",
+            lambda: _get(f"{memory_query_base}/phylactery", timeout=8),
+            fallback=None,
+        )
+        if phylactery_data:
+            soul_vectors = phylactery_data.get("soul_vectors", [])
+            log.info("[hydra] Phylactery: received %d soul vectors from %s",
+                     len(soul_vectors), dead_node)
+    except Exception as e:
+        log.debug("[hydra] Phylactery fetch failed (non-critical): %s", e)
+
     context = {
         "dead_node":    dead_node,
         "absorbed_at":  time.time(),
@@ -282,6 +298,7 @@ def absorb_node(dead_node: str,
         "skills":       absorbed_skills,
         "recent_tasks": absorbed_tasks,
         "persona_vec":  absorbed_vector,
+        "soul_vectors": soul_vectors,   # Freya's top memory IDs — use to pull from LanceDB
         "snapshot_age": time.time() - snapshot.get("ts", time.time()) if snapshot else None,
         "status":       "active" if snapshot else "cold",
         "system_prompt_injection": _build_absorption_prompt(dead_node, absorbed_personality,
@@ -289,7 +306,8 @@ def absorb_node(dead_node: str,
     }
 
     _absorbed[dead_node] = context
-    log.info("[hydra] Now absorbing role: %s (status=%s)", dead_node, context["status"])
+    log.info("[hydra] Now absorbing role: %s (status=%s, soul_vectors=%d)",
+             dead_node, context["status"], len(soul_vectors))
     return context
 
 
