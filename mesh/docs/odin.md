@@ -24,6 +24,7 @@
 |--------|----------|--------------|
 | `TaskPoller` | 5 min | Polls War Room for open tasks assigned to `odin`, auto-claims + processes via `/ask` |
 | `GossipSync` | 30s | Syncs with all peers — memories, event log, personality deltas |
+| `PhilosopherStone` | Nightly 3 AM | Pulls top CRISPR patterns + Golden Facts + immune vaccines from Freya, and /patterns + /audit from Heimdall → compiles `philosopher_prompt.md` |
 | `Overseer` | 60s | Monitors mesh health, fires alerts on anomalies |
 | `WorkspaceSync` | On change | Pushes workspace file changes to all nodes |
 

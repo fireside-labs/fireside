@@ -510,7 +510,7 @@
                 <span class="panel-title">💬 Messages</span>
                 <div>
                     <span class="panel-count" id="msg-count">—</span>
-                    <button class="btn danger" onclick="clearMessages()" title="Clear all"
+                    <button class="btn danger" data-clear-msg onclick="clearMessages()" title="Clear all"
                         style="margin-left:0.3rem;font-size:0.6rem;">🗑</button>
                 </div>
             </div>
@@ -638,7 +638,7 @@
         </div>
         <div class="task-actions">
           ${t.status !== 'done' ? `<button class="btn" onclick="forceComplete('${t.id}')" title="Force complete">✓</button>` : ''}
-          <button class="btn danger" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
+          <button class="btn danger" data-del="${t.id}" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
         </div>
       </div>`).join('');
             } catch (e) { document.getElementById('tasks').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
@@ -655,10 +655,25 @@
             toast('Task posted'); loadTasks();
         }
 
+        // Two-step delete: first click → confirm state, second click → delete
+        const _pendingDelete = {};
         async function deleteTask(id) {
-            if (!confirm('Delete this task?')) return;
-            await api('/war-room/delete-task', { task_id: id });
-            toast('Task deleted'); loadTasks();
+            if (_pendingDelete[id]) {
+                clearTimeout(_pendingDelete[id].timer);
+                delete _pendingDelete[id];
+                const res = await api('/war-room/delete-task', { task_id: id });
+                if (res && res.error) { toast(res.error, true); return; }
+                toast('Task deleted'); loadTasks();
+            } else {
+                const btn = document.querySelector(`[data-del="${id}"]`);
+                if (btn) { btn.textContent = 'Del?'; btn.style.borderColor = 'var(--red)'; btn.style.color = 'var(--red)'; }
+                _pendingDelete[id] = {
+                    timer: setTimeout(() => {
+                        delete _pendingDelete[id];
+                        if (btn) { btn.textContent = '✕'; btn.style.borderColor = ''; btn.style.color = ''; }
+                    }, 3000)
+                };
+            }
         }
 
         async function forceComplete(id) {
@@ -688,7 +703,7 @@
             const body = document.getElementById('new-msg').value.trim();
             if (!body) return;
             const to = document.getElementById('new-msg-to').value;
-            await api('/war-room/post', { from_agent: 'odin', to, body, type: 'directive' });
+            await api('/war-room/post', { from: 'odin', to, body, type: 'directive' });
             document.getElementById('new-msg').value = '';
             toast('Message sent'); loadMessages();
         }
@@ -698,10 +713,24 @@
             loadMessages();
         }
 
+        const _pendingClear = { v: false };
         async function clearMessages() {
-            if (!confirm('Clear ALL messages?')) return;
-            await api('/war-room/clear-messages', {});
-            toast('Messages cleared'); loadMessages();
+            if (_pendingClear.v) {
+                _pendingClear.v = false;
+                clearTimeout(_pendingClear.timer);
+                const btn = document.querySelector('[data-clear-msg]');
+                if (btn) { btn.textContent = '🗑'; btn.style.borderColor = ''; btn.style.color = ''; }
+                await api('/war-room/clear-messages', {});
+                toast('Messages cleared'); loadMessages();
+            } else {
+                _pendingClear.v = true;
+                const btn = document.querySelector('[data-clear-msg]');
+                if (btn) { btn.textContent = 'Sure?'; btn.style.borderColor = 'var(--red)'; btn.style.color = 'var(--red)'; }
+                _pendingClear.timer = setTimeout(() => {
+                    _pendingClear.v = false;
+                    if (btn) { btn.textContent = '🗑'; btn.style.borderColor = ''; btn.style.color = ''; }
+                }, 3000);
+            }
         }
 
         // --- Pheromones ---

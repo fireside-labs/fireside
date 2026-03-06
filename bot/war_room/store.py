@@ -23,11 +23,14 @@ class WarRoomStore:
 
         self._msg_file = self.data_dir / "messages.json"
         self._task_file = self.data_dir / "tasks.json"
+        self._tombstone_file = self.data_dir / "tombstones.json"
         self._lock = threading.Lock()
         self._archive_lock = threading.Lock()  # serialises concurrent archive file writes
 
         self._messages: list[dict] = self._load(self._msg_file, default=[])
         self._tasks: dict[str, dict] = self._load(self._task_file, default={})
+        # tombstones: {id: iso_timestamp} — propagated to peers so deletes replicate
+        self._tombstones: dict[str, str] = self._load(self._tombstone_file, default={})
 
     # ------------------------------------------------------------------
     # Persistence
@@ -53,6 +56,38 @@ class WarRoomStore:
         tmp = self._task_file.with_suffix(".tmp")
         tmp.write_text(json.dumps(self._tasks, indent=2))
         tmp.replace(self._task_file)
+
+    def _save_tombstones(self):
+        tmp = self._tombstone_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self._tombstones, indent=2))
+        tmp.replace(self._tombstone_file)
+
+    def get_tombstones(self, since: Optional[str] = None) -> dict:
+        """Return tombstones (deleted IDs) optionally filtered by timestamp."""
+        with self._lock:
+            if not since:
+                return dict(self._tombstones)
+            return {k: v for k, v in self._tombstones.items() if v >= since}
+
+    def apply_tombstones(self, tombstones: dict):
+        """Apply tombstones received from a peer — delete matching local tasks/messages."""
+        with self._lock:
+            changed = False
+            for obj_id, ts in tombstones.items():
+                if obj_id in self._tombstones:
+                    continue  # already know about this deletion
+                self._tombstones[obj_id] = ts
+                # Remove from tasks or messages
+                if obj_id in self._tasks:
+                    del self._tasks[obj_id]
+                    changed = True
+                else:
+                    self._messages = [m for m in self._messages if m.get("id") != obj_id]
+            if changed:
+                self._save_tasks()
+                self._save_messages()
+            if tombstones:
+                self._save_tombstones()
 
     # ------------------------------------------------------------------
     # Messages
@@ -240,6 +275,49 @@ class WarRoomStore:
                     parent["updated"] = datetime.now(timezone.utc).isoformat()
             self._save_tasks()
             return task
+
+    def delete_task(self, task_id: str) -> dict:
+        """Permanently remove a task. Records tombstone for gossip propagation."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            task = self._tasks.pop(task_id, None)
+            if task is None:
+                raise KeyError(f"Task {task_id} not found")
+            parent_id = task.get("parent_id")
+            if parent_id and parent_id in self._tasks:
+                subs = self._tasks[parent_id].setdefault("subtask_ids", [])
+                if task_id in subs:
+                    subs.remove(task_id)
+            self._tombstones[task_id] = now
+            self._save_tasks()
+            self._save_tombstones()
+            return task
+
+    def delete_message(self, msg_id: str) -> dict:
+        """Permanently remove a message. Records tombstone for gossip propagation."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            # messages is a list — find and remove by id
+            msg = next((m for m in self._messages if m.get("id") == msg_id), None)
+            if msg is None:
+                raise KeyError(f"Message {msg_id} not found")
+            self._messages = [m for m in self._messages if m.get("id") != msg_id]
+            self._tombstones[msg_id] = now
+            self._save_messages()
+            self._save_tombstones()
+            return msg
+
+    def clear_messages(self) -> int:
+        """Delete all messages. Records tombstones for gossip propagation."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            count = len(self._messages)
+            for m in self._messages:
+                self._tombstones[m.get("id", "")] = now
+            self._messages.clear()
+            self._save_messages()
+            self._save_tombstones()
+            return count
 
     def get_tasks(
         self,

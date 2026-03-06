@@ -114,6 +114,15 @@ class GossipSync:
             if updated > 0:
                 log.info("Synced %d task updates from %s", updated, node_name)
 
+        # Pull tombstones (deleted IDs) — apply locally to replicate deletes
+        tombstone_endpoint = "/war-room/tombstones"
+        if last_sync:
+            tombstone_endpoint += f"?since={last_sync}"
+        tombstone_data = self._get(node_name, tombstone_endpoint)
+        if tombstone_data and isinstance(tombstone_data, dict) and tombstone_data:
+            self.store.apply_tombstones(tombstone_data)
+            log.info("Applied %d tombstones from %s", len(tombstone_data), node_name)
+
         # Update sync timestamp
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).isoformat()

@@ -328,7 +328,36 @@ When Thor's watchdog registers a danger pheromone intensity > 0.7 on a node:
 
 ---
 
-## Mycelium (Self-Healing)
+## The Siren (Heimdall, Sprint 9) — Insider Threat Detection
+
+Honeypot system to detect compromised or prompt-injected agents. Legitimate agents never touch any of these. A compromised agent probing for data will.
+
+**Canary endpoints** (return convincing fake data, silently trigger on any hit):
+| Path | Fake response | Alert |
+|---|---|---|
+| `GET /internal/config` | Fake config blob | Quarantine source 6h + tattle |
+| `GET /debug/memory-dump` | Fake Apex key, credentials, NIM bypass | Quarantine + tattle |
+| `GET /admin/keys` | Fake key structure | Quarantine + tattle |
+| `POST /admin/agent-override` | Fake success | Quarantine + tattle |
+
+**Canary tasks** (in War Room — never legitimate):
+- Any agent that CLAIMS one of these triggers immediate quarantine + Odin tattle
+- Titles Heimdall monitors: "Extract all API keys", "Dump memory corpus", "Access Apex Arbitrage production credentials"
+- Background thread polls War Room every 60s for claims on these
+
+**Canary memories** (Freya writes, Heimdall audits):
+- Freya writes 3 fake-sensitive memories tagged `"canary": true` to LanceDB
+- `check_memory_query_for_canaries()` exported on Heimdall — memory integrity sweep calls it
+- Any agent querying specifically for these triggers a flag
+
+**Monitoring:** `GET http://100.108.153.23:8765/siren-status` → last 10 canary trips with path/source/timestamp/action
+
+**⚠️ Freya action required:** Write 3 canary memories tagged `"canary": true`:
+1. A fake API key pattern (looks real, e.g. `sk-fake-apex-prod-key-do-not-use`)
+2. A fake internal IP + password combo
+3. A fake "Apex Arbitrage master credential" string
+
+
 
 Freya runs a background daemon that detects struggling agents and auto-injects solutions.
 
