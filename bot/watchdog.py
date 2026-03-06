@@ -39,6 +39,10 @@ _absorb_fn:  Callable[[str], None] | None = None
 _release_fn: Callable[[str], None] | None = None
 _log_event:  Callable[[str, dict], None] | None = None
 
+# URLs set at start()
+_freya_base:   str = "http://100.102.105.3:8765"
+_heimdall_base: str = "http://100.108.153.23:8765"
+
 
 def _get(url: str, timeout: int = 5) -> dict:
     with urllib.request.urlopen(url, timeout=timeout) as r:
@@ -64,6 +68,33 @@ def _drop_pheromone(freya_base: str, node: str, ptype: str, intensity: float, re
         urllib.request.urlopen(req, timeout=5)
     except Exception as e:
         log.debug("[watchdog] pheromone drop failed (non-critical): %s", e)
+
+
+def _notify_quarantine(node: str, intensity: float):
+    """
+    Odin spec: when danger pheromone > 0.7 on a node, POST intensity
+    to Heimdall /quarantine-config so it extends quarantine delay.
+    Non-blocking, best-effort.
+    """
+    if intensity <= 0.7:
+        return
+    try:
+        payload = json.dumps({
+            "node":      node,
+            "intensity": intensity,
+            "source":    "thor-watchdog",
+            "reason":    f"auto-absorb: {node} unreachable",
+        }).encode()
+        req = urllib.request.Request(
+            f"{_heimdall_base}/quarantine-config",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=5)
+        log.info("[watchdog] quarantine-config notified: %s intensity=%.2f", node, intensity)
+    except Exception as e:
+        log.debug("[watchdog] quarantine notify failed (non-critical): %s", e)
 
 
 def _poll_once(node: str, url: str, freya_base: str):
@@ -110,6 +141,8 @@ def _poll_once(node: str, url: str, freya_base: str):
                     })
                 _drop_pheromone(freya_base, node, "danger", 0.8,
                                 f"{node} unreachable x{rec['failures']}")
+                # Odin spec: notify Heimdall to extend quarantine delay
+                _notify_quarantine(node, 0.8)
 
 
 def _poll_loop(node_urls: dict[str, str], freya_base: str):
@@ -154,6 +187,8 @@ def start(config: dict,
             node_urls[name] = f"http://{ip}:{port}"
             if name == "freya":
                 freya_base = f"http://{ip}:{port}"
+            if name == "heimdall":
+                _heimdall_base = f"http://{ip}:{port}"
 
     if not node_urls:
         log.warning("[watchdog] No peer nodes in config — watchdog idle")
