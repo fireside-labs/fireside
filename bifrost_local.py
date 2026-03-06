@@ -294,6 +294,41 @@ def register_routes(handler_class, config):
             import urllib.parse as _up2
             _cat = _up2.parse_qs(_up2.urlparse(self.path).query).get("category", [""])[0]
             self._respond(200, _skills.get_skills(category=_cat))
+        elif self.path == "/agent-docs":
+            # Serve this node's own mesh/docs/<node>.md
+            import pathlib as _pl, json as _js
+            try:
+                _cfg = _js.loads((_pl.Path(__file__).parent / "config.json").read_text())
+            except Exception:
+                _cfg = {}
+            _node_name = _cfg.get("name", "freya").lower()
+            _doc_path  = _pl.Path(__file__).parent / "mesh" / "docs" / f"{_node_name}.md"
+            if _doc_path.exists():
+                _md = _doc_path.read_text(encoding="utf-8")
+                self._respond(200, {"node": _node_name, "format": "markdown", "content": _md})
+            else:
+                self._respond(404, {"error": f"No doc found at {_doc_path}"})
+        elif self.path.startswith("/mesh-docs"):
+            # Fetch another node's /agent-docs: GET /mesh-docs?node=heimdall
+            import urllib.parse as _up4, urllib.request as _ur, json as _js, pathlib as _pl
+            _peer = _up4.parse_qs(_up4.urlparse(self.path).query).get("node", [""])[0]
+            try:
+                _cfg = _js.loads((_pl.Path(__file__).parent / "config.json").read_text())
+            except Exception:
+                _cfg = {}
+            _nodes_cfg = _cfg.get("nodes", {})
+            _peer_cfg  = _nodes_cfg.get(_peer, {})
+            if not _peer_cfg:
+                self._respond(404, {"error": f"Unknown peer node: {_peer}"})
+            else:
+                _peer_url = f"http://{_peer_cfg['ip']}:{_peer_cfg.get('port', 8765)}/agent-docs"
+                try:
+                    _doc = _js.loads(_ur.urlopen(_peer_url, timeout=10).read())
+                    self._respond(200, _doc)
+                except Exception as _e:
+                    self._respond(503, {"error": f"Could not reach {_peer}: {_e}"})
+
+
         elif self.path.startswith("/memory-provenance") and _MEMORY_OK:
             import urllib.parse as _up3
             _mid = _up3.parse_qs(_up3.urlparse(self.path).query).get("id", [""])[0]
