@@ -583,6 +583,13 @@ if WAR_ROOM_AVAILABLE:
         )
     log.info("War Room initialized for '%s' (role=%s)", AGENT_CONFIG.get('id'), AGENT_CONFIG.get('role'))
 
+try:
+    from philosopher_stone import PhilosopherStone
+    _philosopher = PhilosopherStone() if THIS_NODE == "odin" else None
+except ImportError:
+    _philosopher = None
+
+
 # Pending action requests (persisted to disk)
 PENDING_FILE = BASE / "pending.json"
 
@@ -1417,6 +1424,8 @@ async def on_startup(app: Application):
         global _task_poller
         _task_poller = TaskPoller(THIS_NODE)
         _task_poller.start()
+    if _philosopher:
+        _philosopher.start()
     log.info("Bifrost v5 FULL mode ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
 
 def _load_local_extensions():

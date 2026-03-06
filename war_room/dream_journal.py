@@ -59,6 +59,12 @@ def _ts_human() -> str:
 
 def _write_entry(entry: dict) -> None:
     """Append entry to JSONL file and update in-memory cache."""
+    # Inject monotonic sequence number for save point / rollback support
+    try:
+        from war_room import save_point as _sp
+        entry["seq"] = _sp.next_seq()
+    except Exception:
+        pass  # save_point unavailable — seq field simply absent
     with _lock:
         try:
             with open(JOURNAL_FILE, "a", encoding="utf-8") as f:

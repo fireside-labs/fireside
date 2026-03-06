@@ -126,6 +126,22 @@ except ImportError as e:
     _SS_OK = False
     log.warning("bifrost_local: shared_state unavailable: %s", e)
 
+try:
+    from war_room import phylactery as _phylactery
+    _PHYLACTERY_OK = True
+except ImportError as e:
+    _phylactery = None
+    _PHYLACTERY_OK = False
+    log.warning("bifrost_local: phylactery unavailable: %s", e)
+
+try:
+    from war_room import save_point as _save_point
+    _SAVEPOINT_OK = True
+except ImportError as e:
+    _save_point = None
+    _SAVEPOINT_OK = False
+    log.warning("bifrost_local: save_point unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -298,6 +314,11 @@ def register_routes(handler_class, config):
             import urllib.parse as _up5
             _sk = _up5.parse_qs(_up5.urlparse(self.path).query).get("key", [""])[0]
             self._respond(200, _ss.get(key=_sk))
+        elif self.path == "/phylactery" and _PHYLACTERY_OK:
+            self._respond(200, _phylactery.get_soul_vectors())
+        elif self.path == "/save-points" and _SAVEPOINT_OK:
+            self._respond(200, {"bookmarks": _save_point.list_bookmarks(),
+                                "current_seq": _save_point.current_seq()})
         elif self.path == "/plasticity" and _PLASTICITY_OK:
             self._respond(200, _plasticity.get_plasticity())
         elif self.path == "/confidence" and _CONFIDENCE_OK:
@@ -367,7 +388,8 @@ def register_routes(handler_class, config):
     _orig_post = handler_class.do_POST
 
     def do_POST(self):
-        if self.path in ("/memory-sync", "/explain", "/pheromone", "/shared-state-sync"):
+        if self.path in ("/memory-sync", "/explain", "/pheromone",
+                          "/shared-state-sync", "/save-point", "/rollback"):
             import json
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -407,6 +429,15 @@ def register_routes(handler_class, config):
                 _key  = body.get("key", "")
                 _entry = body.get("entry", {})
                 self._respond(200, _ss.receive(_key, _entry, _from))
+            elif self.path == "/save-point" and _SAVEPOINT_OK:
+                label = body.get("label", "")
+                self._respond(200, _save_point.create(label=label))
+            elif self.path == "/rollback" and _SAVEPOINT_OK:
+                to_seq = int(body.get("to_seq", 0))
+                if to_seq <= 0:
+                    self._respond(400, {"error": "to_seq must be > 0"})
+                else:
+                    self._respond(200, _save_point.rollback(to_seq))
             else:
                 self._respond(503, {"error": "module not available"})
         else:
@@ -454,6 +485,26 @@ def register_routes(handler_class, config):
                             reason         = f"ask failed — {str(_ex)[:60]}"
                         )
                         log.debug("[slime] danger on %s (ask failed: %s)", _path, _ex)
+            elif self.path == "/war-room/task" and _SAVEPOINT_OK:
+                # Intercept to auto-save-point on high_risk=true tasks
+                import io as _io2, json as _json2
+                try:
+                    length2 = int(self.headers.get("Content-Length", 0))
+                    body_bytes2 = self.rfile.read(length2) if length2 else b"{}"
+                    self.rfile = _io2.BytesIO(body_bytes2)
+                    try:
+                        _task_body = _json2.loads(body_bytes2)
+                        if _task_body.get("high_risk"):
+                            _task_title = _task_body.get("title", "high-risk-task")
+                            _sp_label = f"before: {_task_title[:40]}"
+                            _sp_result = _save_point.create(label=_sp_label)
+                            log.info("[save_point] auto-save for high_risk task: %s → seq=%d",
+                                     _task_title, _sp_result.get("seq", 0))
+                    except Exception:
+                        pass
+                    _orig_post(self)  # let Bifrost process the task normally
+                except Exception:
+                    _orig_post(self)
             else:
                 _orig_post(self)
 
