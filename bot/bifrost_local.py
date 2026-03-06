@@ -53,11 +53,16 @@ def register_routes(handler_class, config):
     _wire_critique(handler_class, config)
     _wire_hydra(handler_class, config)
     _wire_hardening(handler_class, config)
-    log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, /critique, /snapshot, /absorb, /hydra-status, /circuit-status, /reload-personality, /catch-up")
+    _wire_watchdog_shutdown(handler_class, config)
+    log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
+             "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
+             "/reload-personality, /catch-up, /watchdog-status, /shutdown")
     # Pin models in VRAM — runs in background so startup isn't blocked
     import threading
     ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
     threading.Thread(target=_warmup_models, args=(ollama_base,), daemon=True).start()
+    # Start watchdog — auto-absorb dead peers
+    _start_watchdog(config)
 
 
 def _warmup_models(ollama_base: str = "http://127.0.0.1:11434"):
@@ -727,3 +732,156 @@ def _handle_catch_up(handler):
         "node":          "thor",
         "ts":            time.time(),
     })
+
+
+# ---------------------------------------------------------------------------
+# Sprint 5: Auto-Hydra Watchdog + Graceful Shutdown
+# GET  /watchdog-status -- node health poll states
+# POST /watchdog        -- {"action": "enable"|"disable"|"reset"}
+# POST /shutdown        -- graceful: snapshot + clean exit
+# ---------------------------------------------------------------------------
+
+def _get_event_log_instance():
+    """Return the EventLog singleton (set by _wire_event_log)."""
+    return getattr(_get_event_log_instance, "_instance", None)
+
+
+def _start_watchdog(config: dict):
+    """Start watchdog after bifrost is mostly up (delayed 30s to let server bind)."""
+    import threading
+    def _delayed_start():
+        import time as _t
+        _t.sleep(30)   # let bifrost fully bind before we start polling peers
+        try:
+            import watchdog as wd  # type: ignore
+
+            def _absorb(node):
+                h = _get_hydra()
+                if h:
+                    h.absorb_node(node)
+                    # Audit log
+                    _audit("hydra:auto_absorb", node, "warning",
+                           {"trigger": "watchdog", "failures": wd.FAILURE_THRESHOLD})
+
+            def _release(node):
+                h = _get_hydra()
+                if h:
+                    h.release_role(node)
+                    _audit("hydra:release", node, "info", {"trigger": "watchdog", "reason": "node_recovered"})
+
+            def _log_evt(event_type, payload):
+                _audit(event_type, payload.get("node", "unknown"), "info", payload)
+
+            wd.start(config, absorb_fn=_absorb, release_fn=_release, log_event_fn=_log_evt)
+            log.info("[bifrost_local] Watchdog started")
+        except Exception as e:
+            log.error("[bifrost_local] Watchdog failed to start: %s", e)
+
+    threading.Thread(target=_delayed_start, daemon=True, name="watchdog-init").start()
+
+
+def _audit(event_type: str, node: str, severity: str = "info", payload: dict = None):
+    """Write an event to the local event log (best-effort)."""
+    try:
+        import urllib.request as _ur, json as _json
+        body = _json.dumps({
+            "event_type": event_type,
+            "node":       node,
+            "payload":    payload or {},
+            "severity":   severity,
+        }).encode()
+        req = _ur.Request(
+            "http://127.0.0.1:8765/event-log",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        _ur.urlopen(req, timeout=3)
+    except Exception:
+        pass  # audit is best-effort, never block the call path
+
+
+def _wire_watchdog_shutdown(handler_class, config):
+    """Inject /watchdog-status, POST /watchdog, POST /shutdown routes."""
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    def do_GET_wd(self):
+        if self.path == "/watchdog-status":
+            try:
+                import watchdog as wd  # type: ignore
+                _json_respond(self, 200, wd.status())
+            except ImportError:
+                _json_respond(self, 503, {"error": "watchdog module not loaded"})
+        else:
+            prev_get(self)
+
+    def do_POST_wd(self):
+        if self.path == "/watchdog":
+            _handle_watchdog_control(self)
+        elif self.path == "/shutdown":
+            _handle_shutdown(self, config)
+        else:
+            prev_post(self)
+
+    handler_class.do_GET  = do_GET_wd
+    handler_class.do_POST = do_POST_wd
+    log.info("[bifrost_local] watchdog/shutdown routes wired")
+
+
+def _handle_watchdog_control(handler):
+    """POST /watchdog {\"action\": \"enable\"|\"disable\"|\"reset\"}."""
+    try:
+        length = int(handler.headers.get("Content-Length", 0))
+        body   = json.loads(handler.rfile.read(length)) if length else {}
+    except Exception:
+        _json_respond(handler, 400, {"error": "invalid JSON"}); return
+
+    action = body.get("action", "").lower()
+    try:
+        import watchdog as wd  # type: ignore
+        if action == "enable":
+            wd.set_enabled(True)
+        elif action == "disable":
+            wd.set_enabled(False)
+        elif action == "reset":
+            with wd._lock:
+                for rec in wd._nodes.values():
+                    rec["failures"] = 0
+        else:
+            _json_respond(handler, 400, {"error": f"unknown action: {action}"}); return
+        _json_respond(handler, 200, {"status": "ok", "action": action, **wd.status()})
+    except ImportError:
+        _json_respond(handler, 503, {"error": "watchdog module not loaded"})
+
+
+def _handle_shutdown(handler, config):
+    """
+    POST /shutdown
+    Graceful exit:
+      1. Respond immediately with {status: "shutting_down"}
+      2. Push a final Hydra snapshot
+      3. Write shutdown event to audit log
+      4. os._exit(0) after 3 seconds
+    """
+    node = config.get("node_name", "thor")
+    _json_respond(handler, 200, {"status": "shutting_down", "node": node})
+    _audit("node:shutdown", node, "warning", {"initiated_by": "POST /shutdown"})
+
+    import threading
+    def _deferred_shutdown():
+        import time as _t
+        # Push final snapshot
+        try:
+            h = _get_hydra()
+            if h:
+                h.generate_snapshot(node)
+                log.info("[shutdown] Final snapshot pushed")
+        except Exception as e:
+            log.warning("[shutdown] Snapshot failed: %s", e)
+        _t.sleep(2)
+        log.info("[shutdown] Exiting")
+        import os
+        os._exit(0)
+
+    threading.Thread(target=_deferred_shutdown, daemon=True, name="shutdown").start()
