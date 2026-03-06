@@ -70,6 +70,14 @@ except ImportError as e:
     _METABOLIC_OK = False
     log.warning("bifrost_local: metabolic unavailable: %s", e)
 
+try:
+    from war_room import attention as _attention
+    _ATTENTION_OK = True
+except ImportError as e:
+    _attention = None
+    _ATTENTION_OK = False
+    log.warning("bifrost_local: attention unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -185,6 +193,12 @@ def register_routes(handler_class, config):
         elif self.path == "/memory-info" and _MEMORY_OK:
             self._respond(200, _mq.info())
         elif self.path.startswith("/memory-query") and _MEMORY_OK:
+            # Record query for attention gradient BEFORE responding
+            if _ATTENTION_OK:
+                import urllib.parse as _up
+                qs = _up.parse_qs(_up.urlparse(self.path).query)
+                q_text = (qs.get("q") or [""])[0]
+                _attention.record_query(q_text)
             code, data = _mq.handle_query(self.path)
             self._respond(code, data)
         elif self.path.startswith("/pheromone") and _PHEROMONE_OK:
@@ -194,6 +208,8 @@ def register_routes(handler_class, config):
             self._respond(200, _mycelium.status())
         elif self.path == "/metabolic-rate" and _METABOLIC_OK:
             self._respond(200, _metabolic.get_rate())
+        elif self.path == "/attention" and _ATTENTION_OK:
+            self._respond(200, _attention.get_attention())
         else:
             _orig_get(self)
 
