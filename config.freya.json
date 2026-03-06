@@ -1,0 +1,11 @@
+{
+    "this_node": "freya",
+    "telegram_polling": false,
+    "agent": {
+        "id": "freya",
+        "role": "frontend_engineer",
+        "local_model": "qwen3.5:35b",
+        "cloud_model": "moonshot-v1-128k",
+        "cloud_base_url": "https://api.moonshot.cn/v1"
+    }
+}

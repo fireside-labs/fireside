@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valhalla Mesh</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #080b10;
+            --surface: #0e1419;
+            --surface2: #141c24;
+            --border: #1e2a35;
+            --border2: #253040;
+            --text: #d4e0ec;
+            --muted: #4a6070;
+            --accent: #3b9eff;
+            --accent-glow: rgba(59, 158, 255, 0.15);
+            --green: #2dd4a0;
+            --green-bg: rgba(45, 212, 160, 0.08);
+            --red: #f05050;
+            --red-bg: rgba(240, 80, 80, 0.08);
+            --yellow: #f0b429;
+            --yellow-bg: rgba(240, 180, 41, 0.08);
+            --purple: #a78bfa;
+        }
+
+        html,
+        body {
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem 2.5rem;
+            border-bottom: 1px solid var(--border);
+            background: rgba(14, 20, 25, 0.8);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #1a4a7a, #3b9eff);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .header-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .header-sub {
+            font-size: 0.72rem;
+            color: var(--muted);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .refresh-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 0 0 rgba(45, 212, 160, 0.4);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(45, 212, 160, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(45, 212, 160, 0);
+            }
+        }
+
+        .summary-chips {
+            display: flex;
+            gap: 0.6rem;
+        }
+
+        .chip {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.25em 0.8em;
+            border-radius: 999px;
+            border: 1px solid;
+        }
+
+        .chip.online {
+            color: var(--green);
+            border-color: rgba(45, 212, 160, 0.3);
+            background: var(--green-bg);
+        }
+
+        .chip.offline {
+            color: var(--red);
+            border-color: rgba(240, 80, 80, 0.3);
+            background: var(--red-bg);
+        }
+
+        .chip.pending {
+            color: var(--yellow);
+            border-color: rgba(240, 180, 41, 0.3);
+            background: var(--yellow-bg);
+        }
+
+        /* ── Main layout ── */
+        .main {
+            padding: 2rem 2.5rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* ── Mesh grid ── */
+        .nodes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        /* ── Node card ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.4rem;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            cursor: default;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            border-radius: 12px 12px 0 0;
+            transition: background 0.3s;
+        }
+
+        .card.online::before {
+            background: linear-gradient(90deg, var(--green), transparent);
+        }
+
+        .card.offline::before {
+            background: linear-gradient(90deg, var(--red), transparent);
+        }
+
+        .card.pending::before {
+            background: linear-gradient(90deg, var(--yellow), transparent);
+        }
+
+        .card.online {
+            box-shadow: 0 0 0 1px rgba(45, 212, 160, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .card.offline {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            border-color: rgba(240, 80, 80, 0.2);
+        }
+
+        .card:hover {
+            border-color: var(--border2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .node-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            text-transform: capitalize;
+            margin-bottom: 0.1rem;
+        }
+
+        .node-role {
+            font-size: 0.72rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            padding: 0.3em 0.75em;
+            border-radius: 999px;
+            border: 1px solid;
+            white-space: nowrap;
+        }
+
+        .status-badge .dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+        }
+
+        .status-badge.online {
+            color: var(--green);
+            border-color: rgba(45, 212, 160, 0.3);
+            background: var(--green-bg);
+        }
+
+        .status-badge.offline {
+            color: var(--red);
+            border-color: rgba(240, 80, 80, 0.3);
+            background: var(--red-bg);
+        }
+
+        .status-badge.pending {
+            color: var(--yellow);
+            border-color: rgba(240, 180, 41, 0.3);
+            background: var(--yellow-bg);
+        }
+
+        .status-badge.online .dot {
+            background: var(--green);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-badge.offline .dot {
+            background: var(--red);
+        }
+
+        .status-badge.pending .dot {
+            background: var(--yellow);
+            animation: pulse 1.5s infinite;
+        }
+
+        /* ── Stats row ── */
+        .stats-row {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat {
+            flex: 1;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.6rem 0.75rem;
+            text-align: center;
+        }
+
+        .stat-val {
+            font-size: 1.05rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent);
+        }
+
+        .stat-lbl {
+            font-size: 0.65rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 0.1rem;
+        }
+
+        .stat-val.good {
+            color: var(--green);
+        }
+
+        .stat-val.bad {
+            color: var(--red);
+        }
+
+        .stat-val.warn {
+            color: var(--yellow);
+        }
+
+        /* ── Meta rows ── */
+        .meta-rows {
+            margin-bottom: 0.75rem;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.3rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.78rem;
+        }
+
+        .meta-row:last-child {
+            border-bottom: none;
+        }
+
+        .meta-key {
+            color: var(--muted);
+        }
+
+        .meta-val {
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            text-align: right;
+            max-width: 60%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ── Badges ── */
+        .badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.75rem;
+        }
+
+        .badge {
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 0.2em 0.6em;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge.war-room {
+            background: rgba(59, 158, 255, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(59, 158, 255, 0.2);
+        }
+
+        .badge.platform-win {
+            background: rgba(0, 120, 215, 0.1);
+            color: #4ea4f5;
+            border: 1px solid rgba(0, 120, 215, 0.2);
+        }
+
+        .badge.platform-mac {
+            background: rgba(167, 139, 250, 0.1);
+            color: var(--purple);
+            border: 1px solid rgba(167, 139, 250, 0.2);
+        }
+
+        .badge.orchestrator {
+            background: rgba(240, 180, 41, 0.1);
+            color: var(--yellow);
+            border: 1px solid rgba(240, 180, 41, 0.2);
+        }
+
+        /* ── Latency history sparkline ── */
+        .sparkline-wrap {
+            margin-top: 0.75rem;
+            height: 28px;
+            position: relative;
+        }
+
+        .sparkline-wrap canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ── Bottom panels ── */
+        .panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 860px) {
+            .panels {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.9rem 1.2rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .panel-header .count {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.1em 0.6em;
+            font-size: 0.65rem;
+            color: var(--text);
+        }
+
+        .panel-body {
+            padding: 0.5rem 0;
+        }
+
+        .event-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1.2rem;
+            font-size: 0.75rem;
+            border-bottom: 1px solid rgba(30, 42, 53, 0.5);
+            transition: background 0.15s;
+        }
+
+        .event-row:last-child {
+            border-bottom: none;
+        }
+
+        .event-row:hover {
+            background: var(--surface2);
+        }
+
+        .event-time {
+            color: var(--muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            white-space: nowrap;
+        }
+
+        .event-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .event-dot.online {
+            background: var(--green);
+        }
+
+        .event-dot.offline {
+            background: var(--red);
+        }
+
+        .event-dot.pending {
+            background: var(--yellow);
+        }
+
+        .event-msg {
+            color: var(--text);
+            flex: 1;
+        }
+
+        .event-node {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 1.5rem;
+            font-size: 0.7rem;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        /* ── Skeleton shimmer ── */
+        .skeleton {
+            background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+            background-size: 400% 100%;
+            animation: shimmer 1.4s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 100% 0;
+            }
+
+            100% {
+                background-position: -100% 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">⚡</div>
+            <div>
+                <div class="header-title">Valhalla Mesh</div>
+                <div class="header-sub">Live Node Dashboard</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="summary-chips">
+                <div class="chip online" id="chip-online">— online</div>
+                <div class="chip offline" id="chip-offline">— offline</div>
+            </div>
+            <div class="refresh-indicator">
+                <div class="pulse-dot" id="pulse"></div>
+                <span id="last-check">connecting…</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="nodes-grid" id="nodes-grid"></div>
+        <div class="panels">
+            <div class="panel">
+                <div class="panel-header">
+                    Event Log
+                    <span class="count" id="event-count">0</span>
+                </div>
+                <div class="panel-body" id="event-log"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    Latency History (last 10 polls)
+                    <span class="count">5s interval</span>
+                </div>
+                <div class="panel-body" id="latency-panel" style="padding: 0.75rem 1.2rem;"></div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        Valhalla Mesh Dashboard &nbsp;·&nbsp; Served by Bifrost &nbsp;·&nbsp;
+        <a href="/dashboard">Node Status</a> &nbsp;·&nbsp;
+        <a href="/taskboard">Task Board</a>
+    </footer>
+
+    <script>
+        const NODES = [
+            { name: "odin", ip: "100.105.27.121", port: 8765, role: "Orchestrator", isOdin: true },
+            { name: "thor", ip: "100.117.255.38", port: 8765, role: "Backend Engineer" },
+            { name: "freya", ip: "100.102.105.3", port: 8765, role: "Frontend Engineer" },
+            { name: "heimdall", ip: "100.108.153.23", port: 8765, role: "Security Monitor" },
+            { name: "hermes", ip: "100.86.195.123", port: 8765, role: "Messenger" },
+        ];
+
+        // State per node: { history: [{ms, status, ts}], lastStatus }
+        const state = {};
+        NODES.forEach(n => { state[n.name] = { history: [], lastStatus: null }; });
+        const events = [];
+
+        // ── Fetch node health ──
+        async function checkNode(node) {
+            const url = `http://${node.ip}:${node.port}/health`;
+            const t0 = Date.now();
+            try {
+                const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
+                const ms = Date.now() - t0;
+                if (!res.ok) return { status: 'offline', ms };
+                const data = await res.json();
+                return {
+                    status: 'online', ms,
+                    war_room: data.war_room,
+                    platform: data.platform,
+                    node_id: data.node,
+                };
+            } catch {
+                return { status: 'offline', ms: null };
+            }
+        }
+
+        // ── Sparkline canvas ──
+        function drawSparkline(canvas, history) {
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width, H = canvas.height;
+            ctx.clearRect(0, 0, W, H);
+            const vals = history.map(h => h.ms || 0).filter(v => v > 0);
+            if (vals.length < 2) return;
+            const max = Math.max(...vals, 1);
+            const pts = history.slice(-10).map((h, i, arr) => ({
+                x: (i / (arr.length - 1)) * W,
+                y: H - ((h.ms || 0) / max) * H * 0.85
+            }));
+            // Fill
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, H);
+            pts.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.lineTo(pts[pts.length - 1].x, H);
+            ctx.closePath();
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, 'rgba(59,158,255,0.2)');
+            grad.addColorStop(1, 'rgba(59,158,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+            // Line
+            ctx.beginPath();
+            pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.strokeStyle = '#3b9eff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+
+        // ── Render a card ──
+        function renderCard(node, result) {
+            const s = result.status;
+            const ns = state[node.name];
+            const avgMs = ns.history.length
+                ? Math.round(ns.history.slice(-5).reduce((a, h) => a + (h.ms || 0), 0) / ns.history.slice(-5).filter(h => h.ms).length) || '—'
+                : '—';
+            const upCount = ns.history.filter(h => h.status === 'online').length;
+            const upPct = ns.history.length ? Math.round(upCount / ns.history.length * 100) : null;
+
+            const platformBadge = result.platform === 'win32'
+                ? '<span class="badge platform-win">Windows</span>'
+                : result.platform === 'darwin'
+                    ? '<span class="badge platform-mac">macOS</span>'
+                    : '';
+            const warRoomBadge = result.war_room ? '<span class="badge war-room">War Room</span>' : '';
+            const orchestratorBadge = node.isOdin ? '<span class="badge orchestrator">Orchestrator</span>' : '';
+
+            const latencyColor = result.ms == null ? '' : result.ms < 30 ? 'good' : result.ms < 120 ? '' : 'warn';
+
+            const msDisp = result.ms != null ? `${result.ms}ms` : '—';
+            const upDisp = upPct != null ? `${upPct}%` : '—';
+            const upColor = upPct == null ? '' : upPct === 100 ? 'good' : upPct >= 80 ? 'warn' : 'bad';
+
+            return `
+    <div class="card ${s}" id="card-${node.name}">
+      <div class="card-header">
+        <div class="node-identity">
+          <div class="node-name">${node.name}</div>
+          <div class="node-role">${node.role}</div>
+        </div>
+        <div class="status-badge ${s}">
+          <div class="dot"></div>
+          ${s}
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-val ${latencyColor}">${msDisp}</div>
+          <div class="stat-lbl">Latency</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val ${upColor}">${upDisp}</div>
+          <div class="stat-lbl">Uptime</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val">${ns.history.length}</div>
+          <div class="stat-lbl">Polls</div>
+        </div>
+      </div>
+
+      <div class="meta-rows">
+        <div class="meta-row">
+          <span class="meta-key">IP</span>
+          <span class="meta-val">${node.ip}:${node.port}</span>
+        </div>
+        <div class="meta-row">
+          <span class="meta-key">Avg latency (5)</span>
+          <span class="meta-val">${typeof avgMs === 'number' ? avgMs + 'ms' : avgMs}</span>
+        </div>
+        ${result.node_id ? `<div class="meta-row">
+          <span class="meta-key">Node ID</span>
+          <span class="meta-val">${result.node_id}</span>
+        </div>` : ''}
+      </div>
+
+      <div class="badges">
+        ${platformBadge}${warRoomBadge}${orchestratorBadge}
+      </div>
+
+      <div class="sparkline-wrap">
+        <canvas id="spark-${node.name}" width="400" height="28"></canvas>
+      </div>
+    </div>`;
+        }
+
+        // ── Log event ──
+        function logEvent(node, oldStatus, newStatus) {
+            const ts = new Date().toLocaleTimeString();
+            let msg;
+            if (oldStatus === null) {
+                msg = `<span class="event-node">${node.name}</span> → ${newStatus}`;
+            } else if (oldStatus !== newStatus) {
+                msg = `<span class="event-node">${node.name}</span> changed ${oldStatus} → ${newStatus}`;
+            } else return;
+            events.unshift({ ts, msg, status: newStatus });
+            if (events.length > 40) events.pop();
+        }
+
+        // ── Render event log ──
+        function renderEventLog() {
+            const el = document.getElementById('event-log');
+            document.getElementById('event-count').textContent = events.length;
+            el.innerHTML = events.slice(0, 15).map(e => `
+    <div class="event-row">
+      <span class="event-time">${e.ts}</span>
+      <span class="event-dot ${e.status}"></span>
+      <span class="event-msg">${e.msg}</span>
+    </div>`).join('');
+        }
+
+        // ── Render latency panel ──
+        function renderLatencyPanel() {
+            const el = document.getElementById('latency-panel');
+            el.innerHTML = NODES.map(node => {
+                const ns = state[node.name];
+                const last = ns.history[ns.history.length - 1];
+                const ms = last?.ms != null ? `${last.ms}ms` : '—';
+                const color = last?.status !== 'online' ? 'bad' : last.ms < 30 ? 'good' : last.ms < 120 ? '' : 'warn';
+                return `
+      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.35rem 0;border-bottom:1px solid var(--border)">
+        <span style="width:72px;font-weight:600;text-transform:capitalize;font-size:0.75rem">${node.name}</span>
+        <canvas id="lspk-${node.name}" width="200" height="20" style="flex:1;height:20px"></canvas>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;width:50px;text-align:right" class="stat-val ${color}">${ms}</span>
+      </div>`;
+            }).join('');
+        }
+
+        // ── Update summary chips ──
+        function updateSummary() {
+            const counts = { online: 0, offline: 0, pending: 0 };
+            NODES.forEach(n => {
+                const s = state[n.name].lastStatus;
+                if (s) counts[s]++;
+                else counts.pending++;
+            });
+            document.getElementById('chip-online').textContent = `${counts.online} online`;
+            document.getElementById('chip-offline').textContent = `${counts.offline} offline`;
+        }
+
+        // ── Main refresh ──
+        let isRefreshing = false;
+        async function refresh() {
+            if (isRefreshing) return;
+            isRefreshing = true;
+            const grid = document.getElementById('nodes-grid');
+
+            // Init cards if needed
+            if (!grid.children.length) {
+                grid.innerHTML = NODES.map(node => `<div id="card-${node.name}">${renderCard(node, { status: 'pending' })}</div>`).join('');
+            }
+
+            const checks = NODES.map(node =>
+                checkNode(node).then(result => ({ node, result }))
+            );
+
+            for (const check of checks) {
+                const { node, result } = await check;
+                const ns = state[node.name];
+                logEvent(node, ns.lastStatus, result.status);
+                ns.lastStatus = result.status;
+                ns.history.push({ ms: result.ms, status: result.status, ts: Date.now() });
+                if (ns.history.length > 30) ns.history.shift();
+
+                // Update card HTML
+                const wrapper = document.getElementById(`card-${node.name}`);
+                if (wrapper) wrapper.outerHTML = renderCard(node, result);
+
+                // Draw sparkline on card
+                const spark = document.getElementById(`spark-${node.name}`);
+                if (spark) drawSparkline(spark, ns.history);
+            }
+
+            updateSummary();
+            renderEventLog();
+            renderLatencyPanel();
+
+            // Draw latency panel sparklines
+            NODES.forEach(node => {
+                const c = document.getElementById(`lspk-${node.name}`);
+                if (c) drawSparkline(c, state[node.name].history);
+            });
+
+            document.getElementById('last-check').textContent = new Date().toLocaleTimeString();
+            isRefreshing = false;
+        }
+
+        refresh();
+        setInterval(refresh, 5000);
+    </script>
+</body>
+
+</html>
