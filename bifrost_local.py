@@ -178,6 +178,27 @@ def register_routes(handler_class, config):
                                 reason = f"{event} — {str(error)[:80]}"
                             )
                             log.debug("[slime] danger on %s", path)
+                        elif event == "ask:success":
+                            detail = payload.get("model") or payload.get("detail") or ""
+                            _pheromone.drop(
+                                resource  = path,
+                                pheromone_type = "reliable",
+                                intensity = 0.5,
+                                dropped_by = node_a,
+                                reason = f"ask:success — {str(detail)[:60]}"
+                            )
+                            log.debug("[slime] reliable on %s (ask)", path)
+                        elif event in ("ask:error", "model:error", "inference:failed"):
+                            error = payload.get("error") or payload.get("reason") or event
+                            _pheromone.drop(
+                                resource  = path,
+                                pheromone_type = "danger",
+                                intensity = 0.7,
+                                dropped_by = node_a,
+                                reason = f"{event} — {str(error)[:60]}"
+                            )
+                            log.debug("[slime] danger on %s (ask failure)", path)
+
                     except Exception as ex:
                         log.debug("[slime] pheromone drop error: %s", ex)
                 threading.Thread(target=_drop_path, daemon=True).start()
@@ -273,7 +294,52 @@ def register_routes(handler_class, config):
             else:
                 self._respond(503, {"error": "module not available"})
         else:
-            _orig_post(self)
+            # Intercept /ask to drop pheromones on success/failure
+            if self.path == "/ask" and (_PHEROMONE_OK or _METABOLIC_OK):
+                import io as _io, json as _json
+                _ask_node  = "?"
+                _ask_model = "?"
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    body_bytes = self.rfile.read(length) if length else b"{}"
+                    # Re-inject so _orig_post can re-read the body
+                    self.rfile = _io.BytesIO(body_bytes)
+                    try:
+                        _ask_body  = _json.loads(body_bytes)
+                        _ask_node  = (_ask_body.get("node") or
+                                      _ask_body.get("source_node") or
+                                      _ask_body.get("from") or "mesh")
+                        _ask_model = _ask_body.get("model") or "default"
+                    except Exception:
+                        pass
+                    _orig_post(self)   # runs Bifrost's own /ask handler
+                    # ---------- SUCCESS ----------
+                    if _METABOLIC_OK:
+                        _metabolic.record_ask()
+                    if _PHEROMONE_OK:
+                        _path = f"{_ask_node}->/ask"
+                        _pheromone.drop(
+                            resource       = _path,
+                            pheromone_type = "reliable",
+                            intensity      = 0.5,
+                            dropped_by     = _ask_node,
+                            reason         = f"ask served ({_ask_model})"
+                        )
+                        log.debug("[slime] reliable on %s (ask success)", _path)
+                except Exception as _ex:
+                    # ---------- FAILURE ----------
+                    if _PHEROMONE_OK:
+                        _path = f"{_ask_node}->/ask"
+                        _pheromone.drop(
+                            resource       = _path,
+                            pheromone_type = "danger",
+                            intensity      = 0.7,
+                            dropped_by     = _ask_node,
+                            reason         = f"ask failed — {str(_ex)[:60]}"
+                        )
+                        log.debug("[slime] danger on %s (ask failed: %s)", _path, _ex)
+            else:
+                _orig_post(self)
 
     handler_class.do_POST = do_POST
 
