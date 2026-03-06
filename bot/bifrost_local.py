@@ -55,6 +55,7 @@ def register_routes(handler_class, config):
     _wire_hardening(handler_class, config)
     _wire_watchdog_shutdown(handler_class, config)
     _wire_security(handler_class, config)
+    _wire_agent_docs(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
              "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
              "/reload-personality, /catch-up, /watchdog-status, /shutdown, /rate-limit-status")
@@ -1022,3 +1023,33 @@ def _wire_security(handler_class, config):
     handler_class.do_POST = do_POST_sec
     log.info("[bifrost_local] Security: rate limiting on %s, HMAC soft-verify on %s",
              sorted(_RATE_LIMITED_POSTS), sorted(_SIGNED_POSTS))
+
+
+# ---------------------------------------------------------------------------
+# GET /agent-docs — serve mesh/docs/thor.md (Freya's shared doc layer)
+# ---------------------------------------------------------------------------
+
+_AGENT_DOC_PATH = Path(__file__).parent / "mesh" / "docs" / "thor.md"
+
+
+def _wire_agent_docs(handler_class, config):
+    """Inject GET /agent-docs to serve thor.md over HTTP."""
+    prev_get = handler_class.do_GET
+
+    def do_GET_agentdocs(self):
+        if self.path == "/agent-docs":
+            try:
+                content = _AGENT_DOC_PATH.read_text(encoding="utf-8")
+                encoded = content.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/markdown; charset=utf-8")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+            except Exception as e:
+                _json_respond(self, 500, {"error": f"Could not read agent doc: {e}"})
+        else:
+            prev_get(self)
+
+    handler_class.do_GET = do_GET_agentdocs
+    log.info("[bifrost_local] /agent-docs wired -> %s", _AGENT_DOC_PATH)
