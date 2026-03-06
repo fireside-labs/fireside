@@ -182,6 +182,35 @@ def generate_snapshot(node: str = None, memory_sync_url: str = "http://127.0.0.1
         },
     }
 
+    # 6. Pre-push integrity check — ask Heimdall to verify permanent memories
+    # Best-effort: never blocks the snapshot, just flags corrupted state in meta
+    integrity_status = None
+    try:
+        heimdall_base = "http://100.102.105.3:8766"
+        integrity_data = cb_call(
+            "heimdall",
+            lambda: _get(f"{heimdall_base}/memory-integrity?action=verify", timeout=8),
+            fallback=None,
+        )
+        if integrity_data:
+            corrupted = integrity_data.get("corrupted_count", 0)
+            integrity_status = {
+                "checked":      integrity_data.get("checked", 0),
+                "corrupted":    corrupted,
+                "integrity_ok": corrupted == 0,
+                "checked_at":   ts,
+            }
+            if corrupted > 0:
+                log.warning("[hydra] %d corrupted memories detected before snapshot push",
+                            corrupted)
+            else:
+                log.info("[hydra] Memory integrity OK (%d memories verified)",
+                         integrity_data.get("checked", 0))
+    except Exception as e:
+        log.debug("[hydra] Integrity pre-check unavailable (Heimdall offline?): %s", e)
+
+    snapshot["meta"]["integrity_check"] = integrity_status
+
     # Push to memory-sync — use circuit breaker on Freya
     try:
         result = cb_call("freya", lambda: _post(memory_sync_url, {"memories": [snapshot]}))

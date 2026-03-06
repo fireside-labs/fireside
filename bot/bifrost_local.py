@@ -352,6 +352,9 @@ def _handle_critique(handler, config):
     sender    = body.get("from", "unknown")
     ollama    = config.get("ollama_base", "http://127.0.0.1:11434")
 
+    # Optional: prompt_score from Heimdall's prompt_guard (0.0–1.0, higher = more dangerous)
+    prompt_score = body.get("prompt_score")   # None if not provided
+
     if not text:
         _json_respond(handler, 400, {"error": "text field required"}); return
 
@@ -367,6 +370,30 @@ def _handle_critique(handler, config):
             "skipped": True,
         })
         return
+
+    # --- prompt_score fast-path: if Heimdall's guard already blocked it, skip inference ---
+    if prompt_score is not None:
+        ps = float(prompt_score)
+        if ps >= 0.8:
+            # Guard already blocked — no need to run Ollama
+            _CRITIQUE_STATS["skipped"] += 1
+            log.warning("[critique] Skipped inference — prompt_guard blocked (score=%.2f) from %s",
+                        ps, sender)
+            _json_respond(handler, 200, {
+                "pass":         False,
+                "score":        0.0,
+                "flaws":        ["Blocked by prompt guard before critique"],
+                "verdict":      "Rejected by Heimdall prompt guard",
+                "type":         msg_type,
+                "prompt_score": ps,
+                "guard_blocked": True,
+                "threshold":    _CRITIQUE_THRESHOLD,
+            })
+            return
+        elif ps >= 0.5:
+            # Guard warned — run critic but flag the result
+            log.info("[critique] prompt_guard warning (score=%.2f) on msg from %s — proceeding",
+                     ps, sender)
 
     # --- SHA256 cache check — skip inference on duplicate text ---
     cache_key = _hashlib.sha256(text.encode()).hexdigest()
