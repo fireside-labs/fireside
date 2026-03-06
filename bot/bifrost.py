@@ -1148,7 +1148,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         # Original Bifrost routes
-        bifrost_routes = ("/request", "/propose-command", "/receive-files", "/fetch-file", "/execute", "/proposal-result", "/self-update", "/hook", "/notify", "/memory-sync", "/node-status")
+        bifrost_routes = ("/request", "/propose-command", "/receive-files", "/fetch-file", "/execute", "/proposal-result", "/self-update", "/hook", "/notify", "/memory-sync", "/node-status", "/shared-state-sync")
         # War Room routes
         war_room_routes = ("/war-room/post", "/war-room/task", "/war-room/claim",
                            "/war-room/complete", "/war-room/status", "/ask",

@@ -40,9 +40,14 @@ def _wire_memory(handler_class):
     original_do_get  = handler_class.do_GET
     original_do_post = handler_class.do_POST
 
-    # Load shared_state module once
+    # Load shared_state module once — use importlib to avoid sys.path issues after self-update re-exec
     try:
-        from war_room import shared_state as _ss
+        import importlib.util as _ilu
+        _ss_path = BASE / "war_room" / "shared_state.py"
+        _ss_spec = _ilu.spec_from_file_location("war_room.shared_state", str(_ss_path))
+        _ss = _ilu.module_from_spec(_ss_spec)
+        _ss_spec.loader.exec_module(_ss)
+        log.info("[bifrost_local] shared_state loaded from %s", _ss_path)
     except Exception as e:
         log.warning("[bifrost_local] shared_state unavailable: %s", e)
         _ss = None
@@ -62,7 +67,10 @@ def _wire_memory(handler_class):
     def do_POST_extended(self):
         if self.path == "/memory-sync":
             _handle_memory_write(self, _mq)
-        elif self.path == "/shared-state-sync" and _ss is not None:
+        elif self.path == "/shared-state-sync":
+            if _ss is None:
+                _json_respond(self, 503, {"error": "shared_state module not loaded"})
+                return
             import json as _j
             _length = int(self.headers.get("Content-Length", 0))
             _body   = _j.loads(self.rfile.read(_length))

@@ -367,7 +367,7 @@ def register_routes(handler_class, config):
     _orig_post = handler_class.do_POST
 
     def do_POST(self):
-        if self.path in ("/memory-sync", "/explain", "/pheromone"):
+        if self.path in ("/memory-sync", "/explain", "/pheromone", "/shared-state-sync"):
             import json
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
