@@ -65,6 +65,13 @@ class WarRoomRoutes:
         """GET /ask/info — returns this node's model capabilities."""
         return 200, self.ask.info()
 
+    def handle_tombstones(self, path: str) -> tuple[int, dict]:
+        """GET /war-room/tombstones?since=<iso> — returns deleted IDs since timestamp."""
+        from urllib.parse import urlparse, parse_qs
+        params = parse_qs(urlparse(path).query)
+        since = params.get("since", [None])[0]
+        return 200, self.store.get_tombstones(since=since)
+
     # ------------------------------------------------------------------
     # POST handlers — take body dict, return (status_code, response_dict)
     # ------------------------------------------------------------------

@@ -1155,6 +1155,9 @@ class BifrostHandler(BaseHTTPRequestHandler):
             if self.path.startswith("/war-room/read"):
                 code, data = _war_room_routes.handle_read(self.path)
                 self._respond(code, data); return
+            if self.path.startswith("/war-room/tombstones"):
+                code, data = _war_room_routes.handle_tombstones(self.path)
+                self._respond(code, data); return
         if self.path.startswith("/leaderboard"):
             self._respond(*_compute_leaderboard()); return
 

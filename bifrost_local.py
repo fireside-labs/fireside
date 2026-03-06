@@ -329,11 +329,14 @@ def register_routes(handler_class, config):
                                 "current_seq": _save_point.current_seq()})
         elif self.path.startswith("/procedures") and _PROC_OK:
             import urllib.parse as _up6
-            _qs = _up6.parse_qs(_up6.urlparse(self.path).query)
+            _qs  = _up6.parse_qs(_up6.urlparse(self.path).query)
             _tt  = _qs.get("task_type", [None])[0]
+            _q   = _qs.get("q", [""])[0].strip() or None
             _lim = int((_qs.get("limit") or ["5"])[0])
             _lim = max(1, min(_lim, 50))
-            self._respond(200, _procedures.get_procedures(task_type=_tt, limit=_lim))
+            _mc  = float((_qs.get("min_confidence") or ["0.0"])[0])
+            self._respond(200, _procedures.get_procedures(
+                task_type=_tt, q=_q, limit=_lim, min_confidence=_mc))
         elif self.path == "/plasticity" and _PLASTICITY_OK:
             self._respond(200, _plasticity.get_plasticity())
         elif self.path == "/confidence" and _CONFIDENCE_OK:
@@ -405,7 +408,7 @@ def register_routes(handler_class, config):
     def do_POST(self):
         if self.path in ("/memory-sync", "/explain", "/pheromone",
                           "/shared-state-sync", "/save-point", "/rollback",
-                          "/procedure"):
+                          "/procedure", "/procedures"):
             import json
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -466,6 +469,13 @@ def register_routes(handler_class, config):
                 )
                 code = 200 if result.get("ok") else 400
                 self._respond(code, result)
+            elif self.path == "/procedures" and _PROC_OK:
+                procs = body.get("procedures", [])
+                if not isinstance(procs, list):
+                    self._respond(400, {"error": "procedures must be a list"})
+                else:
+                    result = _procedures.upsert_batch(procs)
+                    self._respond(200, result)
             else:
                 self._respond(503, {"error": "module not available"})
         else:
@@ -537,6 +547,28 @@ def register_routes(handler_class, config):
                 _orig_post(self)
 
     handler_class.do_POST = do_POST
+
+    # -----------------------------------------------------------------------
+    # DELETE /procedure?id=proc_xxx  — remove a bad procedure
+    # -----------------------------------------------------------------------
+    _orig_delete = getattr(handler_class, "do_DELETE", None)
+
+    def do_DELETE(self):
+        if self.path.startswith("/procedure") and _PROC_OK:
+            import urllib.parse as _up7
+            _pid = _up7.parse_qs(_up7.urlparse(self.path).query).get("id", [None])[0]
+            if not _pid:
+                self._respond(400, {"error": "id parameter required"})
+            else:
+                result = _procedures.delete_procedure(_pid)
+                code = 200 if result.get("ok") else (404 if "not found" in result.get("error","") else 400)
+                self._respond(code, result)
+        elif _orig_delete:
+            _orig_delete(self)
+        else:
+            self._respond(405, {"error": "method not allowed"})
+
+    handler_class.do_DELETE = do_DELETE
 
     log.info("bifrost_local: routes registered (circuit=%s memory=%s explain=%s pheromone=%s mycelium=%s)",
              _CIRCUIT_OK, _MEMORY_OK, _EXPLAIN_OK, _PHEROMONE_OK, _MYCELIUM_OK)
