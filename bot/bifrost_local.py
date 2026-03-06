@@ -236,8 +236,21 @@ def _json_respond(handler, code: int, data: dict):
 _SKIP_TYPES = {"status", "note", "tattle", "heartbeat", "update", "info", "praise", "alert"}
 _CRITIQUE_TYPES = {"idea", "proposal", "architecture", "design", "plan"}
 _CRITIQUE_THRESHOLD = 0.6
-_CRITIC_MODEL = "qwen3.5:35b"   # Thor's only LLM — used for critic pass
-_MAIN_MODEL   = "qwen3.5:35b"   # same model, same hardware, 5090 handles it
+
+# Multi-model critic: try fast model first, fall back to heavy model
+_CRITIC_MODEL_FAST = "qwen2.5:7b"    # ~5GB VRAM — critic pass, faster
+_CRITIC_MODEL_FULL = "qwen3.5:35b"   # ~26GB VRAM — fallback if 7b unavailable
+_MAIN_MODEL        = "qwen3.5:35b"   # main inference model
+
+# SHA256 critique result cache — avoid re-running inference on identical text
+# {sha256_hex: {"result": {...}, "ts": float}}
+import hashlib as _hashlib
+_CRITIQUE_CACHE: dict = {}
+_CRITIQUE_CACHE_TTL = 600   # seconds (10 minutes)
+
+# Critique calibration stats
+_CRITIQUE_STATS = {"total": 0, "passed": 0, "rejected": 0, "cached": 0,
+                   "fast_model": 0, "full_model": 0, "skipped": 0}
 
 _CRITIC_SYSTEM = """You are a ruthless, systematic critic reviewing a technical proposal for a distributed AI agent mesh.
 Your job: find every logical flaw, missing edge case, weak assumption, and gap in the proposal.
@@ -331,6 +344,7 @@ def _handle_critique(handler, config):
 
     # --- Type gate: skip critic for routine messages ---
     if msg_type in _SKIP_TYPES and msg_type not in _CRITIQUE_TYPES:
+        _CRITIQUE_STATS["skipped"] += 1
         _json_respond(handler, 200, {
             "pass":    True,
             "score":   1.0,
@@ -339,6 +353,17 @@ def _handle_critique(handler, config):
             "type":    msg_type,
             "skipped": True,
         })
+        return
+
+    # --- SHA256 cache check — skip inference on duplicate text ---
+    cache_key = _hashlib.sha256(text.encode()).hexdigest()
+    cached = _CRITIQUE_CACHE.get(cache_key)
+    if cached and (time.time() - cached["ts"]) < _CRITIQUE_CACHE_TTL:
+        _CRITIQUE_STATS["cached"] += 1
+        res = cached["result"]
+        log.info("[critique] Cache hit for %s/%s (age=%.0fs)",
+                 msg_type, sender, time.time() - cached["ts"])
+        _json_respond(handler, 200, {**res, "cached": True})
         return
 
     # --- Build critic system prompt + personality preamble ---
@@ -350,16 +375,20 @@ def _handle_critique(handler, config):
 
     critic_system = _CRITIC_SYSTEM + personality_preamble
 
-    # --- Run critic pass ---
+    # --- Run critic pass: try fast model first, fall back to full ---
     prompt = f"[TYPE: {msg_type}] [FROM: {sender}]\n\n{text}"
     raw_response = None
     model_used   = None
 
-    for model in [_CRITIC_MODEL, _MAIN_MODEL]:
+    for model in [_CRITIC_MODEL_FAST, _CRITIC_MODEL_FULL]:
         try:
             raw_response = _ollama_generate(model, critic_system, prompt,
                                             ollama, extra_params=ollama_params)
-            model_used   = model
+            model_used = model
+            if model == _CRITIC_MODEL_FAST:
+                _CRITIQUE_STATS["fast_model"] += 1
+            else:
+                _CRITIQUE_STATS["full_model"] += 1
             break
         except Exception as e:
             log.warning("[critique] Model %s failed: %s", model, e)
@@ -388,19 +417,33 @@ def _handle_critique(handler, config):
         return
 
     passed = score >= _CRITIQUE_THRESHOLD
+    _CRITIQUE_STATS["total"] += 1
+    if passed:
+        _CRITIQUE_STATS["passed"] += 1
+    else:
+        _CRITIQUE_STATS["rejected"] += 1
 
-    log.info("[critique] %s/%s from=%s score=%.2f pass=%s flaws=%d",
-             msg_type, model_used, sender, score, passed, len(flaws))
-
-    _json_respond(handler, 200, {
-        "pass":    passed,
-        "score":   round(score, 3),
-        "flaws":   flaws,
-        "verdict": verdict,
-        "type":    msg_type,
-        "model":   model_used,
+    # Store in cache
+    result_obj = {
+        "pass":      passed,
+        "score":     round(score, 3),
+        "flaws":     flaws,
+        "verdict":   verdict,
+        "type":      msg_type,
+        "model":     model_used,
         "threshold": _CRITIQUE_THRESHOLD,
-    })
+    }
+    _CRITIQUE_CACHE[cache_key] = {"result": result_obj, "ts": time.time()}
+    # Prune stale cache entries (keep it bounded)
+    if len(_CRITIQUE_CACHE) > 500:
+        oldest = sorted(_CRITIQUE_CACHE.items(), key=lambda x: x[1]["ts"])[:100]
+        for k, _ in oldest:
+            _CRITIQUE_CACHE.pop(k, None)
+
+    log.info("[critique] %s/%s from=%s score=%.2f pass=%s flaws=%d model=%s",
+             msg_type, model_used, sender, score, passed, len(flaws), model_used)
+
+    _json_respond(handler, 200, result_obj)
 
 
 # ---------------------------------------------------------------------------
@@ -573,6 +616,17 @@ def _wire_hardening(handler_class, config):
     def do_GET_hardening(self):
         if self.path == "/circuit-status":
             _handle_circuit_status(self)
+        elif self.path == "/critique-stats":
+            _json_respond(self, 200, {
+                **_CRITIQUE_STATS,
+                "cache_size":   len(_CRITIQUE_CACHE),
+                "cache_ttl_s":  _CRITIQUE_CACHE_TTL,
+                "threshold":    _CRITIQUE_THRESHOLD,
+                "fast_model":   _CRITIC_MODEL_FAST,
+                "full_model":   _CRITIC_MODEL_FULL,
+                "pass_rate":    round(
+                    _CRITIQUE_STATS["passed"] / max(1, _CRITIQUE_STATS["total"]), 3),
+            })
         elif self.path.startswith("/catch-up"):
             _handle_catch_up(self)
         else:
@@ -586,7 +640,7 @@ def _wire_hardening(handler_class, config):
 
     handler_class.do_GET  = do_GET_hardening
     handler_class.do_POST = do_POST_hardening
-    log.info("[bifrost_local] Hardening routes: /circuit-status, /reload-personality, /catch-up")
+    log.info("[bifrost_local] Hardening routes: /circuit-status, /critique-stats, /reload-personality, /catch-up")
 
 
 def _handle_circuit_status(handler):

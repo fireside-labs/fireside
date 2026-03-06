@@ -19,6 +19,10 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+# Node health endpoint base URLs — populated from config
+_NODE_URLS: dict[str, str] = {}
+_VRAM_OVERLOAD_THRESHOLD = 0.90   # 90% VRAM used = skip this node
+
 # ---------------------------------------------------------------------------
 # Fallback profiles — used when a node hasn't pushed its own skills.json yet
 # ---------------------------------------------------------------------------
@@ -120,6 +124,45 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (mag_a * mag_b)
 
 
+def _get_node_load(node: str, config: dict = None) -> dict:
+    """
+    Fetch /health from a node and return load info.
+    Returns {"overloaded": bool, "vram_used": float, "vram_total": float}
+    """
+    # Build URL from config or _NODE_URLS registry
+    if node in _NODE_URLS:
+        base = _NODE_URLS[node]
+    elif config and "nodes" in config and node in config["nodes"]:
+        n = config["nodes"][node]
+        base = f"http://{n['ip']}:{n.get('port', 8765)}"
+    else:
+        return {"overloaded": False, "vram_used": 0, "vram_total": 0, "error": "no url"}
+    try:
+        with urllib.request.urlopen(f"{base}/health", timeout=3) as r:
+            data = json.loads(r.read())
+            load = data.get("load", {})
+            total = float(load.get("total_vram_gb") or 0)
+            # Estimate used VRAM: 0 models loaded = 0, otherwise use total as proxy
+            models = load.get("models_loaded", 0)
+            # We don't have a "used" field, just total occupied by pinned models
+            # Use models_loaded > 0 as alive signal; overload = not responding
+            return {
+                "overloaded": False,
+                "vram_total": total,
+                "models_loaded": models,
+                "alive": True,
+            }
+    except Exception:
+        # Unreachable = treat as overloaded to avoid routing to dead node
+        return {"overloaded": True, "alive": False, "vram_total": 0}
+
+
+def set_node_urls(urls: dict[str, str]):
+    """Register base URLs for nodes so load checks can reach them."""
+    global _NODE_URLS
+    _NODE_URLS.update(urls)
+
+
 def _profile_to_text(profile: dict) -> str:
     """Turn a skills profile into a natural language string for embedding."""
     parts = []
@@ -194,13 +237,20 @@ class Router:
         scores = [self.score(p, task) for p in self._profiles]
         return sorted(scores, key=lambda x: x["score"], reverse=True)
 
-    def route(self, task: str, exclude: list = None) -> Optional[dict]:
-        exclude = exclude or []
+    def route(self, task: str, exclude: list = None,
+              load_check: bool = False, config: dict = None) -> Optional[dict]:
+        exclude = list(exclude or [])
+        if load_check:
+            # Skip nodes that are unreachable
+            dead = [n for n in self.available_nodes()
+                    if _get_node_load(n, config).get("overloaded")]
+            exclude = list(set(exclude + dead))
         ranked = [s for s in self.score_all(task) if s["node"] not in exclude]
         if not ranked:
             return None
         best = ranked[0]
         best["confident"] = best["score"] > 0
+        best["load_checked"] = load_check
         return best
 
     # ------------------------------------------------------------------
@@ -227,18 +277,25 @@ class Router:
             self._get_personality_vector(profile["node"])
 
     def semantic_route(self, message: str, top_k: int = 2,
-                       exclude: list = None) -> list[dict]:
+                       exclude: list = None,
+                       load_check: bool = False, config: dict = None) -> list[dict]:
         """
         Embed message and rank agents by cosine similarity to their personality vectors.
+        Optionally skips nodes that fail /health check (unreachable = overloaded).
         Returns top_k matches sorted by similarity descending.
-
-        Returns: [{"node": "freya", "similarity": 0.91, "role": "..."}, ...]
         """
-        exclude = exclude or []
+        exclude = list(exclude or [])
+        if load_check:
+            dead = [n for n in self.available_nodes()
+                    if _get_node_load(n, config).get("overloaded")]
+            exclude = list(set(exclude + dead))
+            if dead:
+                import logging
+                logging.getLogger("router").info("[router] Skipping unreachable nodes: %s", dead)
+
         try:
             msg_vec = _embed(message, self._ollama_base)
-        except Exception as e:
-            # Fall back to keyword routing on Ollama failure
+        except Exception:
             results = self.score_all(message)
             return [
                 {"node": r["node"], "similarity": max(0.0, r["score"] / 10.0),
@@ -256,10 +313,11 @@ class Router:
                 continue
             sim = _cosine(msg_vec, pvec)
             scores.append({
-                "node":       node,
-                "similarity": round(sim, 4),
-                "role":       profile.get("role", ""),
-                "method":     "semantic",
+                "node":         node,
+                "similarity":   round(sim, 4),
+                "role":         profile.get("role", ""),
+                "method":       "semantic",
+                "load_checked": load_check,
             })
 
         return sorted(scores, key=lambda x: x["similarity"], reverse=True)[:top_k]

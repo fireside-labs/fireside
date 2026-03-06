@@ -259,12 +259,41 @@ def consolidate(memories: list[dict], dry_run: bool = False) -> dict:
     return stats
 
 
+def rotate_event_log(days: int = 30, dry_run: bool = False):
+    """Delete events older than `days` days from mesh_events.db."""
+    import sqlite3
+    db_path = BASE / "mesh_events.db"
+    if not db_path.exists():
+        log.info("No mesh_events.db found — nothing to rotate")
+        return 0
+    cutoff = time.time() - (days * 86400)
+    try:
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM events WHERE ts < ?", (cutoff,))
+        count = c.fetchone()[0]
+        if count == 0:
+            log.info("Event log rotation: 0 events older than %d days", days)
+        elif dry_run:
+            log.info("[DRY RUN] Would delete %d events older than %d days", count, days)
+        else:
+            c.execute("DELETE FROM events WHERE ts < ?", (cutoff,))
+            conn.commit()
+            log.info("Event log rotation: deleted %d events older than %d days", count, days)
+        conn.close()
+        return count
+    except Exception as e:
+        log.warning("Event log rotation failed: %s", e)
+        return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="SVD Dream Consolidation")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--test",    action="store_true", help="Inject 20 synthetic memories then run")
     parser.add_argument("--local",   action="store_true", help="Force local LanceDB")
     parser.add_argument("--limit",   type=int, default=500)
+    parser.add_argument("--no-rotate", action="store_true", help="Skip event log rotation")
     args = parser.parse_args()
 
     log.info("=== SVD Dream Consolidation ===")
@@ -278,10 +307,14 @@ def main():
 
     if not memories:
         log.info("No mortal memories to consolidate — done")
-        return
+    else:
+        stats = consolidate(memories, dry_run=args.dry_run)
+        log.info("Done: %s", stats)
 
-    stats = consolidate(memories, dry_run=args.dry_run)
-    log.info("Done: %s", stats)
+    # Rotate old event log entries (runs every night at 2 AM anyway)
+    if not args.no_rotate:
+        rotated = rotate_event_log(days=30, dry_run=args.dry_run)
+        log.info("Event log: %d old entries pruned", rotated)
 
 
 if __name__ == "__main__":
