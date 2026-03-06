@@ -78,6 +78,14 @@ except ImportError as e:
     _ATTENTION_OK = False
     log.warning("bifrost_local: attention unavailable: %s", e)
 
+try:
+    from war_room import dream_journal as _dj
+    _DJ_OK = True
+except ImportError as e:
+    _dj = None
+    _DJ_OK = False
+    log.warning("bifrost_local: dream_journal unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -210,6 +218,12 @@ def register_routes(handler_class, config):
             self._respond(200, _metabolic.get_rate())
         elif self.path == "/attention" and _ATTENTION_OK:
             self._respond(200, _attention.get_attention())
+        elif self.path.startswith("/dream-journal") and _DJ_OK:
+            import urllib.parse as _up
+            qs  = _up.parse_qs(_up.urlparse(self.path).query)
+            lim = int((qs.get("limit") or ["20"])[0])
+            ev  = (qs.get("event") or [""])[0]
+            self._respond(200, _dj.get_journal(limit=lim, event_filter=ev))
         else:
             _orig_get(self)
 
@@ -228,9 +242,24 @@ def register_routes(handler_class, config):
 
             if self.path == "/memory-sync" and _MEMORY_OK:
                 code, data = _mq.handle_upsert(body)
-                if _METABOLIC_OK and code == 200:
-                    written = data.get("upserted", 0) if isinstance(data, dict) else 0
-                    _metabolic.record_memory_write(written)
+                if isinstance(data, dict) and code == 200:
+                    written   = data.get("upserted", 0)
+                    permanent = data.get("permanent", 0)
+                    total     = data.get("total", 0)
+                    if _METABOLIC_OK:
+                        _metabolic.record_memory_write(written)
+                    if _DJ_OK:
+                        _dj.record_consolidation(written, permanent, total)
+                        # Journal any permanent/high-importance memories individually
+                        for mem in body.get("memories", []):
+                            imp = float(mem.get("importance", 0))
+                            perm = bool(mem.get("permanent", False))
+                            if perm or imp >= 0.85:
+                                _dj.record_milestone(
+                                    content    = mem.get("content", ""),
+                                    importance = imp,
+                                    permanent  = perm,
+                                )
                 self._respond(code, data)
             elif self.path == "/explain" and _explain:
                 code, data = _explain.handle(body)

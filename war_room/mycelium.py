@@ -286,6 +286,12 @@ def _cycle() -> None:
     for node, evs in stressed.items():
         if node in _healed_this_cycle:
             continue
+        # Journal the stress episode
+        try:
+            from war_room import dream_journal as _dj
+            _dj.record_stress(node, len(evs))
+        except Exception:
+            pass
         _heal(node, evs)
         _healed_this_cycle.add(node)
 
@@ -344,6 +350,11 @@ def _heal(node: str, events: list) -> None:
         if injected > 0:
             log.info("[immune] Vaccination complete: %s healed instantly (%d memories)",
                      node, injected)
+            try:
+                from war_room import dream_journal as _dj
+                _dj.record_healing(node, injected, via_vaccine=True)
+            except Exception:
+                pass
             return
         log.info("[immune] Vaccine had no viable memories — falling back to fresh search")
 
@@ -395,6 +406,11 @@ def _heal(node: str, events: list) -> None:
         log.info("[mycelium] Healed %s with %d memories — recording vaccine", node, injected)
         # === RECORD VACCINE: learn this cure for future instant response ===
         _record_vaccine(fingerprint, topics, cured_ids)
+        try:
+            from war_room import dream_journal as _dj
+            _dj.record_healing(node, injected, via_vaccine=False)
+        except Exception:
+            pass
 
 
 def _query_memory(topic: str) -> list:
