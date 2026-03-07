@@ -1,45 +1,90 @@
 {
-  "telegram_bot_token": "8742485890:AAEuXE8U41GO7na64WLUiXGhBArLzMqd2AQ",
-  "telegram_chat_id": 7111843831,
-  "listen_port": 8765,
-  "war_room": {
-    "sync_interval_seconds": 30,
-    "max_messages": 500,
-    "overseer_interval_seconds": 60
-  },
-  "nodes": {
-    "thor": {
-      "ip": "100.117.255.38",
-      "port": 8765,
-      "user": "Jorda"
-    },
-    "odin": {
-      "ip": "100.105.27.121",
-      "port": 8765,
-      "user": "Jorda"
-    },
-    "freya": {
-      "ip": "100.102.105.3",
-      "port": 8765,
-      "user": "Jorda"
-    },
-    "heimdall": {
-      "ip": "100.108.153.23",
-      "port": 8765,
-      "user": "Jorda"
-    },
-    "hermes": {
-      "ip": "100.86.195.123",
-      "port": 8765,
-      "user": "Jorda"
-    }
-  },
-  "this_node": "thor",
-  "agent": {
-    "id": "thor",
-    "role": "backend_engineer",
-    "local_model": "qwen3.5:35b",
-    "cloud_model": "deepseek-ai/deepseek-r1",
-    "cloud_base_url": "https://integrate.api.nvidia.com/v1"
-  }
+    "this_node":  "freya",
+    "telegram_polling":  false,
+    "agent":  {
+                  "id":  "freya",
+                  "role":  "frontend_engineer",
+                  "local_model":  "qwen3.5:35b",
+                  "cloud_model":  "moonshot-v1-128k",
+                  "cloud_base_url":  "https://api.moonshot.cn/v1"
+              },
+    "hooks":  {
+                  "node:error":  [
+                                     "telegram_alert",
+                                     "event_log",
+                                     "heimdall_audit"
+                                 ],
+                  "node:offline":  [
+                                       "telegram_alert",
+                                       "event_log",
+                                       "heimdall_audit"
+                                   ],
+                  "model:fallback":  [
+                                         "telegram_alert",
+                                         "event_log",
+                                         "heimdall_audit"
+                                     ],
+                  "task:complete":  [
+                                        "event_log",
+                                        "memory_write",
+                                        "crispr_extract"
+                                    ],
+                  "command:approve":  [
+                                          "event_log",
+                                          "heimdall_audit"
+                                      ],
+                  "command:reject":  [
+                                         "event_log",
+                                         "heimdall_audit"
+                                     ],
+                  "command:error":  [
+                                        "event_log",
+                                        "heimdall_audit"
+                                    ],
+                  "sync:complete":  [
+                                        "log_only"
+                                    ],
+                  "sync:failed":  [
+                                      "telegram_alert",
+                                      "event_log",
+                                      "heimdall_audit"
+                                  ]
+              },
+    "listen_port":  8765,
+    "memory_master":  "freya",
+    "nodes":  {
+                  "thor":  {
+                               "ip":  "100.117.255.38",
+                               "port":  8765,
+                               "user":  "Jorda"
+                           },
+                  "odin":  {
+                               "ip":  "100.105.27.121",
+                               "port":  8765,
+                               "user":  "Jorda"
+                           },
+                  "freya":  {
+                                "ip":  "100.102.105.3",
+                                "port":  8765,
+                                "user":  "Jorda"
+                            },
+                  "heimdall":  {
+                                   "ip":  "100.108.153.23",
+                                   "port":  8765,
+                                   "user":  "Jorda"
+                               },
+                  "hermes":  {
+                                 "ip":  "100.86.195.123",
+                                 "port":  8765,
+                                 "user":  "Jorda"
+                             }
+              },
+    "telegram_bot_token":  "8742485890:AAEuXE8U41GO7na64WLUiXGhBArLzMqd2AQ",
+    "telegram_chat_id":  7111843831,
+    "war_room":  {
+                     "sync_interval_seconds":  30,
+                     "max_messages":  500,
+                     "overseer_interval_seconds":  60
+                 },
+    "_note":  "this_node intentionally absent ╬ô├ç├╢ each node discovers identity via hostname ╬ô├Ñ├å config.\u003cnode\u003e.json"
 }

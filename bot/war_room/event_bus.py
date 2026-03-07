@@ -1,13 +1,13 @@
 """
-event_bus.py — Freya's Internal Event Bus (Pillar 8: IIT / Phi)
+event_bus.py ΓÇö Freya's Internal Event Bus (Pillar 8: IIT / Phi)
 
 Purpose:
     Lightweight in-process pub/sub hub. Gives every Bifrost subsystem a shared
     communication channel so that significant events in one module can trigger
-    reactions in another — without hard-wiring imports between them.
+    reactions in another ΓÇö without hard-wiring imports between them.
 
     The more cross-module connections, the higher the system's integrated
-    information (Φ). This is the connective tissue.
+    information (╬ª). This is the connective tissue.
 
 Usage:
     from war_room import event_bus as bus
@@ -15,7 +15,7 @@ Usage:
     # Subscribe (typically called once in register_routes())
     bus.subscribe("hypothesis.confirmed", my_handler)
 
-    # Publish (from anywhere — hypotheses.py, circuit.py, etc.)
+    # Publish (from anywhere ΓÇö hypotheses.py, circuit.py, etc.)
     bus.publish("hypothesis.confirmed", {"id": "hyp_abc", "confidence": 0.85})
 
 Handler contract:
@@ -56,7 +56,7 @@ log = logging.getLogger("bifrost.event_bus")
 # ---------------------------------------------------------------------------
 
 _lock        = threading.Lock()
-_subscribers: dict[str, list[Callable]] = {}   # topic → [handler, ...]
+_subscribers: dict[str, list[Callable]] = {}   # topic ΓåÆ [handler, ...]
 _event_log: deque = deque(maxlen=500)           # rolling history for self-model
 
 
@@ -74,13 +74,13 @@ def subscribe(topic: str, handler: Callable) -> None:
     """
     with _lock:
         _subscribers.setdefault(topic, []).append(handler)
-    log.debug("[bus] subscribed %s → %s", topic, handler.__name__ if hasattr(handler, "__name__") else repr(handler))
+    log.debug("[bus] subscribed %s ΓåÆ %s", topic, handler.__name__ if hasattr(handler, "__name__") else repr(handler))
 
 
 def publish(topic: str, payload: dict) -> None:
     """
     Publish an event. All matching handlers are dispatched in daemon threads.
-    Returns immediately — never blocks the caller.
+    Returns immediately ΓÇö never blocks the caller.
     """
     event = {
         "topic":   topic,
@@ -94,10 +94,10 @@ def publish(topic: str, payload: dict) -> None:
         handlers = _collect_handlers(topic)
 
     if not handlers:
-        log.debug("[bus] publish %s — no subscribers", topic)
+        log.debug("[bus] publish %s ΓÇö no subscribers", topic)
         return
 
-    log.debug("[bus] publish %s → %d handler(s)", topic, len(handlers))
+    log.debug("[bus] publish %s ΓåÆ %d handler(s)", topic, len(handlers))
 
     for handler in handlers:
         t = threading.Thread(
@@ -125,7 +125,7 @@ def get_log(limit: int = 50, topic_filter: str = "") -> list:
 
 
 def subscriber_count() -> dict:
-    """Return a dict of topic → subscriber count (for /event-log status)."""
+    """Return a dict of topic ΓåÆ subscriber count (for /event-log status)."""
     with _lock:
         return {t: len(hs) for t, hs in _subscribers.items()}
 

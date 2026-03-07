@@ -131,6 +131,66 @@ def mark_consumed():
 
 
 # ---------------------------------------------------------------------------
+# Phalanx — Two-node consensus peers
+# ---------------------------------------------------------------------------
+
+CONSENSUS_PEERS = {
+    "odin":     "http://100.105.27.121:8765",
+    "freya":    "http://100.102.105.3:8765",
+    "thor":     "http://100.117.255.38:8765",
+    "heimdall": "http://100.108.153.23:8765",
+}
+
+# Which node is this? Read from config if present, else default.
+try:
+    import os, json as _json
+    _cfg_path = Path(__file__).parent / "config.json"
+    _cfg = _json.loads(_cfg_path.read_text(encoding="utf-8")) if _cfg_path.exists() else {}
+    _SELF_NODE = _cfg.get("id", "heimdall")
+except Exception:
+    _SELF_NODE = "heimdall"
+
+
+def request_consensus(concern: str, response_snippet: str, node: str) -> bool:
+    """Ask a peer Stand for a second opinion. Returns True if peer also sees a concern.
+
+    Falls back to True (single-node, write whisper) if no peer is reachable.
+    """
+    payload = json.dumps({
+        "response": response_snippet,
+        "context": concern,
+        "requesting_node": _SELF_NODE,
+    }).encode()
+
+    for peer_name, peer_url in CONSENSUS_PEERS.items():
+        if peer_name == _SELF_NODE:
+            continue  # skip self
+        try:
+            req = urllib.request.Request(
+                f"{peer_url}/stand-consensus",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data = json.loads(r.read())
+                verdict = data.get("verdict", "clear")
+                if verdict == "concern":
+                    log.info("[stand] PHALANX: %s confirms concern — writing whisper", peer_name)
+                    return True
+                else:
+                    log.info("[stand] PHALANX: %s says clear — false positive, skipping whisper", peer_name)
+                    return False
+        except Exception as e:
+            log.debug("[stand] PHALANX: %s unreachable (%s) — trying next peer", peer_name, e)
+            continue
+
+    # No peer reachable — fall back to single-node behavior (write whisper)
+    log.warning("[stand] PHALANX: no peers reachable — falling back to single-node decision")
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Background checker
 # ---------------------------------------------------------------------------
 
@@ -180,7 +240,10 @@ def _check_once(item: dict, ollama_base: str):
 
     if result.lower().startswith("concern"):
         concern = result.replace("CONCERN:", "").replace("concern:", "").strip()
-        _append_whisper(concern, response, node)
+        # ── Phalanx: require two-node consensus before writing whisper ──
+        if request_consensus(concern, response[:500], node):
+            _append_whisper(concern, response, node)
+        # else: peer said clear — log as false positive, skip whisper
     else:
         log.debug("[stand] clear (from %s)", node)
 

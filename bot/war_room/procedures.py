@@ -1,7 +1,7 @@
 """
-procedures.py — Freya's Procedural Memory (v2).
+procedures.py ΓÇö Freya's Procedural Memory (v2).
 
-Captures *how to approach* a task type — persistent skill across sessions.
+Captures *how to approach* a task type ΓÇö persistent skill across sessions.
 
 LanceDB table: "procedures"
 
@@ -11,33 +11,33 @@ Schema:
   approach    str   full description of the approach taken
   embedding   f32[] nomic-embed-text vector of approach
   outcome     str   "success" | "failure" | "partial"
-  confidence  f32   0.0 – 1.0
+  confidence  f32   0.0 ΓÇô 1.0
   uses        i32   times applied (incremented on each match-merge)
   last_used   i64   unix timestamp
   tags        str[] list of tag strings
   permanent   bool
 
 Ranking:
-  score = confidence × log(1 + uses) × recency_decay(last_used)
-  where recency_decay = exp(-λ × age_days), λ=0.02 (half-life ~35 days)
+  score = confidence ├ù log(1 + uses) ├ù recency_decay(last_used)
+  where recency_decay = exp(-╬╗ ├ù age_days), ╬╗=0.02 (half-life ~35 days)
 
   Frequently-used, recent, high-confidence procedures surface first.
 
 Endpoints (wired in bifrost_local.py):
   POST  /procedure   {task_type, approach, outcome, confidence, tags}
-  POST  /procedures  {procedures: [...]}   — batch insert
+  POST  /procedures  {procedures: [...]}   ΓÇö batch insert
   GET   /procedures?task_type=t&q=text&limit=5&min_confidence=0.0
   DELETE /procedure?id=proc_xxx
 
-Dedup: cosine similarity > 0.92 on same task_type → update, not insert.
+Dedup: cosine similarity > 0.92 on same task_type ΓåÆ update, not insert.
 
 Auto-population:
   auto_record(task_type, approach, outcome, confidence, tags)
-  — fire-and-forget, called after /war-room/complete on Freya.
+  ΓÇö fire-and-forget, called after /war-room/complete on Freya.
 
 Stand downgrade:
   stand_downgrade(task_type, approach_snippet)
-  — lowers confidence of closest matching procedure by 0.1.
+  ΓÇö lowers confidence of closest matching procedure by 0.1.
 """
 
 import json
@@ -64,7 +64,7 @@ _DECAY_LAMBDA   = 0.02   # half-life ~35 days for recency factor
 
 
 # ---------------------------------------------------------------------------
-# Inline cosine similarity — no coupling to memory_query
+# Inline cosine similarity ΓÇö no coupling to memory_query
 # ---------------------------------------------------------------------------
 
 def _cosine_sim(a: list, b: list) -> float:
@@ -103,7 +103,7 @@ def _embed(text: str) -> Optional[list]:
 
 
 # ---------------------------------------------------------------------------
-# ID sanitization — prevent SQL injection via f-string where clauses
+# ID sanitization ΓÇö prevent SQL injection via f-string where clauses
 # ---------------------------------------------------------------------------
 
 _SAFE_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
@@ -171,9 +171,9 @@ def _ensure_table(dim: int):
 
 def _rank(confidence: float, uses: int, last_used: int) -> float:
     """
-    confidence × log(1 + uses) × recency_decay
+    confidence ├ù log(1 + uses) ├ù recency_decay
 
-    Recency decay: exp(-λ × age_days), λ=0.02, half-life ~35 days.
+    Recency decay: exp(-╬╗ ├ù age_days), ╬╗=0.02, half-life ~35 days.
     A procedure used heavily but 6 months ago won't dominate a
     fresh but less-used one.
     """
@@ -204,14 +204,14 @@ def _upsert_one(
 
     vec = _embed(approach)
     if vec is None:
-        return {"error": "embedding failed — is Ollama running?"}
+        return {"error": "embedding failed ΓÇö is Ollama running?"}
 
     dim = len(vec)
     tbl = _ensure_table(dim)
     ts_now = int(time.time())
 
     # Search for existing procedures with same task_type using LanceDB
-    # vector search + where filter — avoids full table scan
+    # vector search + where filter ΓÇö avoids full table scan
     try:
         candidates = (
             tbl.search(vec)
@@ -235,7 +235,7 @@ def _upsert_one(
             break
 
     if match_id:
-        # Update existing — bump uses, EMA-blend confidence
+        # Update existing ΓÇö bump uses, EMA-blend confidence
         try:
             safe_mid  = _safe_id(match_id)
         except ValueError as e:
@@ -303,7 +303,7 @@ def upsert_procedure(
     proc_id:    str   = None,
     permanent:  bool  = True,
 ) -> dict:
-    """POST /procedure — write or update a single procedure."""
+    """POST /procedure ΓÇö write or update a single procedure."""
     try:
         return _upsert_one(task_type, approach, outcome, confidence,
                            tags, proc_id, permanent)
@@ -314,7 +314,7 @@ def upsert_procedure(
 
 def upsert_batch(procedures: list) -> dict:
     """
-    POST /procedures — batch upsert a list of procedures.
+    POST /procedures ΓÇö batch upsert a list of procedures.
     Each item should have: task_type, approach, and optionally
     outcome, confidence, tags, id, permanent.
     Returns {"results": [...], "inserted": N, "updated": N, "errors": N}
@@ -357,8 +357,8 @@ def get_procedures(
 
     If q is given: vector search on approach embedding, then filter.
     If task_type only: where-filter + vector search with zero vector.
-    Both use LanceDB search — no full table scan.
-    Ranked by: confidence × log(1+uses) × recency_decay.
+    Both use LanceDB search ΓÇö no full table scan.
+    Ranked by: confidence ├ù log(1+uses) ├ù recency_decay.
     """
     try:
         tbl = _get_table()
@@ -370,7 +370,7 @@ def get_procedures(
         if q:
             vec = _embed(q)
             if vec is None:
-                return {"error": "embedding failed — is Ollama running?"}
+                return {"error": "embedding failed ΓÇö is Ollama running?"}
         else:
             # Probe vector dimension from table, fall back to 768
             try:
@@ -431,7 +431,7 @@ def get_procedures(
 
 
 def delete_procedure(proc_id: str) -> dict:
-    """DELETE /procedure?id=proc_xxx — remove a bad procedure."""
+    """DELETE /procedure?id=proc_xxx ΓÇö remove a bad procedure."""
     try:
         safe_mid = _safe_id(proc_id)
     except ValueError as e:
@@ -515,7 +515,7 @@ def stand_downgrade(task_type: str, approach_snippet: str) -> None:
         old_conf = float(best.get("confidence", 0.5))
         new_conf = max(0.1, old_conf - 0.1)
         tbl.update(where=f"id = '{safe_mid}'", values={"confidence": new_conf})
-        log.info("[procedures] Stand downgrade: %s %.2f → %.2f (sim=%.2f)",
+        log.info("[procedures] Stand downgrade: %s %.2f ΓåÆ %.2f (sim=%.2f)",
                  best["id"], old_conf, new_conf, sim)
 
     except Exception as e:
