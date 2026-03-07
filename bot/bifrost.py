@@ -1648,7 +1648,6 @@ def main():
         _event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_event_loop)
         _bot = Application.builder().token(BOT_TOKEN).build().bot
-        threading.Thread(target=run_http_server, daemon=True).start()
         # Start War Room daemons
         if _gossip_sync:
             _gossip_sync.start()
