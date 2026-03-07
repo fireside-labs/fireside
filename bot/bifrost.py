@@ -1125,6 +1125,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
             if f.exists():
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(f.read_bytes())
             else:
@@ -1447,8 +1448,18 @@ class BifrostHandler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests."""
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Bifrost-Node, X-Bifrost-Signature")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.end_headers()
 
 # ---------------------------------------------------------------------------
 # Startup
