@@ -1,0 +1,11 @@
+{
+    "this_node": "heimdall",
+    "telegram_polling": false,
+    "agent": {
+        "id": "heimdall",
+        "role": "security_monitor",
+        "local_model": "qwen3.5:35b",
+        "cloud_model": "mistralai/mistral-large-2-instruct",
+        "cloud_base_url": "https://integrate.api.nvidia.com/v1"
+    }
+}
