@@ -22,8 +22,9 @@ log = logging.getLogger("bifrost.memory")
 _OLLAMA_BASE  = os.environ.get("OLLAMA_BASE", "http://127.0.0.1:11434")
 _EMBED_MODEL  = os.environ.get("EMBED_MODEL", "nomic-embed-text")
 _DB_NAME      = "memory"
-_TABLE_NAME   = "memories"
+_TABLE_NAME   = "mesh_memories"   # actual table name in memory.db
 _VECTOR_DIM   = 768
+_EMBED_FIELD  = "embedding"       # vector column name
 
 
 def _embed(text: str) -> list[float] | None:
@@ -56,12 +57,13 @@ class MemoryQueryHandler:
             import lancedb
             self._db  = lancedb.connect(str(self._db_path))
             tables = self._db.table_names()
-            if _TABLE_NAME in tables:
+            available = self._db.table_names()
+            if _TABLE_NAME in available:
                 self._tbl = self._db.open_table(_TABLE_NAME)
                 log.info("[memory_query] Connected to '%s' (%d rows)", _TABLE_NAME, self._tbl.count_rows())
             else:
                 self._tbl = None
-                log.info("[memory_query] Table '%s' not found yet (empty DB)", _TABLE_NAME)
+                log.info("[memory_query] Table '%s' not found — available: %s", _TABLE_NAME, available)
         except Exception as e:
             log.warning("[memory_query] LanceDB connect failed: %s", e)
             self._db = self._tbl = None
@@ -71,33 +73,41 @@ class MemoryQueryHandler:
         if self._tbl is not None:
             return self._tbl
         if self._db is not None:
-            tables = self._db.table_names()
-            if _TABLE_NAME in tables:
+            if _TABLE_NAME in self._db.table_names():
                 self._tbl = self._db.open_table(_TABLE_NAME)
         return self._tbl
 
     def query(self, q: str, node: str = None, limit: int = 10) -> list[dict]:
-        """Semantic search. Falls back to full-table scan if Ollama down."""
+        """Semantic search over mesh_memories. Falls back to text scan if Ollama down."""
         tbl = self._get_table()
         if tbl is None:
             return []
         try:
             emb = _embed(q)
             if emb:
-                results = tbl.search(emb).limit(limit).to_list()
+                results = tbl.search(emb, vector_column_name=_EMBED_FIELD).limit(limit).to_list()
             else:
-                # Fallback: text filter
-                results = tbl.search().limit(limit * 3).to_list()
+                # Fallback: text filter on 'content' field
+                results = tbl.search().limit(limit * 5).to_list()
                 if q:
                     q_low = q.lower()
-                    results = [r for r in results if q_low in str(r.get("text", "")).lower()][:limit]
-            # Apply node filter
+                    results = [r for r in results
+                               if q_low in str(r.get("content", "")).lower()][:limit]
+            # Apply node/agent filter
             if node:
-                results = [r for r in results if r.get("node") == node]
-            # Clean up non-serializable fields
+                results = [r for r in results
+                           if r.get("node") == node or r.get("agent") == node]
+            # Serialize cleanly
             out = []
             for r in results:
-                row = {k: v for k, v in r.items() if k != "vector" and not isinstance(v, bytes)}
+                row = {}
+                for k, v in r.items():
+                    if k == _EMBED_FIELD:
+                        continue
+                    if isinstance(v, (list, dict, str, int, float, bool, type(None))):
+                        row[k] = v
+                    else:
+                        row[k] = str(v)
                 out.append(row)
             return out
         except Exception as e:
@@ -105,53 +115,66 @@ class MemoryQueryHandler:
             return []
 
     def upsert(self, body: dict) -> dict:
-        """Write or update a memory record. Auto-embeds the text field."""
+        """Write or update a memory record. Schema matches mesh_memories table."""
         if self._db is None:
             return {"error": "LanceDB not connected"}
         try:
-            import lancedb
             import pyarrow as pa
 
-            text  = body.get("text", "")
-            node  = body.get("node", "unknown")
-            tags  = body.get("tags", [])
-            ts    = body.get("timestamp", time.time())
-            mem_id = body.get("id", f"mem-{int(ts*1000)}")
+            content   = body.get("content", body.get("text", ""))
+            node      = body.get("node", "unknown")
+            agent     = body.get("agent", node)
+            tags      = body.get("tags", [])
+            ts        = int(body.get("ts", body.get("timestamp", time.time())))
+            importance = float(body.get("importance", 0.5))
+            valence    = float(body.get("valence", 0.0))
+            shared     = bool(body.get("shared", False))
+            permanent  = bool(body.get("permanent", False))
+            mem_id     = body.get("memory_id", body.get("id", f"mem-{ts}"))
 
-            emb = _embed(text) or [0.0] * _VECTOR_DIM
+            emb = _embed(content) or [0.0] * _VECTOR_DIM
 
             row = {
-                "id":        mem_id,
-                "text":      text,
-                "node":      node,
-                "tags":      json.dumps(tags),
-                "timestamp": float(ts),
-                "vector":    emb,
+                "memory_id":  mem_id,
+                "node":       node,
+                "agent":      agent,
+                "content":    content,
+                "embedding":  emb,
+                "tags":       tags if isinstance(tags, list) else [tags],
+                "importance": importance,
+                "ts":         ts,
+                "shared":     shared,
+                "permanent":  permanent,
+                "valence":    valence,
             }
 
             tbl = self._get_table()
             if tbl is None:
-                # Create table on first write
+                # Create table matching mesh_memories schema
                 schema = pa.schema([
-                    pa.field("id",        pa.utf8()),
-                    pa.field("text",      pa.utf8()),
-                    pa.field("node",      pa.utf8()),
-                    pa.field("tags",      pa.utf8()),
-                    pa.field("timestamp", pa.float64()),
-                    pa.field("vector",    pa.list_(pa.float32(), _VECTOR_DIM)),
+                    pa.field("memory_id",  pa.utf8()),
+                    pa.field("node",       pa.utf8()),
+                    pa.field("agent",      pa.utf8()),
+                    pa.field("content",    pa.utf8()),
+                    pa.field("embedding",  pa.list_(pa.float32(), _VECTOR_DIM)),
+                    pa.field("tags",       pa.list_(pa.utf8())),
+                    pa.field("importance", pa.float32()),
+                    pa.field("ts",         pa.int64()),
+                    pa.field("shared",     pa.bool_()),
+                    pa.field("permanent",  pa.bool_()),
+                    pa.field("valence",    pa.float32()),
                 ])
                 self._tbl = self._db.create_table(_TABLE_NAME, schema=schema)
                 tbl = self._tbl
                 log.info("[memory_query] Created table '%s'", _TABLE_NAME)
 
-            # Delete existing row with same id (upsert)
             try:
-                tbl.delete(f"id = '{mem_id}'")
+                tbl.delete(f"memory_id = '{mem_id}'")
             except Exception:
                 pass
             tbl.add([row])
             log.info("[memory_query] Upserted memory %s (%s)", mem_id, node)
-            return {"status": "ok", "id": mem_id, "node": node}
+            return {"status": "ok", "memory_id": mem_id, "node": node}
         except Exception as e:
             log.error("[memory_query] upsert error: %s", e)
             return {"error": str(e)}
@@ -159,19 +182,24 @@ class MemoryQueryHandler:
     def info(self) -> dict:
         tbl = self._get_table()
         if tbl is None:
-            return {"status": "empty", "table": _TABLE_NAME, "rows": 0, "db": str(self._db_path)}
+            all_tables = self._db.table_names() if self._db else []
+            return {"status": "not_found", "table": _TABLE_NAME, "available": all_tables, "db": str(self._db_path)}
         try:
             count = tbl.count_rows()
             nodes = {}
+            agents = {}
             for row in tbl.search().limit(1000).to_list():
                 n = row.get("node", "unknown")
-                nodes[n] = nodes.get(n, 0) + 1
+                a = row.get("agent", "unknown")
+                nodes[n]  = nodes.get(n, 0) + 1
+                agents[a] = agents.get(a, 0) + 1
             return {
-                "status": "ok",
-                "table":  _TABLE_NAME,
-                "rows":   count,
-                "nodes":  nodes,
-                "db":     str(self._db_path),
+                "status":  "ok",
+                "table":   _TABLE_NAME,
+                "rows":    count,
+                "nodes":   nodes,
+                "agents":  agents,
+                "db":      str(self._db_path),
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
