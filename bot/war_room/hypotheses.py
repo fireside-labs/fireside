@@ -495,13 +495,13 @@ def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float,
             raw = result.get("response", "") or result.get("thinking", "") or ""
             # Strip any remaining <think>...</think> blocks
             text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
-            # Extract the hypothesis line
+            # Extract the LAST hypothesis line (thinking models put it at the end)
+            hyp_line = None
             for line in text.splitlines():
                 if line.strip().lower().startswith("hypothesis:"):
-                    return line.strip()
-            # Fallback: label the whole response if no prefix found
-            if text:
-                return f"Hypothesis: {text[:200]}"
+                    hyp_line = line.strip()
+            if hyp_line:
+                return hyp_line
             return None
     except Exception as e:
         log.warning("[hypotheses] ollama inference failed: %s", e)
