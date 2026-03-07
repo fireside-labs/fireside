@@ -379,6 +379,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # HTTP server
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Local extensions (bifrost_local.py) -- node-specific routes
+# ---------------------------------------------------------------------------
+def _load_local_extensions(handler_class):
+    _local = BASE / 'bifrost_local.py'
+    if not _local.exists():
+        return
+    try:
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location('bifrost_local', _local)
+        _mod  = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        if hasattr(_mod, 'register_routes'):
+            _mod.register_routes(handler_class, CONFIG)
+            log.info('Loaded bifrost_local.py extensions')
+    except Exception as _le:
+        log.warning('bifrost_local.py load error: %s', _le)
+
 class BifrostHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args): log.debug(fmt, *args)
 
@@ -575,6 +593,9 @@ async def on_startup(app: Application):
     if _overseer:
         _overseer.start()
     log.info("Bifrost v5 FULL mode ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
+
+# Load node-local extensions (bifrost_local.py) BEFORE the HTTP server starts
+_load_local_extensions(BifrostHandler)
 
 def run_http_server():
     server = ThreadingHTTPServer(("0.0.0.0", LISTEN_PORT), BifrostHandler)
