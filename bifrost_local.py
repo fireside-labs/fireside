@@ -150,6 +150,14 @@ except ImportError as e:
     _PROC_OK = False
     log.warning("bifrost_local: procedures unavailable: %s", e)
 
+try:
+    from war_room import hypotheses as _hyp
+    _HYP_OK = True
+except ImportError as e:
+    _hyp = None
+    _HYP_OK = False
+    log.warning("bifrost_local: hypotheses unavailable: %s", e)
+
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
@@ -166,6 +174,10 @@ def register_routes(handler_class, config):
     We wrap the existing do_GET and do_POST methods to prepend our routes.
     """
     global _explain, _cb
+
+    # Start the dream daemon (idle-triggered hypothesis generation)
+    if _HYP_OK:
+        _hyp.start_dream_daemon()
 
     nodes = config.get("nodes", {})
     agent_cfg = config.get("agent", {})
@@ -337,6 +349,16 @@ def register_routes(handler_class, config):
             _mc  = float((_qs.get("min_confidence") or ["0.0"])[0])
             self._respond(200, _procedures.get_procedures(
                 task_type=_tt, q=_q, limit=_lim, min_confidence=_mc))
+        elif self.path.startswith("/hypotheses") and _HYP_OK:
+            import urllib.parse as _up8
+            _hyp.record_activity()
+            _hqs  = _up8.parse_qs(_up8.urlparse(self.path).query)
+            _hlim = int((_hqs.get("limit") or ["10"])[0])
+            _hlim = max(1, min(_hlim, 50))
+            _hmc  = float((_hqs.get("min_confidence") or ["0.0"])[0])
+            _ht_s = (_hqs.get("tested") or [None])[0]
+            _ht   = (True if _ht_s == "true" else (False if _ht_s == "false" else None))
+            self._respond(200, _hyp.get_hypotheses(limit=_hlim, min_confidence=_hmc, tested=_ht))
         elif self.path == "/plasticity" and _PLASTICITY_OK:
             self._respond(200, _plasticity.get_plasticity())
         elif self.path == "/confidence" and _CONFIDENCE_OK:
@@ -408,7 +430,8 @@ def register_routes(handler_class, config):
     def do_POST(self):
         if self.path in ("/memory-sync", "/explain", "/pheromone",
                           "/shared-state-sync", "/save-point", "/rollback",
-                          "/procedure", "/procedures"):
+                          "/procedure", "/procedures",
+                          "/hypotheses/generate", "/hypotheses/test"):
             import json
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -476,6 +499,21 @@ def register_routes(handler_class, config):
                 else:
                     result = _procedures.upsert_batch(procs)
                     self._respond(200, result)
+            elif self.path == "/hypotheses/generate" and _HYP_OK:
+                _hyp.record_activity()   # prevent immediate self-dream while generating
+                result = _hyp.run_dream_cycle(force=True)
+                self._respond(200, result)
+            elif self.path == "/hypotheses/test" and _HYP_OK:
+                _hyp.record_activity()
+                hid   = body.get("id", "")
+                hres  = body.get("result", "")
+                hdelta= float(body.get("confidence_delta", 0.1))
+                if not hid or not hres:
+                    self._respond(400, {"error": "id and result required"})
+                else:
+                    result = _hyp.test_hypothesis(hid, hres, hdelta)
+                    code = 200 if result.get("ok") else 400
+                    self._respond(code, result)
             else:
                 self._respond(503, {"error": "module not available"})
         else:
