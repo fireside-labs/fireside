@@ -346,7 +346,7 @@ class WarRoomStore:
                     del self._progress[k]
         return entry
 
-    def get_progress(self, task_id: str = "") -> dict | list:
+    def get_progress(self, task_id: str = ""):
         """Get progress for one task or all tasks."""
         with self._lock:
             if task_id:
