@@ -96,19 +96,18 @@ def _fetch_procedures(limit: int = 50) -> list[dict]:
         return []
 
 
-def _downgrade_procedure(proc_id: str, reason: str, dry_run: bool = False) -> bool:
-    """Reduce procedure confidence via local Bifrost."""
+def _downgrade_procedure(proc_id: str, reason: str, proc: dict,
+                          dry_run: bool = False) -> bool:
+    """Reduce procedure confidence via stand_downgrade."""
     if dry_run:
         log.info("[crucible] [DRY RUN] Would downgrade %s: %s", proc_id, reason)
         return True
     try:
-        # Use the procedures API to update confidence
-        payload = json.dumps({
-            "task_type": "",  # not needed for downgrade
-            "approach": reason,
-        }).encode()
-        # Call stand_downgrade indirectly by posting a crucible result
-        log.info("[crucible] Downgrading procedure %s: %s", proc_id, reason[:80])
+        from war_room.procedures import stand_downgrade
+        task_type = proc.get("task_type", "")
+        approach = proc.get("approach", reason)
+        stand_downgrade(task_type, approach)
+        log.info("[crucible] Downgraded procedure %s: %s", proc_id, reason[:80])
         return True
     except Exception as e:
         log.debug("[crucible] Downgrade failed: %s", e)
@@ -211,7 +210,7 @@ def run_crucible(dry_run: bool = False, limit: int = 20) -> dict:
         # Only downgrade if high-severity edges found
         if high_count > 0:
             stats["broken"] += 1
-            _downgrade_procedure(proc_id, f"Crucible found {high_count} high-severity edge cases", dry_run)
+            _downgrade_procedure(proc_id, f"Crucible found {high_count} high-severity edge cases", proc, dry_run)
             # Notify owning node
             node_ip = NODE_IPS.get(node)
             if node_ip and not dry_run:
