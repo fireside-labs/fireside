@@ -79,15 +79,38 @@ _patterns_lock = threading.Lock()
 _BLOCK_THRESHOLD = 0.8
 _WARN_THRESHOLD  = 0.5
 
-# Mesh peer IPs for antibody broadcasting
-_PEER_URLS = [
-    "http://100.105.27.121:8765",   # Odin
-    "http://100.102.105.3:8765",    # Freya (self — skipped on broadcast)
-    "http://100.117.255.38:8765",   # Thor
-    "http://100.108.153.23:8765",   # Heimdall
-]
-_MY_URL  = "http://100.102.105.3:8765"
-_MY_NODE = "freya"
+# ---------------------------------------------------------------------------
+# Mesh config — read node identity and peers from config.json so this file
+# works correctly on any node without modification.
+# ---------------------------------------------------------------------------
+
+def _load_mesh_config() -> tuple:
+    """Return (my_url, my_node, peer_urls) from config.json."""
+    import os
+    config_path = os.path.join(os.path.dirname(__file__), "..", "config.json")
+    try:
+        with open(os.path.normpath(config_path), encoding="utf-8") as f:
+            cfg = json.load(f)
+        this_node = cfg.get("this_node", "unknown")
+        nodes     = cfg.get("nodes", {})
+        port      = cfg.get("listen_port", 8765)
+        my_ip     = nodes.get(this_node, {}).get("ip", "127.0.0.1")
+        my_url    = f"http://{my_ip}:{port}"
+        peer_urls = [
+            f"http://{info['ip']}:{info.get('port', port)}"
+            for name, info in nodes.items()
+            if name != this_node and "ip" in info
+        ]
+        return my_url, this_node, peer_urls
+    except Exception as e:
+        log.warning("[prompt_guard] Could not load config.json: %s — using hardcoded fallback", e)
+        return "http://100.102.105.3:8765", "freya", [
+            "http://100.105.27.121:8765",
+            "http://100.117.255.38:8765",
+            "http://100.108.153.23:8765",
+        ]
+
+_MY_URL, _MY_NODE, _PEER_URLS = _load_mesh_config()
 
 # Persistence path for learned antibodies
 _ANTIBODY_FILE = Path(__file__).parent / "antibodies.json"
