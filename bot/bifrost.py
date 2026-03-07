@@ -36,6 +36,7 @@ from typing import Optional
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle each request in a new thread so /ask doesn't freeze the node."""
     daemon_threads = True
+    allow_reuse_address = True
 
 
 from pathlib import Path
@@ -1634,6 +1635,18 @@ class TaskPoller:
 _task_poller = None
 
 # ---------------------------------------------------------------------------
+# HTTP Server
+# ---------------------------------------------------------------------------
+
+def run_http_server():
+    """Start the HTTP server on port 8765."""
+    port = int(os.environ.get("BIFROST_HTTP_PORT", 8765))
+    _load_local_extensions(BifrostHandler)
+    httpd = ThreadingHTTPServer(("", port), BifrostHandler)
+    log.info("HTTP listening on port %d", port)
+    httpd.serve_forever()
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1661,7 +1674,9 @@ def main():
             _task_poller = TaskPoller(THIS_NODE)
             _task_poller.start()
         log.info("Bifrost v5 SEND-ONLY ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
-        _event_loop.run_forever()
+        # Run asyncio in daemon thread, HTTP server on main thread
+        threading.Thread(target=_event_loop.run_forever, daemon=True).start()
+        run_http_server()  # blocks main thread
         return
 
     app = (
