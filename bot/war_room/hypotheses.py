@@ -63,6 +63,7 @@ MEMORY_TABLE   = "mesh_memories"
 EMBED_MODEL    = "nomic-embed-text"
 DREAM_MODEL    = os.environ.get("BIFROST_DREAM_MODEL", "qwen2.5-coder:32b")
 OLLAMA_BASE    = "http://127.0.0.1:11434"
+FREYA_BASE     = os.environ.get("FREYA_BASE", "http://100.102.105.3:8765")
 EMBED_MAX_CHARS = 6000
 
 # Mesh attribution
@@ -221,18 +222,71 @@ def _ensure_table(dim: int):
 # Phase 1 Γò¼├┤Γö£├ºΓö£Γòó Salience sampling
 # ---------------------------------------------------------------------------
 
+def _fetch_freya_memories(n: int = SAMPLE_TOP_N) -> list:
+    """
+    Remote fallback: query Freya's /memory-query for memories when local
+    LanceDB has no mesh_memories table (non-Freya nodes).
+    Re-embeds content locally for cosine scoring.
+    """
+    import urllib.request
+    try:
+        url = f"{FREYA_BASE}/memory-query?limit={min(n * 4, 200)}"
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            data = json.loads(resp.read())
+        all_mems = data.get("results") or data.get("memories") or []
+        if not all_mems:
+            return []
+
+        now = time.time()
+        lam = float(os.environ.get("BIFROST_MEMORY_DECAY_LAMBDA", "0.05"))
+
+        scored = []
+        for m in all_mems:
+            imp  = float(m.get("importance", 0.5))
+            val  = float(m.get("valence", 0.0))
+            ts   = int(m.get("ts", 0))
+            perm = bool(m.get("permanent", False))
+            content = m.get("content", "")
+            if not content:
+                continue
+            # Embed locally for cosine scoring
+            emb = _embed(content[:EMBED_MAX_CHARS])
+            if not emb:
+                continue
+            age_days = max(0.0, (now - ts) / 86400.0)
+            recency  = math.exp(-lam * age_days)
+            salience = 10.0 if perm else (imp * (abs(val) + 0.1) * recency)
+            scored.append({
+                "memory_id": m.get("memory_id", "?"),
+                "content":   content,
+                "embedding": emb,
+                "importance": imp,
+                "valence":   val,
+                "ts":        ts,
+                "permanent": perm,
+                "salience":  salience,
+            })
+
+        scored.sort(key=lambda x: x["salience"], reverse=True)
+        log.info("[hypotheses] Freya remote: fetched %d, scored %d memories",
+                 len(all_mems), len(scored))
+        return scored[:n]
+
+    except Exception as e:
+        log.warning("[hypotheses] Freya remote fallback failed: %s", e)
+        return []
+
+
 def _sample_memories(n: int = SAMPLE_TOP_N) -> list:
     """
-    Pull top-N memories from LanceDB ranked by:
-      importance ╬ô├╢┬úΓö£Γòú |valence| ╬ô├╢┬úΓö£Γòú exp(-╬ô├▓┬╝╬ô├▓├╣ ╬ô├╢┬úΓö£Γòú age_days)
-    
-    Permanent memories always included (they anchor belief formation).
-    Returns list of dicts with: memory_id, content, embedding, importance, valence, ts, permanent.
+    Pull top-N memories from local LanceDB. Falls back to querying Freya
+    remotely if local table is empty or missing (non-Freya nodes).
     """
     try:
         db = _get_db()
         if MEMORY_TABLE not in db.table_names():
-            return []
+            log.info("[hypotheses] No local %s table -- querying Freya", MEMORY_TABLE)
+            return _fetch_freya_memories(n)
         tbl = db.open_table(MEMORY_TABLE)
 
         # Use a zero-vector probe to scan all rows (no semantic filter needed)
@@ -299,7 +353,8 @@ def _sample_memories_by_seed(seed_text: str, n: int = SAMPLE_TOP_N) -> list:
 
         db = _get_db()
         if MEMORY_TABLE not in db.table_names():
-            return []
+            log.info("[hypotheses] No local %s for seed search — querying Freya", MEMORY_TABLE)
+            return _fetch_freya_memories(n)
         tbl = db.open_table(MEMORY_TABLE)
 
         seed_quota     = max(2, n // 2)
