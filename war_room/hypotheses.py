@@ -1,10 +1,10 @@
 """
-hypotheses.py — Freya's Hypothesis Generator / Artificial Epistemology
+hypotheses.py ΓÇö Freya's Hypothesis Generator / Artificial Epistemology
 
 What this is:
   After importance decay prunes weak memories and the consolidation phase
   identifies the most salient survivors, this module runs a FINAL phase:
-  pairwise delta construction — taking the vector *pointing* from one
+  pairwise delta construction ΓÇö taking the vector *pointing* from one
   experience to another through the latent embedding space.
 
   That delta, labeled via Ollama inference, becomes a HYPOTHESIS:
@@ -19,16 +19,16 @@ When it runs:
   Dreams never run during active task processing.
 
 Dream cycle phases:
-  1. Salience sampling    — pull top-N memories ranked by importance × |valence| × recency
-  2. Collision detection  — pairwise cosine, filter to "interesting distance" band [0.3, 0.7]
-  3. Belief construction  — delta embedding + Ollama inference to label the hypothesis
-  4. Storage              — LanceDB `hypotheses` table, max 50 (prune lowest-conf untested)
-  5. Dream journal        — record_consolidation-style audit entry
+  1. Salience sampling    ΓÇö pull top-N memories ranked by importance ├ù |valence| ├ù recency
+  2. Collision detection  ΓÇö pairwise cosine, filter to "interesting distance" band [0.3, 0.7]
+  3. Belief construction  ΓÇö delta embedding + Ollama inference to label the hypothesis
+  4. Storage              ΓÇö LanceDB `hypotheses` table, max 50 (prune lowest-conf untested)
+  5. Dream journal        ΓÇö record_consolidation-style audit entry
 
 Endpoints (wired in bifrost_local.py):
   GET  /hypotheses?limit=10&min_confidence=0.0&tested=false
-  POST /hypotheses/generate   — on-demand generation (Philosopher's Stone, tests)
-  POST /hypotheses/test       — mark a hypothesis as confirmed/refuted + confidence delta
+  POST /hypotheses/generate   ΓÇö on-demand generation (Philosopher's Stone, tests)
+  POST /hypotheses/test       ΓÇö mark a hypothesis as confirmed/refuted + confidence delta
 """
 
 import json
@@ -43,6 +43,12 @@ from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger("war-room.hypotheses")
+
+try:
+    from war_room import event_bus as _bus
+    _BUS_OK = True
+except Exception:
+    _BUS_OK = False
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -61,7 +67,7 @@ EMBED_MAX_CHARS = 6000
 
 # Mesh attribution
 BIFROST_NODE_ID       = os.environ.get("BIFROST_NODE_ID", "freya")
-FOREIGN_CONF_DISCOUNT = 0.6    # received beliefs: conf × 0.6
+FOREIGN_CONF_DISCOUNT = 0.6    # received beliefs: conf ├ù 0.6
 SHARE_RATE_LIMIT      = 10     # max received beliefs per sender per 60s
 SHARE_MAX_AGE_S       = 3600   # reject payloads with ts > 1h old
 
@@ -212,13 +218,13 @@ def _ensure_table(dim: int):
 
 
 # ---------------------------------------------------------------------------
-# Phase 1 — Salience sampling
+# Phase 1 ΓÇö Salience sampling
 # ---------------------------------------------------------------------------
 
 def _sample_memories(n: int = SAMPLE_TOP_N) -> list:
     """
     Pull top-N memories from LanceDB ranked by:
-      importance × |valence| × exp(-λ × age_days)
+      importance ├ù |valence| ├ù exp(-╬╗ ├ù age_days)
     
     Permanent memories always included (they anchor belief formation).
     Returns list of dicts with: memory_id, content, embedding, importance, valence, ts, permanent.
@@ -273,11 +279,11 @@ def _sample_memories_by_seed(seed_text: str, n: int = SAMPLE_TOP_N) -> list:
     """
     Guided Dreaming: hybrid memory sampler seeded toward a topic.
 
-    HYBRID DESIGN — takes two pools and merges them:
+    HYBRID DESIGN ΓÇö takes two pools and merges them:
       - Pool A (n//2): memories closest to the seed by cosine similarity
-        (topical focus — what the dream is "about")
+        (topical focus ΓÇö what the dream is "about")
       - Pool B (n//2): highest-salience memories (structural diversity)
-        (ensures collision pairs exist in the 0.30–0.70 cosine band)
+        (ensures collision pairs exist in the 0.30ΓÇô0.70 cosine band)
 
     Pure seed-only sampling would return memories all in the same embedding
     neighborhood, making ALL pairwise cosine scores > 0.70 (the ceiling for
@@ -288,7 +294,7 @@ def _sample_memories_by_seed(seed_text: str, n: int = SAMPLE_TOP_N) -> list:
     try:
         seed_emb = _embed(seed_text[:EMBED_MAX_CHARS])
         if not seed_emb:
-            log.warning("[hypotheses] seed embedding failed — falling back to salience sampling")
+            log.warning("[hypotheses] seed embedding failed ΓÇö falling back to salience sampling")
             return _sample_memories(n)
 
         db = _get_db()
@@ -343,24 +349,24 @@ def _sample_memories_by_seed(seed_text: str, n: int = SAMPLE_TOP_N) -> list:
         return merged
 
     except Exception as e:
-        log.warning("[hypotheses] seed sampling failed: %s — falling back", e)
+        log.warning("[hypotheses] seed sampling failed: %s ΓÇö falling back", e)
         return _sample_memories(n)
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Collision detection (interesting distance filter)
+# Phase 2 ΓÇö Collision detection (interesting distance filter)
 # ---------------------------------------------------------------------------
 
 def _find_interesting_pairs(memories: list, k: int = MAX_PAIRS) -> list:
     """
     Compute pairwise cosine similarity.
-    Keep pairs where COLLISION_MIN ≤ cosine ≤ COLLISION_MAX:
+    Keep pairs where COLLISION_MIN Γëñ cosine Γëñ COLLISION_MAX:
       - Too similar (>0.7): delta is noise
       - Too distant (<0.3): no structural bridge
       - Middle band: non-obvious but defensible connection
 
     Weight each pair by emotional salience:
-      w = (|valence_a| + |valence_b|) × (importance_a + importance_b)
+      w = (|valence_a| + |valence_b|) ├ù (importance_a + importance_b)
     
     Return top-K pairs sorted by weight.
     """
@@ -383,14 +389,14 @@ def _find_interesting_pairs(memories: list, k: int = MAX_PAIRS) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Belief construction (Ollama inference)
+# Phase 3 ΓÇö Belief construction (Ollama inference)
 # ---------------------------------------------------------------------------
 
 def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float,
                           seed: Optional[str] = None) -> Optional[str]:
     """
     Call Ollama to articulate the structural relationship between two memories
-    as a single hypothesis — a candidate belief never directly learned.
+    as a single hypothesis ΓÇö a candidate belief never directly learned.
 
     If seed is provided (Guided Dreaming), it's appended as context so the
     hypothesis is oriented toward the seed topic.
@@ -402,7 +408,7 @@ def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float,
         f"Memory B: \"{mem_b['content'][:300]}\"\n"
         f"  Emotional tone: {_valence_label(mem_b['valence'])}, importance: {mem_b['importance']:.2f}\n\n"
         f"These two experiences are structurally related (cosine similarity: {sim:.2f}) "
-        f"but not obviously connected. You are generating a hypothesis — not a summary, "
+        f"but not obviously connected. You are generating a hypothesis ΓÇö not a summary, "
         f"not a fact, but a candidate belief about what their relationship implies.\n\n"
     )
     if seed:
@@ -412,7 +418,7 @@ def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float,
         )
     prompt += (
         f"State exactly one hypothesis in this format:\n"
-        f"Hypothesis: [a single sentence using 'may', 'suggests', or 'implies' — "
+        f"Hypothesis: [a single sentence using 'may', 'suggests', or 'implies' ΓÇö "
         f"something that was never directly stated but is structurally defensible]\n\n"
         f"Respond with only the hypothesis line. No explanation."
     )
@@ -456,7 +462,7 @@ def _valence_label(v: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4+5 — Storage and pruning
+# Phase 4+5 ΓÇö Storage and pruning
 # ---------------------------------------------------------------------------
 
 def _stand_review(text: str) -> Optional[str]:
@@ -499,18 +505,18 @@ def _store_hypothesis(
 ) -> Optional[str]:
     """
     Store one hypothesis. Returns the new ID, or None on failure.
-    Safety gate → Dedup → Embed text → Prune → Store.
+    Safety gate ΓåÆ Dedup ΓåÆ Embed text ΓåÆ Prune ΓåÆ Store.
     """
     # --- Stand review gate: reject self-destructive beliefs ---
     rejection = _stand_review(text)
     if rejection:
-        log.warning("[hypotheses] REJECTED by Stand: %s — %s", rejection, text[:60])
+        log.warning("[hypotheses] REJECTED by Stand: %s ΓÇö %s", rejection, text[:60])
         return None
 
     # --- Embed the hypothesis TEXT (not the delta vector) for semantic search ---
     text_emb = _embed(text)
     if not text_emb:
-        log.warning("[hypotheses] skip — failed to embed hypothesis text")
+        log.warning("[hypotheses] skip ΓÇö failed to embed hypothesis text")
         return None
     dim = len(text_emb)
     tbl = _ensure_table(dim)
@@ -565,11 +571,18 @@ def _store_hypothesis(
         "shared_from": shared_from,
         "ts":          ts,
     }])
+    if _BUS_OK:
+        _bus.publish("hypothesis.created", {
+            "id":          hid,
+            "text":        text[:120],
+            "confidence":  float(confidence),
+            "origin_node": origin_node or BIFROST_NODE_ID,
+        })
     return hid
 
 
 # ---------------------------------------------------------------------------
-# Phase 0 — Hypothesis decay (orphaned-root pruning)
+# Phase 0 ΓÇö Hypothesis decay (orphaned-root pruning)
 # ---------------------------------------------------------------------------
 
 # Importance below this threshold means a memory has largely faded
@@ -582,10 +595,10 @@ def _decay_hypotheses() -> dict:
 
     For each hypothesis, look up source_a and source_b in the memory table.
     If BOTH source memories have importance < IMPORTANCE_THRESHOLD, the belief
-    is considered orphaned — its roots have faded — and its confidence is halved.
+    is considered orphaned ΓÇö its roots have faded ΓÇö and its confidence is halved.
     If confidence falls below 0.10 after halving, the hypothesis is purged.
 
-    Tested (confirmed/refuted) hypotheses are never touched — they represent
+    Tested (confirmed/refuted) hypotheses are never touched ΓÇö they represent
     settled knowledge, not candidate beliefs.
 
     Returns {"decayed": N, "purged": M}
@@ -618,7 +631,7 @@ def _decay_hypotheses() -> dict:
                 if rA:
                     imp_a = float(rA[0].get("importance", 1.0))
                 else:
-                    imp_a = 0.0   # memory deleted — treat as fully decayed
+                    imp_a = 0.0   # memory deleted ΓÇö treat as fully decayed
             except Exception:
                 pass
 
@@ -632,7 +645,7 @@ def _decay_hypotheses() -> dict:
             except Exception:
                 pass
 
-            # Both roots faded — orphaned hypothesis
+            # Both roots faded ΓÇö orphaned hypothesis
             if imp_a < _IMPORTANCE_THRESHOLD and imp_b < _IMPORTANCE_THRESHOLD:
                 new_conf = conf * 0.5
                 if new_conf < 0.10:
@@ -661,7 +674,7 @@ def _decay_hypotheses() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Phase 1.5 — Nightmare Processing (Trauma Resolution)
+# Phase 1.5 ΓÇö Nightmare Processing (Trauma Resolution)
 # ---------------------------------------------------------------------------
 
 _NIGHTMARE_VALENCE_NEG = -0.7   # below this = traumatic memory
@@ -671,14 +684,14 @@ _MAX_TRAUMAS_PER_CYCLE = 3     # cap: prevent N:1 flooding against one triumph
 _NAIVE_RULE_PATTERNS   = [
     "i learned", "i felt", "it was hard", "it hurt", "it was difficult",
     "i realized", "it made me", "it taught me", "i understand now",
-]  # LLM rationalization catch — reject if any appear
+]  # LLM rationalization catch ΓÇö reject if any appear
 
 def _construct_rule_from_trauma(trauma: dict, triumph: dict) -> Optional[str]:
     """
     Specialized Ollama prompt for nightmare processing.
 
     Pairs a traumatic memory against a successful one and demands an
-    actionable rule — not a reflection, not a lesson felt, but a
+    actionable rule ΓÇö not a reflection, not a lesson felt, but a
     mechanistically testable if/then directive.
 
     The Stand review is intentionally stricter here:
@@ -697,9 +710,9 @@ def _construct_rule_from_trauma(trauma: dict, triumph: dict) -> Optional[str]:
         f"the successful outcome.\n\n"
         f"REQUIREMENTS for your rule:\n"
         f"  1. Start with an action verb: Avoid / Check / Verify / Stop / Do not / Always / Never\n"
-        f"  2. Specify a CONCRETE CONDITION — what situation triggers this rule\n"
-        f"  3. Specify a MEASURABLE BEHAVIOR — exactly what to do differently\n"
-        f"  4. Must be testable — someone could objectively check if the rule was followed\n\n"
+        f"  2. Specify a CONCRETE CONDITION ΓÇö what situation triggers this rule\n"
+        f"  3. Specify a MEASURABLE BEHAVIOR ΓÇö exactly what to do differently\n"
+        f"  4. Must be testable ΓÇö someone could objectively check if the rule was followed\n\n"
         f"FORBIDDEN responses:\n"
         f"  - 'I learned that...' or 'I realized...' (rationalization)\n"
         f"  - Vague feelings or emotional descriptions\n"
@@ -732,7 +745,7 @@ def _construct_rule_from_trauma(trauma: dict, triumph: dict) -> Optional[str]:
                 if line.strip().lower().startswith("rule:"):
                     rule_text = line.strip()
                     break
-            # No fallback wrapping — if the LLM can't follow the format, reject
+            # No fallback wrapping ΓÇö if the LLM can't follow the format, reject
             if not rule_text:
                 log.debug("[hypotheses] nightmare: LLM didn't produce 'Rule:' prefix, rejecting")
                 return None
@@ -762,15 +775,15 @@ def _process_nightmares(memories: list) -> dict:
     """
     Phase 1.5: Nightmare Processing (Trauma Resolution).
 
-    From the current memory sample, isolate traumatic memories (valence ≤ -0.7)
-    and pair each against the closest triumphant memory (valence ≥ +0.7) by
+    From the current memory sample, isolate traumatic memories (valence Γëñ -0.7)
+    and pair each against the closest triumphant memory (valence ΓëÑ +0.7) by
     cosine embedding similarity.
 
     For each valid (trauma, triumph) pair, call _construct_rule_from_trauma()
     which forces Ollama to produce an actionable, mechanistically testable rule.
 
     Trauma-derived rules are stored with:
-      - confidence = 0.80  (high — catastrophic failures are high-signal)
+      - confidence = 0.80  (high ΓÇö catastrophic failures are high-signal)
       - valence    = source trauma valence (stays negative as a marker)
       - test_result = ""  (can be confirmed/refuted like any hypothesis)
 
@@ -786,7 +799,7 @@ def _process_nightmares(memories: list) -> dict:
         log.debug("[hypotheses] nightmare: no triumphant counterexamples in sample")
         return {"generated": 0, "rejected": 0}
 
-    log.info("[hypotheses] Nightmare phase: %d traumatic × %d triumphant memories",
+    log.info("[hypotheses] Nightmare phase: %d traumatic ├ù %d triumphant memories",
              len(traumatic), len(triumphant))
 
     generated = 0
@@ -828,14 +841,14 @@ def _process_nightmares(memories: list) -> dict:
             rejected += 1
             continue
 
-        # Stand review — still run standard safety gate
+        # Stand review ΓÇö still run standard safety gate
         rejection = _stand_review(rule_text)
         if rejection:
             log.warning("[hypotheses] nightmare REJECTED by Stand: %s", rejection)
             rejected += 1
             continue
 
-        # Embed and store — same pipeline as normal, but with high confidence
+        # Embed and store ΓÇö same pipeline as normal, but with high confidence
         rule_emb = _embed(rule_text)
         if not rule_emb:
             rejected += 1
@@ -854,7 +867,7 @@ def _process_nightmares(memories: list) -> dict:
             "source_b":    best_triumph["memory_id"],
             "hypothesis":  rule_text,
             "embedding":   [float(x) for x in rule_emb],
-            "confidence":  0.80,   # high — catastrophic failure is high-signal
+            "confidence":  0.80,   # high ΓÇö catastrophic failure is high-signal
             "valence":     float(trauma.get("valence", -1.0)),  # mark as trauma-derived
             "tested":      False,
             "test_result": "",
@@ -864,12 +877,18 @@ def _process_nightmares(memories: list) -> dict:
         }])
         generated += 1
         log.info("[hypotheses] Nightmare rule: [%s] %s", hid, rule_text[:80])
+        if _BUS_OK:
+            _bus.publish("hypothesis.nightmare", {
+                "id":    hid,
+                "text":  rule_text[:120],
+                "reason": "trauma-resolution",
+            })
 
     return {"generated": generated, "rejected": rejected}
 
 
 # ---------------------------------------------------------------------------
-# Dream cycle — full pipeline
+# Dream cycle ΓÇö full pipeline
 # ---------------------------------------------------------------------------
 
 def run_dream_cycle(seed: Optional[str] = None,
@@ -880,7 +899,7 @@ def run_dream_cycle(seed: Optional[str] = None,
       1. Sample top-N salient memories (or seed-biased if seed provided)
       2. Find interesting collision pairs
       3. Construct hypotheses via Ollama (with seed context if provided)
-      4. Stand review → Dedup → Embed text → Store
+      4. Stand review ΓåÆ Dedup ΓåÆ Embed text ΓåÆ Store
       5. Dream journal audit entry
       6. (Optional) Auto-share to mesh peers
 
@@ -888,8 +907,8 @@ def run_dream_cycle(seed: Optional[str] = None,
     """
     global _last_dream_ts
 
-    # Phase 0: Decay orphaned beliefs (outside the lock — DB reads are thread-safe
-    # and holding _dream_lock during N×2 LanceDB reads would block other API callers)
+    # Phase 0: Decay orphaned beliefs (outside the lock ΓÇö DB reads are thread-safe
+    # and holding _dream_lock during N├ù2 LanceDB reads would block other API callers)
     decay_stats = _decay_hypotheses()
     if decay_stats["decayed"] or decay_stats["purged"]:
         log.info("[hypotheses] Decay: %d weakened, %d purged",
@@ -898,12 +917,12 @@ def run_dream_cycle(seed: Optional[str] = None,
     with _dream_lock:
         _last_dream_ts = time.time()
 
-        # Phase 1: Memory sampling — seed-biased or salience-based
+        # Phase 1: Memory sampling ΓÇö seed-biased or salience-based
         if seed:
-            log.info("[hypotheses] Guided dream cycle — seed: %s", seed[:60])
+            log.info("[hypotheses] Guided dream cycle ΓÇö seed: %s", seed[:60])
             memories = _sample_memories_by_seed(seed, SAMPLE_TOP_N)
         else:
-            log.info("[hypotheses] Dream cycle starting — sampling %d memories", SAMPLE_TOP_N)
+            log.info("[hypotheses] Dream cycle starting ΓÇö sampling %d memories", SAMPLE_TOP_N)
             memories = _sample_memories(SAMPLE_TOP_N)
         if len(memories) < 4:
             log.info("[hypotheses] Not enough memories to dream (%d)", len(memories))
@@ -933,7 +952,7 @@ def run_dream_cycle(seed: Optional[str] = None,
                 skipped += 1
 
         # Phase 1.5: Nightmare Processing (Trauma Resolution)
-        # Runs on the same memory sample — finds traumatic memories and
+        # Runs on the same memory sample ΓÇö finds traumatic memories and
         # forces Ollama to produce actionable rules from the contrast.
         nightmare_stats = _process_nightmares(memories)
         if nightmare_stats["generated"]:
@@ -962,7 +981,7 @@ def run_dream_cycle(seed: Optional[str] = None,
             except Exception as e:
                 log.warning("[hypotheses] Auto-share failed: %s", e)
 
-        return {
+        result_dict = {
             "generated":          len(generated_ids),
             "nightmare_generated": nightmare_stats["generated"],
             "nightmare_rejected":  nightmare_stats["rejected"],
@@ -974,17 +993,24 @@ def run_dream_cycle(seed: Optional[str] = None,
             "origin_node":        BIFROST_NODE_ID,
             "ts":                 int(_last_dream_ts),
         }
+        if _BUS_OK:
+            _bus.publish("sleep.completed", {
+                "dreamed": len(generated_ids),
+                "decayed": decay_stats.get("decayed", 0),
+                "pruned":  decay_stats.get("purged", 0),
+            })
+        return result_dict
 
 
 # ---------------------------------------------------------------------------
-# POST /sleep — explicit trigger (no auto-idle daemon)
+# POST /sleep ΓÇö explicit trigger (no auto-idle daemon)
 # ---------------------------------------------------------------------------
 
 def sleep(seed: Optional[str] = None,
          auto_share: bool = False,
          peer_urls: Optional[list] = None) -> dict:
     """
-    POST /sleep — Freya goes to sleep and dreams.
+    POST /sleep ΓÇö Freya goes to sleep and dreams.
 
     Called explicitly by the user (via Telegram /sleep or Odin broadcast),
     or by a scheduled job (cron, Philosopher's Stone nightly build).
@@ -997,9 +1023,9 @@ def sleep(seed: Optional[str] = None,
     This prevents dreams from stealing GPU during overnight work cadences.
     """
     if seed:
-        log.info("[hypotheses] Going to sleep — guided dream (seed: %s)", seed[:60])
+        log.info("[hypotheses] Going to sleep ΓÇö guided dream (seed: %s)", seed[:60])
     else:
-        log.info("[hypotheses] Going to sleep — starting dream cycle")
+        log.info("[hypotheses] Going to sleep ΓÇö starting dream cycle")
     return run_dream_cycle(seed=seed, auto_share=auto_share, peer_urls=peer_urls)
 
 
@@ -1007,7 +1033,7 @@ def sleep(seed: Optional[str] = None,
 # Public API
 # ---------------------------------------------------------------------------
 
-# Auto-decay timestamp — run decay at most once every 12h even if /sleep is never called
+# Auto-decay timestamp ΓÇö run decay at most once every 12h even if /sleep is never called
 _last_decay_ts: float = 0.0
 _DECAY_INTERVAL = 12 * 3600   # 12 hours
 
@@ -1023,7 +1049,7 @@ def get_hypotheses(
     GET /hypotheses?limit=10&min_confidence=0.0&tested=false
 
     Returns hypotheses sorted by confidence (highest first).
-    tested=false → only unvalidated; tested=true → only validated; omit → all.
+    tested=false ΓåÆ only unvalidated; tested=true ΓåÆ only validated; omit ΓåÆ all.
     """
     global _last_decay_ts
 
@@ -1136,7 +1162,7 @@ def receive_shared_hypothesis(payload: dict, sender: str) -> dict:
     # --- Replay protection ---
     payload_ts = int(payload.get("ts", 0))
     if payload_ts and (now - payload_ts) > SHARE_MAX_AGE_S:
-        log.warning("[hypotheses] share replay rejected — ts %d is %ds old",
+        log.warning("[hypotheses] share replay rejected ΓÇö ts %d is %ds old",
                     payload_ts, int(now - payload_ts))
         return {"ok": False, "id": None, "reason": "replay_too_old"}
 
@@ -1147,7 +1173,7 @@ def receive_shared_hypothesis(payload: dict, sender: str) -> dict:
     # --- Stand review ---
     rejection = _stand_review(text)
     if rejection:
-        log.warning("[hypotheses] shared belief REJECTED by Stand: %s — %s",
+        log.warning("[hypotheses] shared belief REJECTED by Stand: %s ΓÇö %s",
                     rejection, text[:60])
         return {"ok": False, "id": None, "reason": f"stand_review: {rejection}"}
 
@@ -1184,7 +1210,7 @@ def receive_shared_hypothesis(payload: dict, sender: str) -> dict:
         "ts":          ts,
     }])
 
-    log.info("[hypotheses] Received shared belief [%s] from %s (origin=%s, conf=%.2f→%.2f): %s",
+    log.info("[hypotheses] Received shared belief [%s] from %s (origin=%s, conf=%.2fΓåÆ%.2f): %s",
              hid, sender, origin, raw_conf, confidence, text[:60])
     _rate_limit_prune()  # evict stale sender keys to cap memory
     return {"ok": True, "id": hid, "reason": "accepted"}
@@ -1236,7 +1262,7 @@ def share_batch(hids: list, peer_urls: list) -> dict:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
-                log.info("[hypotheses] Pushed %d beliefs to %s — %d",
+                log.info("[hypotheses] Pushed %d beliefs to %s ΓÇö %d",
                          len(hyps_to_share), peer_url, resp.status)
         except Exception as e:
             log.warning("[hypotheses] Push to %s failed: %s", peer_url, e)
@@ -1255,7 +1281,7 @@ def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> 
     """
     POST /hypotheses/test {id, result: "confirmed"|"refuted", confidence_delta}
 
-    Mark a hypothesis as tested. Confirmed → confidence +delta; refuted → –delta.
+    Mark a hypothesis as tested. Confirmed ΓåÆ confidence +delta; refuted ΓåÆ ΓÇôdelta.
     Tested hypotheses are never auto-pruned.
     """
     try:
@@ -1284,7 +1310,7 @@ def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> 
             where=f"id = '{safe_hid}'",
             values={"tested": True, "confidence": new_conf, "test_result": result},
         )
-        log.info("[hypotheses] Tested %s → %s (%.2f → %.2f)", hyp_id, result, old_conf, new_conf)
+        log.info("[hypotheses] Tested %s ΓåÆ %s (%.2f ΓåÆ %.2f)", hyp_id, result, old_conf, new_conf)
 
         # -------------------------------------------------------------------
         # Semantic Contagion: propagate belief update to nearest neighbors.
@@ -1322,11 +1348,20 @@ def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> 
                         values={"confidence": nb_new_conf},
                     )
                     contagion_ids.append(nb_id)
-                    log.debug("[hypotheses] contagion %s → %.2f (cos=%.2f, capped)",
+                    log.debug("[hypotheses] contagion %s ΓåÆ %.2f (cos=%.2f, capped)",
                               nb_id, nb_new_conf, cos)
         except Exception as ce:
             log.debug("[hypotheses] contagion step error: %s", ce)
         # -------------------------------------------------------------------
+
+        topic = "hypothesis.confirmed" if result == "confirmed" else "hypothesis.refuted"
+        if _BUS_OK:
+            _bus.publish(topic, {
+                "id":         hyp_id,
+                "text":       str(rows[0].get("hypothesis", ""))[:120],
+                "confidence": round(new_conf, 3),
+                "delta":      round(new_conf - old_conf, 3),
+            })
 
         return {"ok": True, "id": hyp_id, "result": result,
                 "old_confidence": round(old_conf, 3),
