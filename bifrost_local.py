@@ -511,7 +511,12 @@ def register_routes(handler_class, config):
                     code = 200 if result.get("ok") else 400
                     self._respond(code, result)
             elif self.path == "/sleep" and _HYP_OK:
-                result = _hyp.sleep()
+                # Support ?seed=... from query string or body
+                import urllib.parse
+                parsed = urllib.parse.urlparse(self.path)
+                qs = urllib.parse.parse_qs(parsed.query)
+                seed = body.get("seed") or (qs.get("seed")[0] if qs.get("seed") else None)
+                result = _hyp.sleep(seed=seed)
                 self._respond(200, result)
             else:
                 self._respond(503, {"error": "module not available"})
