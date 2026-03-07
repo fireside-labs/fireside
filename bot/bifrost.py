@@ -53,14 +53,10 @@ log = logging.getLogger("bifrost")
 if sys.platform == "win32":
     import io
     try:
-        if sys.stdout is not None and hasattr(sys.stdout, "buffer"):
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        if sys.stderr is not None and hasattr(sys.stderr, "buffer"):
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-        # Also fix the logging handler stream
-        for _h in logging.root.handlers:
-            if hasattr(_h, "stream") and _h.stream is not None and hasattr(_h.stream, "buffer"):
-                _h.stream = io.TextIOWrapper(_h.stream.buffer, encoding="utf-8", errors="replace")
+        if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if sys.stderr is not None and hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (ValueError, AttributeError, OSError):
         # Detached/closed streams — redirect logging to a file instead
         import tempfile, os
