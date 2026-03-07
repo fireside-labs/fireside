@@ -58,10 +58,12 @@ def register_routes(handler_class, config):
     _wire_agent_docs(handler_class, config)
     _wire_metrics_shared_state(handler_class, config)
     _wire_stand(handler_class, config)
+    _wire_hypotheses(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
              "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
              "/reload-personality, /catch-up, /watchdog-status, /shutdown, "
-             "/rate-limit-status, /stand, /stand-status, /stand-whispers")
+             "/rate-limit-status, /stand, /stand-status, /stand-whispers, "
+             "/hypotheses, /sleep")
     # Pin models in VRAM — runs in background so startup isn't blocked
     import threading
     ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
@@ -1225,3 +1227,159 @@ def _wire_stand(handler_class, config):
     handler_class.do_GET  = do_GET_stand
     handler_class.do_POST = do_POST_stand
     log.info("[bifrost_local] The Stand wired: /stand, /stand-status, /stand-whispers")
+
+
+# ---------------------------------------------------------------------------
+# Hypothesis Engine — Freya's 6-pillar belief system, now on Thor
+# GET  /hypotheses                -- list beliefs (?limit=&min_confidence=&tested=)
+# POST /hypotheses/generate       -- trigger one dream cycle on-demand
+# POST /hypotheses/test           -- confirm or refute a belief + semantic contagion
+# POST /hypotheses/share          -- RECEIVE beliefs from peer nodes (batch)
+# POST /hypotheses/push           -- PUSH beliefs to named peers (fire-and-forget)
+# POST /sleep                     -- full dream cycle (seed, auto_share, share_targets)
+# ---------------------------------------------------------------------------
+
+import os as _os
+_os.environ.setdefault("BIFROST_NODE_ID", "thor")
+_os.environ.setdefault("BIFROST_DREAM_MODEL", "qwen2.5:7b")   # Thor uses 7b for dreaming
+
+
+def _wire_hypotheses(handler_class, config):
+    """Wire the hypothesis engine routes."""
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    def _peer_urls():
+        nodes = config.get("nodes", {})
+        this  = config.get("node_name", "thor")
+        urls  = []
+        for name, ncfg in nodes.items():
+            if name == this:
+                continue
+            ip   = ncfg.get("ip", "")
+            port = ncfg.get("port", 8765)
+            if ip:
+                urls.append(f"http://{ip}:{port}")
+        return urls
+
+    def do_GET_hyp(self):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        if parsed.path == "/hypotheses":
+            try:
+                from war_room.hypotheses import get_hypotheses  # type: ignore
+                params  = parse_qs(parsed.query)
+                limit   = int(params.get("limit", ["10"])[0])
+                min_c   = float(params.get("min_confidence", ["0.0"])[0])
+                tested_p = params.get("tested", [None])[0]
+                tested  = None if tested_p is None else tested_p.lower() == "true"
+                _json_respond(self, 200, get_hypotheses(limit=limit,
+                                                        min_confidence=min_c,
+                                                        tested=tested))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+        else:
+            prev_get(self)
+
+    def do_POST_hyp(self):
+        from urllib.parse import urlparse
+        path = urlparse(self.path).path
+
+        if path == "/hypotheses/generate":
+            try:
+                length     = int(self.headers.get("Content-Length", 0))
+                body       = json.loads(self.rfile.read(length)) if length else {}
+                from war_room.hypotheses import run_dream_cycle  # type: ignore
+                seed       = body.get("seed")
+                auto_share = bool(body.get("auto_share", False))
+                targets    = body.get("share_targets")
+                peer_urls  = targets if isinstance(targets, list) else (_peer_urls() if auto_share else [])
+                _json_respond(self, 200, run_dream_cycle(seed=seed,
+                                                         auto_share=auto_share,
+                                                         peer_urls=peer_urls))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif path == "/hypotheses/test":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body   = json.loads(self.rfile.read(length)) if length else {}
+                hyp_id = body.get("id", "")
+                result = body.get("result", "")
+                delta  = float(body.get("confidence_delta", 0.1))
+                if not hyp_id or result not in ("confirmed", "refuted"):
+                    _json_respond(self, 400, {"error": "id and result (confirmed|refuted) required"})
+                    return
+                from war_room.hypotheses import test_hypothesis  # type: ignore
+                _json_respond(self, 200, test_hypothesis(hyp_id, result, delta))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif path == "/hypotheses/share":
+            # Receive beliefs pushed from a peer node — single or batch
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body   = json.loads(self.rfile.read(length)) if length else {}
+                sender = self.headers.get("X-Bifrost-Node", "unknown")
+                from war_room.hypotheses import receive_shared_hypothesis  # type: ignore
+                items   = body.get("hypotheses", None)
+                if items is None:
+                    items = [body]
+                results  = [receive_shared_hypothesis(item, sender) for item in items]
+                accepted = sum(1 for r in results if r.get("ok"))
+                _json_respond(self, 200, {
+                    "accepted": accepted,
+                    "total":    len(results),
+                    "results":  results,
+                })
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif path == "/hypotheses/push":
+            # Push specific hypothesis IDs to named peers or URLs
+            try:
+                length  = int(self.headers.get("Content-Length", 0))
+                body    = json.loads(self.rfile.read(length)) if length else {}
+                ids     = body.get("ids", [])
+                targets = body.get("targets", [])
+                if not ids:
+                    _json_respond(self, 400, {"error": "ids required"}); return
+                nodes     = config.get("nodes", {})
+                peer_urls = []
+                for t in targets:
+                    if t.startswith("http"):
+                        peer_urls.append(t)
+                    else:
+                        ncfg = nodes.get(t, {})
+                        ip   = ncfg.get("ip", "")
+                        port = ncfg.get("port", 8765)
+                        if ip:
+                            peer_urls.append(f"http://{ip}:{port}")
+                if not peer_urls:
+                    peer_urls = _peer_urls()
+                from war_room.hypotheses import share_batch  # type: ignore
+                _json_respond(self, 202, share_batch(ids, peer_urls))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif path == "/sleep":
+            try:
+                length     = int(self.headers.get("Content-Length", 0))
+                body       = json.loads(self.rfile.read(length)) if length else {}
+                from war_room.hypotheses import sleep  # type: ignore
+                seed       = body.get("seed")
+                auto_share = bool(body.get("auto_share", False))
+                targets    = body.get("share_targets")
+                peer_urls  = targets if isinstance(targets, list) else (_peer_urls() if auto_share else [])
+                _json_respond(self, 200, sleep(seed=seed, auto_share=auto_share,
+                                               peer_urls=peer_urls))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        else:
+            prev_post(self)
+
+    handler_class.do_GET  = do_GET_hyp
+    handler_class.do_POST = do_POST_hyp
+    log.info("[bifrost_local] Hypothesis engine wired: GET /hypotheses, "
+             "POST /hypotheses/{generate,test,share,push}, POST /sleep")
