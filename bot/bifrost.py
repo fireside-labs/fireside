@@ -1641,15 +1641,25 @@ class TaskPoller:
             ).start()
 
     def _process_task(self, task: dict):
-        """Claim → process via /ask → complete."""
+        """Claim → progress ping → process via /ask → complete."""
         import urllib.request
         tid = task["id"]
         title = task.get("title", "untitled")
         desc = task.get("description", title)
         log.info("[task-poller] Processing: %s (%s)", title, tid[:8])
 
+        def _ping(note, pct=-1):
+            try:
+                self._post(f"{self.base}/war-room/progress", {
+                    "task_id": tid, "agent": self.node,
+                    "note": note, "percent": pct
+                })
+            except Exception:
+                pass
+
         try:
             # 1. Claim the task
+            _ping("Claiming task...")
             self._post(f"{self.base}/war-room/claim", {
                 "task_id": tid, "agent_id": self.node
             })
@@ -1660,6 +1670,7 @@ class TaskPoller:
             })
 
             # 3. Process via /ask
+            _ping("Thinking...", 25)
             prompt = (
                 f"You have been assigned a task from the War Room.\n"
                 f"Task: {title}\n"
@@ -1672,15 +1683,18 @@ class TaskPoller:
             result_text = result_data.get("response", result_data.get("answer", str(result_data)))
 
             # 4. Complete the task
+            _ping("Submitting result...", 90)
             self._post(f"{self.base}/war-room/complete", {
                 "task_id": tid,
                 "agent_id": self.node,
                 "result": result_text[:2000]  # cap result size
             })
+            _ping("Done ✓", 100)
             log.info("[task-poller] Completed: %s (%s)", title, tid[:8])
 
         except Exception as e:
             log.error("[task-poller] Failed task %s: %s", tid[:8], e)
+            _ping(f"Blocked: {str(e)[:80]}")
             # Mark blocked so it shows up in Guild Hall
             try:
                 self._post(f"{self.base}/war-room/status", {
