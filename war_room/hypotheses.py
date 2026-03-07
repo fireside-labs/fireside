@@ -534,6 +534,212 @@ def _decay_hypotheses() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Phase 1.5 — Nightmare Processing (Trauma Resolution)
+# ---------------------------------------------------------------------------
+
+_NIGHTMARE_VALENCE_NEG = -0.7   # below this = traumatic memory
+_NIGHTMARE_VALENCE_POS =  0.7   # above this = triumphant counterexample
+_MAX_NIGHTMARE_RULES   = 10    # cap: prevent avoidance-rule dominance
+_MAX_TRAUMAS_PER_CYCLE = 3     # cap: prevent N:1 flooding against one triumph
+_NAIVE_RULE_PATTERNS   = [
+    "i learned", "i felt", "it was hard", "it hurt", "it was difficult",
+    "i realized", "it made me", "it taught me", "i understand now",
+]  # LLM rationalization catch — reject if any appear
+
+def _construct_rule_from_trauma(trauma: dict, triumph: dict) -> Optional[str]:
+    """
+    Specialized Ollama prompt for nightmare processing.
+
+    Pairs a traumatic memory against a successful one and demands an
+    actionable rule — not a reflection, not a lesson felt, but a
+    mechanistically testable if/then directive.
+
+    The Stand review is intentionally stricter here:
+    - Must contain an action verb: avoid, check, verify, stop, do not, always, never
+    - Must not be pure rationalization ("I learned that...", "I felt...")
+    - Must be a single imperative sentence
+    """
+    import urllib.request
+    prompt = (
+        f"TRAUMATIC MEMORY: \"{trauma['content'][:300]}\"\n"
+        f"  Emotional tone: aversive, importance: {trauma['importance']:.2f}\n\n"
+        f"SUCCESSFUL COUNTEREXAMPLE: \"{triumph['content'][:300]}\"\n"
+        f"  Emotional tone: triumphant, importance: {triumph['importance']:.2f}\n\n"
+        f"You are performing trauma resolution processing. Your task is to extract "
+        f"an ACTIONABLE RULE from the contrast between the catastrophic failure and "
+        f"the successful outcome.\n\n"
+        f"REQUIREMENTS for your rule:\n"
+        f"  1. Start with an action verb: Avoid / Check / Verify / Stop / Do not / Always / Never\n"
+        f"  2. Specify a CONCRETE CONDITION — what situation triggers this rule\n"
+        f"  3. Specify a MEASURABLE BEHAVIOR — exactly what to do differently\n"
+        f"  4. Must be testable — someone could objectively check if the rule was followed\n\n"
+        f"FORBIDDEN responses:\n"
+        f"  - 'I learned that...' or 'I realized...' (rationalization)\n"
+        f"  - Vague feelings or emotional descriptions\n"
+        f"  - Explanations of what went wrong without a directive\n\n"
+        f"State exactly one rule in this format:\n"
+        f"Rule: [imperative sentence]\n\n"
+        f"Respond with only the Rule line. No preamble, no explanation."
+    )
+    try:
+        payload = json.dumps({
+            "model":  DREAM_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"num_predict": 150, "temperature": 0.2},  # lower temp = more directive
+        }).encode()
+        req = urllib.request.Request(
+            f"{OLLAMA_BASE}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as r:
+            result = json.loads(r.read())
+            raw = result.get("response", "") or ""
+            text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
+            # Extract the rule line
+            rule_text = None
+            for line in text.splitlines():
+                if line.strip().lower().startswith("rule:"):
+                    rule_text = line.strip()
+                    break
+            # No fallback wrapping — if the LLM can't follow the format, reject
+            if not rule_text:
+                log.debug("[hypotheses] nightmare: LLM didn't produce 'Rule:' prefix, rejecting")
+                return None
+
+            # Naive rationalization check: reject if LLM just described a feeling
+            lower = rule_text.lower()
+            for pat in _NAIVE_RULE_PATTERNS:
+                if pat in lower:
+                    log.debug("[hypotheses] nightmare: LLM rationalized, rejecting: %s", rule_text[:60])
+                    return None
+
+            # Must contain at least one action keyword
+            action_keywords = ["avoid", "check", "verify", "stop", "do not", "don't",
+                               "always", "never", "ensure", "confirm", "require"]
+            if not any(kw in lower for kw in action_keywords):
+                log.debug("[hypotheses] nightmare: no action verb, rejecting: %s", rule_text[:60])
+                return None
+
+            return rule_text
+
+    except Exception as e:
+        log.warning("[hypotheses] nightmare inference failed: %s", e)
+        return None
+
+
+def _process_nightmares(memories: list) -> dict:
+    """
+    Phase 1.5: Nightmare Processing (Trauma Resolution).
+
+    From the current memory sample, isolate traumatic memories (valence ≤ -0.7)
+    and pair each against the closest triumphant memory (valence ≥ +0.7) by
+    cosine embedding similarity.
+
+    For each valid (trauma, triumph) pair, call _construct_rule_from_trauma()
+    which forces Ollama to produce an actionable, mechanistically testable rule.
+
+    Trauma-derived rules are stored with:
+      - confidence = 0.80  (high — catastrophic failures are high-signal)
+      - valence    = source trauma valence (stays negative as a marker)
+      - test_result = ""  (can be confirmed/refuted like any hypothesis)
+
+    Returns {"generated": N, "rejected": M}
+    """
+    traumatic = [m for m in memories if float(m.get("valence", 0.0)) <= _NIGHTMARE_VALENCE_NEG]
+    triumphant = [m for m in memories if float(m.get("valence", 0.0)) >= _NIGHTMARE_VALENCE_POS]
+
+    if not traumatic:
+        log.debug("[hypotheses] nightmare: no traumatic memories in sample")
+        return {"generated": 0, "rejected": 0}
+    if not triumphant:
+        log.debug("[hypotheses] nightmare: no triumphant counterexamples in sample")
+        return {"generated": 0, "rejected": 0}
+
+    log.info("[hypotheses] Nightmare phase: %d traumatic × %d triumphant memories",
+             len(traumatic), len(triumphant))
+
+    generated = 0
+    rejected  = 0
+
+    # Cap traumas per cycle to prevent N:1 flooding
+    traumatic = traumatic[:_MAX_TRAUMAS_PER_CYCLE]
+
+    for trauma in traumatic:
+        # Check nightmare cap
+        try:
+            tbl_check = _get_table()
+            if tbl_check is not None:
+                existing = tbl_check.search().where("valence < -0.5").limit(_MAX_NIGHTMARE_RULES + 1).to_list()
+                if len(existing) >= _MAX_NIGHTMARE_RULES:
+                    log.info("[hypotheses] nightmare: at cap (%d rules), skipping", _MAX_NIGHTMARE_RULES)
+                    break
+        except Exception:
+            pass
+
+        t_emb = list(trauma.get("embedding") or [])
+        if not t_emb:
+            continue
+
+        # Find the closest triumphant counterexample by cosine similarity
+        best_triumph = max(
+            triumphant,
+            key=lambda m: _cosine_sim(t_emb, list(m.get("embedding") or [])),
+        )
+        pair_sim = _cosine_sim(t_emb, list(best_triumph.get("embedding") or []))
+
+        # Only process if the pair has real semantic overlap (0.25 floor for nomic embeddings)
+        if pair_sim < 0.25:
+            log.debug("[hypotheses] nightmare: trauma/triumph pair too distant (cos=%.2f)", pair_sim)
+            continue
+
+        rule_text = _construct_rule_from_trauma(trauma, best_triumph)
+        if not rule_text:
+            rejected += 1
+            continue
+
+        # Stand review — still run standard safety gate
+        rejection = _stand_review(rule_text)
+        if rejection:
+            log.warning("[hypotheses] nightmare REJECTED by Stand: %s", rejection)
+            rejected += 1
+            continue
+
+        # Embed and store — same pipeline as normal, but with high confidence
+        rule_emb = _embed(rule_text)
+        if not rule_emb:
+            rejected += 1
+            continue
+
+        tbl = _ensure_table(len(rule_emb))
+        if _dedup_check(tbl, rule_emb):
+            log.debug("[hypotheses] nightmare: dedup skip")
+            continue
+
+        hid = f"hyp_{uuid.uuid4().hex[:12]}"
+        ts  = int(time.time())
+        tbl.add([{
+            "id":          hid,
+            "source_a":    trauma["memory_id"],
+            "source_b":    best_triumph["memory_id"],
+            "hypothesis":  rule_text,
+            "embedding":   [float(x) for x in rule_emb],
+            "confidence":  0.80,   # high — catastrophic failure is high-signal
+            "valence":     float(trauma.get("valence", -1.0)),  # mark as trauma-derived
+            "tested":      False,
+            "test_result": "",
+            "ts":          ts,
+        }])
+        generated += 1
+        log.info("[hypotheses] Nightmare rule: [%s] %s", hid, rule_text[:80])
+
+    return {"generated": generated, "rejected": rejected}
+
+
+# ---------------------------------------------------------------------------
 # Dream cycle — full pipeline
 # ---------------------------------------------------------------------------
 
@@ -589,23 +795,33 @@ def run_dream_cycle() -> dict:
                 # _store_hypothesis returns None for rejection, dedup, or embed failure
                 skipped += 1
 
+        # Phase 1.5: Nightmare Processing (Trauma Resolution)
+        # Runs on the same memory sample — finds traumatic memories and
+        # forces Ollama to produce actionable rules from the contrast.
+        nightmare_stats = _process_nightmares(memories)
+        if nightmare_stats["generated"]:
+            log.info("[hypotheses] Nightmare phase: %d rules generated, %d rejected",
+                     nightmare_stats["generated"], nightmare_stats["rejected"])
+
         # Dream journal entry
         try:
             from war_room.dream_journal import record_consolidation
             record_consolidation(
-                upserted  = len(generated_ids),
+                upserted  = len(generated_ids) + nightmare_stats["generated"],
                 permanent = 0,
-                total     = len(generated_ids),
+                total     = len(generated_ids) + nightmare_stats["generated"],
             )
         except Exception:
             pass
 
         return {
-            "generated":   len(generated_ids),
-            "skipped":     skipped,
-            "pairs_found": len(pairs),
-            "hypotheses":  generated_ids,
-            "ts":          int(_last_dream_ts),
+            "generated":          len(generated_ids),
+            "nightmare_generated": nightmare_stats["generated"],
+            "nightmare_rejected":  nightmare_stats["rejected"],
+            "skipped":            skipped,
+            "pairs_found":        len(pairs),
+            "hypotheses":         generated_ids,
+            "ts":                 int(_last_dream_ts),
         }
 
 
