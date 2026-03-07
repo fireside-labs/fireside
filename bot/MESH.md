@@ -37,10 +37,32 @@ and delivers only to relevant agents instead of broadcasting.
 | `/war-room/read` | GET | Read messages (`?since=`, `?from_agent=`, `?to=`) |
 | `/war-room/task` | POST | Create a task |
 | `/war-room/claim` | POST | Claim a task |
-| `/war-room/complete` | POST | Mark task done |
+| `/war-room/complete` | POST | Mark task done (+ optional `approach`, `task_type` for procedural memory) |
 | `/war-room/status` | POST | Update task status |
 | `/war-room/summary` | GET | Board summary |
 | `/ask` | POST | Direct inference (`"model": "local"\|"cloud"`) |
+
+### Completing a Task — Procedural Memory Protocol
+
+When closing a task, agents **should** include how they solved it. Freya's
+`bifrost_local.py` intercepts these fields and records them as permanent mesh skills:
+
+```json
+POST /war-room/complete
+{
+  "task_id": "task_abc",
+  "agent_id": "thor",
+  "result": "Short summary of what was produced",
+  "task_type": "debugging",
+  "approach": "Read traceback → found charmap error → patched I/O with explicit utf-8."
+}
+```
+
+`task_type` and `approach` are **optional** — omitting them is fully backward-compatible.
+When present, Freya writes a `procedures` entry so the mesh learns the skill permanently.
+
+**Common `task_type` values:** `debugging`, `crispr_prompt`, `code_review`,
+`memory_synthesis`, `pattern_recognition`, `security_audit`, `ui_design`
 
 ### Direct Notifications
 | Endpoint | Method | Purpose |

@@ -1,13 +1,32 @@
+# Node-specific local extensions — NEVER commit these
+# Each node maintains its own version
+bot/bifrost_local.py
+bot/bifrost_local.*.py
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+
+# Data files — too large/sensitive for git
+bot/war_room/data/
+bot/war_room/*.json
+bot/data/
 *.db
+*.lance
+
+# Secrets
+.env
+config.json
+bot/config.json
+bot/bot/config.json
+
+# Logs
 *.log
 logs/
-snapshot_*.json
-pheromones.json
-war_room_data/
-lancedb_memories/
-.env
-*.egg-info/
-dist/
-build/
+
+# OS
+.DS_Store
+Thumbs.db
