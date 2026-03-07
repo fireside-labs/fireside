@@ -1,0 +1,1 @@
+{"ts": 1772829439.3253386, "source_ip": "127.0.0.1", "path": "/internal/config", "headers": "{'User-Agent': 'Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.7705', 'Host': 'localhost:8765', 'Connection': 'Keep-Alive'}", "action": "quarantine+tattle"}
