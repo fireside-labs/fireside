@@ -195,7 +195,10 @@ def _call_ollama(prompt: str) -> Optional[str]:
         )
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read())
-            return data.get("response", "").strip()
+            text = data.get("response", "").strip()
+            if not text:
+                text = data.get("thinking", "").strip()  # qwen3.5 thinking model fallback
+            return text
     except Exception as e:
         log.error("[self_model] Ollama call failed: %s", e)
         return None
