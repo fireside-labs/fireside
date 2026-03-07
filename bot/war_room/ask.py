@@ -112,6 +112,25 @@ class AskHandler:
         if len(system.encode()) > MAX_PROMPT_BYTES:
             return {"error": f"system prompt exceeds max size ({MAX_PROMPT_BYTES // 1024}KB)"}
 
+        # ── Working Memory injection ──────────────────────────────
+        # Inject recent high-importance WM items into system prompt
+        # so the model has contextual awareness of recent activity.
+        try:
+            from working_memory import get_working_memory
+            wm = get_working_memory()
+            wm_items = wm.recall("", top_k=5)
+            # Filter to importance >= 0.5
+            wm_items = [i for i in wm_items if i.get("importance", 0) >= 0.5]
+            if wm_items:
+                wm_block = "\n".join(
+                    f"- [{i.get('source','?')}] {i['content'][:200]}"
+                    for i in wm_items
+                )
+                system += f"\n\n## Recent Context (Working Memory)\n{wm_block}"
+                log.debug("WM injected %d items into system prompt", len(wm_items))
+        except Exception:
+            pass  # WM not available on all nodes yet
+
         start = time.time()
 
         if mode == "cloud" and self.cloud_model and self.cloud_base_url:
