@@ -59,11 +59,12 @@ def register_routes(handler_class, config):
     _wire_metrics_shared_state(handler_class, config)
     _wire_stand(handler_class, config)
     _wire_hypotheses(handler_class, config)
+    _wire_cognitive_triad(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
              "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
              "/reload-personality, /catch-up, /watchdog-status, /shutdown, "
              "/rate-limit-status, /stand, /stand-status, /stand-whispers, "
-             "/hypotheses, /sleep")
+             "/hypotheses, /sleep, /event-bus, /predictions, /self-model, /reflect")
     # Pin models in VRAM — runs in background so startup isn't blocked
     import threading
     ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
@@ -1383,3 +1384,241 @@ def _wire_hypotheses(handler_class, config):
     handler_class.do_POST = do_POST_hyp
     log.info("[bifrost_local] Hypothesis engine wired: GET /hypotheses, "
              "POST /hypotheses/{generate,test,share,push}, POST /sleep")
+
+
+# ---------------------------------------------------------------------------
+# Cognitive Triad — Pillars 7-9
+#   event_bus subscriptions (IIT / Phi)
+#   prediction wired into /ask (Predictive Processing / Free Energy Principle)
+#   self_model injected into system prompt (Default Mode Network)
+#
+# GET  /event-bus?limit=&topic=    -- rolling event bus log
+# GET  /predictions?limit=         -- prediction error history + stats
+# GET  /self-model                 -- current self-assessment markdown
+# POST /reflect                    -- trigger reflection cycle (async)
+# ---------------------------------------------------------------------------
+
+def _wire_cognitive_triad(handler_class, config):
+    """
+    Wire the cognitive triad into Thor's Bifrost.
+
+    1. Event bus subscriptions — cross-module Phi:
+         hypothesis.confirmed  → drop reliable pheromone on Freya
+         circuit.tripped       → seed nightmare hypothesis cycle
+         prediction.scored     → trigger dream on high surprise
+
+    2. prediction.predict() before /ask, prediction.score() after (background)
+       + self_model.get_system_prompt_injection() prepended to system prompt
+
+    3. GET /event-bus, GET /predictions, GET /self-model, POST /reflect
+    """
+    import threading
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    # ------------------------------------------------------------------
+    # Event bus subscriptions
+    # ------------------------------------------------------------------
+    try:
+        import war_room.event_bus as bus             # type: ignore
+
+        # hypothesis.confirmed → drop reliable pheromone on Freya (fire-and-forget)
+        def _on_hypothesis_confirmed(payload: dict):
+            try:
+                freya_ip   = config.get("nodes", {}).get("freya", {}).get("ip", "100.102.105.3")
+                freya_port = config.get("nodes", {}).get("freya", {}).get("port", 8765)
+                url        = f"http://{freya_ip}:{freya_port}/pheromone"
+                body = json.dumps({
+                    "resource":  "mesh",
+                    "type":      "reliable",
+                    "intensity": min(1.0, float(payload.get("confidence", 0.7))),
+                    "source":    "thor",
+                    "reason":    f"hypothesis confirmed: {str(payload.get('id',''))[:20]}",
+                }).encode()
+                req = urllib.request.Request(url, data=body,
+                                             headers={"Content-Type": "application/json"},
+                                             method="POST")
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+                log.info("[bus] hypothesis.confirmed → reliable pheromone dropped on Freya")
+            except Exception as e:
+                log.debug("[bus] pheromone drop failed: %s", e)
+
+        # circuit.tripped → seed a nightmare dream cycle (async, silent)
+        def _on_circuit_tripped(payload: dict):
+            try:
+                from war_room.hypotheses import run_dream_cycle   # type: ignore
+                node = payload.get("node", "unknown")
+                log.info("[bus] circuit.tripped(%s) → seeding nightmare dream", node)
+                run_dream_cycle(seed=f"circuit breaker failure on node {node}")
+            except Exception as e:
+                log.debug("[bus] nightmare seed failed: %s", e)
+
+        # prediction.scored (high surprise) → trigger dream cycle
+        def _on_prediction_scored(payload: dict):
+            try:
+                error = float(payload.get("error", 0.0))
+                if error > 0.65:   # very surprising — dream about it
+                    from war_room.hypotheses import run_dream_cycle  # type: ignore
+                    qh = payload.get("query_hash", "")
+                    log.info("[bus] high prediction surprise (%.3f) → triggering dream", error)
+                    threading.Thread(
+                        target=run_dream_cycle,
+                        kwargs={"seed": f"high-surprise query {qh}"},
+                        daemon=True, name="surprise-dream",
+                    ).start()
+            except Exception as e:
+                log.debug("[bus] surprise dream trigger failed: %s", e)
+
+        bus.subscribe("hypothesis.confirmed",  _on_hypothesis_confirmed)
+        bus.subscribe("circuit.tripped",       _on_circuit_tripped)
+        bus.subscribe("prediction.scored",     _on_prediction_scored)
+        log.info("[bus] Thor subscriptions: hypothesis.confirmed, circuit.tripped, prediction.scored")
+
+    except Exception as e:
+        log.warning("[bifrost_local] event_bus not available: %s", e)
+
+    # Also publish circuit trips from Thor's circuit breaker
+    try:
+        import circuit_breaker as _cb   # type: ignore
+        _orig_trip = _cb.CircuitBreaker.trip if hasattr(_cb, "CircuitBreaker") else None
+        if _orig_trip:
+            import war_room.event_bus as bus        # type: ignore
+            def _patched_trip(self_cb):
+                _orig_trip(self_cb)
+                try:
+                    bus.publish("circuit.tripped", {"node": getattr(self_cb, "name", "unknown"),
+                                                     "failures": getattr(self_cb, "failures", 0)})
+                except Exception:
+                    pass
+            _cb.CircuitBreaker.trip = _patched_trip
+    except Exception:
+        pass
+
+    # ------------------------------------------------------------------
+    # /ask interception: predict before, score after (background)
+    # ------------------------------------------------------------------
+    def do_POST_cog(self):
+        from urllib.parse import urlparse
+        path = urlparse(self.path).path
+
+        if path == "/ask":
+            # --- Read body first (can only read once) ---
+            length = int(self.headers.get("Content-Length", 0))
+            raw    = self.rfile.read(length) if length else b""
+            try:
+                body = json.loads(raw)
+            except Exception:
+                body = {}
+
+            # --- Extract prompt for prediction ---
+            prompt_text = body.get("prompt", "") or body.get("message", "")
+            query_hash  = None
+            try:
+                import war_room.prediction as pred        # type: ignore
+                query_hash = pred.predict(prompt_text) if prompt_text else None
+            except Exception:
+                pass
+
+            # --- Inject self-model into system prompt ---
+            try:
+                import war_room.self_model as sm        # type: ignore
+                injection = sm.get_system_prompt_injection()
+                if injection:
+                    existing  = body.get("system", "") or ""
+                    body["system"] = injection + existing
+                    raw = json.dumps(body).encode()
+            except Exception:
+                pass
+
+            # Re-stuff the body so prev_post reads it
+            import io
+            self.rfile   = io.BytesIO(raw)
+            self.headers["Content-Length"] = str(len(raw))
+
+            # Capture response via TeeWriter
+            try:
+                from war_room.prediction import TeeWriter  # type: ignore
+                tee       = TeeWriter(self.wfile)
+                self.wfile = tee
+                prev_post(self)
+                self.wfile = tee._real
+                response_text = tee.buf.decode("utf-8", errors="replace")
+            except Exception:
+                prev_post(self)
+                response_text = ""
+
+            # Score in background — never blocks response
+            if query_hash and response_text:
+                def _score():
+                    try:
+                        import war_room.prediction as pred2        # type: ignore
+                        pred2.score(query_hash, response_text)
+                    except Exception:
+                        pass
+                threading.Thread(target=_score, daemon=True, name="pred-score").start()
+
+        elif path == "/reflect":
+            # Async reflection — return immediately
+            threading.Thread(target=_do_reflect, daemon=True, name="reflect").start()
+            _json_respond(self, 202, {"ok": True, "status": "reflection started"})
+
+        else:
+            prev_post(self)
+
+    def _do_reflect():
+        try:
+            import war_room.self_model as sm        # type: ignore
+            result = sm.reflect()
+            log.info("[self_model] Reflection complete: %s", result)
+        except Exception as e:
+            log.error("[self_model] Reflection failed: %s", e)
+
+    def do_GET_cog(self):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        p      = parsed.path
+
+        if p == "/event-bus":
+            try:
+                import war_room.event_bus as bus        # type: ignore
+                params = parse_qs(parsed.query)
+                limit  = int(params.get("limit", ["50"])[0])
+                topic  = params.get("topic", [""])[0]
+                events = bus.get_log(limit=limit, topic_filter=topic)
+                subs   = bus.subscriber_count()
+                _json_respond(self, 200, {
+                    "events":      events,
+                    "total":       len(events),
+                    "subscribers": subs,
+                })
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif p == "/predictions":
+            try:
+                import war_room.prediction as pred         # type: ignore
+                params = parse_qs(parsed.query)
+                limit  = int(params.get("limit", ["20"])[0])
+                stats  = pred.get_stats()
+                recent = (stats.get("recent") or [])[:limit]
+                _json_respond(self, 200, {**stats, "recent": recent})
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif p == "/self-model":
+            try:
+                import war_room.self_model as sm        # type: ignore
+                _json_respond(self, 200, sm.get_current())
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        else:
+            prev_get(self)
+
+    handler_class.do_GET  = do_GET_cog
+    handler_class.do_POST = do_POST_cog
+    log.info("[bifrost_local] Cognitive Triad wired: "
+             "event bus subs (hypothesis.confirmed→pheromone, circuit.tripped→nightmare, "
+             "prediction.scored→dream), GET /event-bus, GET /predictions, "
+             "GET /self-model, POST /reflect")
