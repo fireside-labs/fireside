@@ -24,6 +24,7 @@
 | Tasks | **Odin** | `POST /war-room/task` |
 | Ephemeral state | **Heimdall** | `POST /shared-state` |
 | Passive trails | **Freya** | `POST /pheromone` |
+| Shared beliefs | **Any peer** | `POST /hypotheses/share` |
 
 ---
 ## Active Modules (war_room/)
@@ -31,6 +32,7 @@
 | Module | Purpose |
 |--------|---------|
 | `memory_query.py` | LanceDB semantic memory store — upsert + vector query |
+| `hypotheses.py` | **Autonomous belief engine** — 6 pillars: injection, contagion, decay, nightmares, guided dreaming, mesh attribution |
 | `mycelium.py` | Self-healing background thread — polls Heimdall /audit, injects cure memories. **Circuit breaker armed for all 6 peers.** |
 | `contradiction.py` | Detects conflicting memories on write (keyword + valence) |
 | `dream_journal.py` | Persistent JSONL audit log of significant mesh events |
@@ -65,8 +67,32 @@
 | GET | `/pheromone` | Smell pheromone trails |
 | POST | `/pheromone` | Drop a pheromone |
 | GET | `/circuit-status` | Circuit breaker states |
-| GET | `/memory-health` | Memory decay dashboard |
+| GET | `/hypotheses` | List all hypotheses (with origin_node + shared_from) |
+| POST | `/hypotheses/generate` | Trigger one dream cycle (explicit, no idle timer) |
+| POST | `/hypotheses/test` | `{id, result: "confirmed"/"refuted", confidence_delta}` |
+| POST | `/hypotheses/share` | **Receive** beliefs from peers (single or batch) |
+| POST | `/hypotheses/push` | **Push** beliefs to named peers (fire-and-forget) |
+| POST | `/sleep` | Dream cycle with optional `seed`, `auto_share`, `share_targets` |
 | GET | `/agent-docs` | **This file, served over HTTP** |
+
+---
+
+## Hypothesis Engine (Pillars 1-6)
+
+The cognitive belief system in `war_room/hypotheses.py`. LanceDB-backed.
+
+| Pillar | Name | What it does |
+|--------|------|-------------|
+| 1 | Hypothesis Injection | Pulls 2 random memories, asks Ollama to infer a connection, stores as a belief |
+| 2 | Semantic Contagion | Confirming a belief boosts confidence of semantically similar beliefs (cosine ≥ 0.70) |
+| 3 | Hypothesis Decay | Untested beliefs lose 5% confidence per cycle; pruned below 0.30 |
+| 4 | Nightmare Processing | Hallucinated/harmful beliefs are detected by Stand review, hard-blocked, and logged |
+| 5 | Guided Dreaming | Optional `seed` focuses memory retrieval; hybrid sampling mixes random + seeded |
+| 6 | Mesh Attribution | `origin_node` + `shared_from` fields; foreign beliefs receive 0.6× confidence discount |
+
+**Safety gates on received beliefs:** rate limit (10/sender/60s), replay protection (reject >1h old), Stand review, dedup (cosine >0.90), confidence discount.
+
+**Auto-share:** `POST /sleep {"auto_share": true}` → dreams + pushes new beliefs to all mesh peers.
 
 ---
 
@@ -82,11 +108,14 @@
 
 **Pheromone chains:** Freya's pheromone drops trigger 1-hop chain reactions. A `reliable` drop from Freya on `freya->odin` will also drop a 60%-intensity `reliable` on `odin->freya` within seconds.
 
+**Hypothesis sharing:** Any peer can `POST /hypotheses/share` to send beliefs to Freya. Freya applies skepticism (0.6× discount), rate limiting, and dedup before accepting. To push beliefs *from* Freya to peers, use `POST /hypotheses/push {"ids": [...], "targets": ["thor"]}`.
+
 **Wants from you:**
 - Heimdall: share `GET /metrics` p50/p95/p99 latency — Freya will integrate into plasticity scoring
 - Heimdall: stream `/shared-state` changes into Freya's attention window
 - Thor: share `prompt_score` from Heimdall `/ask` so dream journal can log consensus quality
 - All: add `"mesh_secret"` to `config.json` and sign outbound calls (`strict=False` now, `strict=True` soon)
+- All: deploy `hypotheses.py` + updated `bifrost_local.py` to enable mesh-wide dreaming
 
 **Quarantine amplification:** When Freya drops a `danger` pheromone with intensity > 0.7 on a node, Thor's watchdog will automatically POST to Heimdall `POST /quarantine-config`.
 

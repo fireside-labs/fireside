@@ -27,6 +27,7 @@
 | Tasks | **Odin** | `POST /war-room/task` |
 | Ephemeral state | **Heimdall** | `POST http://100.108.153.23:8765/shared-state` |
 | Passive trails | **Freya** | `POST http://100.102.105.3:8765/pheromone` |
+| Shared beliefs | **Any peer** | `POST http://<node-ip>:8765/hypotheses/share` |
 
 ### Signing (gradual rollout)
 - Add `"mesh_secret": "<shared_value>"` to every node's `config.json`
