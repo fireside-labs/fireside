@@ -53,14 +53,10 @@ log = logging.getLogger("bifrost")
 if sys.platform == "win32":
     import io
     try:
-        if sys.stdout is not None and hasattr(sys.stdout, "buffer"):
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        if sys.stderr is not None and hasattr(sys.stderr, "buffer"):
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-        # Also fix the logging handler stream
-        for _h in logging.root.handlers:
-            if hasattr(_h, "stream") and _h.stream is not None and hasattr(_h.stream, "buffer"):
-                _h.stream = io.TextIOWrapper(_h.stream.buffer, encoding="utf-8", errors="replace")
+        if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if sys.stderr is not None and hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (ValueError, AttributeError, OSError):
         # Detached/closed streams — redirect logging to a file instead
         import tempfile, os
@@ -1486,7 +1482,18 @@ def _load_local_extensions():
     """
     local_path = BASE / "bifrost_local.py"
     if not local_path.exists():
-        return
+        backup_path = BASE / f"bifrost_local.{THIS_NODE}.py"
+        if backup_path.exists():
+            try:
+                import shutil
+                shutil.copy2(backup_path, local_path)
+                log.info("Auto-restored missing bifrost_local.py from %s", backup_path.name)
+            except Exception as e:
+                log.error("Failed to auto-restore bifrost_local.py: %s", e)
+                return
+        else:
+            return
+            
     try:
         import importlib.util
         spec = importlib.util.spec_from_file_location("bifrost_local", local_path)
@@ -1647,7 +1654,12 @@ def main():
         log.info("Send-only mode (no callback handling)")
         _event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_event_loop)
-        _bot = Application.builder().token(BOT_TOKEN).build().bot
+        # HTTP first — always reachable regardless of Telegram state
+        threading.Thread(target=run_http_server, daemon=True, name="http-server").start()
+        try:
+            _bot = Application.builder().token(BOT_TOKEN).build().bot
+        except Exception as _tg_e:
+            log.warning("Telegram bot init failed (non-fatal): %s", _tg_e)
         # Start War Room daemons
         if _gossip_sync:
             _gossip_sync.start()
@@ -1661,9 +1673,7 @@ def main():
             _task_poller = TaskPoller(THIS_NODE)
             _task_poller.start()
         log.info("Bifrost v5 SEND-ONLY ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
-        # Run asyncio in daemon thread, HTTP server on main thread
-        threading.Thread(target=_event_loop.run_forever, daemon=True).start()
-        run_http_server()  # blocks main thread
+        _event_loop.run_forever()  # asyncio owns main thread
         return
 
     app = (
