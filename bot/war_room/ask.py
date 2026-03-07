@@ -185,6 +185,10 @@ class AskHandler:
                 text = result.get("response", "")
                 if not text and result.get("thinking"):
                     text = result["thinking"]
+                # Strip <think>...</think> tags from qwen3.5 output
+                if "<think>" in text:
+                    import re
+                    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
                 return {
                     "response": text,
                     "model": self.local_model,
