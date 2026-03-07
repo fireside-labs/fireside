@@ -440,6 +440,98 @@ def _store_hypothesis(
 
 
 # ---------------------------------------------------------------------------
+# Phase 0 — Hypothesis decay (orphaned-root pruning)
+# ---------------------------------------------------------------------------
+
+# Importance below this threshold means a memory has largely faded
+_IMPORTANCE_THRESHOLD = 0.15
+
+
+def _decay_hypotheses() -> dict:
+    """
+    Phase 0: Penalize hypotheses whose source memories have decayed.
+
+    For each hypothesis, look up source_a and source_b in the memory table.
+    If BOTH source memories have importance < IMPORTANCE_THRESHOLD, the belief
+    is considered orphaned — its roots have faded — and its confidence is halved.
+    If confidence falls below 0.10 after halving, the hypothesis is purged.
+
+    Tested (confirmed/refuted) hypotheses are never touched — they represent
+    settled knowledge, not candidate beliefs.
+
+    Returns {"decayed": N, "purged": M}
+    """
+    decayed = 0
+    purged  = 0
+    try:
+        hyp_tbl = _get_table()
+        if hyp_tbl is None:
+            return {"decayed": 0, "purged": 0}
+
+        db       = _get_db()
+        mem_tbl  = db.open_table(MEMORY_TABLE)
+
+        # Scan all untested hypotheses
+        rows = hyp_tbl.search().where("tested = false").limit(MAX_HYPOTHESES).to_list()
+
+        for row in rows:
+            hid      = row.get("id", "")
+            src_a    = row.get("source_a", "")
+            src_b    = row.get("source_b", "")
+            conf     = float(row.get("confidence", 0.5))
+
+            # Look up current importance of both source memories
+            imp_a = 1.0   # default to alive if not found
+            imp_b = 1.0
+            try:
+                safe_a = _safe_id(src_a)
+                rA = mem_tbl.search().where(f"memory_id = '{safe_a}'").limit(1).to_list()
+                if rA:
+                    imp_a = float(rA[0].get("importance", 1.0))
+                else:
+                    imp_a = 0.0   # memory deleted — treat as fully decayed
+            except Exception:
+                pass
+
+            try:
+                safe_b = _safe_id(src_b)
+                rB = mem_tbl.search().where(f"memory_id = '{safe_b}'").limit(1).to_list()
+                if rB:
+                    imp_b = float(rB[0].get("importance", 1.0))
+                else:
+                    imp_b = 0.0
+            except Exception:
+                pass
+
+            # Both roots faded — orphaned hypothesis
+            if imp_a < _IMPORTANCE_THRESHOLD and imp_b < _IMPORTANCE_THRESHOLD:
+                new_conf = conf * 0.5
+                if new_conf < 0.10:
+                    # Purge
+                    try:
+                        hyp_tbl.delete(f"id = '{_safe_id(hid)}'")
+                        purged += 1
+                        log.info("[hypotheses] decay-purged %s (both sources faded)", hid)
+                    except Exception as e:
+                        log.debug("[hypotheses] purge failed %s: %s", hid, e)
+                else:
+                    # Halve confidence
+                    hyp_tbl.update(
+                        where=f"id = '{_safe_id(hid)}'",
+                        values={"confidence": new_conf},
+                    )
+                    decayed += 1
+                    log.debug("[hypotheses] decay %s: conf %.2f -> %.2f "
+                              "(imp_a=%.2f imp_b=%.2f)",
+                              hid, conf, new_conf, imp_a, imp_b)
+
+    except Exception as e:
+        log.error("[hypotheses] decay phase error: %s", e)
+
+    return {"decayed": decayed, "purged": purged}
+
+
+# ---------------------------------------------------------------------------
 # Dream cycle — full pipeline
 # ---------------------------------------------------------------------------
 
@@ -459,6 +551,12 @@ def run_dream_cycle() -> dict:
     with _dream_lock:
         _last_dream_ts = time.time()
         log.info("[hypotheses] Dream cycle starting — sampling %d memories", SAMPLE_TOP_N)
+
+        # Phase 0: Decay orphaned beliefs before generating new ones
+        decay_stats = _decay_hypotheses()
+        if decay_stats["decayed"] or decay_stats["purged"]:
+            log.info("[hypotheses] Decay: %d weakened, %d purged",
+                     decay_stats["decayed"], decay_stats["purged"])
 
         memories = _sample_memories(SAMPLE_TOP_N)
         if len(memories) < 4:
