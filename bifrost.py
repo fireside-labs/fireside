@@ -41,6 +41,11 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("bifrost")
 
+# Sparse-checkout path fix: on Freya/sparse-checkout, war_room lives in bot/ subdirectory
+_wr_sub = __import__('pathlib').Path(__file__).parent / 'bot'
+if _wr_sub.exists() and str(_wr_sub) not in __import__('sys').path:
+    __import__('sys').path.insert(0, str(_wr_sub))
+
 # Valhalla War Room — peer-to-peer agent mesh
 try:
     from war_room import WarRoomStore, GossipSync, AskHandler
