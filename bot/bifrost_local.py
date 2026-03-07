@@ -56,6 +56,16 @@ from memory_integrity import get_memory_integrity
 from shared_state import get_shared_state, set_peer_nodes
 from perf_metrics import get_metrics, TimerContext
 
+# Cognitive Triad (Freya Pillars 7-9)
+try:
+    from war_room import event_bus as _bus
+    from war_room.prediction import predict as _predict, score as _score, get_stats as _prediction_stats
+    from war_room.self_model import reflect as _reflect, get_current as _self_model_current, get_system_prompt_injection as _self_model_injection
+    _COGNITIVE_TRIAD = True
+except ImportError as _ct_err:
+    _COGNITIVE_TRIAD = False
+    _bus = None
+
 log = logging.getLogger("bifrost")
 BASE = Path(__file__).parent
 
@@ -887,6 +897,30 @@ def register_routes(handler_class, config):
     threading.Thread(target=_canary_memory_sweep_loop, daemon=True,
                      name="siren-memory-sweep").start()
 
+    # Wire Cognitive Triad
+    if _COGNITIVE_TRIAD:
+        # Subscribe Siren events to event bus for cross-module Φ
+        def _on_siren_hit(payload):
+            _write_audit("siren", f"canary:{payload.get('path','?')}", "critical",
+                         f"source={payload.get('source_ip','?')}")
+        _bus.subscribe("siren.*", _on_siren_hit)
+        _bus.subscribe("circuit.tripped", lambda p: _write_audit(
+            "circuit", "tripped", "high", f"node={p.get('node','?')} failures={p.get('failures',0)}"))
+        # Start self-model reflect loop (runs every 30 min)
+        def _self_model_loop():
+            import time as _t
+            _t.sleep(120)  # let /ask traffic accumulate first
+            while True:
+                try:
+                    result = _reflect()
+                    log.info("[self-model] Reflect complete: %s", result.get("status", "?"))
+                except Exception as e:
+                    log.error("[self-model] Reflect failed: %s", e)
+                _t.sleep(1800)
+        threading.Thread(target=_self_model_loop, daemon=True,
+                         name="self-model-reflect").start()
+        log.info("[cognitive-triad] event_bus + prediction + self_model wired")
+
 
 def _wire_hooks():
     """Register heimdall_watch and heimdall_audit into the running HookEngine."""
@@ -954,6 +988,12 @@ def _wire_routes(handler_class, config):
             _handle_canary_get(self)
         elif self.path.startswith("/catch-up"):
             _handle_catch_up(self)
+        elif self.path.startswith("/predictions"):
+            _handle_predictions(self)
+        elif self.path.startswith("/self-model"):
+            _handle_self_model(self)
+        elif self.path.startswith("/event-log"):
+            _handle_event_log(self)
         else:
             orig_get(self)
 
@@ -1059,9 +1099,24 @@ def _wire_routes(handler_class, config):
                 _ok(self, cached)
                 return
 
+            # 3.5 Prediction pre-hook (Free Energy Principle)
+            _prediction_hash = None
+            if _COGNITIVE_TRIAD:
+                try:
+                    _prediction_hash = _predict(prompt)
+                except Exception as _pe:
+                    log.debug("[prediction] pre-hook failed: %s", _pe)
+
             # 4. Inject working memory context (token-budget-aware)
             #    Pre-step: fetch Stand whispers from Thor to prepend security warnings
+            #    Pre-step 2: inject self-model awareness into system prompt
             stand_prefix = ""
+            self_model_prefix = ""
+            if _COGNITIVE_TRIAD:
+                try:
+                    self_model_prefix = _self_model_injection()
+                except Exception:
+                    pass
             try:
                 _stand_resp = urllib.request.urlopen(
                     f"{_THOR_BASE}/stand-whispers", timeout=2
@@ -1077,7 +1132,7 @@ def _wire_routes(handler_class, config):
                 log.debug("[stand] Whisper fetch skipped: %s", _se)
 
             wm = get_working_memory()
-            wm_base_system = stand_prefix + system if stand_prefix else system
+            wm_base_system = self_model_prefix + stand_prefix + system if (self_model_prefix or stand_prefix) else system
             existing_tokens = wm.estimate_tokens(wm_base_system)
             wm_context = wm.as_prompt_context(prompt, max_tokens=2000,
                                                existing_system_tokens=existing_tokens)
@@ -1095,6 +1150,18 @@ def _wire_routes(handler_class, config):
 
             self.rfile = io.BytesIO(raw_body)
             orig_post(self)
+
+            # 5.5 Prediction post-hook — score how surprising the response was
+            if _COGNITIVE_TRIAD and _prediction_hash:
+                def _score_prediction(qh, p):
+                    try:
+                        err = _score(qh, p)
+                        if err is not None:
+                            log.info("[prediction] error=%.3f for query_hash=%s", err, qh[:8])
+                    except Exception as e:
+                        log.debug("[prediction] score failed: %s", e)
+                threading.Thread(target=_score_prediction, args=(_prediction_hash, prompt),
+                                 daemon=True, name="prediction-score").start()
 
             # 6. Fire-and-forget to Thor's Stand for security/hallucination check
             def _submit_to_stand(resp_prompt, resp_context):
@@ -1906,6 +1973,36 @@ def _write_audit(node, event, severity, detail=None):
                 (time.time(), node, event, severity, detail))
     except Exception as e:
         log.error("[heimdall] audit write failed: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Cognitive Triad GET endpoint handlers
+# ---------------------------------------------------------------------------
+
+def _handle_predictions(handler):
+    if not _COGNITIVE_TRIAD:
+        _ok(handler, {"error": "cognitive triad not loaded"})
+        return
+    _ok(handler, _prediction_stats())
+
+def _handle_self_model(handler):
+    if not _COGNITIVE_TRIAD:
+        _ok(handler, {"error": "cognitive triad not loaded"})
+        return
+    _ok(handler, _self_model_current())
+
+def _handle_event_log(handler):
+    if not _COGNITIVE_TRIAD:
+        _ok(handler, {"error": "cognitive triad not loaded"})
+        return
+    from urllib.parse import urlparse, parse_qs
+    qs = parse_qs(urlparse(handler.path).query)
+    limit = int(qs.get("limit", ["50"])[0])
+    topic = qs.get("topic", [""])[0]
+    _ok(handler, {
+        "events": _bus.get_log(limit=limit, topic_filter=topic),
+        "subscribers": _bus.subscriber_count(),
+    })
 
 
 def _ok(handler, data):
