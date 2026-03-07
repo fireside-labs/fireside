@@ -48,7 +48,11 @@ from pathlib import Path
 
 from circuit_breaker import get_circuit, all_statuses as cb_all_statuses, CircuitOpenError
 from rate_limiter import RateLimiter
-from signing import sign_body, verify_request, signed_request
+from signing import sign_body, verify_request
+try:
+    from signing import signed_request
+except ImportError:
+    signed_request = None  # Odin's signing.py may not have this
 from working_memory import get_working_memory
 from inference_cache import get_inference_cache
 from prompt_guard import scan_prompt
