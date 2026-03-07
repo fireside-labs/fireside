@@ -38,6 +38,7 @@ import os
 import re
 import time
 import threading
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -888,8 +889,140 @@ def _process_nightmares(memories: list) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Dream cycle ╬ô├▓┬╝Γö£Γöñ╬ô├╢┬úΓö£┬║╬ô├╢┬ú╬ô├▓├│ full pipeline
+# Phase 1.75 — Error Loop Learning (Task Failure Post-Mortem)
+#
+#   When tasks are blocked/failed in the War Room, this phase:
+#   1. Fetches blocked tasks with failure reasons
+#   2. Fetches completed tasks for contrast
+#   3. Asks the LLM: "what operational rule prevents this failure?"
+#   4. Stores as a hypothesis (origin="error_loop")
 # ---------------------------------------------------------------------------
+
+_PROCESSED_FAILURES_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "war_room_data", "processed_failures.json"
+)
+
+
+def _load_processed_failures():
+    """Load set of task IDs already analyzed."""
+    try:
+        if os.path.exists(_PROCESSED_FAILURES_FILE):
+            with open(_PROCESSED_FAILURES_FILE, "r") as f:
+                return set(json.loads(f.read()))
+    except Exception:
+        pass
+    return set()
+
+
+def _save_processed_failures(ids):
+    try:
+        os.makedirs(os.path.dirname(_PROCESSED_FAILURES_FILE), exist_ok=True)
+        with open(_PROCESSED_FAILURES_FILE, "w") as f:
+            f.write(json.dumps(list(ids)[-200:]))
+    except Exception:
+        pass
+
+
+def _extract_error_lesson(failed_task: dict, success_task: dict) -> str:
+    """Ask LLM to extract an operational lesson from a failure/success pair."""
+    prompt = (
+        f"A task failed and another succeeded. Extract ONE operational rule "
+        f"that would prevent the failure from recurring.\n\n"
+        f"FAILED TASK:\n"
+        f"  Title: {failed_task.get('title', 'unknown')}\n"
+        f"  Agent: {failed_task.get('assigned_to', 'unknown')}\n"
+        f"  Reason: {str(failed_task.get('reason', failed_task.get('result', 'unknown')))[:300]}\n\n"
+        f"SUCCESSFUL TASK:\n"
+        f"  Title: {success_task.get('title', 'unknown')}\n"
+        f"  Agent: {success_task.get('assigned_to', 'unknown')}\n"
+        f"  Result: {str(success_task.get('result', ''))[:200]}\n\n"
+        f"Respond with ONLY the operational rule as a single imperative sentence. "
+        f"Example: 'Always validate JSON payloads before forwarding to downstream handlers.'\n"
+        f"Do not explain. Just the rule."
+    )
+    try:
+        payload = json.dumps({
+            "model": DREAM_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"num_predict": 120, "temperature": 0.3},
+        }).encode()
+        req = urllib.request.Request(
+            f"{OLLAMA_BASE}/api/generate", data=payload,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = json.loads(resp.read()).get("response", "")
+            text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+            return text
+    except Exception as e:
+        log.warning("[error_loop] LLM extraction failed: %s", e)
+        return ""
+
+
+def _process_task_failures():
+    """Phase 1.75: Error Loop Learning. Returns {"generated": N, "skipped": M}"""
+    stats = {"generated": 0, "skipped": 0}
+    try:
+        import pathlib
+        data_dir = pathlib.Path(__file__).parent.parent / "war_room_data"
+        # Use a fresh store instance to read tasks
+        from war_room.store import WarRoomStore
+        store = WarRoomStore(str(data_dir))
+
+        all_tasks = store.get_tasks()
+        if isinstance(all_tasks, dict):
+            all_tasks = list(all_tasks.values())
+
+        blocked = [t for t in all_tasks if t.get("status") == "blocked"]
+        done = [t for t in all_tasks if t.get("status") == "done" and t.get("result")]
+
+        if not blocked or not done:
+            log.info("[error_loop] No pairs (blocked=%d, done=%d)", len(blocked), len(done))
+            return stats
+
+        processed = _load_processed_failures()
+
+        for task in blocked[:5]:  # max 5 per cycle
+            tid = task.get("id", "")
+            if tid in processed:
+                continue
+
+            success = done[-1]  # most recent success as contrast
+            lesson = _extract_error_lesson(task, success)
+            if not lesson or len(lesson) < 10:
+                stats["skipped"] += 1
+                processed.add(tid)
+                continue
+
+            reject = _stand_review(lesson)
+            if reject:
+                log.info("[error_loop] Rejected: %s", reject)
+                stats["skipped"] += 1
+                processed.add(tid)
+                continue
+
+            dummy_a = {"memory_id": f"err_{tid[:8]}", "content": f"[FAIL] {task.get('title','')}",
+                       "embedding": [], "importance": 0.5}
+            dummy_b = {"memory_id": f"ok_{success.get('id','')[:8]}",
+                       "content": f"[OK] {success.get('title','')}",
+                       "embedding": [], "importance": 0.5}
+            hid = _store_hypothesis(dummy_a, dummy_b, f"[ERROR LOOP] {lesson}", 0.0,
+                                    origin_node=BIFROST_NODE_ID)
+            if hid:
+                stats["generated"] += 1
+                log.info("[error_loop] Lesson: [%s] %s", hid, lesson[:80])
+            else:
+                stats["skipped"] += 1
+            processed.add(tid)
+
+        _save_processed_failures(processed)
+
+    except Exception as e:
+        log.warning("[error_loop] Error: %s", e)
+        stats["error"] = str(e)
+
+    return stats
 
 def run_dream_cycle(seed: Optional[str] = None,
                     auto_share: bool = False,
@@ -958,6 +1091,12 @@ def run_dream_cycle(seed: Optional[str] = None,
         if nightmare_stats["generated"]:
             log.info("[hypotheses] Nightmare phase: %d rules generated, %d rejected",
                      nightmare_stats["generated"], nightmare_stats["rejected"])
+
+        # Phase 1.75: Error Loop Learning (Task Failure Post-Mortem)
+        error_loop_stats = _process_task_failures()
+        if error_loop_stats["generated"]:
+            log.info("[hypotheses] Error loop: %d lessons extracted",
+                     error_loop_stats["generated"])
 
         # Dream journal entry
         try:
