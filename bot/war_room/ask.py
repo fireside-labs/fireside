@@ -47,7 +47,7 @@ def _report_cost_to_heimdall(node: str, model: str, provider: str,
     t.start()
 
 OLLAMA_BASE = "http://127.0.0.1:11434"
-INFERENCE_TIMEOUT = 120  # seconds
+INFERENCE_TIMEOUT = 300  # seconds — increased for large local models (qwen3.5)
 
 
 class AskHandler:
@@ -58,7 +58,7 @@ class AskHandler:
         agent_config: {
             "id": "odin",
             "role": "orchestrator",
-            "local_model": "qwen3.5:27b",
+            "local_model": "qwen3.5:9b",
             "cloud_model": "z-ai/glm5",
             "cloud_base_url": "https://integrate.api.nvidia.com/v1",
             "cloud_api_key": "..."  # optional, from env
