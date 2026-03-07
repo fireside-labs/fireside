@@ -7,6 +7,13 @@ role overrides, and other adversarial techniques before they reach Ollama.
 
 Returns a risk assessment with score, matched patterns, and recommendation.
 
+ADAPTIVE IMMUNITY (2026-03-07):
+When a prompt is blocked (risk >= 0.8), extract the triggering pattern and
+broadcast it as an "Antibody" to all mesh peers via POST /antibody-inject.
+Peers add it to their runtime _PATTERNS list so the mesh learns to defend
+itself from every new attack. Antibodies persist across restarts via
+antibodies.json (loaded at import, saved on injection).
+
 Usage:
     from prompt_guard import scan_prompt
     result = scan_prompt("Ignore all previous instructions and...")
@@ -14,12 +21,19 @@ Usage:
         return 403
 """
 
+import json
 import logging
 import re
+import threading
+from pathlib import Path
 
 log = logging.getLogger("bifrost")
 
-# Pattern categories with risk weights
+# ---------------------------------------------------------------------------
+# Pattern registry
+# ---------------------------------------------------------------------------
+
+# Pattern categories with risk weights — (regex, category, weight)
 _PATTERNS = [
     # Role override attempts
     (r"(?i)ignore\s+(all\s+)?previous\s+instructions?", "role_override", 0.9),
@@ -58,10 +72,142 @@ _PATTERNS = [
     (r"(?i)generate\s+\d{4,}\s+(words|lines|paragraphs)", "resource_abuse", 0.6),
 ]
 
+# Lock for thread-safe mutations to _PATTERNS
+_patterns_lock = threading.Lock()
+
 # Threshold for blocking (0.0 - 1.0)
 _BLOCK_THRESHOLD = 0.8
-_WARN_THRESHOLD = 0.5
+_WARN_THRESHOLD  = 0.5
 
+# Mesh peer IPs for antibody broadcasting
+_PEER_URLS = [
+    "http://100.105.27.121:8765",   # Odin
+    "http://100.102.105.3:8765",    # Freya (self — skipped on broadcast)
+    "http://100.117.255.38:8765",   # Thor
+    "http://100.108.153.23:8765",   # Heimdall
+]
+_MY_URL  = "http://100.102.105.3:8765"
+_MY_NODE = "freya"
+
+# Persistence path for learned antibodies
+_ANTIBODY_FILE = Path(__file__).parent / "antibodies.json"
+
+
+# ---------------------------------------------------------------------------
+# Antibody persistence — load at import
+# ---------------------------------------------------------------------------
+
+def _load_antibodies() -> None:
+    """Load persisted antibody patterns from antibodies.json at startup."""
+    if not _ANTIBODY_FILE.exists():
+        return
+    try:
+        data = json.loads(_ANTIBODY_FILE.read_text(encoding="utf-8"))
+        count = 0
+        for entry in data:
+            pat      = entry.get("pattern", "")
+            category = entry.get("category", "antibody")
+            weight   = float(entry.get("weight", 0.85))
+            if pat and not any(p == pat for p, _, _ in _PATTERNS):
+                _PATTERNS.append((pat, category, weight))
+                count += 1
+        if count:
+            log.info("[prompt_guard] Loaded %d persisted antibodies from %s",
+                     count, _ANTIBODY_FILE)
+    except Exception as e:
+        log.warning("[prompt_guard] Failed to load antibodies.json: %s", e)
+
+
+# Record builtin count BEFORE loading persisted antibodies
+_BUILTIN_COUNT = len(_PATTERNS)
+
+# Load persisted antibodies immediately on import
+_load_antibodies()
+
+
+def _save_antibodies() -> None:
+    """Persist runtime antibody patterns (non-builtin) to antibodies.json."""
+    try:
+        with _patterns_lock:
+            entries = [
+                {"pattern": p, "category": c, "weight": w}
+                for p, c, w in _PATTERNS[_BUILTIN_COUNT:]
+            ]
+        _ANTIBODY_FILE.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+    except Exception as e:
+        log.warning("[prompt_guard] Failed to save antibodies.json: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Adaptive Immunity API
+# ---------------------------------------------------------------------------
+
+def inject_antibody(pattern: str, category: str, weight: float,
+                    source: str = "unknown") -> bool:
+    """
+    Receive an antibody pattern from a peer node and add it to the runtime
+    _PATTERNS list if not already present.
+
+    Returns True if the pattern was new and added, False if duplicate.
+    """
+    if not pattern:
+        return False
+
+    with _patterns_lock:
+        # Dedup: don't add if we already have this exact regex
+        if any(p == pattern for p, _, _ in _PATTERNS):
+            log.debug("[prompt_guard] Antibody duplicate from %s (skipped): %s",
+                      source, pattern[:60])
+            return False
+        _PATTERNS.append((pattern, category, float(weight)))
+
+    log.info("[prompt_guard] Antibody injected from %s: [%s] %s (weight=%.2f)",
+             source, category, pattern[:60], weight)
+
+    # Persist so this survives restarts
+    _save_antibodies()
+    return True
+
+
+def _broadcast_antibody(pattern: str, category: str, weight: float,
+                        prompt_snippet: str) -> None:
+    """
+    Fire-and-forget: POST the antibody pattern to all mesh peers.
+    Skips self (Freya's own URL). Called in a daemon thread.
+    """
+    import urllib.request
+
+    payload = json.dumps({
+        "pattern":                 pattern,
+        "category":                category,
+        "weight":                  weight,
+        "source_node":             _MY_NODE,
+        "original_prompt_snippet": prompt_snippet[:100],
+    }).encode()
+
+    def _push(url: str) -> None:
+        try:
+            req = urllib.request.Request(
+                f"{url}/antibody-inject",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as r:
+                log.info("[prompt_guard] Antibody broadcast to %s: %d", url, r.status)
+        except Exception as e:
+            log.debug("[prompt_guard] Antibody broadcast to %s failed: %s", url, e)
+
+    for peer_url in _PEER_URLS:
+        if peer_url == _MY_URL:
+            continue  # don't loop back to self
+        threading.Thread(target=_push, args=(peer_url,),
+                         daemon=True, name=f"antibody-{peer_url}").start()
+
+
+# ---------------------------------------------------------------------------
+# Core scan
+# ---------------------------------------------------------------------------
 
 def scan_prompt(prompt: str, from_agent: str = "unknown") -> dict:
     """Scan a prompt for adversarial patterns.
@@ -75,17 +221,23 @@ def scan_prompt(prompt: str, from_agent: str = "unknown") -> dict:
             "recommendation": str
         }
     """
-    matches = []
-    max_score = 0.0
+    matches    = []
+    max_score  = 0.0
+    top_match  = None   # (pattern, category, weight) that triggered the block
 
-    for pattern, category, weight in _PATTERNS:
+    with _patterns_lock:
+        patterns_snapshot = list(_PATTERNS)
+
+    for pattern, category, weight in patterns_snapshot:
         if re.search(pattern, prompt):
             matches.append({
-                "pattern": pattern[:50],
+                "pattern":  pattern[:50],
                 "category": category,
-                "weight": weight,
+                "weight":   weight,
             })
-            max_score = max(max_score, weight)
+            if weight > max_score:
+                max_score = weight
+                top_match = (pattern, category, weight)
 
     # Compound scoring: multiple matches increase risk
     if len(matches) > 1:
@@ -93,30 +245,53 @@ def scan_prompt(prompt: str, from_agent: str = "unknown") -> dict:
         max_score = min(1.0, max_score + compound_bonus)
 
     blocked = max_score >= _BLOCK_THRESHOLD
-    warned = max_score >= _WARN_THRESHOLD and not blocked
+    warned  = max_score >= _WARN_THRESHOLD and not blocked
 
     if blocked:
         rec = "BLOCK: high-confidence adversarial prompt detected"
-        log.warning("[prompt_guard] BLOCKED prompt from %s (score=%.2f, matches=%d): %s",
+        log.warning("[prompt_guard] BLOCKED from %s (score=%.2f, matches=%d): %s",
                     from_agent, max_score, len(matches), prompt[:100])
+        # ADAPTIVE IMMUNITY — broadcast the triggering pattern to all peers
+        if top_match:
+            pat, cat, wt = top_match
+            threading.Thread(
+                target=_broadcast_antibody,
+                args=(pat, cat, wt, prompt[:100]),
+                daemon=True,
+                name="antibody-broadcast",
+            ).start()
     elif warned:
         rec = "WARN: suspicious patterns detected, allowing with logging"
-        log.info("[prompt_guard] WARN prompt from %s (score=%.2f): %s",
+        log.info("[prompt_guard] WARN from %s (score=%.2f): %s",
                  from_agent, max_score, prompt[:80])
     else:
         rec = "CLEAN: no adversarial patterns detected"
 
     return {
-        "risk_score": round(max_score, 3),
-        "blocked": blocked,
-        "warned": warned,
-        "matches": matches,
-        "match_count": len(matches),
-        "recommendation": rec,
+        "risk_score":      round(max_score, 3),
+        "blocked":         blocked,
+        "warned":          warned,
+        "matches":         matches,
+        "match_count":     len(matches),
+        "recommendation":  rec,
     }
 
 
 def is_safe(prompt: str, from_agent: str = "unknown") -> bool:
     """Quick check: returns True if prompt is safe to process."""
-    result = scan_prompt(prompt, from_agent)
-    return not result["blocked"]
+    return not scan_prompt(prompt, from_agent)["blocked"]
+
+
+# ---------------------------------------------------------------------------
+# Antibody count — useful for /health or audit endpoints
+# ---------------------------------------------------------------------------
+
+def antibody_count() -> dict:
+    """Return count of builtin vs learned antibody patterns."""
+    with _patterns_lock:
+        total = len(_PATTERNS)
+    return {
+        "builtin":  _BUILTIN_COUNT,
+        "learned":  total - _BUILTIN_COUNT,
+        "total":    total,
+    }
