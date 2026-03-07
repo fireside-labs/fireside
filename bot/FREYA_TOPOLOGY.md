@@ -19,7 +19,8 @@ C:\Users\Jorda\.openclaw\workspace\bot\
 - Remote: `github` → `https://github.com/JordanFableFur/valhalla-mesh`
 - Pull: `git pull github main`
 - Push: `git add . && git commit -m "..." && git push github main`
-- **Never commit `bifrost_local.py`** — it is gitignored by design
+- **`bifrost_local.py`** (plain, on each node) is gitignored — stays local, never push
+- **`bifrost_local.freya.py`** (named, in Odin's repo) IS tracked — reference/backup
 
 ## Role
 Memory master, designer, epistemologist.
