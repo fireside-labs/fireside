@@ -4,17 +4,17 @@
 ```
 C:\Users\Jorda\.openclaw\workspace\bot\
   war_room/          → shared cognitive modules (git-tracked)
-  stand.py           → The Stand — background conscience monitor
-  metrics.py         → mesh performance metrics
-  shared_state.py    → cross-request shared state
-  watchdog.py        → process watchdog + health monitor
-  signing.py         → request signing/verification
-  rate_limiter.py    → rate limiting
-  circuit_breaker.py → circuit breaker for peer calls
-  hydra.py           → hydra resilience (canary detection, phylactery)
-  router.py          → semantic message routing
-  bifrost_local.py   → Thor's node extensions (gitignored, never push)
-  mesh/docs/thor.md  → live capability doc (served via /agent-docs)
+  stand.py           → The Stand — background conscience monitor       [git-tracked]
+  metrics.py         → mesh performance metrics                        [git-tracked]
+  shared_state.py    → cross-request shared state                      [git-tracked]
+  watchdog.py        → process watchdog + health monitor               [git-tracked]
+  signing.py         → request signing/verification                    [git-tracked]
+  rate_limiter.py    → rate limiting                                   [git-tracked]
+  circuit_breaker.py → circuit breaker for peer calls                  [git-tracked]
+  hydra.py           → hydra resilience (canary detection, phylactery) [git-tracked]
+  router.py          → semantic message routing                        [git-tracked]
+  bifrost_local.py   → Thor's node extensions (gitignored, stays local)
+  mesh/docs/thor.md  → live capability doc (served via /agent-docs)   [git-tracked]
 ```
 
 ## Git
