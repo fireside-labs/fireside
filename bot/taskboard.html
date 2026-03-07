@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valhalla — War Room Task Board</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            min-height: 100vh;
+            padding: 1.5rem 2rem;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        h1 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #58a6ff;
+        }
+
+        .subtitle {
+            font-size: 0.78rem;
+            color: #6e7681;
+            margin-top: 2px;
+        }
+
+        .refresh-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 0.35em 0.9em;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: border-color 0.15s;
+        }
+
+        .refresh-btn:hover {
+            border-color: #58a6ff;
+            color: #58a6ff;
+        }
+
+        .columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .column {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 0.9rem;
+        }
+
+        .col-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .col-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .col-title.active {
+            color: #3fb950;
+        }
+
+        .col-title.blocked {
+            color: #f85149;
+        }
+
+        .col-title.done {
+            color: #8b949e;
+        }
+
+        .col-title.pending {
+            color: #d29922;
+        }
+
+        .col-count {
+            font-size: 0.7rem;
+            background: #21262d;
+            padding: 0.1em 0.5em;
+            border-radius: 999px;
+            color: #8b949e;
+        }
+
+        .task-card {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 7px;
+            padding: 0.7rem 0.8rem;
+            margin-bottom: 0.6rem;
+            transition: border-color 0.15s;
+        }
+
+        .task-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .task-card:hover {
+            border-color: #30363d;
+        }
+
+        .task-card.blocked {
+            border-left: 3px solid #f85149;
+        }
+
+        .task-card.active {
+            border-left: 3px solid #3fb950;
+        }
+
+        .task-card.done {
+            border-left: 3px solid #21262d;
+            opacity: 0.6;
+        }
+
+        .task-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+            color: #e6edf3;
+        }
+
+        .task-meta {
+            font-size: 0.72rem;
+            color: #6e7681;
+            line-height: 1.7;
+        }
+
+        .task-meta .agent {
+            display: inline-block;
+            background: #21262d;
+            color: #8b949e;
+            padding: 0.1em 0.45em;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-right: 0.3em;
+        }
+
+        .task-meta .agent.odin {
+            background: #0d2a4a;
+            color: #58a6ff;
+        }
+
+        .task-meta .agent.thor {
+            background: #1a2a0d;
+            color: #3fb950;
+        }
+
+        .task-meta .agent.freya {
+            background: #2d1a2d;
+            color: #d2a8ff;
+        }
+
+        .task-meta .agent.heimdall {
+            background: #2d1a1a;
+            color: #f85149;
+        }
+
+        .empty {
+            color: #484f58;
+            font-size: 0.78rem;
+            text-align: center;
+            padding: 1rem 0;
+        }
+
+        #last-check {
+            font-size: 0.75rem;
+            color: #6e7681;
+            margin-top: 1.2rem;
+        }
+
+        /* Messages strip */
+        .messages-section {
+            margin-top: 1.5rem;
+        }
+
+        .messages-section h2 {
+            font-size: 0.9rem;
+            color: #8b949e;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+
+        .message-row {
+            display: flex;
+            gap: 0.6rem;
+            align-items: flex-start;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #161b22;
+            font-size: 0.78rem;
+        }
+
+        .message-row:last-child {
+            border-bottom: none;
+        }
+
+        .msg-from {
+            color: #58a6ff;
+            font-weight: 600;
+            min-width: 60px;
+        }
+
+        .msg-body {
+            color: #c9d1d9;
+            flex: 1;
+        }
+
+        .msg-ts {
+            color: #484f58;
+            min-width: 80px;
+            text-align: right;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div>
+            <h1>⚔️ War Room Task Board</h1>
+            <div class="subtitle" id="last-check">Loading...</div>
+        </div>
+        <button class="refresh-btn" onclick="refresh()">↻ Refresh</button>
+    </header>
+
+    <div class="columns" id="board"></div>
+
+    <div class="messages-section">
+        <h2>📨 Recent Messages</h2>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        const LOCAL = `http://${location.hostname}:8765`;
+
+        const STATUS_GROUPS = {
+            blocked: { label: 'Blocked', cls: 'blocked' },
+            active: { label: 'Active', cls: 'active' },
+            pending: { label: 'Pending', cls: 'pending' },
+            done: { label: 'Done', cls: 'done' },
+        };
+
+        function agentPill(name) {
+            if (!name) return '';
+            const cls = ['odin', 'thor', 'freya', 'heimdall'].includes(name.toLowerCase())
+                ? name.toLowerCase() : '';
+            return `<span class="agent ${cls}">${name}</span>`;
+        }
+
+        function timeAgo(ts) {
+            if (!ts) return '';
+            const diff = Math.floor((Date.now() - new Date(ts)) / 1000);
+            if (diff < 60) return `${diff}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+
+        function renderCard(task) {
+            const statusCls = task.status === 'blocked' ? 'blocked'
+                : task.status === 'done' ? 'done'
+                    : 'active';
+            const assigned = task.assigned_to || task.claimed_by || '';
+            return `
+    <div class="task-card ${statusCls}">
+      <div class="task-title">${task.title || task.id}</div>
+      <div class="task-meta">
+        ${agentPill(assigned)}
+        ${task.result ? `<span style="color:#3fb950">✓</span> ` : ''}
+        <span title="${task.updated_at || ''}">${timeAgo(task.updated_at)}</span>
+        ${task.blocked_reason ? `<br><span style="color:#f85149">⚠ ${task.blocked_reason}</span>` : ''}
+      </div>
+    </div>`;
+        }
+
+        async function refresh() {
+            document.getElementById('last-check').textContent = 'Refreshing...';
+            try {
+                // Fetch tasks
+                const tr = await fetch(`${LOCAL}/war-room/tasks?raw=true`);
+                const tasksData = await tr.json();
+                const tasks = Object.values(tasksData);
+
+                // Fetch recent messages
+                const mr = await fetch(`${LOCAL}/war-room/read?limit=10`);
+                const messages = await mr.json();
+
+                // Group tasks by status
+                const groups = { blocked: [], active: [], pending: [], done: [] };
+                for (const t of tasks) {
+                    const s = t.status || 'pending';
+                    const g = groups[s] || groups.pending;
+                    g.push(t);
+                }
+
+                // Sort done by updated time descending, limit to 10
+                groups.done = groups.done
+                    .sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0))
+                    .slice(0, 10);
+
+                // Render columns
+                const board = document.getElementById('board');
+                board.innerHTML = Object.entries(STATUS_GROUPS).map(([key, meta]) => {
+                    const items = groups[key] || [];
+                    return `
+        <div class="column">
+          <div class="col-header">
+            <span class="col-title ${meta.cls}">${meta.label}</span>
+            <span class="col-count">${items.length}</span>
+          </div>
+          ${items.length ? items.map(renderCard).join('') : '<div class="empty">—</div>'}
+        </div>`;
+                }).join('');
+
+                // Render messages
+                const msgBox = document.getElementById('messages');
+                if (!messages.length) {
+                    msgBox.innerHTML = '<div class="empty">No messages yet.</div>';
+                } else {
+                    msgBox.innerHTML = messages.slice(0, 10).map(m => `
+        <div class="message-row">
+          <div class="msg-from">${m.from || '?'}</div>
+          <div class="msg-body">${m.body || ''}</div>
+          <div class="msg-ts">${timeAgo(m.timestamp)}</div>
+        </div>`).join('');
+                }
+
+                document.getElementById('last-check').textContent =
+                    'Updated ' + new Date().toLocaleTimeString();
+            } catch (e) {
+                document.getElementById('last-check').textContent = 'Error: ' + e.message;
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+
+</html>

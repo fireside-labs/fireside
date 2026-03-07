@@ -1,0 +1,72 @@
+{
+    "_comment": "Bifrost Hook Registry — defines listeners for mesh events. Hooks fire via POST /hook on any node.",
+    "hooks": {
+        "on_task_complete": {
+            "description": "Fires when a War Room task transitions to 'done'.",
+            "enabled": true,
+            "actions": [
+                {
+                    "type": "war_room_post",
+                    "from": "heimdall",
+                    "template": "✅ Task completed: {task_title} (node: {node})"
+                }
+            ]
+        },
+        "on_error": {
+            "description": "Fires when any command execution returns a non-zero exit or raises an exception.",
+            "enabled": true,
+            "actions": [
+                {
+                    "type": "telegram_notify",
+                    "template": "🔴 *Error on {node}*\n\nCommand: `{command}`\nCaller: `{caller}`\nError: {error}"
+                },
+                {
+                    "type": "war_room_post",
+                    "from": "heimdall",
+                    "template": "[ALERT:error] {node} — {command} failed: {error}"
+                }
+            ]
+        },
+        "on_model_fallback": {
+            "description": "Fires when a node falls back from cloud to local model due to API failure or timeout.",
+            "enabled": true,
+            "actions": [
+                {
+                    "type": "war_room_post",
+                    "from": "heimdall",
+                    "template": "[INFO:fallback] {node} fell back to local model ({local_model}). Cloud model {cloud_model} unavailable."
+                }
+            ]
+        },
+        "on_denial_spike": {
+            "description": "Fires when anomaly watchdog detects 3+ denials in 60s from same caller.",
+            "enabled": true,
+            "actions": [
+                {
+                    "type": "telegram_notify",
+                    "template": "⚠️ *SECURITY ALERT — {node}*\n\nCaller `{caller}` has {count} denials in 60s.\nLast command: `{command}`"
+                }
+            ]
+        },
+        "on_node_down": {
+            "description": "Fires when cluster-status detects a node stops responding.",
+            "enabled": false,
+            "actions": [
+                {
+                    "type": "telegram_notify",
+                    "template": "🔴 Node `{node}` is unreachable. Last seen: {last_seen}"
+                },
+                {
+                    "type": "war_room_post",
+                    "from": "heimdall",
+                    "template": "[ALERT:node_down] {node} is unreachable."
+                }
+            ]
+        }
+    },
+    "action_types": {
+        "telegram_notify": "Send a Telegram message using _send_telegram_rest(). Template vars: {node}, {caller}, {command}, {error}, {count}",
+        "war_room_post": "POST a message to /war-room/post on localhost. Template vars: same as above.",
+        "http_post": "POST to an arbitrary URL with the event payload as JSON body. Requires 'url' field."
+    }
+}

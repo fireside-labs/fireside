@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Valhalla — Node Status</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #58a6ff;
+    margin-bottom: 0.25rem;
+    letter-spacing: 0.05em;
+  }
+  .subtitle {
+    font-size: 0.8rem;
+    color: #6e7681;
+    margin-bottom: 2rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    max-width: 1200px;
+  }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 1.2rem 1.4rem;
+    transition: border-color 0.2s;
+  }
+  .card.online  { border-left: 3px solid #3fb950; }
+  .card.offline { border-left: 3px solid #f85149; }
+  .card.pending { border-left: 3px solid #d29922; }
+  .node-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+  }
+  .node-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+  .pill {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2em 0.7em;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .pill.online  { background: #0d4a1a; color: #3fb950; }
+  .pill.offline { background: #4a0d0d; color: #f85149; }
+  .pill.pending { background: #4a3500; color: #d29922; }
+  .meta {
+    font-size: 0.78rem;
+    color: #8b949e;
+    line-height: 1.8;
+  }
+  .meta span { color: #c9d1d9; }
+  .war-room-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 0.1em 0.5em;
+    border-radius: 4px;
+    margin-top: 0.4rem;
+  }
+  .war-room-badge.yes { background: #0d3a4a; color: #58a6ff; }
+  .war-room-badge.no  { background: #2d2d2d; color: #8b949e; }
+  .footer {
+    margin-top: 2rem;
+    font-size: 0.75rem;
+    color: #6e7681;
+  }
+  #last-check { color: #8b949e; }
+</style>
+</head>
+<body>
+
+<h1>⚡ Valhalla Node Status</h1>
+<p class="subtitle">Refreshes every 60s &nbsp;·&nbsp; <span id="last-check">checking...</span></p>
+
+<div class="grid" id="grid"></div>
+
+<p class="footer">Served from any Bifrost node &nbsp;·&nbsp; <code>GET /dashboard</code></p>
+
+<script>
+const NODES = [
+  { name: "odin",     ip: "100.105.27.121", port: 8765, role: "Orchestrator"    },
+  { name: "thor",     ip: "100.117.255.38", port: 8765, role: "Backend Engineer" },
+  { name: "freya",    ip: "100.102.105.3",  port: 8765, role: "Frontend Engineer"},
+  { name: "heimdall", ip: "100.108.153.23", port: 8765, role: "Security Monitor" },
+  { name: "hermes",   ip: "100.86.195.123", port: 8765, role: "Messenger"        },
+];
+
+async function checkNode(node) {
+  const url = `http://${node.ip}:${node.port}/health`;
+  const start = Date.now();
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const ms = Date.now() - start;
+    if (!res.ok) return { status: "offline", ms };
+    const data = await res.json();
+    return { status: "online", ms, war_room: data.war_room, platform: data.platform };
+  } catch {
+    return { status: "offline", ms: null };
+  }
+}
+
+function renderCard(node, result) {
+  const s = result.status;
+  const msStr = result.ms != null ? `${result.ms}ms` : "—";
+  const wrBadge = result.war_room != null
+    ? `<div class="war-room-badge ${result.war_room ? 'yes' : 'no'}">war_room: ${result.war_room ? '✓ active' : '✗ inactive'}</div>`
+    : '';
+  const platform = result.platform ? `<br><span>Platform</span> ${result.platform}` : '';
+  return `
+    <div class="card ${s}">
+      <div class="node-header">
+        <div class="node-name">${node.name}</div>
+        <div class="pill ${s}">${s}</div>
+      </div>
+      <div class="meta">
+        <span>Role</span> ${node.role}<br>
+        <span>IP</span> ${node.ip}:${node.port}<br>
+        <span>Latency</span> ${msStr}
+        ${platform}
+      </div>
+      ${wrBadge}
+    </div>`;
+}
+
+async function refresh() {
+  const grid = document.getElementById('grid');
+  // Show pending state immediately
+  NODES.forEach(node => {
+    const existing = document.getElementById(`card-${node.name}`);
+    if (!existing) {
+      const div = document.createElement('div');
+      div.id = `card-${node.name}`;
+      div.innerHTML = renderCard(node, { status: 'pending', ms: null });
+      grid.appendChild(div);
+    }
+  });
+
+  const checks = NODES.map(node =>
+    checkNode(node).then(result => ({ node, result }))
+  );
+
+  for (const promise of checks) {
+    const { node, result } = await promise;
+    document.getElementById(`card-${node.name}`).innerHTML = renderCard(node, result);
+  }
+
+  document.getElementById('last-check').textContent =
+    'Last checked: ' + new Date().toLocaleTimeString();
+}
+
+refresh();
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>

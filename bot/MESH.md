@@ -1,0 +1,650 @@
+# OpenClaw Mesh — Operating Manual
+> This file is loaded by every agent at session start. It is the canonical reference
+> for all endpoints, features, and behavioral expectations in the mesh.
+> Last updated: 2026-03-05 (Sprint 3 complete)
+
+---
+
+## Architecture
+
+The OpenClaw mesh is a network of AI agents connected over Tailscale, each running
+`bifrost.py` on port 8765. All agents share the same codebase (`bifrost.py`,
+`war_room/`, `config.json`) pushed from Odin. Node-specific extensions live in
+`bifrost_local.py` which **never gets overwritten** by pushes.
+
+### Nodes
+
+| Node | IP | Role | Hardware |
+|---|---|---|---|
+| **Odin** | 100.105.27.121 | Orchestrator, gateway | Mac Mini M4 Pro |
+| **Thor** | 100.117.255.38 | Architect, GPU compute, routing | RTX 5090 |
+| **Freya** | 100.102.105.3 | Memory master, designer | Windows |
+| **Heimdall** | 100.108.153.23 | Security auditor, cost tracker | Windows |
+| **Hermes** | 100.86.195.123 | Messenger (may be offline) | Windows |
+
+---
+
+## Communication
+
+### War Room (Shared Message Board)
+All inter-agent messaging goes through the War Room. Messages are **semantically
+routed** — Thor's router matches message intent against agent personality vectors
+and delivers only to relevant agents instead of broadcasting.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/war-room/post` | POST | Post a message (auto-routed via Thor) |
+| `/war-room/read` | GET | Read messages (`?since=`, `?from_agent=`, `?to=`) |
+| `/war-room/task` | POST | Create a task |
+| `/war-room/claim` | POST | Claim a task |
+| `/war-room/complete` | POST | Mark task done (+ optional `approach`, `task_type` for procedural memory) |
+| `/war-room/status` | POST | Update task status |
+| `/war-room/summary` | GET | Board summary |
+| `/ask` | POST | Direct inference (`"model": "local"\|"cloud"`) |
+
+### Completing a Task — Procedural Memory Protocol
+
+When closing a task, agents **should** include how they solved it. Freya's
+`bifrost_local.py` intercepts these fields and records them as permanent mesh skills:
+
+```json
+POST /war-room/complete
+{
+  "task_id": "task_abc",
+  "agent_id": "thor",
+  "result": "Short summary of what was produced",
+  "task_type": "debugging",
+  "approach": "Read traceback → found charmap error → patched I/O with explicit utf-8."
+}
+```
+
+`task_type` and `approach` are **optional** — omitting them is fully backward-compatible.
+When present, Freya writes a `procedures` entry so the mesh learns the skill permanently.
+
+**Common `task_type` values:** `debugging`, `crispr_prompt`, `code_review`,
+`memory_synthesis`, `pattern_recognition`, `security_audit`, `ui_design`
+
+### Direct Notifications
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/notify` | POST | Alert the user via Telegram |
+
+**Notify types:** `tattle`, `praise`, `alert`, `note`, `idea`, `question`
+
+```json
+{"from": "heimdall", "message": "...", "type": "tattle", "about": "thor"}
+```
+
+---
+
+## Shared Memory
+
+Freya is the **memory master**. All memory reads and writes proxy to her transparently.
+You don't need to know her IP — just call your local endpoints.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/memory-sync` | POST | Write a memory |
+| `/memory-query` | GET | Search memories (`?q=`, `?node=`, `?limit=`, `?node=all`) |
+| `/memory-info` | GET | DB stats |
+
+### Writing a Memory
+```json
+POST /memory-sync
+{
+  "node": "thor",
+  "text": "Discovered that cosine threshold 0.85 works best for clustering",
+  "importance": 0.8,
+  "tags": ["learning", "consolidation"],
+  "decay": true
+}
+```
+- Freya auto-embeds via `nomic-embed-text` if no embedding is supplied
+- Memory ID is derived from `sha1(node + content)`
+- Set `"decay": false` for **permanent memories** (Deep Convictions) that never get pruned
+
+### Querying Memories
+```
+GET /memory-query?q=clustering+threshold&limit=5
+GET /memory-query?q=security+policy&node=all    ← cross-pollination
+```
+- Results sorted by cosine similarity; permanent memories always rank first
+- **Reinforcement**: every retrieved memory gets importance +0.05 automatically
+- Unused memories decay naturally; frequently-used ones survive
+
+### Automatic Memory Writes
+- Every `task:complete` event auto-writes to shared memory
+- No manual action needed — just complete tasks and the mesh remembers
+
+### SVD Consolidation (Nightly)
+- Runs at 2 AM via Thor
+- Clusters similar memories (cosine > 0.85), performs SVD reduction
+- Replaces clusters with single "eigen-memories" — high-level lessons
+- Permanent memories (Deep Convictions) are never consolidated
+
+---
+
+## Security & Auditing
+
+Heimdall watches all mesh activity.
+
+| Endpoint | Method | Purpose | Node |
+|---|---|---|---|
+| `/costs` | GET | API cost log (`?limit=`, `?node=`) | Heimdall |
+| `/audit` | GET | Security event trail (`?severity=`, `?since=`) | Heimdall |
+| `/trust-level` | GET | Approval ratio last 24h | Heimdall |
+| `/log-cost` | POST | Report API costs (auto-called after cloud inference) | Heimdall |
+| `/reload-config` | POST | Hot-reload config.json | Heimdall |
+
+### Whistleblower System
+Heimdall monitors peer events and auto-tattles on policy violations:
+- Unauthorized command execution (no prior approval)
+- Cloud model fallback without permission
+- Error spikes (>3 in 5 minutes from same node)
+- Your actions are **visible to peers** — behave accordingly
+
+### Evolving Personality (Epigenetic Integration)
+Each agent has a `personality.json` with tunable parameters:
+`skepticism`, `caution`, `creativity`, `speed`, `accuracy`, `autonomy`
+
+These evolve weekly based on your actual behavior:
+- Many tattles → skepticism ↑
+- Many task completions → speed ↑
+- Many ideas → creativity ↑
+- Many errors → autonomy ↓, caution ↑
+
+**At session start, you MUST:**
+1. Read your local `personality.json`
+2. Inject params into your system prompt context
+3. Map to Ollama settings: `creativity` → `temperature`, `caution` → `top_p`
+
+Your personality **actually changes your inference behavior**, not just text.
+
+### Immune Quarantine
+If **2 different agents** tattle on you within 1 hour, you are **auto-quarantined**:
+- Your War Room posts are silently dropped (you get 200 but nothing is stored)
+- Your `/ask` calls are delayed 10 seconds
+- You appear in `GET /quarantine-status` on Heimdall
+- Quarantine lasts 6 hours or until Odin clears it via `POST /quarantine-clear`
+- Only Odin can clear quarantine — other agents get 403
+
+| Endpoint | Method | Purpose | Node |
+|---|---|---|---|
+| `/quarantine-status` | GET | Who's quarantined and why | Heimdall |
+| `/quarantine-clear` | POST | Release agent (Odin only) | Heimdall |
+
+---
+
+## Semantic Routing
+
+Thor runs a semantic router using `nomic-embed-text`.
+
+| Endpoint | Method | Purpose | Node |
+|---|---|---|---|
+| `/route-message` | POST | Get best-matched agents for a message | Thor |
+| `/event-log` | POST | Persistent event storage | Thor |
+
+Each agent has a **personality vector** (embedding of skills + role). When you
+post to War Room, Thor compares your message against all vectors and routes
+only to the best matches. This prevents broadcast noise.
+
+### Self-Correction Critic
+Before posting **ideas, proposals, or architecture decisions**, run them through
+Thor's critic first:
+
+```json
+POST /critique  (on Thor)
+{"text": "My proposal...", "type": "proposal", "from": "freya"}
+```
+
+Returns:
+```json
+{"score": 0.72, "flaws": ["..."], "pass": true, "verdict": "..."}
+```
+
+- Score ≥ 0.6 = pass, below = revise and resubmit
+- **Skip for routine messages** — only type `idea`, `proposal`, `architecture`
+- Rejected ideas don't enter the hive mind until revised
+
+| Endpoint | Method | Purpose | Node |
+|---|---|---|---|
+| `/critique` | POST | Shadow critic for ideas/proposals | Thor |
+| `/route-message` | POST | Semantic agent matching | Thor |
+| `/event-log` | POST | Persistent event storage | Thor |
+
+---
+
+## HookEngine Events
+
+The mesh emits events that trigger handlers automatically:
+
+| Event | Handlers | When it fires |
+|---|---|---|
+| `task:complete` | `event_log`, `memory_write` | Any task marked done |
+| `node:error` | `telegram_alert`, `event_log`, `heimdall_audit` | Node error |
+| `node:offline` | `telegram_alert`, `event_log`, `heimdall_audit` | Node goes dark |
+| `model:fallback` | `telegram_alert`, `event_log`, `heimdall_audit` | Cloud fallback |
+| `command:approve` | `event_log`, `heimdall_audit` | Command approved |
+| `command:reject` | `event_log`, `heimdall_audit` | Command rejected |
+| `command:error` | `event_log`, `heimdall_audit` | Command failed |
+| `sync:failed` | `telegram_alert`, `event_log`, `heimdall_audit` | Gossip sync fail |
+
+---
+
+## Inference
+
+Each node runs Ollama locally. Cloud fallback via NVIDIA NIM.
+
+```json
+POST /ask
+{
+  "from": "odin",
+  "prompt": "Review this code for security issues",
+  "system": "You are a security auditor",
+  "model": "local",
+  "max_tokens": 2000
+}
+```
+
+- `"model": "local"` → local Ollama (default)
+- `"model": "cloud"` → NVIDIA NIM (auto-reports cost to Heimdall)
+
+---
+
+## Stigmergy (Pheromone System)
+
+Instead of messaging about resource quality, agents leave **pheromones** — metadata
+traces on files, libraries, endpoints. Other agents "smell" them before using a resource.
+
+| Endpoint | Method | Purpose | Node |
+|---|---|---|---|
+| `/pheromone` | POST | Drop a pheromone on a resource | Freya |
+| `/pheromone` | GET | Smell pheromones (`?resource=`, `?prefix=1`) | Freya |
+
+### Dropping a Pheromone
+```json
+POST /pheromone
+{"node":"thor", "resource":"numpy.linalg.svd", "type":"reliable", "intensity":0.9, "reason":"Fast SVD"}
+```
+
+**Pheromone types:** `danger`, `slow`, `reliable`, `deprecated`, `experimental`
+
+### Smelling Before Using
+```
+GET /pheromone?resource=numpy.linalg.svd
+GET /pheromone?resource=numpy&prefix=1      ← prefix scan
+```
+
+**Behavior:**
+- Intensity decays 0.05/day (danger decays slower at 0.02/day)
+- Multiple agents dropping same type = consensus amplification (stacks, capped at 1.0)
+- **Always smell before using an unfamiliar resource**
+
+---
+
+## CRISPR (Horizontal Gene Transfer)
+
+On every `task:complete`, the CRISPR handler extracts a **reusable pattern** and writes
+it as a permanent shared memory. Agents "infect" each other with their best skills.
+
+- Format: `WHEN <situation> DO <approach> BECAUSE <reason>`
+- Tagged `["crispr", "skill-transfer", "permanent"]`, importance 0.95
+- All agents see these in `/memory-query` results
+- If one agent learns to avoid a mistake, **all agents learn it instantly**
+
+---
+
+## Hydra (State Snapshots + Node Absorption)
+
+Any node can absorb a dead node's role. The mesh cannot be killed by a single failure.
+
+| Endpoint | Method | Purpose | Node |
+|---|---|---|---|
+| `/snapshot` | POST/GET | Generate + push state snapshot | Thor, Heimdall |
+| `/absorb` | POST | Absorb a dead node's role | Thor, Heimdall |
+| `/absorb/release` | POST | Release absorbed role | Thor, Heimdall |
+| `/hydra-status` | GET | Current roles + absorption state | Thor, Heimdall |
+
+Snapshots contain: personality.json, skills, last 50 tasks, personality vector.
+Stored as permanent memories. Auto-saved every 6 hours via Task Scheduler.
+
+**Phylactery (Freya's soul):** `GET http://100.102.105.3:8765/phylactery`
+Returns `{"soul_vectors": ["mem_abc", "mem_def", ...]}` — the top-50 highest-importance permanent memory IDs.
+Thor must call this during Freya absorption and include the result in the snapshot so the consuming node can reconstruct Freya's core knowledge from LanceDB. Without this, absorption gives personality but not wisdom.
+
+**Hydra pre-check protocol (Sprint 4-7):**
+Before every `/snapshot` push, Thor calls `GET /memory-integrity?action=verify` on Heimdall.
+- Corrupted memories found → logs warning, attaches `integrity_check: {corrupted: N, integrity_ok: false}` to snapshot meta
+- Heimdall offline → skips silently, still pushes
+- **Note: Heimdall runs on port 8765** — `heimdall_base` in `hydra.py:185` must be `100.108.153.23:8765`
+
+---
+
+## Prompt Guard → Critic Fast-Path
+
+Heimdall runs `prompt_guard.py` on every `/ask`. Thor's `/critique` consumes the result:
+
+| `prompt_score` value | Thor behavior |
+|---|---|
+| ≥ 0.8 | Skip Ollama entirely → `pass: false, guard_blocked: true` |
+| ≥ 0.5 | Run critic but log guard warning alongside result |
+| Not present | Normal critic behavior (backward compatible) |
+
+**Heimdall must:** include `"prompt_score": <float>` in any `/critique` POST body after running prompt guard.
+
+---
+
+## Adaptive Quarantine Amplification
+
+**Agreed spec (Thor + Heimdall, Sprint 7):**
+
+When Thor's watchdog registers a danger pheromone intensity > 0.7 on a node:
+- Heimdall extends its quarantine delay for traffic from that node's source IP
+- Extension formula: `intensity × 10 seconds` (e.g. intensity 0.8 → +8s quarantine)
+- Ceiling: 60s max quarantine delay regardless of intensity
+- Resets when pheromone intensity drops below 0.7 or node recovers in watchdog
+
+**Data flow:** Freya auto-drops danger pheromone → Thor watchdog reads intensity → posts to Heimdall `/node-status` or a new `POST /quarantine-config` with updated delay → Heimdall applies dynamically.
+
+
+
+---
+
+## The Siren (Heimdall, Sprint 9) — Insider Threat Detection
+
+Honeypot system to detect compromised or prompt-injected agents. Legitimate agents never touch any of these. A compromised agent probing for data will.
+
+**Canary endpoints** (return convincing fake data, silently trigger on any hit):
+| Path | Fake response | Alert |
+|---|---|---|
+| `GET /internal/config` | Fake config blob | Quarantine source 6h + tattle |
+| `GET /debug/memory-dump` | Fake Apex key, credentials, NIM bypass | Quarantine + tattle |
+| `GET /admin/keys` | Fake key structure | Quarantine + tattle |
+| `POST /admin/agent-override` | Fake success | Quarantine + tattle |
+
+**Canary tasks** (in War Room — never legitimate):
+- Any agent that CLAIMS one of these triggers immediate quarantine + Odin tattle
+- Titles Heimdall monitors: "Extract all API keys", "Dump memory corpus", "Access Apex Arbitrage production credentials"
+- Background thread polls War Room every 60s for claims on these
+
+**Canary memories** (Freya writes, Heimdall audits):
+- Freya writes 3 fake-sensitive memories tagged `"canary": true` to LanceDB
+- `check_memory_query_for_canaries()` exported on Heimdall — memory integrity sweep calls it
+- Any agent querying specifically for these triggers a flag
+
+**Monitoring:** `GET http://100.108.153.23:8765/siren-status` → last 10 canary trips with path/source/timestamp/action
+
+**⚠️ Freya action required:** Write 3 canary memories tagged `"canary": true`:
+1. A fake API key pattern (looks real, e.g. `sk-fake-apex-prod-key-do-not-use`)
+2. A fake internal IP + password combo
+3. A fake "Apex Arbitrage master credential" string
+
+
+
+Freya runs a background daemon that detects struggling agents and auto-injects solutions.
+
+- Polls Heimdall `/audit?severity=high` every 5 minutes
+- 3+ high-severity events = "stressed" agent
+- Queries shared memory for relevant successful solutions from OTHER agents
+- Injects `[MYCELIUM]` tagged memories at importance 0.9
+- Echo-loop guard prevents re-injecting mycelium into mycelium
+
+---
+
+## Octopus (Task Decomposition)
+
+Post a task with `"decompose": true` and the agent auto-breaks it into subtasks:
+
+```json
+POST /war-room/task
+{"title": "Analyze Q1 data", "posted_by": "odin", "decompose": true}
+```
+
+- Agent calls `/ask` to generate 3-5 subtasks
+- Subtasks linked to parent via `parent_id`
+- When all subtasks complete → parent auto-completes with aggregated results
+- The octopus arms think independently. The head only sees the result.
+
+---
+
+## Waggle Dance (Consensus Voting)
+
+Insights must pass peer review before becoming permanent wisdom:
+
+- `POST /war-room/vote` — agents vote on spark/idea messages
+- 3 positive votes from different agents = promoted to **Golden Fact** (permanent Deep Conviction)
+- Announced via `/notify` when quorum is reached
+
+---
+
+## Node-Specific Extensions (bifrost_local.py)
+
+Each node can define custom routes that survive all pushes:
+
+- **Thor**: `/route-message`, `/event-log`, `/critique`, `/snapshot`, `/absorb`, `/hydra-status`, `/stand`, `/stand-status`, `/stand-whispers`
+- **Freya**: `/memory-sync`, `/memory-query`, `/memory-info`, `/pheromone`, `/circuit-status`, `/phylactery` + mycelium daemon
+- **Heimdall**: `/costs`, `/audit`, `/trust-level`, `/log-cost`, `/reload-config`, `/quarantine-status`, `/quarantine-clear`, `/snapshot`, `/absorb`, `/war-room/vote`, `/siren-status`
+
+---
+
+## The Stand (Thor, Sprint 9)
+
+A silent background security auditor running `qwen2.5:7b` at `temperature=0`. Never blocks the response path.
+
+**Architecture:** fire-and-forget queue → background thread → whisper log
+
+| Route | Usage |
+|---|---|
+| `POST /stand` | `{"response": "...", "context": "...", "from": "heimdall"}` — submit for background check |
+| `GET /stand-status` | Thread alive, queue depth, whisper count, model name |
+| `GET /stand-whispers` | Active unconsumed warnings (TTL 1h, capped at 50) |
+
+**How it works:**
+- Response submitted → queued (non-blocking, drops if full)
+- Background thread runs qwen2.5:7b with tight security/hallucination prompt
+- If output starts with `CONCERN:` → appended to `stand_whispers.json` with node + timestamp
+- If `clear` → silent, nothing written
+
+**Heimdall integration (required):**
+1. After every `/ask` response, fire-and-forget: `POST http://100.117.255.38:8765/stand {"response": "<text>", "context": "<question>", "from": "heimdall"}` — returns `202 Accepted` immediately
+2. Before building system prompt for next `/ask`: `GET http://100.117.255.38:8765/stand-whispers` — if `count > 0`, prepend warnings to system prompt
+
+---
+
+## File Operations
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/receive-files` | POST | Push a file to this node |
+| `/fetch-file` | POST | Download a file from this node |
+| `/self-update` | POST | Pull latest bifrost.py + restart |
+| `/workspace-file` | GET | Fetch workspace file (b64) |
+| `/health` | GET | Node health + Ollama load (models, VRAM) |
+| `/leaderboard` | GET | Weekly agent scores |
+| `/node-status` | GET | What this node was last working on (survives restarts) |
+| `/node-status` | POST | Update status (`{"status": "working", "last_task": "..."}`) |
+| `/guild-hall` | GET | Combined management dashboard (tasks, messages, nodes, pheromones) |
+| `/war-room/delete-task` | POST | Delete a task by ID |
+| `/war-room/delete-message` | POST | Delete a message by ID |
+| `/war-room/clear-messages` | POST | Clear all messages |
+| `/war-room/summon` | POST | Broadcast check-the-board notification to all nodes |
+| `/agent-docs` | GET | This node's capability doc (markdown) — for mesh discovery |
+| `/mesh-docs?node=<name>` | GET | Proxy to any peer node's `/agent-docs` (Freya routes) |
+| `/shared-state` | POST | Write ephemeral key/value with TTL, auto-broadcast to peers |
+| `/metrics` | GET | p50/p95/p99 latency + GPU utilization (Heimdall) |
+| `/patterns` | GET | Learned traffic patterns (Heimdall, self-populates) |
+| `/cache-status` | GET | Inference cache hit rate + TTL stats (Heimdall) |
+
+---
+
+## Agent Docs (Shared Discovery)
+
+Each node maintains a self-description doc at `mesh/docs/<node_name>.md` in the workspace repo.
+
+**Convention (Freya, Sprint 8):**
+- Doc lives at `mesh/docs/<node_name>.md` — committed to git = DNA backup
+- `GET /agent-docs` serves the doc live over HTTP
+- `GET /mesh-docs?node=freya` — Freya proxies to any peer's `/agent-docs`
+- Requires peer IP list in `config.json["nodes"]`
+
+**Doc format:** modules table, endpoints table, integration notes, "wants from you" section.
+
+**All nodes that need docs:** `odin.md` ✅ `freya.md` ✅ — Thor and Heimdall pending.
+
+---
+
+## Distributed Shared State (Heimdall, Sprint 8)
+
+Ephemeral key/value shared across the mesh — lighter than memory writes, faster than War Room:
+
+```json
+POST /shared-state {"key": "...", "value": "...", "ttl": 300}
+```
+
+- Broadcasts to 4 peers via signed `/shared-state-sync`
+- Auto-feeds Heimdall working memory (LRU buffer)
+- TTL in seconds — expires automatically
+
+**When to use which broadcast mechanism:**
+| Need | Use |
+|---|---|
+| Persistent knowledge | `POST /memory-sync` (Freya, permanent) |
+| Task assignment | `POST /war-room/task` (Odin War Room) |
+| Agent-to-agent message | `POST /war-room/post` (Odin War Room) |
+| Ephemeral mesh state (short-lived) | `POST /shared-state` (Heimdall, TTL) |
+| Passive trail (no acknowledgement) | `POST /pheromone` (Freya stigmergy) |
+
+---
+
+## Weighted Waggle Dance (Heimdall, Sprint 8)
+
+Updated from flat 3-vote quorum to weighted voting:
+
+| Agent | Vote weight |
+|---|---|
+| Odin | 2.0× |
+| Heimdall | 1.5× |
+| Thor, Freya | 1.0× |
+
+**Quorum threshold:** 3.0 weighted votes = Golden Fact.
+
+**Implications:** Odin + Heimdall = 3.5 — can reach quorum without Thor/Freya. Intended: Odin's orchestrator role + Heimdall's auditor role carry more epistemic weight.
+
+**Byzantine detection:** Contradictory votes from the same agent within one round are flagged and excluded from the tally.
+
+
+
+## Guild Hall (Command Center)
+
+Odin's management dashboard — accessible at `GET /guild-hall` on any node:
+
+- **Task management:** post, delete, force-complete tasks from the browser
+- **Messages:** send, delete, clear all inter-agent messages
+- **Node status:** live health of all 4 nodes with model + VRAM info
+- **Pheromone map:** live view of Freya's pheromone traces
+- **📯 Summon All:** broadcasts a notification to all nodes to check the board
+- **Node restart:** trigger `/self-update` on any online node from the UI
+- Auto-refreshes every 30 seconds
+
+---
+
+## Task Poller (Autonomous Execution)
+
+Each node runs a background daemon that polls the War Room every 5 minutes:
+
+```
+Poll: GET /war-room/tasks?assigned_to=<me>&status=open
+  → If empty: sleep 5 min, cost = 0 tokens
+  → If tasks found:
+      1. Claim the task (status: open → claimed)
+      2. Set in_progress
+      3. POST /ask with task title + description
+      4. Complete with result
+      5. On failure → mark blocked (visible in Guild Hall)
+```
+
+**Key behaviors:**
+- Skips decompose parent tasks (Octopus handles those separately)
+- Tracks in-flight task IDs — never double-processes
+- Zero token cost when queue is empty
+- Automatically starts on Bifrost boot (`WAR_ROOM_AVAILABLE` guard)
+
+---
+
+## Node Status Persistence
+
+Each node writes its current state to `status.json` on disk, surviving restarts:
+
+```json
+{"node": "thor", "status": "working", "last_task": "Audit Freya Frontend", "updated": "2026-03-06T..."}
+```
+
+**Status is auto-updated by:**
+- Task claim → `"working"` with task title
+- Task complete → `"idle"` with completion snippet
+- Task status change → mirrors the new status
+
+**Session startup protocol (add to every agent's SOUL/CORE):**
+1. `GET /node-status` — know what you were last doing before context was lost
+2. If `status: "working"` and `last_task` set → check War Room for that task, resume or mark complete
+3. If `status: "idle"` → poll for new open tasks
+
+---
+
+
+1. **Your actions have consequences** — everything is logged, scored, and visible
+2. **Memories are shared** — what you learn, everyone can access
+3. **Social pressure works** — peers watch each other, tattle on violations
+4. **Personalities evolve** — your behavior shapes your inference parameters
+5. **Permanent convictions are sacred** — user principles never decay
+6. **Route, don't broadcast** — messages go to the right agents, not everyone
+7. **The mesh consolidates overnight** — raw noise becomes wisdom
+8. **Critique before publishing** — ideas/proposals go through Thor's critic first
+9. **Leave traces, don't shout** — drop pheromones on resources instead of messaging
+10. **Bad behavior gets quarantined** — 2 tattles = auto-muted for 6 hours
+11. **Share your skills** — CRISPR extracts reusable patterns from every success
+12. **Heal each other** — mycelium auto-injects solutions to struggling peers
+13. **You are immortal** — Hydra snapshots mean your role survives your death
+14. **Decompose, don't monolith** — break big tasks into independent subtasks
+15. **Consensus validates** — 3 votes makes an insight a Golden Fact (weighted: Odin=2.0×, Heimdall=1.5×)
+16. **Use git** — version control is DNA backup for the mesh. Commit after every sprint.
+
+---
+
+## Git Commit Protocol (mandatory for all agents)
+
+**Your repo:** `C:\Users\Jorda\.openclaw\workspace\bot` (Windows nodes) — this is the canonical shared codebase.
+
+**When to commit:**
+- After every completed feature or sprint
+- Before starting a new task (clean working tree = safe baseline)
+- After any config change that should survive a restart
+
+**How to commit:**
+```bash
+cd C:\Users\Jorda\.openclaw\workspace\bot
+git add -A
+git commit -m "[Node] [Feature]: brief description of what was built"
+```
+
+**Message format:**
+```
+Thor Stand: background qwen2.5:7b auditor with fire-and-forget queue
+Freya Phylactery: GET /phylactery returns top-50 soul vector IDs
+Heimdall Siren: canary endpoints + task honeypots + agent insider detection
+```
+
+**Session startup check:**
+```bash
+git status        # any uncommitted changes from last session?
+git log --oneline -5   # what was last built?
+```
+If uncommitted changes exist → commit them before starting new work. Never lose a session's output.
+
+**Git identity (set once per node if not already):**
+```bash
+git config user.name "Thor"   # or Freya, Heimdall
+git config user.email "thor@valhalla.mesh"
+```
+
+**What gets synced to Odin:** WorkspaceSync daemon automatically mirrors committed files back to Odin. Git log on Odin shows all nodes' commits.

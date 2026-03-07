@@ -1,0 +1,9 @@
+{
+  "audit": {
+    "description": "Trigger Heimdall Forensic Audit",
+    "execute_on": "heimdall",
+    "type": "script",
+    "script": "C:\\Users\\Jorda\\.openclaw\\workspace\\bot\\bot\\forensic_audit.py",
+    "allowed_callers": ["odin"]
+  }
+}

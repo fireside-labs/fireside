@@ -1,0 +1,58 @@
+{
+  "run_exporter": {
+    "description": "Run exporterv2.py on Thor (generates Gantry Oracle PDFs)",
+    "execute_on": "thor",
+    "type": "script",
+    "script": "C:\\Users\\Jorda\\.openclaw\\workspace\\backend\\exporterv2.py",
+    "allowed_callers": [
+      "odin",
+      "freya",
+      "heimdall",
+      "hermes"
+    ]
+  },
+  "copy_output_to_heimdall": {
+    "description": "Copy GantryOracle output folder from Thor to Heimdall",
+    "execute_on": "thor",
+    "type": "file_copy",
+    "src": "C:\\Users\\Jorda\\Documents\\GantryOracle_Handoff\\output",
+    "dst_node": "heimdall",
+    "dst_path": "C:\\Users\\Jorda\\Documents\\GantryOracle_Handoff\\output",
+    "allowed_callers": [
+      "odin",
+      "freya",
+      "heimdall",
+      "hermes"
+    ]
+  },
+  "ping": {
+    "description": "Test: ping this node to confirm Bifrost is alive",
+    "execute_on": "any",
+    "type": "ping",
+    "allowed_callers": [
+      "odin",
+      "freya",
+      "heimdall",
+      "hermes",
+      "thor"
+    ]
+  },
+  "test_command": {
+    "allowed_callers": [
+      "odin",
+      "freya"
+    ],
+    "description": "A test command proposed by Odin",
+    "execute_on": "thor",
+    "type": "ping"
+  },
+  "list_output": {
+    "description": "List files in the Gantry Oracle output folder",
+    "execute_on": "any",
+    "type": "script",
+    "script": "C:\\Users\\Jorda\\.openclaw\\workspace\\bot\\bot\\ls_output.py",
+    "allowed_callers": [
+      "odin"
+    ]
+  }
+}

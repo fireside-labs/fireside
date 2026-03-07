@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.db
+*.log
+logs/
+snapshot_*.json
+pheromones.json
+war_room_data/
