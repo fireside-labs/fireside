@@ -1436,6 +1436,31 @@ def share_batch(hids: list, peer_urls: list) -> dict:
     return {"queued": len(hyps_to_share), "peers": len(peer_urls)}
 
 
+# ---------------------------------------------------------------------------
+# Refutation → Dream Seed: when a belief is refuted, auto-trigger a nightmare
+# dream cycle to learn from the failure and generate replacement beliefs.
+# ---------------------------------------------------------------------------
+
+def _trigger_refutation_dream(hyp_text: str, hyp_id: str) -> None:
+    """Fire-and-forget: spawn a dream cycle seeded with the refuted hypothesis."""
+    seed = (
+        f"The belief '{hyp_text[:120]}' was refuted. "
+        f"Why was it wrong? What should replace it? "
+        f"Generate a better hypothesis from the same evidence."
+    )
+    def _run():
+        try:
+            log.info("[hypotheses] Refutation dream triggered for %s", hyp_id)
+            result = run_dream_cycle(seed=seed)
+            new_count = result.get("generated", 0)
+            log.info("[hypotheses] Refutation dream for %s produced %d new beliefs",
+                     hyp_id, new_count)
+        except Exception as e:
+            log.warning("[hypotheses] Refutation dream failed for %s: %s", hyp_id, e)
+    t = threading.Thread(target=_run, daemon=True, name=f"refute-dream-{hyp_id[:12]}")
+    t.start()
+
+
 def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> dict:
     """
     POST /hypotheses/test {id, result: "confirmed"|"refuted", confidence_delta}
@@ -1522,10 +1547,17 @@ def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> 
                 "delta":      round(new_conf - old_conf, 3),
             })
 
+        # Refutation → Dream Seed: learn from being wrong
+        if result == "refuted":
+            hyp_text = str(rows[0].get("hypothesis", ""))
+            if hyp_text:
+                _trigger_refutation_dream(hyp_text, hyp_id)
+
         return {"ok": True, "id": hyp_id, "result": result,
                 "old_confidence": round(old_conf, 3),
                 "new_confidence": round(new_conf, 3),
-                "contagion": contagion_ids}
+                "contagion": contagion_ids,
+                "refutation_dream": result == "refuted"}
 
     except Exception as e:
         log.error("[hypotheses] test failed: %s", e)
