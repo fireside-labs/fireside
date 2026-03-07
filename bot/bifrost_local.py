@@ -1535,8 +1535,10 @@ def _wire_cognitive_triad(handler_class, config):
 
             # Re-stuff the body so prev_post reads it
             import io
-            self.rfile   = io.BytesIO(raw)
-            self.headers["Content-Length"] = str(len(raw))
+            self.rfile = io.BytesIO(raw)
+            # MUST use replace_header — self.headers["X"] = v APPENDS a
+            # duplicate header instead of overwriting on HTTPMessage.
+            self.headers.replace_header("Content-Length", str(len(raw)))
 
             # Capture response via TeeWriter
             try:
