@@ -235,6 +235,59 @@ def _sample_memories(n: int = SAMPLE_TOP_N) -> list:
         return []
 
 
+def _sample_memories_by_seed(seed_text: str, n: int = SAMPLE_TOP_N) -> list:
+    """
+    Guided Dreaming: sample memories by semantic proximity to a seed text.
+
+    Instead of salience-based ranking, embed the seed and vector-search
+    the memory table. This biases the dream cycle toward the seed topic,
+    allowing the user or Odin to direct Freya's "shower thoughts" toward
+    a specific architectural problem or question.
+
+    Falls back to _sample_memories() if embedding fails.
+    """
+    try:
+        seed_emb = _embed(seed_text[:EMBED_MAX_CHARS])
+        if not seed_emb:
+            log.warning("[hypotheses] seed embedding failed — falling back to salience sampling")
+            return _sample_memories(n)
+
+        db = _get_db()
+        if MEMORY_TABLE not in db.table_names():
+            return []
+        tbl = db.open_table(MEMORY_TABLE)
+
+        rows = tbl.search(seed_emb).limit(n).to_list()
+        if not rows:
+            return _sample_memories(n)
+
+        result = []
+        for r in rows:
+            emb = list(r.get("embedding") or [])
+            if not emb:
+                continue
+            result.append({
+                "memory_id":  r.get("memory_id", "?"),
+                "content":    r.get("content", ""),
+                "embedding":  emb,
+                "importance": float(r.get("importance", 0.5)),
+                "valence":    float(r.get("valence", 0.0)),
+                "ts":         int(r.get("ts", 0)),
+                "permanent":  bool(r.get("permanent", False)),
+                "salience":   _cosine_sim(seed_emb, emb),  # use seed-similarity as score
+            })
+
+        # Sort by seed-similarity (highest first)
+        result.sort(key=lambda x: x["salience"], reverse=True)
+        log.info("[hypotheses] Guided sampling: %d memories near seed (top cos=%.2f)",
+                 len(result), result[0]["salience"] if result else 0.0)
+        return result
+
+    except Exception as e:
+        log.warning("[hypotheses] seed sampling failed: %s — falling back", e)
+        return _sample_memories(n)
+
+
 # ---------------------------------------------------------------------------
 # Phase 2 — Collision detection (interesting distance filter)
 # ---------------------------------------------------------------------------
@@ -274,10 +327,14 @@ def _find_interesting_pairs(memories: list, k: int = MAX_PAIRS) -> list:
 # Phase 3 — Belief construction (Ollama inference)
 # ---------------------------------------------------------------------------
 
-def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float) -> Optional[str]:
+def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float,
+                          seed: Optional[str] = None) -> Optional[str]:
     """
     Call Ollama to articulate the structural relationship between two memories
     as a single hypothesis — a candidate belief never directly learned.
+
+    If seed is provided (Guided Dreaming), it's appended as context so the
+    hypothesis is oriented toward the seed topic.
     """
     import urllib.request
     prompt = (
@@ -288,6 +345,13 @@ def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float) -> Optional[str]
         f"These two experiences are structurally related (cosine similarity: {sim:.2f}) "
         f"but not obviously connected. You are generating a hypothesis — not a summary, "
         f"not a fact, but a candidate belief about what their relationship implies.\n\n"
+    )
+    if seed:
+        prompt += (
+            f"IMPORTANT CONTEXT: This dream cycle was seeded with the topic: \"{seed[:200]}\"\n"
+            f"Your hypothesis should be relevant to this topic if the memories support it.\n\n"
+        )
+    prompt += (
         f"State exactly one hypothesis in this format:\n"
         f"Hypothesis: [a single sentence using 'may', 'suggests', or 'implies' — "
         f"something that was never directly stated but is structurally defensible]\n\n"
@@ -743,12 +807,12 @@ def _process_nightmares(memories: list) -> dict:
 # Dream cycle — full pipeline
 # ---------------------------------------------------------------------------
 
-def run_dream_cycle() -> dict:
+def run_dream_cycle(seed: Optional[str] = None) -> dict:
     """
     Execute one complete dream cycle (only via explicit POST /sleep):
-      1. Sample top-N salient memories
+      1. Sample top-N salient memories (or seed-biased if seed provided)
       2. Find interesting collision pairs
-      3. Construct hypotheses via Ollama
+      3. Construct hypotheses via Ollama (with seed context if provided)
       4. Stand review → Dedup → Embed text → Store
       5. Dream journal audit entry
 
@@ -765,9 +829,14 @@ def run_dream_cycle() -> dict:
 
     with _dream_lock:
         _last_dream_ts = time.time()
-        log.info("[hypotheses] Dream cycle starting — sampling %d memories", SAMPLE_TOP_N)
 
-        memories = _sample_memories(SAMPLE_TOP_N)
+        # Phase 1: Memory sampling — seed-biased or salience-based
+        if seed:
+            log.info("[hypotheses] Guided dream cycle — seed: %s", seed[:60])
+            memories = _sample_memories_by_seed(seed, SAMPLE_TOP_N)
+        else:
+            log.info("[hypotheses] Dream cycle starting — sampling %d memories", SAMPLE_TOP_N)
+            memories = _sample_memories(SAMPLE_TOP_N)
         if len(memories) < 4:
             log.info("[hypotheses] Not enough memories to dream (%d)", len(memories))
             return {"generated": 0, "reason": "insufficient memories", "count": len(memories)}
@@ -782,7 +851,7 @@ def run_dream_cycle() -> dict:
         skipped       = 0
 
         for mem_a, mem_b, sim, weight in pairs:
-            text = _construct_hypothesis(mem_a, mem_b, sim)
+            text = _construct_hypothesis(mem_a, mem_b, sim, seed=seed)
             if not text:
                 skipped += 1
                 continue
@@ -821,6 +890,7 @@ def run_dream_cycle() -> dict:
             "skipped":            skipped,
             "pairs_found":        len(pairs),
             "hypotheses":         generated_ids,
+            "seed":               seed or None,
             "ts":                 int(_last_dream_ts),
         }
 
@@ -829,18 +899,25 @@ def run_dream_cycle() -> dict:
 # POST /sleep — explicit trigger (no auto-idle daemon)
 # ---------------------------------------------------------------------------
 
-def sleep() -> dict:
+def sleep(seed: Optional[str] = None) -> dict:
     """
     POST /sleep — Freya goes to sleep and dreams.
 
     Called explicitly by the user (via Telegram /sleep or Odin broadcast),
     or by a scheduled job (cron, Philosopher's Stone nightly build).
 
+    If seed is provided (Guided Dreaming / Inception API), memory sampling
+    is biased toward the seed topic instead of general salience. The seed
+    text is also injected into the hypothesis generation prompt.
+
     No auto-idle daemon. Dreams only happen when told to sleep.
     This prevents dreams from stealing GPU during overnight work cadences.
     """
-    log.info("[hypotheses] Going to sleep — starting dream cycle")
-    return run_dream_cycle()
+    if seed:
+        log.info("[hypotheses] Going to sleep — guided dream (seed: %s)", seed[:60])
+    else:
+        log.info("[hypotheses] Going to sleep — starting dream cycle")
+    return run_dream_cycle(seed=seed)
 
 
 # ---------------------------------------------------------------------------
