@@ -36,6 +36,7 @@ from typing import Optional
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle each request in a new thread so /ask doesn't freeze the node."""
     daemon_threads = True
+    allow_reuse_address = True
 
 
 from pathlib import Path
@@ -1647,7 +1648,6 @@ def main():
         _event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_event_loop)
         _bot = Application.builder().token(BOT_TOKEN).build().bot
-        threading.Thread(target=run_http_server, daemon=True).start()
         # Start War Room daemons
         if _gossip_sync:
             _gossip_sync.start()
@@ -1661,7 +1661,9 @@ def main():
             _task_poller = TaskPoller(THIS_NODE)
             _task_poller.start()
         log.info("Bifrost v5 SEND-ONLY ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
-        _event_loop.run_forever()
+        # Run asyncio in daemon thread, HTTP server on main thread
+        threading.Thread(target=_event_loop.run_forever, daemon=True).start()
+        run_http_server()  # blocks main thread
         return
 
     app = (
