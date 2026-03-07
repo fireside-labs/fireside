@@ -213,7 +213,7 @@ def gut_check(
 
     # Publish to event bus
     try:
-        from war_room import event_bus as bus
+        import war_room.event_bus as bus
         bus.publish("somatic.checked", {
             "action":   action[:80],
             "signal":   round(signal, 4),

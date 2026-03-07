@@ -60,11 +60,13 @@ def register_routes(handler_class, config):
     _wire_stand(handler_class, config)
     _wire_hypotheses(handler_class, config)
     _wire_cognitive_triad(handler_class, config)
+    _wire_somatic_and_shadows(handler_class, config)
     log.info("[bifrost_local] Thor extensions: /event-log, /personality, /route-message, "
              "/critique, /snapshot, /absorb, /hydra-status, /circuit-status, "
              "/reload-personality, /catch-up, /watchdog-status, /shutdown, "
              "/rate-limit-status, /stand, /stand-status, /stand-whispers, "
-             "/hypotheses, /sleep, /event-bus, /predictions, /self-model, /reflect")
+             "/hypotheses, /sleep, /event-bus, /predictions, /self-model, /reflect, "
+             "/gut-check, /somatic-state, /belief-shadow/{node}, /belief-shadows")
     # Pin models in VRAM — runs in background so startup isn't blocked
     import threading
     ollama_base = config.get("ollama_base", "http://127.0.0.1:11434")
@@ -1622,3 +1624,116 @@ def _wire_cognitive_triad(handler_class, config):
              "event bus subs (hypothesis.confirmed→pheromone, circuit.tripped→nightmare, "
              "prediction.scored→dream), GET /event-bus, GET /predictions, "
              "GET /self-model, POST /reflect")
+
+
+# ---------------------------------------------------------------------------
+# Somatic Markers (Pillar 10) + Belief Shadows / Theory of Mind (Pillar 11)
+#
+# POST /gut-check         {action, threshold?}  — somatic gut check
+# GET  /somatic-state                           — recent checks + avg signal
+# GET  /belief-shadow/{node}                    — peer belief shadow
+# GET  /belief-shadows                          — all peer shadows (summary)
+# POST /belief-shadow/update                    — manual shadow push
+# ---------------------------------------------------------------------------
+
+def _wire_somatic_and_shadows(handler_class, config):
+    """
+    Wire somatic markers and belief shadow (Theory of Mind) into Thor.
+
+    Somatic: before risky actions the node runs gut_check() against LanceDB
+    memory — negative-valence dominated neighborhoods = reluctance / block.
+
+    Belief shadows: tracks what each peer knows so we don't re-share stale
+    beliefs. Auto-updates via event bus (hypothesis.received/confirmed/refuted).
+    """
+    prev_get  = handler_class.do_GET
+    prev_post = handler_class.do_POST
+
+    # Boot: wire belief_shadow to event bus (auto-updates on hypothesis events)
+    try:
+        import war_room.belief_shadow as _bs   # type: ignore
+        _bs.wire_event_bus()
+    except Exception as e:
+        log.warning("[bifrost_local] belief_shadow event bus wire failed: %s", e)
+
+    def do_GET_som(self):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        p      = parsed.path
+
+        if p == "/somatic-state":
+            try:
+                import war_room.somatic as som   # type: ignore
+                params = parse_qs(parsed.query)
+                limit  = int(params.get("limit", ["20"])[0])
+                _json_respond(self, 200, som.get_state(limit=limit))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif p == "/belief-shadows":
+            try:
+                import war_room.belief_shadow as bs   # type: ignore
+                _json_respond(self, 200, bs.get_all_shadows())
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif p.startswith("/belief-shadow/"):
+            try:
+                import war_room.belief_shadow as bs   # type: ignore
+                node_id = p.split("/belief-shadow/", 1)[1].strip("/")
+                if not node_id:
+                    _json_respond(self, 400, {"error": "node id required"}); return
+                _json_respond(self, 200, bs.get_shadow(node_id))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        else:
+            prev_get(self)
+
+    def do_POST_som(self):
+        from urllib.parse import urlparse
+        path = urlparse(self.path).path
+
+        if path == "/gut-check":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body   = json.loads(self.rfile.read(length)) if length else {}
+                action = body.get("action", "").strip()
+                if not action:
+                    _json_respond(self, 400, {"error": "action required"}); return
+                threshold = float(body.get("threshold", -0.3))
+                import war_room.somatic as som   # type: ignore
+                _json_respond(self, 200, som.check(action, threshold))
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        elif path == "/belief-shadow/update":
+            try:
+                length  = int(self.headers.get("Content-Length", 0))
+                body    = json.loads(self.rfile.read(length)) if length else {}
+                node_id = body.get("node", "").strip()
+                hyp_id  = body.get("id", "").strip()
+                text    = body.get("text", "")
+                conf    = float(body.get("confidence", 0.5))
+                kind    = body.get("kind", "shared")   # shared|confirmed|refuted
+                if not node_id or not hyp_id:
+                    _json_respond(self, 400, {"error": "node and id required"}); return
+                import war_room.belief_shadow as bs   # type: ignore
+                if kind == "confirmed":
+                    bs.record_confirmed(node_id, hyp_id, text, conf)
+                elif kind == "refuted":
+                    bs.record_refuted(node_id, hyp_id, text, conf)
+                else:
+                    bs.record_received(node_id, hyp_id, text, conf)
+                _json_respond(self, 200, {"ok": True, "node": node_id, "kind": kind})
+            except Exception as e:
+                _json_respond(self, 500, {"error": str(e)})
+
+        else:
+            prev_post(self)
+
+    handler_class.do_GET  = do_GET_som
+    handler_class.do_POST = do_POST_som
+    log.info("[bifrost_local] Somatic + Belief Shadows wired: "
+             "POST /gut-check, GET /somatic-state, "
+             "GET /belief-shadow/{node}, GET /belief-shadows, POST /belief-shadow/update")
