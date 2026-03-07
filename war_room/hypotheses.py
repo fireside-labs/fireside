@@ -1093,7 +1093,21 @@ def get_hypotheses(
 # Mesh attribution: sharing and receiving
 # ---------------------------------------------------------------------------
 
+_SHARE_RATE_MAX_SENDERS = 100  # cap tracked senders to prevent memory leak
 _share_rate: dict = {}  # sender -> [timestamps]
+
+
+def _rate_limit_prune():
+    """Evict oldest sender keys if _share_rate exceeds cap."""
+    if len(_share_rate) > _SHARE_RATE_MAX_SENDERS:
+        # Sort by most recent timestamp, keep newest 80
+        by_recency = sorted(_share_rate.items(),
+                            key=lambda kv: max(kv[1]) if kv[1] else 0,
+                            reverse=True)
+        keep = {k for k, _ in by_recency[:80]}
+        for k in list(_share_rate.keys()):
+            if k not in keep:
+                del _share_rate[k]
 
 def receive_shared_hypothesis(payload: dict, sender: str) -> dict:
     """
@@ -1172,6 +1186,7 @@ def receive_shared_hypothesis(payload: dict, sender: str) -> dict:
 
     log.info("[hypotheses] Received shared belief [%s] from %s (origin=%s, conf=%.2f→%.2f): %s",
              hid, sender, origin, raw_conf, confidence, text[:60])
+    _rate_limit_prune()  # evict stale sender keys to cap memory
     return {"ok": True, "id": hid, "reason": "accepted"}
 
 
