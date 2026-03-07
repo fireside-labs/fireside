@@ -48,16 +48,30 @@ from pathlib import Path
 
 from circuit_breaker import get_circuit, all_statuses as cb_all_statuses, CircuitOpenError
 from rate_limiter import RateLimiter
-from signing import sign_body, verify_request
+try:
+    from signing import sign_body, verify_request
+except ImportError:
+    sign_body = verify_request = None
 try:
     from signing import signed_request
 except ImportError:
-    signed_request = None  # Odin's signing.py may not have this
+    signed_request = None
+
+try:
+    from shared_state import get_shared_state, set_peer_nodes
+except ImportError:
+    # Odin's shared_state uses different names
+    try:
+        from shared_state import get as get_shared_state, set_local as _ss_set
+        def set_peer_nodes(urls): pass  # no-op stub
+    except ImportError:
+        def get_shared_state(): return {}
+        def set_peer_nodes(urls): pass
+
 from working_memory import get_working_memory
 from inference_cache import get_inference_cache
 from prompt_guard import scan_prompt
 from memory_integrity import get_memory_integrity
-from shared_state import get_shared_state, set_peer_nodes
 from perf_metrics import get_metrics, TimerContext
 
 # Cognitive Triad (Freya Pillars 7-9)
