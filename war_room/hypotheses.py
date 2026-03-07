@@ -622,9 +622,43 @@ def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> 
             values={"tested": True, "confidence": new_conf},
         )
         log.info("[hypotheses] Tested %s → %s (%.2f → %.2f)", hyp_id, result, old_conf, new_conf)
+
+        # -------------------------------------------------------------------
+        # Semantic Contagion: propagate belief update to nearest neighbors
+        # -------------------------------------------------------------------
+        contagion_ids = []
+        try:
+            row_emb = list(rows[0].get("embedding") or [])
+            if row_emb:
+                contagion_delta = 0.05 if result == "confirmed" else -0.05
+                # Search for the 5 most similar hypotheses
+                neighbors = tbl.search(row_emb).limit(6).to_list()
+                for nb in neighbors:
+                    nb_id  = nb.get("id", "")
+                    nb_emb = list(nb.get("embedding") or [])
+                    if nb_id == safe_hid or not nb_emb:
+                        continue
+                    cos = _cosine_sim(row_emb, nb_emb)
+                    if cos < 0.70:
+                        continue   # not close enough to be affected
+                    nb_conf     = float(nb.get("confidence", 0.5))
+                    nb_new_conf = max(0.0, min(1.0, nb_conf + contagion_delta))
+                    safe_nb_id  = _safe_id(nb_id)
+                    tbl.update(
+                        where=f"id = '{safe_nb_id}'",
+                        values={"confidence": nb_new_conf},
+                    )
+                    contagion_ids.append(nb_id)
+                    log.debug("[hypotheses] contagion %s → %.2f (cos=%.2f)",
+                              nb_id, nb_new_conf, cos)
+        except Exception as ce:
+            log.debug("[hypotheses] contagion step error: %s", ce)
+        # -------------------------------------------------------------------
+
         return {"ok": True, "id": hyp_id, "result": result,
                 "old_confidence": round(old_conf, 3),
-                "new_confidence": round(new_conf, 3)}
+                "new_confidence": round(new_conf, 3),
+                "contagion": contagion_ids}
 
     except Exception as e:
         log.error("[hypotheses] test failed: %s", e)
