@@ -291,7 +291,7 @@ def wire_event_bus() -> None:
     Call once from bifrost_local.py's register_routes().
     """
     try:
-        from war_room import event_bus as bus
+        import war_room.event_bus as bus
         bus.subscribe("hypothesis.received", lambda e: record_received(
             sender     = e.get("sender", "unknown"),
             hyp_id     = e.get("id", ""),
