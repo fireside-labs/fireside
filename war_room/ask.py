@@ -27,6 +27,14 @@ except ImportError:
     _personality_mod = None
     _PERSONALITY_OK = False
 
+# Lazy import — hypotheses module for belief injection
+try:
+    from war_room import hypotheses as _hypotheses_mod
+    _HYPOTHESES_OK = True
+except ImportError:
+    _hypotheses_mod = None
+    _HYPOTHESES_OK = False
+
 OLLAMA_BASE = "http://127.0.0.1:11434"
 INFERENCE_TIMEOUT = 120  # seconds
 
@@ -74,6 +82,64 @@ class AskHandler:
             except Exception as e:
                 log.warning("[ask] Could not load personality: %s", e)
 
+    def _inject_beliefs(self, task_text: str, system: str) -> str:
+        """
+        Look up hypotheses relevant to the current task and inject the top 3
+        into the system prompt as 'Current Working Beliefs.'
+
+        Uses vector similarity: task_text is embedded, then searched against
+        the hypotheses LanceDB table. Only beliefs with cosine similarity > 0.30
+        are included — otherwise we're pulling irrelevant beliefs.
+
+        Fails silently if the hypotheses table is empty or unavailable.
+        """
+        if not task_text.strip():
+            return system
+        try:
+            # Embed the task prompt
+            task_emb = _hypotheses_mod._embed(task_text[:_hypotheses_mod.EMBED_MAX_CHARS])
+            if not task_emb:
+                return system
+
+            # Open hypotheses table and vector search
+            db  = _hypotheses_mod._get_db()
+            tbl = db.open_table(_hypotheses_mod.HYP_TABLE)
+            rows = tbl.search(task_emb).limit(5).to_list()
+
+            # Filter to cosine > 0.30 and not refuted, sort by confidence
+            beliefs = []
+            for r in rows:
+                row_emb = list(r.get("embedding") or [])
+                if not row_emb:
+                    continue
+                cos = _hypotheses_mod._cosine_sim(task_emb, row_emb)
+                if cos > 0.30 and not r.get("tested") is True:
+                    beliefs.append({
+                        "text":       r.get("hypothesis", ""),
+                        "confidence": float(r.get("confidence", 0.0)),
+                        "cos":        cos,
+                    })
+
+            if not beliefs:
+                return system
+
+            # Sort by confidence × relevance, take top 3
+            beliefs.sort(key=lambda b: b["confidence"] * b["cos"], reverse=True)
+            top = beliefs[:3]
+
+            belief_block = "\n\n## Current Working Beliefs\n"
+            belief_block += "The following are candidate beliefs derived from prior experience. "
+            belief_block += "Treat them as working hypotheses — priors to consider, not facts to assert:\n"
+            for i, b in enumerate(top, 1):
+                belief_block += f"{i}. {b['text']} (confidence: {round(b['confidence'], 2)})\n"
+
+            log.debug("[ask] Injected %d beliefs into system prompt", len(top))
+            return (system or "") + belief_block
+
+        except Exception as e:
+            log.debug("[ask] Belief injection skipped: %s", e)
+            return system
+
     def _find_api_key(self) -> Optional[str]:
         """Check env vars in priority order for cloud API key."""
         for var in _API_KEY_ENV_VARS:
@@ -117,6 +183,10 @@ class AskHandler:
         # Inject personality directives into system prompt
         if self._personality:
             system = self._personality.inject_system(system)
+
+        # Inject relevant beliefs into system prompt (Hypothesis Cognitive Loop)
+        if _HYPOTHESES_OK:
+            system = self._inject_beliefs(prompt or "", system)
 
         if not prompt and not messages:
             return {"error": "prompt or messages is required"}
