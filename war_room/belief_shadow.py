@@ -1,10 +1,10 @@
 """
-belief_shadow.py — Theory of Mind / Peer Belief Modeling (Pillar 11)
+belief_shadow.py ΓÇö Theory of Mind / Peer Belief Modeling (Pillar 11)
 
 Theory (Premack & Woodruff, Baron-Cohen):
     The ability to model what *others* believe is fundamental to high-level
     cooperation and negotiation. True intelligence isn't just knowing what
-    you know — it's knowing what your teammates know differently.
+    you know ΓÇö it's knowing what your teammates know differently.
 
 Application:
     Each node maintains a "Belief Shadow" of its peers: a compact model of
@@ -12,9 +12,9 @@ Application:
     confidence.
 
     Before sharing a belief, Freya checks it against Thor's shadow:
-    - Already in Thor's shadow? → skip (no point sharing what he knows)
-    - Contradicts Thor's shadow? → flag for debate, don't quietly share
-    - Novel to Thor? → high-value share
+    - Already in Thor's shadow? ΓåÆ skip (no point sharing what he knows)
+    - Contradicts Thor's shadow? ΓåÆ flag for debate, don't quietly share
+    - Novel to Thor? ΓåÆ high-value share
 
 Mechanism:
     1. When a peer shares a hypothesis (hypothesis.received), update their shadow
@@ -24,21 +24,24 @@ Mechanism:
 
 Shadow schema (in-memory, bounded):
     _shadows: dict[node_id, dict]
-        node_id → {
+        node_id ΓåÆ {
             "confirmed": deque([{id, text, confidence, ts}], maxlen=200),
             "shared": deque([{id, text, ts}], maxlen=200),
             "last_updated": int
         }
 
 Endpoints:
-    GET  /belief-shadow/{node}     — current shadow for a peer
-    GET  /belief-shadows           — all known peer shadows (summary)
-    POST /belief-shadow/update     — manually push a belief to a peer's shadow
+    GET  /belief-shadow/{node}     ΓÇö current shadow for a peer
+    GET  /belief-shadows           ΓÇö all known peer shadows (summary)
+    POST /belief-shadow/update     ΓÇö manually push a belief to a peer's shadow
 """
 
+import json
 import logging
+import os
 import time
 from collections import deque
+from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger("bifrost.belief_shadow")
@@ -50,7 +53,11 @@ log = logging.getLogger("bifrost.belief_shadow")
 _SHADOW_MAXLEN = 200   # max beliefs tracked per peer
 _OVERLAP_SIM_THRESHOLD = 0.85   # cosine similarity above which = "already known"
 
-_shadows: dict = {}   # node_id → {"confirmed": deque, "shared": deque, "last_updated": int}
+_shadows: dict = {}
+
+# Persistence path
+_BOT_DIR = Path(__file__).parent.parent
+_SHADOW_FILE = _BOT_DIR / "mesh" / "docs" / "peer_shadows.json"
 
 
 def _get_shadow(node_id: str) -> dict:
@@ -58,10 +65,51 @@ def _get_shadow(node_id: str) -> dict:
     if node_id not in _shadows:
         _shadows[node_id] = {
             "confirmed":    deque(maxlen=_SHADOW_MAXLEN),
+            "refuted":      deque(maxlen=_SHADOW_MAXLEN),
             "shared":       deque(maxlen=_SHADOW_MAXLEN),
             "last_updated": int(time.time()),
         }
+    # Backfill refuted deque for older shadows missing it
+    if "refuted" not in _shadows[node_id]:
+        _shadows[node_id]["refuted"] = deque(maxlen=_SHADOW_MAXLEN)
     return _shadows[node_id]
+
+
+def _save_shadows():
+    """Persist shadows to JSON so they survive restarts."""
+    try:
+        _SHADOW_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {}
+        for nid, s in _shadows.items():
+            data[nid] = {
+                "confirmed":    list(s["confirmed"]),
+                "refuted":      list(s.get("refuted", [])),
+                "shared":       list(s["shared"]),
+                "last_updated": s["last_updated"],
+            }
+        _SHADOW_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception as e:
+        log.debug("[belief_shadow] save failed: %s", e)
+
+
+def _load_shadows():
+    """Load shadows from JSON on module init."""
+    global _shadows
+    try:
+        if _SHADOW_FILE.exists():
+            data = json.loads(_SHADOW_FILE.read_text(encoding="utf-8"))
+            for nid, s in data.items():
+                _shadows[nid] = {
+                    "confirmed":    deque(s.get("confirmed", []), maxlen=_SHADOW_MAXLEN),
+                    "refuted":      deque(s.get("refuted", []), maxlen=_SHADOW_MAXLEN),
+                    "shared":       deque(s.get("shared", []), maxlen=_SHADOW_MAXLEN),
+                    "last_updated": s.get("last_updated", 0),
+                }
+            log.info("[belief_shadow] loaded %d peer shadows from disk", len(_shadows))
+    except Exception as e:
+        log.debug("[belief_shadow] load failed: %s", e)
+
+_load_shadows()  # auto-load on import
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +130,7 @@ def record_received(sender: str, hyp_id: str, text: str, confidence: float) -> N
     })
     shadow["last_updated"] = int(time.time())
     log.debug("[belief_shadow] recorded shared belief from %s: %s", sender, hyp_id)
+    _save_shadows()
 
 
 def record_confirmed(node_id: str, hyp_id: str, text: str, confidence: float) -> None:
@@ -100,6 +149,26 @@ def record_confirmed(node_id: str, hyp_id: str, text: str, confidence: float) ->
         })
         shadow["last_updated"] = int(time.time())
         log.debug("[belief_shadow] recorded confirmed belief for %s: %s", node_id, hyp_id)
+        _save_shadows()
+
+
+def record_refuted(node_id: str, hyp_id: str, text: str, confidence: float) -> None:
+    """
+    Record a belief that a peer has refuted.
+    If we later try to share something similar, we should flag it.
+    """
+    shadow = _get_shadow(node_id)
+    existing_ids = {e["id"] for e in shadow.get("refuted", [])}
+    if hyp_id not in existing_ids:
+        shadow["refuted"].append({
+            "id":         hyp_id,
+            "text":       text[:120],
+            "confidence": round(confidence, 3),
+            "ts":         int(time.time()),
+        })
+        shadow["last_updated"] = int(time.time())
+        log.debug("[belief_shadow] recorded refuted belief for %s: %s", node_id, hyp_id)
+        _save_shadows()
 
 
 # ---------------------------------------------------------------------------
@@ -112,15 +181,17 @@ def filter_for_peer(hyp_ids: list, peer_node: str, get_hyp_fn) -> tuple:
 
     Returns (to_share, skipped_already_known, skipped_novel_count)
 
-    get_hyp_fn: callable(hyp_id) → {hypothesis: str, confidence: float, ...}
+    get_hyp_fn: callable(hyp_id) ΓåÆ {hypothesis: str, confidence: float, ...}
         e.g. lambda hid: hypotheses.get_hypotheses(limit=1, ...)  # simplified
     """
     if peer_node not in _shadows:
-        # No shadow yet — share everything, we'll learn as we go
+        # No shadow yet ΓÇö share everything, we'll learn as we go
         return hyp_ids, 0, len(hyp_ids)
 
     shadow = _shadows[peer_node]
-    peer_known_ids = {e["id"] for e in shadow["shared"]} | {e["id"] for e in shadow["confirmed"]}
+    peer_known_ids = ({e["id"] for e in shadow["shared"]}
+                     | {e["id"] for e in shadow["confirmed"]}
+                     | {e["id"] for e in shadow.get("refuted", [])})
 
     to_share    = []
     already_known = 0
@@ -128,7 +199,7 @@ def filter_for_peer(hyp_ids: list, peer_node: str, get_hyp_fn) -> tuple:
     for hid in hyp_ids:
         if hid in peer_known_ids:
             already_known += 1
-            log.debug("[belief_shadow] skip %s → already in %s's shadow", hid, peer_node)
+            log.debug("[belief_shadow] skip %s ΓåÆ already in %s's shadow", hid, peer_node)
         else:
             to_share.append(hid)
 
@@ -144,10 +215,12 @@ def novelty_score(hyp_id: str, hyp_text: str, peer_node: str) -> float:
     Currently uses ID-based dedup. Future: embedding similarity check.
     """
     if peer_node not in _shadows:
-        return 1.0  # Unknown peer → assume everything is novel
+        return 1.0  # Unknown peer ΓåÆ assume everything is novel
 
     shadow = _shadows[peer_node]
-    all_known_ids = {e["id"] for e in shadow["shared"]} | {e["id"] for e in shadow["confirmed"]}
+    all_known_ids = ({e["id"] for e in shadow["shared"]}
+                    | {e["id"] for e in shadow["confirmed"]}
+                    | {e["id"] for e in shadow.get("refuted", [])})
 
     if hyp_id in all_known_ids:
         return 0.0
@@ -186,8 +259,10 @@ def get_shadow(node_id: str) -> dict:
         "node":         node_id,
         "known":        True,
         "confirmed":    list(shadow["confirmed"]),
+        "refuted":      list(shadow.get("refuted", [])),
         "shared":       list(shadow["shared"]),
         "confirmed_count": len(shadow["confirmed"]),
+        "refuted_count":   len(shadow.get("refuted", [])),
         "shared_count":    len(shadow["shared"]),
         "last_updated": shadow["last_updated"],
     }
@@ -198,6 +273,7 @@ def get_all_shadows() -> dict:
     return {
         node_id: {
             "confirmed_count": len(s["confirmed"]),
+            "refuted_count":   len(s.get("refuted", [])),
             "shared_count":    len(s["shared"]),
             "last_updated":    s["last_updated"],
         }
@@ -230,6 +306,14 @@ def wire_event_bus() -> None:
                 confidence = e.get("confidence", 0.5),
             ) if e.get("origin_node") else None
         ))
-        log.info("[belief_shadow] wired to event bus")
+        bus.subscribe("hypothesis.refuted", lambda e: (
+            record_refuted(
+                node_id    = e.get("origin_node", ""),
+                hyp_id     = e.get("id", ""),
+                text       = e.get("text", ""),
+                confidence = e.get("confidence", 0.5),
+            ) if e.get("origin_node") else None
+        ))
+        log.info("[belief_shadow] wired to event bus (confirmed + refuted + received)")
     except Exception as e:
         log.warning("[belief_shadow] event bus wire failed: %s", e)
