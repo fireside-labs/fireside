@@ -155,7 +155,8 @@ class WarRoomStore:
         valid = [m for m in remote_messages if self._is_valid_message(m)]
         with self._lock:
             existing_ids = {m["id"] for m in self._messages}
-            new_msgs = [m for m in valid if m["id"] not in existing_ids]
+            new_msgs = [m for m in valid if m["id"] not in existing_ids
+                        and m["id"] not in self._tombstones]
             if not new_msgs:
                 return 0
             self._messages.extend(new_msgs)
