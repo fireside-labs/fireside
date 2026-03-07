@@ -1141,10 +1141,10 @@ def sleep(seed: Optional[str] = None,
                     "tested = true AND test_result = 'confirmed'"
                 ).limit(100).to_list()
 
+                anchors = 0
                 if len(confirmed) >= 3:
                     # Cluster by embedding similarity ΓÇö simple greedy grouping
                     used    = set()
-                    anchors = 0
                     for i, base in enumerate(confirmed):
                         if base.get("id") in used:
                             continue
