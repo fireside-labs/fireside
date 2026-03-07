@@ -237,12 +237,17 @@ def _sample_memories(n: int = SAMPLE_TOP_N) -> list:
 
 def _sample_memories_by_seed(seed_text: str, n: int = SAMPLE_TOP_N) -> list:
     """
-    Guided Dreaming: sample memories by semantic proximity to a seed text.
+    Guided Dreaming: hybrid memory sampler seeded toward a topic.
 
-    Instead of salience-based ranking, embed the seed and vector-search
-    the memory table. This biases the dream cycle toward the seed topic,
-    allowing the user or Odin to direct Freya's "shower thoughts" toward
-    a specific architectural problem or question.
+    HYBRID DESIGN — takes two pools and merges them:
+      - Pool A (n//2): memories closest to the seed by cosine similarity
+        (topical focus — what the dream is "about")
+      - Pool B (n//2): highest-salience memories (structural diversity)
+        (ensures collision pairs exist in the 0.30–0.70 cosine band)
+
+    Pure seed-only sampling would return memories all in the same embedding
+    neighborhood, making ALL pairwise cosine scores > 0.70 (the ceiling for
+    interesting pairs). Zero hypotheses would be generated with no useful log.
 
     Falls back to _sample_memories() if embedding fails.
     """
@@ -257,31 +262,51 @@ def _sample_memories_by_seed(seed_text: str, n: int = SAMPLE_TOP_N) -> list:
             return []
         tbl = db.open_table(MEMORY_TABLE)
 
-        rows = tbl.search(seed_emb).limit(n).to_list()
-        if not rows:
-            return _sample_memories(n)
+        seed_quota     = max(2, n // 2)
+        salience_quota = n - seed_quota
 
-        result = []
-        for r in rows:
+        # Pool A: seed-close memories
+        seed_rows = tbl.search(seed_emb).limit(seed_quota).to_list()
+
+        seen_ids = set()
+        pool_a   = []
+        for r in seed_rows:
             emb = list(r.get("embedding") or [])
-            if not emb:
+            mid = r.get("memory_id", "?")
+            if not emb or mid in seen_ids:
                 continue
-            result.append({
-                "memory_id":  r.get("memory_id", "?"),
+            seen_ids.add(mid)
+            pool_a.append({
+                "memory_id":  mid,
                 "content":    r.get("content", ""),
                 "embedding":  emb,
                 "importance": float(r.get("importance", 0.5)),
                 "valence":    float(r.get("valence", 0.0)),
                 "ts":         int(r.get("ts", 0)),
                 "permanent":  bool(r.get("permanent", False)),
-                "salience":   _cosine_sim(seed_emb, emb),  # use seed-similarity as score
+                "salience":   _cosine_sim(seed_emb, emb),
             })
 
-        # Sort by seed-similarity (highest first)
-        result.sort(key=lambda x: x["salience"], reverse=True)
-        log.info("[hypotheses] Guided sampling: %d memories near seed (top cos=%.2f)",
-                 len(result), result[0]["salience"] if result else 0.0)
-        return result
+        # Pool B: highest-salience memories (structural contrast)
+        salience_pool = _sample_memories(salience_quota * 3)  # oversample, then filter
+        pool_b = []
+        for m in salience_pool:
+            if m["memory_id"] not in seen_ids:
+                seen_ids.add(m["memory_id"])
+                pool_b.append(m)
+                if len(pool_b) >= salience_quota:
+                    break
+
+        merged = pool_a + pool_b
+        # Sort so seed-close memories come first, salience fills the tail
+        merged.sort(key=lambda x: x["salience"], reverse=True)
+
+        top_cos = pool_a[0]["salience"] if pool_a else 0.0
+        log.info(
+            "[hypotheses] Guided sampling: %d seed-close + %d salience (top cos=%.2f, seed=%s)",
+            len(pool_a), len(pool_b), top_cos, seed_text[:40],
+        )
+        return merged
 
     except Exception as e:
         log.warning("[hypotheses] seed sampling failed: %s — falling back", e)
