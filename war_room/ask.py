@@ -35,6 +35,10 @@ except ImportError:
     _hypotheses_mod = None
     _HYPOTHESES_OK = False
 
+# Embedding cache: avoids sending identical prompts to Ollama on every /ask
+_embed_cache: dict = {}   # {prompt_key: embedding_list}
+_EMBED_CACHE_MAX = 32     # LRU-style eviction when full
+
 OLLAMA_BASE = "http://127.0.0.1:11434"
 INFERENCE_TIMEOUT = 120  # seconds
 
@@ -96,29 +100,49 @@ class AskHandler:
         if not task_text.strip():
             return system
         try:
-            # Embed the task prompt
-            task_emb = _hypotheses_mod._embed(task_text[:_hypotheses_mod.EMBED_MAX_CHARS])
-            if not task_emb:
-                return system
+            # Embed the task prompt — use cache to avoid duplicate Ollama calls
+            cache_key = task_text[:500]
+            if cache_key in _embed_cache:
+                task_emb = _embed_cache[cache_key]
+            else:
+                task_emb = _hypotheses_mod._embed(task_text[:_hypotheses_mod.EMBED_MAX_CHARS])
+                if not task_emb:
+                    return system
+                # Simple LRU eviction: drop oldest entry when at capacity
+                if len(_embed_cache) >= _EMBED_CACHE_MAX:
+                    oldest = next(iter(_embed_cache))
+                    del _embed_cache[oldest]
+                _embed_cache[cache_key] = task_emb
 
             # Open hypotheses table and vector search
             db  = _hypotheses_mod._get_db()
             tbl = db.open_table(_hypotheses_mod.HYP_TABLE)
-            rows = tbl.search(task_emb).limit(5).to_list()
+            rows = tbl.search(task_emb).limit(8).to_list()
 
-            # Filter to cosine > 0.30 and not refuted, sort by confidence
+            # Filter: cosine > 0.30, exclude refuted beliefs (tested + confidence < 0.20)
             beliefs = []
             for r in rows:
                 row_emb = list(r.get("embedding") or [])
                 if not row_emb:
                     continue
-                cos = _hypotheses_mod._cosine_sim(task_emb, row_emb)
-                if cos > 0.30 and not r.get("tested") is True:
-                    beliefs.append({
-                        "text":       r.get("hypothesis", ""),
-                        "confidence": float(r.get("confidence", 0.0)),
-                        "cos":        cos,
-                    })
+                cos  = _hypotheses_mod._cosine_sim(task_emb, row_emb)
+                conf = float(r.get("confidence", 0.0))
+                if cos <= 0.30:
+                    continue
+                # Exclude explicitly refuted beliefs (tested=True and conf below floor)
+                is_tested = r.get("tested") is True
+                test_result = r.get("test_result", "")   # "confirmed" | "refuted" | ""
+                if is_tested and test_result == "refuted":
+                    continue
+                # Also exclude anything below confidence floor regardless
+                if conf < 0.10:
+                    continue
+                beliefs.append({
+                    "text":        r.get("hypothesis", ""),
+                    "confidence":  conf,
+                    "cos":         cos,
+                    "test_result": test_result,
+                })
 
             if not beliefs:
                 return system
@@ -131,7 +155,8 @@ class AskHandler:
             belief_block += "The following are candidate beliefs derived from prior experience. "
             belief_block += "Treat them as working hypotheses — priors to consider, not facts to assert:\n"
             for i, b in enumerate(top, 1):
-                belief_block += f"{i}. {b['text']} (confidence: {round(b['confidence'], 2)})\n"
+                tag = " [confirmed]" if b.get("test_result") == "confirmed" else ""
+                belief_block += f"{i}. {b['text']} (confidence: {round(b['confidence'], 2)}{tag})\n"
 
             log.debug("[ask] Injected %d beliefs into system prompt", len(top))
             return (system or "") + belief_block

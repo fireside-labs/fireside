@@ -159,15 +159,16 @@ def _ensure_table(dim: int):
     if HYP_TABLE not in db.table_names():
         import pyarrow as pa
         schema = pa.schema([
-            pa.field("id",         pa.string()),
-            pa.field("source_a",   pa.string()),
-            pa.field("source_b",   pa.string()),
-            pa.field("hypothesis", pa.string()),
-            pa.field("embedding",  pa.list_(pa.float32(), dim)),
-            pa.field("confidence", pa.float32()),
-            pa.field("valence",    pa.float32()),
-            pa.field("tested",     pa.bool_()),
-            pa.field("ts",         pa.int64()),
+            pa.field("id",          pa.string()),
+            pa.field("source_a",    pa.string()),
+            pa.field("source_b",    pa.string()),
+            pa.field("hypothesis",  pa.string()),
+            pa.field("embedding",   pa.list_(pa.float32(), dim)),
+            pa.field("confidence",  pa.float32()),
+            pa.field("valence",     pa.float32()),
+            pa.field("tested",      pa.bool_()),
+            pa.field("test_result", pa.string()),   # "confirmed" | "refuted" | ""
+            pa.field("ts",          pa.int64()),
         ])
         _tbl = db.create_table(HYP_TABLE, data=[], schema=schema)
         log.info("[hypotheses] Created hypotheses table (dim=%d)", dim)
@@ -426,15 +427,16 @@ def _store_hypothesis(
 
     hid = f"hyp_{uuid.uuid4().hex[:12]}"
     tbl.add([{
-        "id":         hid,
-        "source_a":   mem_a["memory_id"],
-        "source_b":   mem_b["memory_id"],
-        "hypothesis": text,
-        "embedding":  [float(x) for x in text_emb],
-        "confidence": float(confidence),
-        "valence":    float(valence),
-        "tested":     False,
-        "ts":         ts,
+        "id":          hid,
+        "source_a":    mem_a["memory_id"],
+        "source_b":    mem_b["memory_id"],
+        "hypothesis":  text,
+        "embedding":   [float(x) for x in text_emb],
+        "confidence":  float(confidence),
+        "valence":     float(valence),
+        "tested":      False,
+        "test_result": "",   # set by test_hypothesis()
+        "ts":          ts,
     }])
     return hid
 
@@ -548,15 +550,16 @@ def run_dream_cycle() -> dict:
     """
     global _last_dream_ts
 
+    # Phase 0: Decay orphaned beliefs (outside the lock — DB reads are thread-safe
+    # and holding _dream_lock during N×2 LanceDB reads would block other API callers)
+    decay_stats = _decay_hypotheses()
+    if decay_stats["decayed"] or decay_stats["purged"]:
+        log.info("[hypotheses] Decay: %d weakened, %d purged",
+                 decay_stats["decayed"], decay_stats["purged"])
+
     with _dream_lock:
         _last_dream_ts = time.time()
         log.info("[hypotheses] Dream cycle starting — sampling %d memories", SAMPLE_TOP_N)
-
-        # Phase 0: Decay orphaned beliefs before generating new ones
-        decay_stats = _decay_hypotheses()
-        if decay_stats["decayed"] or decay_stats["purged"]:
-            log.info("[hypotheses] Decay: %d weakened, %d purged",
-                     decay_stats["decayed"], decay_stats["purged"])
 
         memories = _sample_memories(SAMPLE_TOP_N)
         if len(memories) < 4:
@@ -628,6 +631,13 @@ def sleep() -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
+# Auto-decay timestamp — run decay at most once every 12h even if /sleep is never called
+_last_decay_ts: float = 0.0
+_DECAY_INTERVAL = 12 * 3600   # 12 hours
+
+# Contagion cap: no single hypothesis can receive more than this from cascades
+_CONTAGION_MAX_BOOST = 0.15
+
 def get_hypotheses(
     limit:         int   = 10,
     min_confidence:float  = 0.0,
@@ -639,6 +649,20 @@ def get_hypotheses(
     Returns hypotheses sorted by confidence (highest first).
     tested=false → only unvalidated; tested=true → only validated; omit → all.
     """
+    global _last_decay_ts
+
+    # Automatic background decay: at most once per _DECAY_INTERVAL so stale beliefs
+    # wither even if the operator never explicitly calls POST /sleep.
+    if time.time() - _last_decay_ts > _DECAY_INTERVAL:
+        _last_decay_ts = time.time()   # update before running to prevent re-entry
+        try:
+            ds = _decay_hypotheses()
+            if ds.get("decayed", 0) > 0 or ds.get("purged", 0) > 0:
+                log.info("[hypotheses] Auto-decay: %d weakened, %d purged",
+                         ds["decayed"], ds["purged"])
+        except Exception:
+            pass
+
     try:
         tbl = _get_table()
         if tbl is None:
@@ -665,14 +689,15 @@ def get_hypotheses(
             if tested is not None and _t != tested:
                 continue
             results.append({
-                "id":         r["id"],
-                "hypothesis": r["hypothesis"],
-                "source_a":   r["source_a"],
-                "source_b":   r["source_b"],
-                "confidence": round(conf, 3),
-                "valence":    round(float(r.get("valence", 0.0)), 3),
-                "tested":     _t,
-                "ts":         int(r.get("ts", 0)),
+                "id":          r["id"],
+                "hypothesis":  r["hypothesis"],
+                "source_a":    r["source_a"],
+                "source_b":    r["source_b"],
+                "confidence":  round(conf, 3),
+                "valence":     round(float(r.get("valence", 0.0)), 3),
+                "tested":      _t,
+                "test_result": r.get("test_result", ""),  # "confirmed"|"refuted"|owned
+                "ts":          int(r.get("ts", 0)),
             })
 
         results.sort(key=lambda x: x["confidence"], reverse=True)
@@ -717,19 +742,20 @@ def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> 
 
         tbl.update(
             where=f"id = '{safe_hid}'",
-            values={"tested": True, "confidence": new_conf},
+            values={"tested": True, "confidence": new_conf, "test_result": result},
         )
         log.info("[hypotheses] Tested %s → %s (%.2f → %.2f)", hyp_id, result, old_conf, new_conf)
 
         # -------------------------------------------------------------------
-        # Semantic Contagion: propagate belief update to nearest neighbors
+        # Semantic Contagion: propagate belief update to nearest neighbors.
+        # Cap: no neighbor may receive more than _CONTAGION_MAX_BOOST total
+        # from cascade (prevents rapid-fire confirms from inflating clusters).
         # -------------------------------------------------------------------
         contagion_ids = []
         try:
             row_emb = list(rows[0].get("embedding") or [])
             if row_emb:
                 contagion_delta = 0.05 if result == "confirmed" else -0.05
-                # Search for the 5 most similar hypotheses
                 neighbors = tbl.search(row_emb).limit(6).to_list()
                 for nb in neighbors:
                     nb_id  = nb.get("id", "")
@@ -738,16 +764,25 @@ def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> 
                         continue
                     cos = _cosine_sim(row_emb, nb_emb)
                     if cos < 0.70:
-                        continue   # not close enough to be affected
+                        continue
                     nb_conf     = float(nb.get("confidence", 0.5))
-                    nb_new_conf = max(0.0, min(1.0, nb_conf + contagion_delta))
-                    safe_nb_id  = _safe_id(nb_id)
+                    # Contagion cap: don't push a neighbor above base + _CONTAGION_MAX_BOOST
+                    # or below base - _CONTAGION_MAX_BOOST from cascades alone
+                    nb_base     = float(nb.get("confidence", 0.5))  # pre-cascade value
+                    if contagion_delta > 0:
+                        nb_new_conf = min(nb_base + _CONTAGION_MAX_BOOST,
+                                         nb_conf + contagion_delta)
+                    else:
+                        nb_new_conf = max(nb_base - _CONTAGION_MAX_BOOST,
+                                         nb_conf + contagion_delta)
+                    nb_new_conf = max(0.0, min(1.0, nb_new_conf))
+                    safe_nb_id = _safe_id(nb_id)
                     tbl.update(
                         where=f"id = '{safe_nb_id}'",
                         values={"confidence": nb_new_conf},
                     )
                     contagion_ids.append(nb_id)
-                    log.debug("[hypotheses] contagion %s → %.2f (cos=%.2f)",
+                    log.debug("[hypotheses] contagion %s → %.2f (cos=%.2f, capped)",
                               nb_id, nb_new_conf, cos)
         except Exception as ce:
             log.debug("[hypotheses] contagion step error: %s", ce)
