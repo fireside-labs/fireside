@@ -161,6 +161,7 @@ except ImportError as e:
 # Singletons — set once in register_routes()
 _explain = None
 _cb = None
+_peer_urls = {}  # mesh peer URLs for hypothesis sharing
 
 
 # ---------------------------------------------------------------------------
@@ -173,12 +174,26 @@ def register_routes(handler_class, config):
     Called once at startup from _load_local_extensions() in bifrost.py.
     We wrap the existing do_GET and do_POST methods to prepend our routes.
     """
-    global _explain, _cb
+    global _explain, _cb, _peer_urls
 
     # Dream daemon removed — dreaming is now explicit via POST /sleep
 
     nodes = config.get("nodes", {})
     agent_cfg = config.get("agent", {})
+
+    # Mesh attribution: set node identity before first table access
+    import os as _os
+    _node_id = agent_cfg.get("id", "freya")
+    _os.environ.setdefault("BIFROST_NODE_ID", _node_id)
+    log.info("bifrost_local: node identity = %s", _node_id)
+
+    # Build peer URL map for hypothesis sharing
+    _peer_urls = {}
+    for name, cfg in nodes.items():
+        if isinstance(cfg, dict) and "ip" in cfg:
+            _peer_urls[name] = f"http://{cfg['ip']}:{cfg.get('port', 8765)}"
+    if _peer_urls:
+        log.info("bifrost_local: mesh peers for sharing: %s", list(_peer_urls.keys()))
 
     # Instantiate handlers
     if _EXPLAIN_OK:
@@ -510,13 +525,52 @@ def register_routes(handler_class, config):
                     result = _hyp.test_hypothesis(hid, hres, hdelta)
                     code = 200 if result.get("ok") else 400
                     self._respond(code, result)
+            elif self.path == "/hypotheses/share" and _HYP_OK:
+                # Receive shared beliefs from a peer node (single or batch)
+                hyps = body.get("hypotheses", [body])  # batch or single
+                sender = body.get("origin_node", "unknown")
+                results = []
+                for h in hyps:
+                    r = _hyp.receive_shared_hypothesis(h, sender)
+                    results.append(r)
+                accepted = sum(1 for r in results if r.get("ok"))
+                self._respond(200, {
+                    "received": len(hyps),
+                    "accepted": accepted,
+                    "results":  results,
+                })
+            elif self.path == "/hypotheses/push" and _HYP_OK:
+                # Push locally-dreamed beliefs to peers (fire-and-forget)
+                hids = body.get("ids", [])
+                targets = body.get("targets", [])  # peer names
+                if not hids:
+                    self._respond(400, {"error": "ids required"})
+                else:
+                    urls = [_peer_urls[t] for t in targets
+                            if t in _peer_urls]
+                    if not urls:
+                        self._respond(400, {"error": "no valid targets",
+                                            "known_peers": list(_peer_urls.keys())})
+                    else:
+                        result = _hyp.share_batch(hids, urls)
+                        self._respond(200, result)
             elif self.path == "/sleep" and _HYP_OK:
-                # Support ?seed=... from query string or body
+                # Support seed + auto_share from body or query string
                 import urllib.parse
                 parsed = urllib.parse.urlparse(self.path)
                 qs = urllib.parse.parse_qs(parsed.query)
                 seed = body.get("seed") or (qs.get("seed")[0] if qs.get("seed") else None)
-                result = _hyp.sleep(seed=seed)
+                auto_share = bool(body.get("auto_share", False))
+                # Resolve peer URLs for auto-share
+                share_targets = body.get("share_targets", [])  # optional: specific peers
+                if auto_share:
+                    if share_targets:
+                        urls = [_peer_urls[t] for t in share_targets if t in _peer_urls]
+                    else:
+                        urls = list(_peer_urls.values())  # share to all peers
+                else:
+                    urls = []
+                result = _hyp.sleep(seed=seed, auto_share=auto_share, peer_urls=urls)
                 self._respond(200, result)
             else:
                 self._respond(503, {"error": "module not available"})

@@ -59,6 +59,12 @@ DREAM_MODEL    = os.environ.get("BIFROST_DREAM_MODEL", "qwen2.5-coder:32b")
 OLLAMA_BASE    = "http://127.0.0.1:11434"
 EMBED_MAX_CHARS = 6000
 
+# Mesh attribution
+BIFROST_NODE_ID       = os.environ.get("BIFROST_NODE_ID", "freya")
+FOREIGN_CONF_DISCOUNT = 0.6    # received beliefs: conf × 0.6
+SHARE_RATE_LIMIT      = 10     # max received beliefs per sender per 60s
+SHARE_MAX_AGE_S       = 3600   # reject payloads with ts > 1h old
+
 DREAM_IDLE_THRESHOLD = int(os.environ.get("BIFROST_DREAM_IDLE_S",  "300"))  # 5 min default
 DREAM_COOLDOWN       = int(os.environ.get("BIFROST_DREAM_COOLDOWN", "3600")) # 1h between dreams
 MAX_HYPOTHESES       = 50   # max stored
@@ -153,27 +159,55 @@ def _get_table():
     return _tbl
 
 
+def _build_schema(dim: int):
+    """Build the canonical PyArrow schema for the hypotheses table."""
+    import pyarrow as pa
+    return pa.schema([
+        pa.field("id",          pa.string()),
+        pa.field("source_a",    pa.string()),
+        pa.field("source_b",    pa.string()),
+        pa.field("hypothesis",  pa.string()),
+        pa.field("embedding",   pa.list_(pa.float32(), dim)),
+        pa.field("confidence",  pa.float32()),
+        pa.field("valence",     pa.float32()),
+        pa.field("tested",      pa.bool_()),
+        pa.field("test_result", pa.string()),   # "confirmed" | "refuted" | ""
+        pa.field("origin_node", pa.string()),   # node that dreamed this belief
+        pa.field("shared_from", pa.string()),   # sender node ("" if local)
+        pa.field("ts",          pa.int64()),
+    ])
+
+
 def _ensure_table(dim: int):
     global _tbl
     db = _get_db()
+    schema = _build_schema(dim)
     if HYP_TABLE not in db.table_names():
-        import pyarrow as pa
-        schema = pa.schema([
-            pa.field("id",          pa.string()),
-            pa.field("source_a",    pa.string()),
-            pa.field("source_b",    pa.string()),
-            pa.field("hypothesis",  pa.string()),
-            pa.field("embedding",   pa.list_(pa.float32(), dim)),
-            pa.field("confidence",  pa.float32()),
-            pa.field("valence",     pa.float32()),
-            pa.field("tested",      pa.bool_()),
-            pa.field("test_result", pa.string()),   # "confirmed" | "refuted" | ""
-            pa.field("ts",          pa.int64()),
-        ])
         _tbl = db.create_table(HYP_TABLE, data=[], schema=schema)
         log.info("[hypotheses] Created hypotheses table (dim=%d)", dim)
     else:
         _tbl = db.open_table(HYP_TABLE)
+        # --- Schema migration: add origin_node, shared_from if missing ---
+        try:
+            existing_names = set(f.name for f in _tbl.schema)
+            if "origin_node" not in existing_names or "shared_from" not in existing_names:
+                log.warning("[hypotheses] Schema migration: adding origin_node, shared_from")
+                rows = _tbl.search().limit(MAX_HYPOTHESES * 2).to_list()
+                db.drop_table(HYP_TABLE)
+                _tbl = db.create_table(HYP_TABLE, data=[], schema=schema)
+                if rows:
+                    for r in rows:
+                        r.setdefault("origin_node", BIFROST_NODE_ID)
+                        r.setdefault("shared_from", "")
+                        # Ensure embedding dimension matches
+                        emb = list(r.get("embedding") or [])
+                        if len(emb) != dim:
+                            continue
+                        r["embedding"] = [float(x) for x in emb]
+                    _tbl.add(rows)
+                    log.info("[hypotheses] Migrated %d rows with attribution fields", len(rows))
+        except Exception as e:
+            log.error("[hypotheses] Schema migration failed: %s", e)
     return _tbl
 
 
@@ -460,6 +494,8 @@ def _store_hypothesis(
     mem_b:    dict,
     text:     str,
     sim:      float,
+    origin_node: str = "",
+    shared_from: str = "",
 ) -> Optional[str]:
     """
     Store one hypothesis. Returns the new ID, or None on failure.
@@ -525,6 +561,8 @@ def _store_hypothesis(
         "valence":     float(valence),
         "tested":      False,
         "test_result": "",   # set by test_hypothesis()
+        "origin_node": origin_node or BIFROST_NODE_ID,
+        "shared_from": shared_from,
         "ts":          ts,
     }])
     return hid
@@ -820,6 +858,8 @@ def _process_nightmares(memories: list) -> dict:
             "valence":     float(trauma.get("valence", -1.0)),  # mark as trauma-derived
             "tested":      False,
             "test_result": "",
+            "origin_node": BIFROST_NODE_ID,
+            "shared_from": "",
             "ts":          ts,
         }])
         generated += 1
@@ -832,7 +872,9 @@ def _process_nightmares(memories: list) -> dict:
 # Dream cycle — full pipeline
 # ---------------------------------------------------------------------------
 
-def run_dream_cycle(seed: Optional[str] = None) -> dict:
+def run_dream_cycle(seed: Optional[str] = None,
+                    auto_share: bool = False,
+                    peer_urls: Optional[list] = None) -> dict:
     """
     Execute one complete dream cycle (only via explicit POST /sleep):
       1. Sample top-N salient memories (or seed-biased if seed provided)
@@ -840,6 +882,7 @@ def run_dream_cycle(seed: Optional[str] = None) -> dict:
       3. Construct hypotheses via Ollama (with seed context if provided)
       4. Stand review → Dedup → Embed text → Store
       5. Dream journal audit entry
+      6. (Optional) Auto-share to mesh peers
 
     Returns summary dict.
     """
@@ -908,6 +951,17 @@ def run_dream_cycle(seed: Optional[str] = None) -> dict:
         except Exception:
             pass
 
+        # Phase 6: Auto-share to mesh peers (fire-and-forget)
+        shared_to = 0
+        if auto_share and peer_urls and generated_ids:
+            try:
+                share_batch(generated_ids, peer_urls)
+                shared_to = len(peer_urls)
+                log.info("[hypotheses] Auto-shared %d beliefs to %d peers",
+                         len(generated_ids), shared_to)
+            except Exception as e:
+                log.warning("[hypotheses] Auto-share failed: %s", e)
+
         return {
             "generated":          len(generated_ids),
             "nightmare_generated": nightmare_stats["generated"],
@@ -916,6 +970,8 @@ def run_dream_cycle(seed: Optional[str] = None) -> dict:
             "pairs_found":        len(pairs),
             "hypotheses":         generated_ids,
             "seed":               seed or None,
+            "shared_to":          shared_to,
+            "origin_node":        BIFROST_NODE_ID,
             "ts":                 int(_last_dream_ts),
         }
 
@@ -924,7 +980,9 @@ def run_dream_cycle(seed: Optional[str] = None) -> dict:
 # POST /sleep — explicit trigger (no auto-idle daemon)
 # ---------------------------------------------------------------------------
 
-def sleep(seed: Optional[str] = None) -> dict:
+def sleep(seed: Optional[str] = None,
+         auto_share: bool = False,
+         peer_urls: Optional[list] = None) -> dict:
     """
     POST /sleep — Freya goes to sleep and dreams.
 
@@ -932,8 +990,8 @@ def sleep(seed: Optional[str] = None) -> dict:
     or by a scheduled job (cron, Philosopher's Stone nightly build).
 
     If seed is provided (Guided Dreaming / Inception API), memory sampling
-    is biased toward the seed topic instead of general salience. The seed
-    text is also injected into the hypothesis generation prompt.
+    is biased toward the seed topic instead of general salience.
+    If auto_share is True, newly-dreamed beliefs are pushed to peer_urls.
 
     No auto-idle daemon. Dreams only happen when told to sleep.
     This prevents dreams from stealing GPU during overnight work cadences.
@@ -942,7 +1000,7 @@ def sleep(seed: Optional[str] = None) -> dict:
         log.info("[hypotheses] Going to sleep — guided dream (seed: %s)", seed[:60])
     else:
         log.info("[hypotheses] Going to sleep — starting dream cycle")
-    return run_dream_cycle(seed=seed)
+    return run_dream_cycle(seed=seed, auto_share=auto_share, peer_urls=peer_urls)
 
 
 # ---------------------------------------------------------------------------
@@ -1014,7 +1072,9 @@ def get_hypotheses(
                 "confidence":  round(conf, 3),
                 "valence":     round(float(r.get("valence", 0.0)), 3),
                 "tested":      _t,
-                "test_result": r.get("test_result", ""),  # "confirmed"|"refuted"|owned
+                "test_result": r.get("test_result", ""),
+                "origin_node": r.get("origin_node", BIFROST_NODE_ID),
+                "shared_from": r.get("shared_from", ""),
                 "ts":          int(r.get("ts", 0)),
             })
 
@@ -1027,6 +1087,153 @@ def get_hypotheses(
     except Exception as e:
         log.error("[hypotheses] get failed: %s", e)
         return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Mesh attribution: sharing and receiving
+# ---------------------------------------------------------------------------
+
+_share_rate: dict = {}  # sender -> [timestamps]
+
+def receive_shared_hypothesis(payload: dict, sender: str) -> dict:
+    """
+    Receive a hypothesis pushed from a peer node.
+
+    Safety gates:
+      1. Rate limit: max SHARE_RATE_LIMIT per sender per 60s
+      2. Replay protection: reject if ts is older than SHARE_MAX_AGE_S
+      3. Stand review: reject self-destructive patterns
+      4. Dedup: reject near-duplicates (cosine > 0.90)
+      5. Confidence discount: foreign beliefs * FOREIGN_CONF_DISCOUNT
+
+    Returns {"ok": bool, "id": str|None, "reason": str}
+    """
+    now = time.time()
+
+    # --- Rate limit ---
+    sender_times = _share_rate.setdefault(sender, [])
+    sender_times[:] = [t for t in sender_times if now - t < 60]
+    if len(sender_times) >= SHARE_RATE_LIMIT:
+        log.warning("[hypotheses] share rate limit hit for %s (%d/60s)",
+                    sender, len(sender_times))
+        return {"ok": False, "id": None, "reason": "rate_limited"}
+    sender_times.append(now)
+
+    # --- Replay protection ---
+    payload_ts = int(payload.get("ts", 0))
+    if payload_ts and (now - payload_ts) > SHARE_MAX_AGE_S:
+        log.warning("[hypotheses] share replay rejected — ts %d is %ds old",
+                    payload_ts, int(now - payload_ts))
+        return {"ok": False, "id": None, "reason": "replay_too_old"}
+
+    text = str(payload.get("hypothesis", "")).strip()
+    if not text:
+        return {"ok": False, "id": None, "reason": "empty_hypothesis"}
+
+    # --- Stand review ---
+    rejection = _stand_review(text)
+    if rejection:
+        log.warning("[hypotheses] shared belief REJECTED by Stand: %s — %s",
+                    rejection, text[:60])
+        return {"ok": False, "id": None, "reason": f"stand_review: {rejection}"}
+
+    # --- Embed + dedup ---
+    text_emb = _embed(text)
+    if not text_emb:
+        return {"ok": False, "id": None, "reason": "embed_failed"}
+    dim = len(text_emb)
+    tbl = _ensure_table(dim)
+
+    if _dedup_check(tbl, text_emb):
+        return {"ok": False, "id": None, "reason": "duplicate"}
+
+    # --- Confidence discount ---
+    raw_conf = float(payload.get("confidence", 0.5))
+    confidence = max(0.1, raw_conf * FOREIGN_CONF_DISCOUNT)
+    valence    = float(payload.get("valence", 0.0))
+    origin     = str(payload.get("origin_node", sender))
+
+    hid = f"hyp_{uuid.uuid4().hex[:12]}"
+    ts  = int(now)
+    tbl.add([{
+        "id":          hid,
+        "source_a":    str(payload.get("source_a", "remote")),
+        "source_b":    str(payload.get("source_b", "remote")),
+        "hypothesis":  text,
+        "embedding":   [float(x) for x in text_emb],
+        "confidence":  float(confidence),
+        "valence":     float(valence),
+        "tested":      False,
+        "test_result": "",
+        "origin_node": origin,
+        "shared_from": sender,
+        "ts":          ts,
+    }])
+
+    log.info("[hypotheses] Received shared belief [%s] from %s (origin=%s, conf=%.2f→%.2f): %s",
+             hid, sender, origin, raw_conf, confidence, text[:60])
+    return {"ok": True, "id": hid, "reason": "accepted"}
+
+
+def share_batch(hids: list, peer_urls: list) -> dict:
+    """
+    Push hypotheses to peer nodes via fire-and-forget daemon threads.
+
+    For each peer URL, spawns a thread that POSTs the hypotheses as a
+    JSON array to {peer}/hypotheses/share. Returns immediately.
+    """
+    import urllib.request
+
+    tbl = _get_table()
+    if tbl is None:
+        return {"queued": 0, "peers": 0, "reason": "no_table"}
+
+    # Fetch hypothesis data to share
+    hyps_to_share = []
+    for hid in hids:
+        try:
+            rows = tbl.search().where(f"id = '{_safe_id(hid)}'").limit(1).to_list()
+            if rows:
+                r = rows[0]
+                hyps_to_share.append({
+                    "hypothesis":  r.get("hypothesis", ""),
+                    "confidence":  float(r.get("confidence", 0.5)),
+                    "valence":     float(r.get("valence", 0.0)),
+                    "source_a":    r.get("source_a", ""),
+                    "source_b":    r.get("source_b", ""),
+                    "origin_node": r.get("origin_node", BIFROST_NODE_ID),
+                    "ts":          int(r.get("ts", 0)),
+                })
+        except Exception as e:
+            log.debug("[hypotheses] share_batch: failed to fetch %s: %s", hid, e)
+
+    if not hyps_to_share:
+        return {"queued": 0, "peers": 0, "reason": "no_hypotheses_found"}
+
+    payload_bytes = json.dumps({"hypotheses": hyps_to_share}).encode()
+
+    def _push_to_peer(peer_url: str):
+        try:
+            req = urllib.request.Request(
+                f"{peer_url}/hypotheses/share",
+                data=payload_bytes,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                log.info("[hypotheses] Pushed %d beliefs to %s — %d",
+                         len(hyps_to_share), peer_url, resp.status)
+        except Exception as e:
+            log.warning("[hypotheses] Push to %s failed: %s", peer_url, e)
+
+    for url in peer_urls:
+        t = threading.Thread(target=_push_to_peer, args=(url,),
+                             daemon=True, name=f"share-{url}")
+        t.start()
+
+    log.info("[hypotheses] Queued %d beliefs for %d peers (fire-and-forget)",
+             len(hyps_to_share), len(peer_urls))
+    return {"queued": len(hyps_to_share), "peers": len(peer_urls)}
 
 
 def test_hypothesis(hyp_id: str, result: str, confidence_delta: float = 0.1) -> dict:
