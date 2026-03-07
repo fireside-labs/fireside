@@ -492,7 +492,7 @@ def _construct_hypothesis(mem_a: dict, mem_b: dict, sim: float,
         )
         with urllib.request.urlopen(req, timeout=60) as r:
             result = json.loads(r.read())
-            raw = result.get("response", "") or ""
+            raw = result.get("response", "") or result.get("thinking", "") or ""
             # Strip any remaining <think>...</think> blocks
             text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
             # Extract the hypothesis line
@@ -791,7 +791,7 @@ def _construct_rule_from_trauma(trauma: dict, triumph: dict) -> Optional[str]:
         )
         with urllib.request.urlopen(req, timeout=60) as r:
             result = json.loads(r.read())
-            raw = result.get("response", "") or ""
+            raw = result.get("response", "") or result.get("thinking", "") or ""
             text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
 
             # Extract the rule line
