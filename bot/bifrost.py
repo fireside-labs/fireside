@@ -44,17 +44,29 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("bifrost")
 
 # Windows cp1252 charmap fix — force UTF-8 on stdout/stderr so log messages
-# containing non-ASCII (em-dash, arrows, emoji from agent memory) don't crash threads
+# containing non-ASCII (em-dash, arrows, emoji) don't crash threads.
+# IMPORTANT: wrap everything in try/except — when Bifrost starts detached
+# (scheduled task with no console / pythonw.exe), sys.stdout and sys.stderr
+# are None. hasattr(None, 'buffer') returns False safely but other stream ops
+# will raise ValueError: "I/O operation on closed file". Swallow that here.
 if sys.platform == "win32":
     import io
-    if hasattr(sys.stdout, "buffer"):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    if hasattr(sys.stderr, "buffer"):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-    # Also fix the logging handler stream
-    for _h in logging.root.handlers:
-        if hasattr(_h, "stream") and hasattr(_h.stream, "buffer"):
-            _h.stream = io.TextIOWrapper(_h.stream.buffer, encoding="utf-8", errors="replace")
+    try:
+        if sys.stdout is not None and hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        if sys.stderr is not None and hasattr(sys.stderr, "buffer"):
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+        # Also fix the logging handler stream
+        for _h in logging.root.handlers:
+            if hasattr(_h, "stream") and _h.stream is not None and hasattr(_h.stream, "buffer"):
+                _h.stream = io.TextIOWrapper(_h.stream.buffer, encoding="utf-8", errors="replace")
+    except (ValueError, AttributeError, OSError):
+        # Detached/closed streams — redirect logging to a file instead
+        import tempfile, os
+        _log_path = os.path.join(tempfile.gettempdir(), "bifrost.log")
+        logging.basicConfig(filename=_log_path, level=logging.INFO,
+                            format="%(asctime)s [%(levelname)s] %(message)s",
+                            force=True)
 
 # Valhalla War Room — peer-to-peer agent mesh
 try:

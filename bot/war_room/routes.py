@@ -236,7 +236,15 @@ class WarRoomRoutes:
             return 409, {"error": str(e)}
 
     def handle_complete_task(self, body: dict) -> tuple[int, dict]:
-        """POST /war-room/complete"""
+        """POST /war-room/complete
+
+        Required: task_id, agent_id
+        Optional: result, task_type, approach
+          task_type  - category of skill used (e.g. "debugging", "crispr_prompt")
+          approach   - 1-3 sentence methodology summary
+          These two fields are passed through in the response so that
+          Freya's bifrost_local.py can intercept them for procedural memory.
+        """
         task_id = body.get("task_id", "")
         agent_id = body.get("agent_id", "")
         result = body.get("result", "")
@@ -246,6 +254,11 @@ class WarRoomRoutes:
         try:
             task = self.store.complete_task(task_id, agent_id, result)
             log.info("Task %s completed by %s", task_id, agent_id)
+            # Attach procedural fields so bifrost_local intercepts can learn
+            if body.get("task_type"):
+                task["task_type"] = body["task_type"]
+            if body.get("approach"):
+                task["approach"] = body["approach"]
             try:
                 write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
             except Exception as _e:
