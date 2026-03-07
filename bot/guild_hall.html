@@ -331,6 +331,32 @@
             flex: 1;
             color: var(--text);
             word-break: break-word;
+            line-height: 1.4;
+        }
+
+        .msg-body .msg-full {
+            display: none;
+        }
+
+        .msg-body.expanded .msg-preview {
+            display: none;
+        }
+
+        .msg-body.expanded .msg-full {
+            display: inline;
+        }
+
+        .msg-toggle {
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.68rem;
+            margin-left: 0.3em;
+            opacity: 0.8;
+        }
+
+        .msg-toggle:hover {
+            opacity: 1;
+            text-decoration: underline;
         }
 
         .msg-ts {
@@ -689,13 +715,22 @@
                 document.getElementById('msg-count').textContent = msgs.length;
                 const el = document.getElementById('messages');
                 if (!msgs.length) { el.innerHTML = '<div class="empty">No messages</div>'; return; }
-                el.innerHTML = msgs.slice(0, 30).map(m => `
+                el.innerHTML = msgs.slice(0, 30).map(m => {
+                    const body = m.body || '';
+                    const isLong = body.length > 200;
+                    const preview = isLong ? body.substring(0, 200) + '…' : body;
+                    const mid = 'msg_' + (m.id || Math.random().toString(36).slice(2));
+                    return `
       <div class="msg-row">
         <span class="msg-from">${m.from || '?'}</span>
-        <span class="msg-body">${(m.body || '').substring(0, 200)}</span>
+        <span class="msg-body" id="${mid}">${isLong
+                            ? `<span class="msg-preview">${preview}<span class="msg-toggle" onclick="document.getElementById('${mid}').classList.add('expanded')"> show more</span></span><span class="msg-full">${body}<span class="msg-toggle" onclick="document.getElementById('${mid}').classList.remove('expanded')"> show less</span></span>`
+                            : body
+                        }</span>
         <span class="msg-ts">${ago(m.timestamp)}</span>
         <span class="msg-del" onclick="deleteMsg('${m.id}')" title="Delete">✕</span>
-      </div>`).join('');
+      </div>`;
+                }).join('');
             } catch (e) { document.getElementById('messages').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
         }
 
