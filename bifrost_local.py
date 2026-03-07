@@ -175,9 +175,7 @@ def register_routes(handler_class, config):
     """
     global _explain, _cb
 
-    # Start the dream daemon (idle-triggered hypothesis generation)
-    if _HYP_OK:
-        _hyp.start_dream_daemon()
+    # Dream daemon removed — dreaming is now explicit via POST /sleep
 
     nodes = config.get("nodes", {})
     agent_cfg = config.get("agent", {})
@@ -351,7 +349,6 @@ def register_routes(handler_class, config):
                 task_type=_tt, q=_q, limit=_lim, min_confidence=_mc))
         elif self.path.startswith("/hypotheses") and _HYP_OK:
             import urllib.parse as _up8
-            _hyp.record_activity()
             _hqs  = _up8.parse_qs(_up8.urlparse(self.path).query)
             _hlim = int((_hqs.get("limit") or ["10"])[0])
             _hlim = max(1, min(_hlim, 50))
@@ -431,7 +428,8 @@ def register_routes(handler_class, config):
         if self.path in ("/memory-sync", "/explain", "/pheromone",
                           "/shared-state-sync", "/save-point", "/rollback",
                           "/procedure", "/procedures",
-                          "/hypotheses/generate", "/hypotheses/test"):
+                          "/hypotheses/generate", "/hypotheses/test",
+                          "/sleep"):
             import json
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
@@ -500,11 +498,9 @@ def register_routes(handler_class, config):
                     result = _procedures.upsert_batch(procs)
                     self._respond(200, result)
             elif self.path == "/hypotheses/generate" and _HYP_OK:
-                _hyp.record_activity()   # prevent immediate self-dream while generating
-                result = _hyp.run_dream_cycle(force=True)
+                result = _hyp.run_dream_cycle()
                 self._respond(200, result)
             elif self.path == "/hypotheses/test" and _HYP_OK:
-                _hyp.record_activity()
                 hid   = body.get("id", "")
                 hres  = body.get("result", "")
                 hdelta= float(body.get("confidence_delta", 0.1))
@@ -514,6 +510,9 @@ def register_routes(handler_class, config):
                     result = _hyp.test_hypothesis(hid, hres, hdelta)
                     code = 200 if result.get("ok") else 400
                     self._respond(code, result)
+            elif self.path == "/sleep" and _HYP_OK:
+                result = _hyp.sleep()
+                self._respond(200, result)
             else:
                 self._respond(503, {"error": "module not available"})
         else:

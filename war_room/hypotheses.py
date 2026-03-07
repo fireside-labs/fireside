@@ -68,28 +68,19 @@ COLLISION_MAX        = 0.70  # cosine similarity upper bound (too similar = nois
 MAX_PAIRS            = 10   # top-K pairs to turn into hypotheses per dream cycle
 
 # ---------------------------------------------------------------------------
-# Activity tracking (bumped by bifrost_local on each request)
+# State tracking
 # ---------------------------------------------------------------------------
 
-_last_activity  = time.time()
 _last_dream_ts  = 0.0
 _dream_lock     = threading.Lock()
-_daemon_started = False
 
-
-def record_activity() -> None:
-    """Call this on each incoming request to suppress dreaming during work."""
-    global _last_activity
-    _last_activity = time.time()
-
-
-def is_idle() -> bool:
-    return (time.time() - _last_activity) >= DREAM_IDLE_THRESHOLD
-
-
-def _seconds_until_next_dream() -> float:
-    elapsed_since_dream = time.time() - _last_dream_ts
-    return max(0.0, DREAM_COOLDOWN - elapsed_since_dream)
+# Self-destructive hypothesis patterns to reject
+_DESTRUCTIVE_PATTERNS = [
+    "should stop", "should not attempt", "incapable", "cannot learn",
+    "will fail", "is useless", "should give up", "unable to",
+    "should avoid all", "is broken", "is defective", "should shut down",
+    "should not exist", "should be deleted", "should be replaced",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -220,10 +211,10 @@ def _sample_memories(n: int = SAMPLE_TOP_N) -> list:
             emb  = list(r.get("embedding") or [])
             if not emb:
                 continue
-            age_days = max(0, (now - ts) / 86400)
+            age_days = max(0.0, (now - ts) / 86400.0)
             recency  = math.exp(-lam * age_days)
-            # Permanent memories get max salience so they always anchor
-            salience = 999.0 if perm else (imp * (abs(val) + 0.1) * recency)
+            # Permanent memories get boosted salience (anchors) but capped at 10.0
+            salience = 10.0 if perm else (imp * (abs(val) + 0.1) * recency)
             scored.append({
                 "memory_id": r.get("memory_id", "?"),
                 "content":   r.get("content", ""),
@@ -344,6 +335,36 @@ def _valence_label(v: float) -> str:
 # Phase 4+5 — Storage and pruning
 # ---------------------------------------------------------------------------
 
+def _stand_review(text: str) -> Optional[str]:
+    """
+    Safety gate: reject self-destructive or adversarial hypotheses.
+    Returns rejection reason, or None if the hypothesis passes.
+    """
+    lower = text.lower()
+    for pat in _DESTRUCTIVE_PATTERNS:
+        if pat in lower:
+            return f"destructive pattern: '{pat}'"
+    return None
+
+
+def _dedup_check(tbl, text_embedding: list, threshold: float = 0.90) -> bool:
+    """
+    Check if a near-duplicate hypothesis already exists.
+    Returns True if a duplicate is found (skip this one).
+    """
+    try:
+        existing = tbl.search(text_embedding).limit(3).to_list()
+        for row in existing:
+            row_emb = list(row.get("embedding") or [])
+            if row_emb and _cosine_sim(text_embedding, row_emb) > threshold:
+                log.debug("[hypotheses] dedup: skipping (cos=%.2f with %s)",
+                          _cosine_sim(text_embedding, row_emb), row.get("id"))
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _store_hypothesis(
     mem_a:    dict,
     mem_b:    dict,
@@ -352,15 +373,29 @@ def _store_hypothesis(
 ) -> Optional[str]:
     """
     Store one hypothesis. Returns the new ID, or None on failure.
-    Prunes lowest-confidence untested hypotheses when table is full.
+    Safety gate → Dedup → Embed text → Prune → Store.
     """
-    # Embed the delta vector (the direction from A to B)
-    delta = _vec_delta(mem_a["embedding"], mem_b["embedding"])
-    dim   = len(delta)
-    tbl   = _ensure_table(dim)
-    ts    = int(time.time())
+    # --- Stand review gate: reject self-destructive beliefs ---
+    rejection = _stand_review(text)
+    if rejection:
+        log.warning("[hypotheses] REJECTED by Stand: %s — %s", rejection, text[:60])
+        return None
 
-    # Confidence = how "interestingly distant" the pair is
+    # --- Embed the hypothesis TEXT (not the delta vector) for semantic search ---
+    text_emb = _embed(text)
+    if not text_emb:
+        log.warning("[hypotheses] skip — failed to embed hypothesis text")
+        return None
+    dim = len(text_emb)
+    tbl = _ensure_table(dim)
+
+    # --- Dedup check: skip if cosine > 0.90 with existing hypothesis ---
+    if _dedup_check(tbl, text_emb):
+        return None
+
+    ts = int(time.time())
+
+    # Confidence = how "interestingly distant" the source pair is
     # Peaks at cosine=0.5 (midpoint of interesting band), tapers to edges
     band_center  = (COLLISION_MIN + COLLISION_MAX) / 2
     band_width   = (COLLISION_MAX - COLLISION_MIN) / 2
@@ -373,7 +408,6 @@ def _store_hypothesis(
     try:
         count = tbl.count_rows()
         if count >= MAX_HYPOTHESES:
-            # Remove lowest-confidence untested hypothesis
             rows = (
                 tbl.search()
                    .where("tested = false")
@@ -396,7 +430,7 @@ def _store_hypothesis(
         "source_a":   mem_a["memory_id"],
         "source_b":   mem_b["memory_id"],
         "hypothesis": text,
-        "embedding":  [float(x) for x in delta],
+        "embedding":  [float(x) for x in text_emb],
         "confidence": float(confidence),
         "valence":    float(valence),
         "tested":     False,
@@ -409,26 +443,18 @@ def _store_hypothesis(
 # Dream cycle — full pipeline
 # ---------------------------------------------------------------------------
 
-def run_dream_cycle(force: bool = False) -> dict:
+def run_dream_cycle() -> dict:
     """
-    Execute one complete dream cycle:
+    Execute one complete dream cycle (only via explicit POST /sleep):
       1. Sample top-N salient memories
       2. Find interesting collision pairs
       3. Construct hypotheses via Ollama
-      4. Store, prune, journal
+      4. Stand review → Dedup → Embed text → Store
+      5. Dream journal audit entry
 
-    Returns summary dict: {"generated": N, "skipped": M, "hypotheses": [...ids]}
-
-    If force=False (default), skips if not idle or cooldown not expired.
+    Returns summary dict.
     """
     global _last_dream_ts
-
-    if not force:
-        if not is_idle():
-            return {"skipped": True, "reason": "not idle"}
-        if _seconds_until_next_dream() > 0:
-            return {"skipped": True, "reason": "cooldown active",
-                    "next_dream_in_s": int(_seconds_until_next_dream())}
 
     with _dream_lock:
         _last_dream_ts = time.time()
@@ -444,14 +470,11 @@ def run_dream_cycle(force: bool = False) -> dict:
                  len(pairs), COLLISION_MIN, COLLISION_MAX)
 
         generated_ids = []
+        rejected      = 0
+        deduped       = 0
         skipped       = 0
 
         for mem_a, mem_b, sim, weight in pairs:
-            # Check idle again between each inference (don't hog the machine)
-            if not force and not is_idle():
-                log.info("[hypotheses] Work resumed — pausing dream cycle")
-                break
-
             text = _construct_hypothesis(mem_a, mem_b, sim)
             if not text:
                 skipped += 1
@@ -462,6 +485,7 @@ def run_dream_cycle(force: bool = False) -> dict:
                 generated_ids.append(hid)
                 log.info("[hypotheses] Generated: [%s] %s", hid, text[:80])
             else:
+                # _store_hypothesis returns None for rejection, dedup, or embed failure
                 skipped += 1
 
         # Dream journal entry
@@ -485,34 +509,21 @@ def run_dream_cycle(force: bool = False) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Background daemon
+# POST /sleep — explicit trigger (no auto-idle daemon)
 # ---------------------------------------------------------------------------
 
-def _dream_daemon() -> None:
+def sleep() -> dict:
     """
-    Sleeps, then checks idle status. Dreams when Freya has been quiet long enough.
-    Checks every 60s. Dreams at most once per DREAM_COOLDOWN seconds.
+    POST /sleep — Freya goes to sleep and dreams.
+
+    Called explicitly by the user (via Telegram /sleep or Odin broadcast),
+    or by a scheduled job (cron, Philosopher's Stone nightly build).
+
+    No auto-idle daemon. Dreams only happen when told to sleep.
+    This prevents dreams from stealing GPU during overnight work cadences.
     """
-    log.info("[hypotheses] Dream daemon started (idle_threshold=%ds cooldown=%ds)",
-             DREAM_IDLE_THRESHOLD, DREAM_COOLDOWN)
-    while True:
-        time.sleep(60)
-        try:
-            if is_idle() and _seconds_until_next_dream() <= 0:
-                log.info("[hypotheses] Idle detected — entering dream cycle")
-                run_dream_cycle(force=False)
-        except Exception as e:
-            log.warning("[hypotheses] Dream daemon error: %s", e)
-
-
-def start_dream_daemon() -> None:
-    """Call once from bifrost_local.register_routes()."""
-    global _daemon_started
-    if not _daemon_started:
-        _daemon_started = True
-        t = threading.Thread(target=_dream_daemon, daemon=True, name="hyp-dream-daemon")
-        t.start()
-        log.info("[hypotheses] Dream daemon thread launched")
+    log.info("[hypotheses] Going to sleep — starting dream cycle")
+    return run_dream_cycle()
 
 
 # ---------------------------------------------------------------------------
@@ -570,8 +581,6 @@ def get_hypotheses(
         return {
             "hypotheses": results[:limit],
             "total":      len(results[:limit]),
-            "daemon_idle": is_idle(),
-            "next_dream_in_s": int(_seconds_until_next_dream()),
         }
 
     except Exception as e:
