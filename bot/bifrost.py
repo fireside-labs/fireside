@@ -1196,6 +1196,9 @@ class BifrostHandler(BaseHTTPRequestHandler):
             if self.path.startswith("/war-room/tombstones"):
                 code, data = _war_room_routes.handle_tombstones(self.path)
                 self._respond(code, data); return
+            if self.path.startswith("/war-room/progress"):
+                progress = _war_room_routes.store.get_progress()
+                self._respond(200, progress); return
         if self.path.startswith("/leaderboard"):
             self._respond(*_compute_leaderboard()); return
 
@@ -1218,7 +1221,8 @@ class BifrostHandler(BaseHTTPRequestHandler):
         war_room_routes = ("/war-room/post", "/war-room/task", "/war-room/claim",
                            "/war-room/complete", "/war-room/status", "/ask",
                            "/war-room/delete-task", "/war-room/delete-message",
-                           "/war-room/clear-messages", "/war-room/summon")
+                           "/war-room/clear-messages", "/war-room/summon",
+                           "/war-room/progress")
         all_routes = bifrost_routes + war_room_routes
 
         if self.path not in all_routes:
@@ -1243,6 +1247,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 "/war-room/delete-message": "handle_delete_message",
                 "/war-room/clear-messages": "handle_clear_messages",
                 "/war-room/summon": "handle_summon",
+                "/war-room/progress": "handle_progress",
             }
             method_name = wr_map.get(self.path)
             wr_handler = getattr(_war_room_routes, method_name, None) if method_name else None

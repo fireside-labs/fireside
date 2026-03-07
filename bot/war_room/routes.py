@@ -369,3 +369,15 @@ class WarRoomRoutes:
                 results[name] = f"unreachable: {e}"
         log.info("[summon] Results: %s", results)
         return 200, {"summoned": results, "message": message}
+
+    def handle_progress(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/progress — agent reports progress on a task."""
+        task_id = body.get("task_id", "")
+        agent = body.get("agent", body.get("agent_id", "unknown"))
+        note = body.get("note", body.get("status", ""))
+        percent = body.get("percent", -1)
+        if not task_id:
+            return 400, {"error": "task_id required"}
+        entry = self.store.update_progress(task_id, agent, note, percent)
+        log.info("[progress] %s → %s: %s", agent, task_id, note[:60])
+        return 200, {"ok": True, "progress": entry}

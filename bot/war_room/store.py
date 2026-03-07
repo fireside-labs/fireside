@@ -31,6 +31,8 @@ class WarRoomStore:
         self._tasks: dict[str, dict] = self._load(self._task_file, default={})
         # tombstones: {id: iso_timestamp} ΓÇö propagated to peers so deletes replicate
         self._tombstones: dict[str, str] = self._load(self._tombstone_file, default={})
+        # Progress: {task_id: {agent, note, ts, percent}} — runtime only, not persisted
+        self._progress: dict[str, dict] = {}
 
     # ------------------------------------------------------------------
     # Persistence
@@ -319,6 +321,37 @@ class WarRoomStore:
             self._save_messages()
             self._save_tombstones()
             return count
+
+    # ------------------------------------------------------------------
+    # Task Progress
+    # ------------------------------------------------------------------
+
+    def update_progress(self, task_id: str, agent: str, note: str,
+                        percent: int = -1) -> dict:
+        """Record a progress ping for a task. Runtime only — not persisted."""
+        from datetime import datetime, timezone
+        entry = {
+            "task_id": task_id,
+            "agent": agent,
+            "note": note[:200],
+            "percent": max(-1, min(100, percent)),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        with self._lock:
+            self._progress[task_id] = entry
+            # Cap at 200 entries
+            if len(self._progress) > 200:
+                oldest = sorted(self._progress, key=lambda k: self._progress[k]["ts"])
+                for k in oldest[:50]:
+                    del self._progress[k]
+        return entry
+
+    def get_progress(self, task_id: str = "") -> dict | list:
+        """Get progress for one task or all tasks."""
+        with self._lock:
+            if task_id:
+                return self._progress.get(task_id, {})
+            return list(self._progress.values())
 
     def get_tasks(
         self,
