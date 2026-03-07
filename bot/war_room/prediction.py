@@ -1,27 +1,27 @@
 """
-prediction.py — Freya's Predictive Processing Engine (Pillar 7)
+prediction.py ΓÇö Freya's Predictive Processing Engine (Pillar 7)
 
 Purpose:
     Implements the Free Energy Principle for the /ask pipeline.
 
     Before each /ask:
-        predict(query) → generate synthetic "expected answer" string
-                       → embed it → store {query_hash, expected_embed, ts}
+        predict(query) ΓåÆ generate synthetic "expected answer" string
+                       ΓåÆ embed it ΓåÆ store {query_hash, expected_embed, ts}
 
     After each /ask (via TeeWriter capturing the response):
-        score(query_hash, actual_response) → embed actual response
-                                          → compute cosine distance
-                                          → store error float (discard embeds)
-                                          → publish prediction.scored to event bus
+        score(query_hash, actual_response) ΓåÆ embed actual response
+                                          ΓåÆ compute cosine distance
+                                          ΓåÆ store error float (discard embeds)
+                                          ΓåÆ publish prediction.scored to event bus
 
-    High error (surprise) → publish to event bus → triggers hypothesis generation
-    Low error (boredom)   → no action
+    High error (surprise) ΓåÆ publish to event bus ΓåÆ triggers hypothesis generation
+    Low error (boredom)   ΓåÆ no action
 
     The TeeWriter class lives here but is applied in bifrost_local.py's /ask
     interception block.
 
 Endpoints (wired in bifrost_local.py):
-    GET /predictions?limit=20     — recent prediction errors + rolling stats
+    GET /predictions?limit=20     ΓÇö recent prediction errors + rolling stats
 """
 
 import hashlib
@@ -45,10 +45,10 @@ _HIGH_ERROR_THR = 0.55   # cosine distance above this = "surprising"
 _LOW_ERROR_THR  = 0.20   # below this = "boring" / well-predicted
 
 # ---------------------------------------------------------------------------
-# In-memory store (no LanceDB — just floats after scoring)
+# In-memory store (no LanceDB ΓÇö just floats after scoring)
 # ---------------------------------------------------------------------------
 
-# Pending: query_hash → {expected_embed, ts}
+# Pending: query_hash ΓåÆ {expected_embed, ts}
 # Kept only until score() is called, then deleted
 _pending: dict = {}
 
@@ -90,10 +90,10 @@ def _cosine_sim(a: list, b: list) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Expected-answer synthesis (keyword heuristic — no Ollama cost)
+# Expected-answer synthesis (keyword heuristic ΓÇö no Ollama cost)
 # ---------------------------------------------------------------------------
 
-# Topic buckets — each maps a set of keywords to a synthetic expected frame
+# Topic buckets ΓÇö each maps a set of keywords to a synthetic expected frame
 _TOPIC_FRAMES = {
     "networking":  "This involves network connectivity, IP addresses, routing, or firewall configuration.",
     "security":    "This concerns authentication, encryption, vulnerabilities, or access control.",
@@ -164,7 +164,7 @@ def predict(query: str) -> Optional[str]:
     expected_emb  = _embed(expected_text)
 
     if expected_emb is None:
-        log.debug("[prediction] embed failed for query %s — skipping", query_hash)
+        log.debug("[prediction] embed failed for query %s ΓÇö skipping", query_hash)
         return None
 
     _pending[query_hash] = {
@@ -194,7 +194,7 @@ def score(query_hash: Optional[str], actual_response: str) -> Optional[float]:
     # Truncate response for embedding (nomic max ~6000 chars)
     actual_embed = _embed(actual_response[:6000])
     if actual_embed is None:
-        log.debug("[prediction] score embed failed — dropping entry")
+        log.debug("[prediction] score embed failed ΓÇö dropping entry")
         return None
 
     # Cosine distance (1 - similarity) = prediction error
@@ -207,7 +207,7 @@ def score(query_hash: Optional[str], actual_response: str) -> Optional[float]:
         "ts":         int(time.time()),
     }
     _scored.append(entry)
-    log.debug("[prediction] scored %s → error=%.3f", query_hash, error)
+    log.debug("[prediction] scored %s ΓåÆ error=%.3f", query_hash, error)
 
     # Publish to event bus
     try:
@@ -249,7 +249,7 @@ def get_stats() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# TeeWriter — captures /ask response bytes for scoring
+# TeeWriter ΓÇö captures /ask response bytes for scoring
 # ---------------------------------------------------------------------------
 
 class TeeWriter:

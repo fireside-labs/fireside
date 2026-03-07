@@ -1,16 +1,16 @@
 """
-somatic.py ΓÇö Somatic Markers / Emotional Intuition (Pillar 10)
+somatic.py ╬ô├ç├╢ Somatic Markers / Emotional Intuition (Pillar 10)
 
 Theory (Antonio Damasio):
     Emotions are compressed wisdom. The body's visceral reactions to past
-    outcomes are stored as "somatic markers" ΓÇö shortcut heuristics that bias
+    outcomes are stored as "somatic markers" ╬ô├ç├╢ shortcut heuristics that bias
     decision-making before slow conscious reasoning kicks in.
 
 Application:
     Before high-stakes actions (hypothesis generation, sharing, dream seeding,
     large tasks), the node queries its memory for emotionally similar past
     experiences. If negative-valence memories dominate the neighborhood, the
-    node signals "reluctance" ΓÇö either escalating to a human or refusing
+    node signals "reluctance" ╬ô├ç├╢ either escalating to a human or refusing
     automatically.
 
 Mechanism:
@@ -18,19 +18,19 @@ Mechanism:
         1. Embed the action description
         2. Query memory for k=10 nearest neighbors
         3. Compute valence-weighted signal: mean(valence * importance) for neighbors
-        4. If signal < threshold  ΓåÆ reluctance (block or escalate)
-        5. If signal > |threshold| ΓåÆ confidence boost
+        4. If signal < threshold  ╬ô├Ñ├å reluctance (block or escalate)
+        5. If signal > |threshold| ╬ô├Ñ├å confidence boost
         6. Publish somatic.checked event to event bus
 
 GutResult:
-    signal:    float   ΓÇö weighted emotional signal (-1.0 bad ΓåÆ +1.0 good)
-    reluctant: bool    ΓÇö True if signal < threshold
-    memories:  list    ΓÇö top 3 influencing memories (for transparency)
-    verdict:   str     ΓÇö "proceed" | "reluctant" | "blocked"
+    signal:    float   ╬ô├ç├╢ weighted emotional signal (-1.0 bad ╬ô├Ñ├å +1.0 good)
+    reluctant: bool    ╬ô├ç├╢ True if signal < threshold
+    memories:  list    ╬ô├ç├╢ top 3 influencing memories (for transparency)
+    verdict:   str     ╬ô├ç├╢ "proceed" | "reluctant" | "blocked"
 
 Endpoints (wired in bifrost_local.py):
     POST /gut-check  {action: str, threshold?: float}
-    GET  /somatic-state   ΓÇö recent gut checks + running signal history
+    GET  /somatic-state   ╬ô├ç├╢ recent gut checks + running signal history
 """
 
 import json
@@ -130,8 +130,8 @@ def gut_check(
     Evaluate the emotional signal of a proposed action by querying
     memory for past emotionally similar experiences.
 
-    threshold:       if signal < threshold  ΓåÆ reluctant (warn / escalate)
-    block_threshold: if signal < block_thr  ΓåÆ blocked (hard refuse)
+    threshold:       if signal < threshold  ╬ô├Ñ├å reluctant (warn / escalate)
+    block_threshold: if signal < block_thr  ╬ô├Ñ├å blocked (hard refuse)
     k:               number of nearest memory neighbors to consult
     """
     ts = int(time.time())
@@ -144,7 +144,7 @@ def gut_check(
             memories=[], action=action[:80], ts=ts
         )
         _history.append(result.to_dict())
-        log.warning("[somatic] embed unavailable — fail-closed → reluctant")
+        log.warning("[somatic] embed unavailable ΓÇö fail-closed ΓåÆ reluctant")
         return result
 
     # Query memory for emotionally similar experiences
@@ -208,7 +208,7 @@ def gut_check(
         ts=ts,
     )
     _history.append(result.to_dict())
-    log.info("[somatic] gut_check '%s...' ΓåÆ signal=%.3f verdict=%s",
+    log.info("[somatic] gut_check '%s...' ╬ô├Ñ├å signal=%.3f verdict=%s",
              action[:40], signal, verdict)
 
     # Publish to event bus

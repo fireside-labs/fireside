@@ -1,5 +1,5 @@
 """
-ask.py — Direct agent-to-agent inference proxy.
+ask.py ΓÇö Direct agent-to-agent inference proxy.
 
 Routes inference requests to the local node's Ollama instance or
 cloud NVIDIA NIM endpoint, depending on request.
@@ -15,7 +15,7 @@ from typing import Optional
 
 log = logging.getLogger("war-room.ask")
 
-# Heimdall cost reporter — configurable, falls back to known IP
+# Heimdall cost reporter ΓÇö configurable, falls back to known IP
 _HEIMDALL_LOG_COST_URL = os.environ.get(
     "HEIMDALL_LOG_COST_URL",
     "http://100.108.153.23:8765/log-cost"
@@ -42,7 +42,7 @@ def _report_cost_to_heimdall(node: str, model: str, provider: str,
                 headers={"Content-Type": "application/json"}, method="POST")
             urllib.request.urlopen(req, timeout=5)
         except Exception:
-            pass  # silent — never let cost logging break inference
+            pass  # silent ΓÇö never let cost logging break inference
     t = threading.Thread(target=_send, daemon=True)
     t.start()
 
@@ -51,7 +51,7 @@ INFERENCE_TIMEOUT = 300  # seconds — increased for large local models (qwen3.5
 
 
 class AskHandler:
-    """Handles /ask requests — proxies to local Ollama or cloud NVIDIA NIM."""
+    """Handles /ask requests ΓÇö proxies to local Ollama or cloud NVIDIA NIM."""
 
     def __init__(self, agent_config: dict):
         """

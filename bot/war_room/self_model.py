@@ -1,10 +1,10 @@
 """
-self_model.py — Freya's Default Mode Network (Pillar 9)
+self_model.py ΓÇö Freya's Default Mode Network (Pillar 9)
 
 Purpose:
     Implements the "strange loop" of self-awareness. During idle time or on
     explicit POST /reflect, Freya gathers signals about her own behavior from
-    the event bus, hypotheses, memory patterns, and prediction accuracy — then
+    the event bus, hypotheses, memory patterns, and prediction accuracy ΓÇö then
     uses Ollama to write a 5-paragraph self-assessment.
 
     The self-model is stored to mesh/docs/self_model_freya.md (node-specific
@@ -13,13 +13,13 @@ Purpose:
     what she believes about herself.
 
     The Strange Loop:
-        self_model → shapes system prompt → shapes behavior
-        → shapes predictions → shapes event bus history
-        → shapes next self_model
+        self_model ΓåÆ shapes system prompt ΓåÆ shapes behavior
+        ΓåÆ shapes predictions ΓåÆ shapes event bus history
+        ΓåÆ shapes next self_model
 
 Endpoint:
-    POST /reflect          — trigger a reflection cycle (async, returns immediately)
-    GET  /self-model       — return current self-assessment + metadata
+    POST /reflect          ΓÇö trigger a reflection cycle (async, returns immediately)
+    GET  /self-model       ΓÇö return current self-assessment + metadata
 """
 
 import json
@@ -55,7 +55,7 @@ _last_reflect_ts: float = 0.0
 def _gather_signals() -> dict:
     """
     Pull together all available self-knowledge signals.
-    Each section is best-effort — missing modules are silently skipped.
+    Each section is best-effort ΓÇö missing modules are silently skipped.
     """
     signals: dict = {"node": _NODE_ID, "ts": int(time.time())}
 
@@ -175,7 +175,7 @@ Write exactly 5 paragraphs with these headers:
 
 **What I should focus on next:** Given all of the above, what should your next phase of development prioritize?
 
-Be specific. Do not be generic. Do not be falsely modest or falsely confident. This self-model shapes your future behavior — be accurate."""
+Be specific. Do not be generic. Do not be falsely modest or falsely confident. This self-model shapes your future behavior ΓÇö be accurate."""
 
 
 def _call_ollama(prompt: str) -> Optional[str]:
@@ -210,8 +210,8 @@ def _call_ollama(prompt: str) -> Optional[str]:
 
 def reflect() -> dict:
     """
-    Run a full reflection cycle: gather signals → build prompt → Ollama →
-    write self_model_<node>.md → publish self_model.updated event.
+    Run a full reflection cycle: gather signals ΓåÆ build prompt ΓåÆ Ollama ΓåÆ
+    write self_model_<node>.md ΓåÆ publish self_model.updated event.
 
     Returns a summary dict. Safe to call from a background thread.
     """
@@ -220,7 +220,7 @@ def reflect() -> dict:
     now = time.time()
     if now - _last_reflect_ts < _REFLECT_COOLDOWN:
         remaining = int(_REFLECT_COOLDOWN - (now - _last_reflect_ts))
-        log.info("[self_model] Cooldown active — %ds remaining", remaining)
+        log.info("[self_model] Cooldown active ΓÇö %ds remaining", remaining)
         return {"ok": False, "reason": "cooldown", "retry_in_s": remaining}
 
     log.info("[self_model] Gathering signals for %s...", _NODE_ID)
@@ -236,7 +236,7 @@ def reflect() -> dict:
     # Write to node-specific file
     _SELF_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     ts_str = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
-    content = f"# {_NODE_ID} — Self-Model\n\n*Last updated: {ts_str}*\n\n{text}\n"
+    content = f"# {_NODE_ID} ΓÇö Self-Model\n\n*Last updated: {ts_str}*\n\n{text}\n"
     _SELF_MODEL_PATH.write_text(content, encoding="utf-8")
     log.info("[self_model] Written to %s", _SELF_MODEL_PATH)
 

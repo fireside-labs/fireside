@@ -5,7 +5,7 @@ Contract with Freya's LanceDB:
   - Query WHERE permanent = false, ORDER BY ts ASC (oldest mortal memories first)
   - Skip any memory with permanent = true
   - Cluster semantically similar ones (cosine threshold 0.85)
-  - For clusters >= MIN_CLUSTER_SIZE: SVD → write 1 eigen-memory, delete originals
+  - For clusters >= MIN_CLUSTER_SIZE: SVD ΓåÆ write 1 eigen-memory, delete originals
   - Eigen-memory written back with importance=0.95, permanent=false
 
 Schedule: 2 AM via Windows Task Scheduler (see schedule_consolidation() at bottom)
@@ -60,7 +60,7 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Fetch  — permanent=false contract
+# Fetch  ΓÇö permanent=false contract
 # ---------------------------------------------------------------------------
 
 def fetch_mortal_memories(limit: int = 500) -> list[dict]:
@@ -78,7 +78,7 @@ def fetch_mortal_memories(limit: int = 500) -> list[dict]:
         log.info("Freya: %d total, %d mortal (permanent=false)", len(all_mems), len(mortal))
         return mortal
     except Exception as e:
-        log.warning("Freya unreachable (%s) — trying local LanceDB", e)
+        log.warning("Freya unreachable (%s) ΓÇö trying local LanceDB", e)
         return fetch_mortal_local()
 
 
@@ -106,7 +106,7 @@ def cluster_memories(memories: list[dict]) -> list[list[dict]]:
     """Greedy cosine-similarity clustering. Skips memories without embeddings."""
     with_embed = [m for m in memories if m.get("embedding")]
     if not with_embed:
-        log.warning("No embeddings found in memories — cannot cluster")
+        log.warning("No embeddings found in memories ΓÇö cannot cluster")
         return []
 
     vecs = [np.array(m["embedding"], dtype=np.float32) for m in with_embed]
@@ -223,7 +223,7 @@ def inject_synthetic(n: int = 20) -> list[dict]:
         memories.append({
             "memory_id": str(uuid.uuid4()),
             "node": THIS_NODE, "agent": THIS_NODE,
-            "content": f"{text} — variant {i}",
+            "content": f"{text} ΓÇö variant {i}",
             "embedding": vec, "tags": tags,
             "importance": 0.75, "ts": time.time(),
             "shared": True, "permanent": False,
@@ -264,7 +264,7 @@ def rotate_event_log(days: int = 30, dry_run: bool = False):
     import sqlite3
     db_path = BASE / "mesh_events.db"
     if not db_path.exists():
-        log.info("No mesh_events.db found — nothing to rotate")
+        log.info("No mesh_events.db found ΓÇö nothing to rotate")
         return 0
     cutoff = time.time() - (days * 86400)
     try:
@@ -306,7 +306,7 @@ def main():
         memories = fetch_mortal_memories(limit=args.limit)
 
     if not memories:
-        log.info("No mortal memories to consolidate — done")
+        log.info("No mortal memories to consolidate ΓÇö done")
     else:
         stats = consolidate(memories, dry_run=args.dry_run)
         log.info("Done: %s", stats)
