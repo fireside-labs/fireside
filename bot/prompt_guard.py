@@ -120,3 +120,70 @@ def is_safe(prompt: str, from_agent: str = "unknown") -> bool:
     """Quick check: returns True if prompt is safe to process."""
     result = scan_prompt(prompt, from_agent)
     return not result["blocked"]
+
+
+def inject_antibody(pattern: str, category: str, weight: float = 0.8) -> bool:
+    """Inject a new adversarial pattern from another node (ADAPTIVE IMMUNITY).
+
+    Adds the pattern to the runtime _PATTERNS list so all future scans
+    on this node will catch the new attack vector.
+
+    Returns True if it was a new pattern, False if it was a duplicate.
+    """
+    # Dedup: don't add if an identical pattern already exists
+    for existing_pattern, _, _ in _PATTERNS:
+        if existing_pattern == pattern:
+            log.debug("[prompt_guard] Antibody already known, skipping: %s", pattern[:60])
+            return False
+
+    # Clamp weight to valid range
+    weight = max(0.0, min(1.0, weight))
+
+    # Inject into runtime list
+    _PATTERNS.append((pattern, category, weight))
+    log.info("[prompt_guard] Antibody injected: category=%s weight=%.2f pattern=%s",
+             category, weight, pattern[:60])
+
+    # Persist to antibodies.json so the mesh remembers across restarts
+    import json as _json, os as _os
+    _ab_path = _os.path.join(_os.path.dirname(__file__), "antibodies.json")
+    try:
+        if _os.path.exists(_ab_path):
+            with open(_ab_path, "r", encoding="utf-8") as f:
+                antibodies = _json.load(f)
+        else:
+            antibodies = []
+        antibodies.append({"pattern": pattern, "category": category, "weight": weight})
+        with open(_ab_path, "w", encoding="utf-8") as f:
+            _json.dump(antibodies, f, indent=2)
+    except Exception as e:
+        log.warning("[prompt_guard] Could not persist antibody: %s", e)
+
+    return True
+
+
+def _load_antibodies():
+    """Load persisted antibodies from disk on startup."""
+    import json as _json, os as _os
+    _ab_path = _os.path.join(_os.path.dirname(__file__), "antibodies.json")
+    if not _os.path.exists(_ab_path):
+        return
+    try:
+        with open(_ab_path, "r", encoding="utf-8") as f:
+            antibodies = _json.load(f)
+        loaded = 0
+        for ab in antibodies:
+            pattern  = ab.get("pattern", "")
+            category = ab.get("category", "unknown")
+            weight   = float(ab.get("weight", 0.8))
+            if pattern and all(p != pattern for p, _, _ in _PATTERNS):
+                _PATTERNS.append((pattern, category, weight))
+                loaded += 1
+        if loaded:
+            log.info("[prompt_guard] Loaded %d persisted antibodies from disk", loaded)
+    except Exception as e:
+        log.warning("[prompt_guard] Could not load antibodies.json: %s", e)
+
+
+# Load persisted antibodies on import
+_load_antibodies()
