@@ -158,8 +158,16 @@ class AskHandler:
             )
             with urllib.request.urlopen(req, timeout=INFERENCE_TIMEOUT) as resp:
                 result = json.loads(resp.read())
+                # qwen3.5 is a thinking model — Ollama returns separate
+                # "thinking" and "response" fields.  When num_predict is
+                # tight the model spends all tokens on thinking and the
+                # visible "response" comes back empty.  Fall back to the
+                # thinking content so callers always get something.
+                text = result.get("response", "")
+                if not text and result.get("thinking"):
+                    text = result["thinking"]
                 return {
-                    "response": result.get("response", ""),
+                    "response": text,
                     "model": self.local_model,
                     "tokens": result.get("eval_count", 0),
                 }
