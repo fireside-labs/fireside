@@ -1635,18 +1635,6 @@ class TaskPoller:
 _task_poller = None
 
 # ---------------------------------------------------------------------------
-# HTTP Server
-# ---------------------------------------------------------------------------
-
-def run_http_server():
-    """Start the HTTP server on port 8765."""
-    port = int(os.environ.get("BIFROST_HTTP_PORT", 8765))
-    _load_local_extensions(BifrostHandler)
-    httpd = ThreadingHTTPServer(("", port), BifrostHandler)
-    log.info("HTTP listening on port %d", port)
-    httpd.serve_forever()
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
