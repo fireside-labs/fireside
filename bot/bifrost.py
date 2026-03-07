@@ -1647,7 +1647,12 @@ def main():
         log.info("Send-only mode (no callback handling)")
         _event_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_event_loop)
-        _bot = Application.builder().token(BOT_TOKEN).build().bot
+        # HTTP first — always reachable regardless of Telegram state
+        threading.Thread(target=run_http_server, daemon=True, name="http-server").start()
+        try:
+            _bot = Application.builder().token(BOT_TOKEN).build().bot
+        except Exception as _tg_e:
+            log.warning("Telegram bot init failed (non-fatal): %s", _tg_e)
         # Start War Room daemons
         if _gossip_sync:
             _gossip_sync.start()
@@ -1661,9 +1666,7 @@ def main():
             _task_poller = TaskPoller(THIS_NODE)
             _task_poller.start()
         log.info("Bifrost v5 SEND-ONLY ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
-        # Run asyncio in daemon thread, HTTP server on main thread
-        threading.Thread(target=_event_loop.run_forever, daemon=True).start()
-        run_http_server()  # blocks main thread
+        _event_loop.run_forever()  # asyncio owns main thread
         return
 
     app = (
