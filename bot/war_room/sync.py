@@ -1,5 +1,5 @@
 """
-sync.py — Gossip sync protocol for the Valhalla War Room.
+sync.py ΓÇö Gossip sync protocol for the Valhalla War Room.
 
 Every N seconds, pulls new messages and tasks from all peer nodes.
 Merges into local store with deduplication. Eventually consistent.
@@ -114,7 +114,7 @@ class GossipSync:
             if updated > 0:
                 log.info("Synced %d task updates from %s", updated, node_name)
 
-        # Pull tombstones (deleted IDs) — apply locally to replicate deletes
+        # Pull tombstones (deleted IDs) ΓÇö apply locally to replicate deletes
         tombstone_endpoint = "/war-room/tombstones"
         if last_sync:
             tombstone_endpoint += f"?since={last_sync}"
@@ -199,8 +199,8 @@ class OverseerLoop:
                 age_minutes = (now - updated).total_seconds() / 60
                 if age_minutes > 5:
                     alerts.append(
-                        f"⚠️ Task '{task['title']}' ({task['id']}) blocked for "
-                        f"{age_minutes:.0f}m — assigned to {task.get('assigned_to', 'unassigned')}"
+                        f"ΓÜá∩╕Å Task '{task['title']}' ({task['id']}) blocked for "
+                        f"{age_minutes:.0f}m ΓÇö assigned to {task.get('assigned_to', 'unassigned')}"
                     )
             except (KeyError, ValueError) as e:
                 log.warning("Overseer: could not parse task %s: %s", task.get("id"), e)

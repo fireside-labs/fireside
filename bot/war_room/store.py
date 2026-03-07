@@ -1,5 +1,5 @@
 """
-store.py — Thread-safe JSON-backed store for the Valhalla War Room.
+store.py ΓÇö Thread-safe JSON-backed store for the Valhalla War Room.
 
 Messages: append-only log with optional filters.
 Tasks: lifecycle-managed board with role-based affinity.
@@ -29,7 +29,7 @@ class WarRoomStore:
 
         self._messages: list[dict] = self._load(self._msg_file, default=[])
         self._tasks: dict[str, dict] = self._load(self._task_file, default={})
-        # tombstones: {id: iso_timestamp} — propagated to peers so deletes replicate
+        # tombstones: {id: iso_timestamp} ΓÇö propagated to peers so deletes replicate
         self._tombstones: dict[str, str] = self._load(self._tombstone_file, default={})
 
     # ------------------------------------------------------------------
@@ -70,7 +70,7 @@ class WarRoomStore:
             return {k: v for k, v in self._tombstones.items() if v >= since}
 
     def apply_tombstones(self, tombstones: dict):
-        """Apply tombstones received from a peer — delete matching local tasks/messages."""
+        """Apply tombstones received from a peer ΓÇö delete matching local tasks/messages."""
         with self._lock:
             changed = False
             for obj_id, ts in tombstones.items():
@@ -260,7 +260,7 @@ class WarRoomStore:
             task["result"] = result
             task["assigned_to"] = agent_id
             task["updated"] = datetime.now(timezone.utc).isoformat()
-            # Octopus: if subtask, check if all siblings done → auto-complete parent
+            # Octopus: if subtask, check if all siblings done ΓåÆ auto-complete parent
             parent_id = task.get("parent_id")
             if parent_id and parent_id in self._tasks:
                 parent = self._tasks[parent_id]
@@ -297,7 +297,7 @@ class WarRoomStore:
         """Permanently remove a message. Records tombstone for gossip propagation."""
         now = datetime.now(timezone.utc).isoformat()
         with self._lock:
-            # messages is a list — find and remove by id
+            # messages is a list ΓÇö find and remove by id
             msg = next((m for m in self._messages if m.get("id") == msg_id), None)
             if msg is None:
                 raise KeyError(f"Message {msg_id} not found")

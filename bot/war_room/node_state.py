@@ -1,5 +1,5 @@
 """
-node_state.py — Persistent node status helper for the Valhalla War Room.
+node_state.py ΓÇö Persistent node status helper for the Valhalla War Room.
 
 Moved here from bifrost.py to break the circular import between
 bifrost.py (parent) and war_room/routes.py (child).
@@ -13,7 +13,7 @@ from pathlib import Path
 
 log = logging.getLogger("war-room.node-state")
 
-# Resolve path relative to this file — works on any node regardless of cwd
+# Resolve path relative to this file ΓÇö works on any node regardless of cwd
 _STATUS_FILE = Path(__file__).parent.parent / "status.json"
 
 
