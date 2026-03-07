@@ -1486,7 +1486,18 @@ def _load_local_extensions():
     """
     local_path = BASE / "bifrost_local.py"
     if not local_path.exists():
-        return
+        backup_path = BASE / f"bifrost_local.{THIS_NODE}.py"
+        if backup_path.exists():
+            try:
+                import shutil
+                shutil.copy2(backup_path, local_path)
+                log.info("Auto-restored missing bifrost_local.py from %s", backup_path.name)
+            except Exception as e:
+                log.error("Failed to auto-restore bifrost_local.py: %s", e)
+                return
+        else:
+            return
+            
     try:
         import importlib.util
         spec = importlib.util.spec_from_file_location("bifrost_local", local_path)
