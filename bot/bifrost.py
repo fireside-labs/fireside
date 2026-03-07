@@ -836,6 +836,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
+    # --- Code execution approval callbacks: exec-approve:id / exec-deny:id ---
+    if data.startswith("exec-"):
+        parts = data.split(":", 1)  # ["exec-approve", "abc123"]
+        if len(parts) == 2:
+            action_str, req_id = parts
+            decision = "approved" if "approve" in action_str else "denied"
+            try:
+                from war_room.code_executor import set_approval
+                set_approval(req_id, decision)
+                await query.edit_message_text(
+                    f"Code execution *{decision}* (`{req_id}`)",
+                    parse_mode="Markdown")
+            except Exception as _ce:
+                await query.edit_message_text(f"Error: {_ce}")
+        else:
+            await query.edit_message_text("Bad callback data.")
+        return
+
     # --- Command proposal callbacks: addcmd-approve:node:id ---
     if data.startswith("addcmd-"):
         parts = data.split(":", 2)  # ["addcmd-approve", "thor", "abc123"]
@@ -1195,7 +1213,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
 
     def _do_POST_inner(self):
         # Original Bifrost routes
-        bifrost_routes = ("/request", "/propose-command", "/receive-files", "/fetch-file", "/execute", "/proposal-result", "/self-update", "/hook", "/notify", "/memory-sync", "/node-status")
+        bifrost_routes = ("/request", "/propose-command", "/receive-files", "/fetch-file", "/execute", "/proposal-result", "/self-update", "/hook", "/notify", "/memory-sync", "/node-status", "/execute-code")
         # War Room routes
         war_room_routes = ("/war-room/post", "/war-room/task", "/war-room/claim",
                            "/war-room/complete", "/war-room/status", "/ask",
@@ -1250,6 +1268,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
             "/notify":      self._handle_notify,
             "/memory-sync": self._handle_memory_sync,
             "/node-status": self._handle_node_status_post,
+            "/execute-code": self._handle_execute_code,
         }.get(self.path)
         if handler:
             handler(body)
@@ -1392,6 +1411,33 @@ class BifrostHandler(BaseHTTPRequestHandler):
             result = f"Error: {e}"
         _audit("request", req.get("caller", "?"), req["command"], "approve", result)
         self._respond(200, {"result": result})
+
+    def _handle_execute_code(self, body: dict):
+        """POST /execute-code — run code in sandboxed subprocess with human approval."""
+        code = body.get("code", "")
+        language = body.get("language", "python")
+        timeout = body.get("timeout", 30)
+        task_id = body.get("task_id", "")
+        require_approval = body.get("require_approval", True)
+        if not code:
+            self._respond(400, {"error": "'code' field required"}); return
+        # Run in thread to avoid blocking (approval can take minutes)
+        import threading
+        result_holder = {}
+        def _run():
+            try:
+                from war_room.code_executor import execute_code
+                result_holder["result"] = execute_code(
+                    code, language=language, timeout=timeout,
+                    task_id=task_id, require_approval=require_approval)
+            except Exception as e:
+                result_holder["result"] = {"ok": False, "error": str(e)}
+        t = threading.Thread(target=_run)
+        t.start()
+        t.join(timeout=360)  # 6 min max (5 min approval + 1 min execution)
+        if t.is_alive():
+            self._respond(504, {"error": "execution timed out"}); return
+        self._respond(200, result_holder.get("result", {"error": "no result"}))
 
     def _handle_proposal_result(self, body: dict):
         """Called by the polling node when user approves/denies a command proposal."""

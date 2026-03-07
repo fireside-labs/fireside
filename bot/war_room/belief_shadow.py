@@ -1,10 +1,10 @@
 """
-belief_shadow.py ΓÇö Theory of Mind / Peer Belief Modeling (Pillar 11)
+belief_shadow.py ╬ô├ç├╢ Theory of Mind / Peer Belief Modeling (Pillar 11)
 
 Theory (Premack & Woodruff, Baron-Cohen):
     The ability to model what *others* believe is fundamental to high-level
     cooperation and negotiation. True intelligence isn't just knowing what
-    you know ΓÇö it's knowing what your teammates know differently.
+    you know ╬ô├ç├╢ it's knowing what your teammates know differently.
 
 Application:
     Each node maintains a "Belief Shadow" of its peers: a compact model of
@@ -12,9 +12,9 @@ Application:
     confidence.
 
     Before sharing a belief, Freya checks it against Thor's shadow:
-    - Already in Thor's shadow? ΓåÆ skip (no point sharing what he knows)
-    - Contradicts Thor's shadow? ΓåÆ flag for debate, don't quietly share
-    - Novel to Thor? ΓåÆ high-value share
+    - Already in Thor's shadow? ╬ô├Ñ├å skip (no point sharing what he knows)
+    - Contradicts Thor's shadow? ╬ô├Ñ├å flag for debate, don't quietly share
+    - Novel to Thor? ╬ô├Ñ├å high-value share
 
 Mechanism:
     1. When a peer shares a hypothesis (hypothesis.received), update their shadow
@@ -24,16 +24,16 @@ Mechanism:
 
 Shadow schema (in-memory, bounded):
     _shadows: dict[node_id, dict]
-        node_id ΓåÆ {
+        node_id ╬ô├Ñ├å {
             "confirmed": deque([{id, text, confidence, ts}], maxlen=200),
             "shared": deque([{id, text, ts}], maxlen=200),
             "last_updated": int
         }
 
 Endpoints:
-    GET  /belief-shadow/{node}     ΓÇö current shadow for a peer
-    GET  /belief-shadows           ΓÇö all known peer shadows (summary)
-    POST /belief-shadow/update     ΓÇö manually push a belief to a peer's shadow
+    GET  /belief-shadow/{node}     ╬ô├ç├╢ current shadow for a peer
+    GET  /belief-shadows           ╬ô├ç├╢ all known peer shadows (summary)
+    POST /belief-shadow/update     ╬ô├ç├╢ manually push a belief to a peer's shadow
 """
 
 import json
@@ -181,11 +181,11 @@ def filter_for_peer(hyp_ids: list, peer_node: str, get_hyp_fn) -> tuple:
 
     Returns (to_share, skipped_already_known, skipped_novel_count)
 
-    get_hyp_fn: callable(hyp_id) ΓåÆ {hypothesis: str, confidence: float, ...}
+    get_hyp_fn: callable(hyp_id) ╬ô├Ñ├å {hypothesis: str, confidence: float, ...}
         e.g. lambda hid: hypotheses.get_hypotheses(limit=1, ...)  # simplified
     """
     if peer_node not in _shadows:
-        # No shadow yet ΓÇö share everything, we'll learn as we go
+        # No shadow yet ╬ô├ç├╢ share everything, we'll learn as we go
         return hyp_ids, 0, len(hyp_ids)
 
     shadow = _shadows[peer_node]
@@ -199,7 +199,7 @@ def filter_for_peer(hyp_ids: list, peer_node: str, get_hyp_fn) -> tuple:
     for hid in hyp_ids:
         if hid in peer_known_ids:
             already_known += 1
-            log.debug("[belief_shadow] skip %s ΓåÆ already in %s's shadow", hid, peer_node)
+            log.debug("[belief_shadow] skip %s ╬ô├Ñ├å already in %s's shadow", hid, peer_node)
         else:
             to_share.append(hid)
 
@@ -215,7 +215,7 @@ def novelty_score(hyp_id: str, hyp_text: str, peer_node: str) -> float:
     Currently uses ID-based dedup. Future: embedding similarity check.
     """
     if peer_node not in _shadows:
-        return 1.0  # Unknown peer ΓåÆ assume everything is novel
+        return 1.0  # Unknown peer ╬ô├Ñ├å assume everything is novel
 
     shadow = _shadows[peer_node]
     all_known_ids = ({e["id"] for e in shadow["shared"]}

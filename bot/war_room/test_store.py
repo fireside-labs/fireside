@@ -1,5 +1,5 @@
 """
-test_store.py — Unit tests for the Valhalla War Room store.
+test_store.py ΓÇö Unit tests for the Valhalla War Room store.
 
 Run: python3 -m pytest war_room/test_store.py -v
   or: cd /Users/odin/.openclaw/workspace/bot/bot && python3 -m war_room.test_store
@@ -78,7 +78,7 @@ class TestMessages(unittest.TestCase):
         self.assertEqual(new_count, 1)
         self.assertEqual(len(self.store.read_messages()), 2)
 
-        # Merge same again — should be 0 new
+        # Merge same again ΓÇö should be 0 new
         new_count = self.store.merge_messages(remote)
         self.assertEqual(new_count, 0)
 

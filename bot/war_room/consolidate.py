@@ -5,7 +5,7 @@ Contract with Freya's LanceDB:
   - Query WHERE permanent = false, ORDER BY ts ASC (oldest mortal memories first)
   - Skip any memory with permanent = true
   - Cluster semantically similar ones (cosine threshold 0.85)
-  - For clusters >= MIN_CLUSTER_SIZE: SVD → write 1 eigen-memory, delete originals
+  - For clusters >= MIN_CLUSTER_SIZE: SVD ΓåÆ write 1 eigen-memory, delete originals
   - Eigen-memory written back with importance=0.95, permanent=false
 
 Schedule: 2 AM via Windows Task Scheduler (see schedule_consolidation() at bottom)
@@ -60,7 +60,7 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Fetch  — permanent=false contract
+# Fetch  ΓÇö permanent=false contract
 # ---------------------------------------------------------------------------
 
 def fetch_mortal_memories(limit: int = 500) -> list[dict]:
@@ -78,7 +78,7 @@ def fetch_mortal_memories(limit: int = 500) -> list[dict]:
         log.info("Freya: %d total, %d mortal (permanent=false)", len(all_mems), len(mortal))
         return mortal
     except Exception as e:
-        log.warning("Freya unreachable (%s) — trying local LanceDB", e)
+        log.warning("Freya unreachable (%s) ΓÇö trying local LanceDB", e)
         return fetch_mortal_local()
 
 
@@ -106,7 +106,7 @@ def cluster_memories(memories: list[dict]) -> list[list[dict]]:
     """Greedy cosine-similarity clustering. Skips memories without embeddings."""
     with_embed = [m for m in memories if m.get("embedding")]
     if not with_embed:
-        log.warning("No embeddings found in memories — cannot cluster")
+        log.warning("No embeddings found in memories ΓÇö cannot cluster")
         return []
 
     vecs = [np.array(m["embedding"], dtype=np.float32) for m in with_embed]
@@ -223,7 +223,7 @@ def inject_synthetic(n: int = 20) -> list[dict]:
         memories.append({
             "memory_id": str(uuid.uuid4()),
             "node": THIS_NODE, "agent": THIS_NODE,
-            "content": f"{text} — variant {i}",
+            "content": f"{text} ΓÇö variant {i}",
             "embedding": vec, "tags": tags,
             "importance": 0.75, "ts": time.time(),
             "shared": True, "permanent": False,
@@ -264,7 +264,7 @@ def rotate_event_log(days: int = 30, dry_run: bool = False):
     import sqlite3
     db_path = BASE / "mesh_events.db"
     if not db_path.exists():
-        log.info("No mesh_events.db found — nothing to rotate")
+        log.info("No mesh_events.db found ΓÇö nothing to rotate")
         return 0
     cutoff = time.time() - (days * 86400)
     try:
@@ -287,6 +287,81 @@ def rotate_event_log(days: int = 30, dry_run: bool = False):
         return 0
 
 
+# ---------------------------------------------------------------------------
+# Post-consolidation: auto-push top beliefs to mesh peers
+# ---------------------------------------------------------------------------
+
+PEER_IPS = [
+    "http://100.105.27.121:8765",   # Odin
+    "http://100.102.105.3:8765",    # Freya
+    "http://100.117.255.38:8765",   # Thor
+    "http://100.108.153.23:8765",   # Heimdall
+]
+
+def auto_push_beliefs(dry_run: bool = False) -> int:
+    """
+    After consolidation, push top-3 high-confidence hypotheses to all peers.
+    This makes the mesh share beliefs every night automatically.
+    """
+    # Get local hypotheses
+    try:
+        url = "http://127.0.0.1:8765/hypotheses"
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = json.loads(r.read())
+        hyps = data.get("hypotheses", [])
+    except Exception as e:
+        log.warning("Cannot read local hypotheses: %s", e)
+        return 0
+
+    # Filter: confidence >= 0.6, not already tested/refuted
+    top = sorted(
+        [h for h in hyps if h.get("confidence", 0) >= 0.6
+         and h.get("test_result", "") == ""],
+        key=lambda h: h.get("confidence", 0),
+        reverse=True,
+    )[:3]
+
+    if not top:
+        log.info("No high-confidence beliefs to push (need conf >= 0.6)")
+        return 0
+
+    if dry_run:
+        for h in top:
+            log.info("[DRY RUN] Would push: [%s] conf=%.2f %s",
+                     h.get("id", "?"), h.get("confidence", 0),
+                     h.get("hypothesis", "")[:80])
+        return len(top)
+
+    pushed = 0
+    for peer in PEER_IPS:
+        if "127.0.0.1" in peer:
+            continue  # don't push to self
+        for h in top:
+            try:
+                payload = json.dumps({
+                    "hypothesis": h.get("hypothesis", ""),
+                    "confidence": h.get("confidence", 0.5),
+                    "source_node": THIS_NODE,
+                }).encode()
+                req = urllib.request.Request(
+                    f"{peer}/hypotheses/share",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    result = json.loads(r.read())
+                    if result.get("ok"):
+                        pushed += 1
+                        log.info("Pushed belief to %s: %s", peer,
+                                 h.get("id", "?"))
+            except Exception as e:
+                log.debug("Push to %s failed: %s", peer, e)
+
+    log.info("Auto-pushed %d beliefs to peers after consolidation", pushed)
+    return pushed
+
+
 def main():
     parser = argparse.ArgumentParser(description="SVD Dream Consolidation")
     parser.add_argument("--dry-run", action="store_true")
@@ -294,6 +369,7 @@ def main():
     parser.add_argument("--local",   action="store_true", help="Force local LanceDB")
     parser.add_argument("--limit",   type=int, default=500)
     parser.add_argument("--no-rotate", action="store_true", help="Skip event log rotation")
+    parser.add_argument("--no-push",   action="store_true", help="Skip auto-push beliefs to peers")
     args = parser.parse_args()
 
     log.info("=== SVD Dream Consolidation ===")
@@ -306,7 +382,7 @@ def main():
         memories = fetch_mortal_memories(limit=args.limit)
 
     if not memories:
-        log.info("No mortal memories to consolidate — done")
+        log.info("No mortal memories to consolidate ΓÇö done")
     else:
         stats = consolidate(memories, dry_run=args.dry_run)
         log.info("Done: %s", stats)
@@ -315,6 +391,10 @@ def main():
     if not args.no_rotate:
         rotated = rotate_event_log(days=30, dry_run=args.dry_run)
         log.info("Event log: %d old entries pruned", rotated)
+
+    # Auto-push top beliefs to all mesh peers
+    if not args.no_push:
+        auto_push_beliefs(dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

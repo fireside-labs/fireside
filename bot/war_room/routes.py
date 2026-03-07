@@ -1,5 +1,5 @@
 """
-routes.py — HTTP request handlers for War Room endpoints.
+routes.py ΓÇö HTTP request handlers for War Room endpoints.
 
 These functions are called by BifrostHandler in bifrost.py.
 They take the parsed body (dict) and return (status_code, response_dict).
@@ -25,7 +25,7 @@ class WarRoomRoutes:
         self.ask = ask_handler
 
     # ------------------------------------------------------------------
-    # GET handlers — return (status_code, response_dict)
+    # GET handlers ΓÇö return (status_code, response_dict)
     # ------------------------------------------------------------------
 
     def handle_read(self, path: str) -> tuple[int, object]:
@@ -62,18 +62,18 @@ class WarRoomRoutes:
         return 200, self.store.summary()
 
     def handle_ask_info(self) -> tuple[int, dict]:
-        """GET /ask/info — returns this node's model capabilities."""
+        """GET /ask/info ΓÇö returns this node's model capabilities."""
         return 200, self.ask.info()
 
     def handle_tombstones(self, path: str) -> tuple[int, dict]:
-        """GET /war-room/tombstones?since=<iso> — returns deleted IDs since timestamp."""
+        """GET /war-room/tombstones?since=<iso> ΓÇö returns deleted IDs since timestamp."""
         from urllib.parse import urlparse, parse_qs
         params = parse_qs(urlparse(path).query)
         since = params.get("since", [None])[0]
         return 200, self.store.get_tombstones(since=since)
 
     # ------------------------------------------------------------------
-    # POST handlers — take body dict, return (status_code, response_dict)
+    # POST handlers ΓÇö take body dict, return (status_code, response_dict)
     # ------------------------------------------------------------------
 
     def handle_post_message(self, body: dict) -> tuple[int, dict]:
@@ -259,6 +259,21 @@ class WarRoomRoutes:
                 task["task_type"] = body["task_type"]
             if body.get("approach"):
                 task["approach"] = body["approach"]
+            # --- Auto-procedural-record (Odin task, 2026-03-07) ---
+            # Fire-and-forget: record what was done and how into procedural memory.
+            # Uses task_type + approach if provided; falls back to task title as type.
+            try:
+                from war_room import procedures as _proc
+                _proc.auto_record(
+                    task_type  = body.get("task_type") or task.get("title", "general"),
+                    approach   = body.get("approach") or result or task.get("description", ""),
+                    outcome    = "success",
+                    confidence = 0.75,
+                    tags       = ["auto-recorded", "task-complete", agent_id],
+                )
+            except Exception as _pe:
+                log.debug("[routes] auto_record skipped: %s", _pe)
+            # --- end auto-record ---
             try:
                 write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
             except Exception as _e:
@@ -267,8 +282,9 @@ class WarRoomRoutes:
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}
 
+
     def handle_update_status(self, body: dict) -> tuple[int, dict]:
-        """POST /war-room/status — update task status (in_progress, blocked, etc.)"""
+        """POST /war-room/status ΓÇö update task status (in_progress, blocked, etc.)"""
         task_id = body.get("task_id", "")
         agent_id = body.get("agent_id", "")
         status = body.get("status", "")
@@ -287,7 +303,7 @@ class WarRoomRoutes:
             return 400, {"error": str(e)}
 
     def handle_ask(self, body: dict) -> tuple[int, dict]:
-        """POST /ask — direct inference via local/cloud model"""
+        """POST /ask ΓÇö direct inference via local/cloud model"""
         result = self.ask.handle(body)
         if "error" in result:
             return 500, result
@@ -324,10 +340,10 @@ class WarRoomRoutes:
         return 200, {"cleared": count}
 
     def handle_summon(self, body: dict) -> tuple[int, dict]:
-        """POST /war-room/summon — notify all agents to check the board."""
+        """POST /war-room/summon ΓÇö notify all agents to check the board."""
         import json
         import urllib.request
-        message = body.get("message", "Check the War Room board — new tasks posted.")
+        message = body.get("message", "Check the War Room board ΓÇö new tasks posted.")
         nodes = {
             "thor": "100.117.255.38",
             "freya": "100.102.105.3",
