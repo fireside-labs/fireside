@@ -441,33 +441,8 @@ class WarRoomRoutes:
         log.info("[dispatch] Running agent turn for task %s (timeout=%ds)",
                  task_id[:14] if task_id else "adhoc", timeout)
 
-<<<<<<< Updated upstream
-        # Pre-seed SOUL.md before each agent run.
-        # OpenClaw's agent framework can overwrite SOUL.md with its generic
-        # default during a session. Re-copy from the repo to ensure the
-        # node's real identity is always active.
-        try:
-            import os as _os
-            _here = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-            _node = _os.environ.get("OPENCLAW_NODE", "")
-            if not _node:
-                _cfg_path = _os.path.join(_here, "config.json")
-                if _os.path.isfile(_cfg_path):
-                    with open(_cfg_path) as _f:
-                        _node = json.loads(_f.read()).get("this_node", "")
-            if _node:
-                _soul_src = _os.path.join(_here, "mesh", "souls", f"SOUL.{_node}.md")
-                if _os.path.isfile(_soul_src):
-                    _ws = str(__import__("pathlib").Path(
-                        _os.environ.get("USERPROFILE", _os.environ.get("HOME", ""))
-                    ) / ".openclaw" / "workspace" / "SOUL.md")
-                    shutil.copy2(_soul_src, _ws)
-                    log.info("[dispatch] Pre-seeded SOUL.md from %s", _soul_src)
-        except Exception as _se:
-            log.warning("[dispatch] SOUL pre-seed failed: %s", _se)
-=======
         # Pre-seed SOUL.md with this node's identity before every dispatch.
-        # OpenClaw may overwrite SOUL.md with a generic version — this ensures
+        # OpenClaw may overwrite SOUL.md with a generic version -- this ensures
         # the correct node soul is always in place before the agent runs.
         try:
             import pathlib
@@ -481,7 +456,6 @@ class WarRoomRoutes:
                 log.info("[dispatch] Pre-seeded SOUL.md from %s", node_soul.name)
         except Exception as _e:
             log.warning("[dispatch] Could not pre-seed SOUL.md: %s", _e)
->>>>>>> Stashed changes
 
         try:
             # --session-id: dedicated session per dispatch task
