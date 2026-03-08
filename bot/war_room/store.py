@@ -399,8 +399,6 @@ class WarRoomStore:
 
     def merge_tasks(self, remote_tasks: dict) -> int:
         """Merge tasks from a remote node. Latest 'updated' wins. Returns count of updates."""
-        import logging as _logging
-        _log = _logging.getLogger("war-room.store")
         updated_count = 0
         newly_done = []
         with self._lock:
@@ -410,10 +408,8 @@ class WarRoomStore:
                     # Detect transition to "done"
                     old_status = local.get("status", "") if local else ""
                     new_status = remote_task.get("status", "")
-                    _log.info("[merge] %s: %s → %s", tid[:12], old_status or "(new)", new_status)
                     if new_status == "done" and old_status != "done":
                         newly_done.append(remote_task)
-                        _log.info("[merge] ✅ Detected done transition for %s", tid[:12])
                     self._tasks[tid] = remote_task
                     updated_count += 1
             if updated_count:
@@ -422,7 +418,6 @@ class WarRoomStore:
         self.archive_stale_tasks()
         # Telegram notification for newly completed tasks (Odin only)
         if newly_done:
-            _log.info("[merge] Firing Telegram for %d newly done tasks", len(newly_done))
             self._notify_task_completions(newly_done)
         return updated_count
 
