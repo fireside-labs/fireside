@@ -1,5 +1,5 @@
 """
-dispatcher.py — Bifrost ↔ OpenClaw Dispatch Bridge
+dispatcher.py -- Bifrost <-> OpenClaw Dispatch Bridge
 
 Standalone script that bridges the War Room task board with OpenClaw's
 full agent dispatch system.  When a task is assigned to thor/freya/heimdall
@@ -11,7 +11,7 @@ and has status "open", this script:
 Run:  python dispatcher.py
 Kill:  Ctrl-C (or launchd: launchctl unload)
 
-This script is fully standalone — if it crashes, Bifrost and OpenClaw
+This script is fully standalone -- if it crashes, Bifrost and OpenClaw
 continue to work independently.
 """
 
@@ -35,7 +35,7 @@ POLL_INTERVAL = int(os.environ.get("DISPATCH_POLL_INTERVAL", "30"))
 LOCAL_BIFROST = os.environ.get("DISPATCH_LOCAL_BIFROST", "http://127.0.0.1:8765")
 DISPATCH_TIMEOUT = int(os.environ.get("DISPATCH_TIMEOUT", "300"))
 
-# Node registry — only dispatch to these agents
+# Node registry -- only dispatch to these agents
 NODES = {
     "thor":     "http://100.117.255.38:8765",
     "freya":    "http://100.102.105.3:8765",
@@ -63,7 +63,7 @@ def _get(url: str, timeout: int = 10) -> dict:
 # Core loop
 # ---------------------------------------------------------------------------
 def poll_and_dispatch():
-    """One poll cycle: find open tasks → claim → dispatch → complete."""
+    """One poll cycle: find open tasks -> claim -> dispatch -> complete."""
     try:
         tasks = _get(f"{LOCAL_BIFROST}/war-room/tasks")
     except Exception as e:
@@ -89,7 +89,7 @@ def poll_and_dispatch():
         title = task.get("title", "untitled")[:60]
         description = task.get("description", task.get("title", ""))
 
-        log.info("▶ Dispatching task %s to %s: %s", task_id[:14], assigned, title)
+        log.info("> Dispatching task %s to %s: %s", task_id[:14], assigned, title)
 
         # 1. Claim the task
         try:
@@ -98,7 +98,7 @@ def poll_and_dispatch():
                 "agent_id": assigned,
             })
         except Exception as e:
-            log.warning("  ✗ Failed to claim %s: %s", task_id[:14], e)
+            log.warning("  X Failed to claim %s: %s", task_id[:14], e)
             continue
 
         # 2. Dispatch to the remote node's /dispatch endpoint
@@ -109,11 +109,11 @@ def poll_and_dispatch():
                 "timeout": DISPATCH_TIMEOUT,
             }, timeout=DISPATCH_TIMEOUT + 60)  # extra buffer for HTTP overhead
         except urllib.error.URLError as e:
-            log.error("  ✗ Node %s unreachable: %s", assigned, e)
+            log.error("  X Node %s unreachable: %s", assigned, e)
             _try_block(task_id, assigned, f"Node unreachable: {e}")
             continue
         except Exception as e:
-            log.error("  ✗ Dispatch to %s failed: %s", assigned, e)
+            log.error("  X Dispatch to %s failed: %s", assigned, e)
             _try_block(task_id, assigned, str(e))
             continue
 
@@ -127,13 +127,13 @@ def poll_and_dispatch():
                     "agent_id": assigned,
                     "result": agent_result[:2000],
                 })
-                log.info("  ✓ Task %s completed by %s (%d chars)",
+                log.info("  OK Task %s completed by %s (%d chars)",
                          task_id[:14], assigned, len(agent_result))
             except Exception as e:
-                log.error("  ✗ Failed to post result for %s: %s", task_id[:14], e)
+                log.error("  X Failed to post result for %s: %s", task_id[:14], e)
         else:
             error_msg = result.get("error", "unknown error")
-            log.warning("  ✗ Task %s failed on %s: %s", task_id[:14], assigned, error_msg)
+            log.warning("  X Task %s failed on %s: %s", task_id[:14], assigned, error_msg)
             _try_block(task_id, assigned, error_msg)
 
 
@@ -153,7 +153,7 @@ def _try_block(task_id: str, agent: str, reason: str):
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    log.info("Bifrost ↔ OpenClaw dispatcher starting")
+    log.info("Bifrost <-> OpenClaw dispatcher starting")
     log.info("  Poll interval: %ds  |  Timeout: %ds", POLL_INTERVAL, DISPATCH_TIMEOUT)
     log.info("  Nodes: %s", ", ".join(f"{k}={v}" for k, v in NODES.items()))
     log.info("  Local Bifrost: %s", LOCAL_BIFROST)
