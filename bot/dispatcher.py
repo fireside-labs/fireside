@@ -70,9 +70,15 @@ def poll_and_dispatch():
         log.warning("Failed to fetch tasks: %s", e)
         return
 
+    # Handle both list and dict-wrapped responses
+    if isinstance(tasks, dict):
+        tasks = tasks.get("tasks", [])
+    if not isinstance(tasks, list):
+        return
+
     for task in tasks:
         status = task.get("status", "")
-        assigned = task.get("assigned_to", "").lower()
+        assigned = (task.get("assigned_to") or "").lower()
         task_id = task.get("id", task.get("task_id", ""))
 
         # Only process open tasks assigned to known remote nodes
