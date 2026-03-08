@@ -447,8 +447,12 @@ class WarRoomRoutes:
         # place before the agent runs.
         try:
             import pathlib
-            script_dir = pathlib.Path(__file__).parent.parent
-            souls_dir = script_dir / "mesh" / "souls"
+            _p = pathlib.Path(__file__).parent
+            for _ in range(6):
+                if (_p / "mesh" / "souls").exists():
+                    break
+                _p = _p.parent
+            souls_dir = _p / "mesh" / "souls"
             workspace = pathlib.Path.home() / ".openclaw" / "workspace"
             node = self.store.this_node
             for src_name, dst_name in [
