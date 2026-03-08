@@ -30,3 +30,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+bot/war_room_data/*.json
+
