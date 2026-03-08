@@ -66,7 +66,7 @@ class AskHandler:
         """
         self.agent_id = agent_config.get("id", "unknown")
         self.role = agent_config.get("role", "general")
-        self.local_model = agent_config.get("local_model", "qwen3.5:27b")
+        self.local_model = agent_config.get("local_model", "qwen3.5:9b")
         self.cloud_model = agent_config.get("cloud_model")
         self.cloud_base_url = agent_config.get("cloud_base_url")
         # API key: prefer explicit config, fall back to env var
