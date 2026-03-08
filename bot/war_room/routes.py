@@ -278,7 +278,7 @@ class WarRoomRoutes:
                 write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
             except Exception as _e:
                 log.debug("node_status update failed: %s", _e)
-            # --- Telegram notification (so Odin sees results) ---
+            # --- Telegram notification (only from orchestrator) ---
             try:
                 import json as _json, urllib.request as _urlreq
                 from pathlib import Path as _Path
@@ -287,7 +287,8 @@ class WarRoomRoutes:
                     _cfg = _json.loads(_cfg_path.read_text())
                     _tg_token = _cfg.get("telegram_bot_token", "")
                     _tg_chat  = _cfg.get("telegram_chat_id", "")
-                    if _tg_token and _tg_chat:
+                    _node     = _cfg.get("node_id", "")
+                    if _tg_token and _tg_chat and _node == "odin":
                         _preview = (result or "")[:300]
                         _tg_text = (
                             f"\u2705 *{agent_id}* completed task:\n"
