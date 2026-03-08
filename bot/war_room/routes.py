@@ -443,11 +443,11 @@ class WarRoomRoutes:
 
         try:
             # --session-id: dedicated session per dispatch task
-            # --local: run embedded agent (no gateway dependency)
+            # --agent main: explicit agent target (required on Windows)
             session_id = f"dispatch-{task_id}" if task_id else "dispatch-adhoc"
             result = subprocess.run(
                 [openclaw_bin, "agent", "-m", description, "--json",
-                 "--session-id", session_id, "--local",
+                 "--session-id", session_id, "--agent", "main",
                  "--timeout", str(timeout)],
                 capture_output=True, text=True, timeout=timeout + 30,
             )
