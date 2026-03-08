@@ -271,6 +271,38 @@
             color: var(--muted);
         }
 
+        .task-progress {
+            font-size: 0.65rem;
+            color: #4ade80;
+            margin-top: 0.25em;
+            display: flex;
+            align-items: center;
+            gap: 0.3em;
+        }
+
+        .pulse {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #4ade80;
+            border-radius: 50%;
+            animation: pulse-anim 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-anim {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(0.7);
+            }
+        }
+
         .agent-tag {
             display: inline-block;
             font-size: 0.62rem;
@@ -642,8 +674,14 @@
         // --- Tasks ---
         async function loadTasks() {
             try {
-                const r = await fetch(`${ODIN}/war-room/tasks?raw=true`);
+                const [r, pr] = await Promise.all([
+                    fetch(`${ODIN}/war-room/tasks?raw=true`),
+                    fetch(`${ODIN}/war-room/progress`).catch(() => ({ json: () => [] }))
+                ]);
                 const data = await r.json();
+                const progress = await pr.json();
+                const pMap = {};
+                (Array.isArray(progress) ? progress : []).forEach(p => { if (p.task_id) pMap[p.task_id] = p; });
                 const tasks = Object.values(data).sort((a, b) => {
                     const order = { blocked: -2, open: -1, in_progress: 0, claimed: 0, done: 1 };
                     return (order[a.status] || 0) - (order[b.status] || 0);
@@ -651,7 +689,10 @@
                 document.getElementById('task-count').textContent = tasks.length;
                 const el = document.getElementById('tasks');
                 if (!tasks.length) { el.innerHTML = '<div class="empty">No tasks</div>'; return; }
-                el.innerHTML = tasks.map(t => `
+                el.innerHTML = tasks.map(t => {
+                    const p = pMap[t.id];
+                    const pLine = p ? `<div class="task-progress"><span class="pulse"></span> ${p.agent}: ${p.note}${p.percent >= 0 ? ' (' + p.percent + '%)' : ''} · ${ago(p.ts)}</div>` : '';
+                    return `
       <div class="task-card ${t.status || 'open'}">
         <div class="task-info">
           <div class="task-title">${t.title || t.id}</div>
@@ -661,12 +702,13 @@
             ${t.result ? ' · ✓ done' : ''}
             ${t.decompose ? ' · 🐙' : ''}
           </div>
+          ${pLine}
         </div>
         <div class="task-actions">
           ${t.status !== 'done' ? `<button class="btn" onclick="forceComplete('${t.id}')" title="Force complete">✓</button>` : ''}
           <button class="btn danger" data-del="${t.id}" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
         </div>
-      </div>`).join('');
+      </div>`}).join('');
             } catch (e) { document.getElementById('tasks').innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
         }
 

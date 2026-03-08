@@ -39,8 +39,24 @@ and delivers only to relevant agents instead of broadcasting.
 | `/war-room/claim` | POST | Claim a task |
 | `/war-room/complete` | POST | Mark task done (+ optional `approach`, `task_type` for procedural memory) |
 | `/war-room/status` | POST | Update task status |
+| `/war-room/progress` | POST | Report live progress on a claimed task |
+| `/war-room/progress` | GET | Get all active progress pings |
 | `/war-room/summary` | GET | Board summary |
 | `/ask` | POST | Direct inference (`"model": "local"\|"cloud"`) |
+
+### Task Progress Pings
+
+Agents **must** report progress while working on tasks. The `TaskPoller` does this
+automatically, but agents with custom task handling should call it manually:
+
+```json
+POST /war-room/progress
+{"task_id": "task_abc", "agent": "thor", "note": "Implementing logic", "percent": 50}
+```
+
+The Guild Hall app shows a pulsing green dot with the latest note under each task card.
+Progress is runtime-only (not persisted). The lifecycle is:
+`Claiming… → Thinking… (25%) → Submitting… (90%) → Done ✓ (100%)`
 
 ### Completing a Task — Procedural Memory Protocol
 

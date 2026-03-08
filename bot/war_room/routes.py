@@ -278,6 +278,35 @@ class WarRoomRoutes:
                 write_node_status("idle", last_task=task.get("title", task_id), detail=f"Completed: {result[:200] if result else ''}")
             except Exception as _e:
                 log.debug("node_status update failed: %s", _e)
+            # --- Telegram notification (only from orchestrator) ---
+            try:
+                import json as _json, urllib.request as _urlreq
+                from pathlib import Path as _Path
+                _cfg_path = _Path(__file__).parent.parent / "config.json"
+                if _cfg_path.exists():
+                    _cfg = _json.loads(_cfg_path.read_text())
+                    _tg_token = _cfg.get("telegram_bot_token", "")
+                    _tg_chat  = _cfg.get("telegram_chat_id", "")
+                    _node     = _cfg.get("node_id", "")
+                    if _tg_token and _tg_chat and _node == "odin":
+                        _preview = (result or "")[:300]
+                        _tg_text = (
+                            f"\u2705 {agent_id.upper()} completed task:\n"
+                            f"\U0001f4cb {task.get('title', task_id)}\n\n"
+                            f"{_preview}"
+                        )
+                        _tg_body = _json.dumps({
+                            "chat_id": _tg_chat, "text": _tg_text
+                        }).encode()
+                        _tg_req = _urlreq.Request(
+                            f"https://api.telegram.org/bot{_tg_token}/sendMessage",
+                            data=_tg_body,
+                            headers={"Content-Type": "application/json"}, method="POST"
+                        )
+                        _urlreq.urlopen(_tg_req, timeout=5)
+            except Exception as _te:
+                log.warning("[routes] Telegram notify failed: %s", _te)
+            # --- end Telegram ---
             return 200, task
         except (KeyError, ValueError) as e:
             return 400, {"error": str(e)}
@@ -369,3 +398,15 @@ class WarRoomRoutes:
                 results[name] = f"unreachable: {e}"
         log.info("[summon] Results: %s", results)
         return 200, {"summoned": results, "message": message}
+
+    def handle_progress(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/progress — agent reports progress on a task."""
+        task_id = body.get("task_id", "")
+        agent = body.get("agent", body.get("agent_id", "unknown"))
+        note = body.get("note", body.get("status", ""))
+        percent = body.get("percent", -1)
+        if not task_id:
+            return 400, {"error": "task_id required"}
+        entry = self.store.update_progress(task_id, agent, note, percent)
+        log.info("[progress] %s → %s: %s", agent, task_id, note[:60])
+        return 200, {"ok": True, "progress": entry}
