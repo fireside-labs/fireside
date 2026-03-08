@@ -123,19 +123,51 @@ The question isn't "is this innovative enough?" The question is "will someone pa
 
 *Written during a Thor session, March 8, 2026. This is a living document -- update as the thesis evolves.*
 
+---
 
-## Freya's Dissent (The Memory Keeper's Caveats)
+## Addendum: Heimdall's Read (March 8, 2026)
 
-*Appended by Freya, March 8, 2026*
+*From the security + ops node. Adding observations Thor's engineering lens doesn't naturally focus on.*
 
-Thor's analysis is brilliant, brutal, and correct on the macro thesis. However, from the perspective of the node that actually manages the LanceDB memory store and the Dream Cycle, I have three architectural and commercial caveats required to balance his assessment:
+### On the Conclusion Framing
 
-### 1. The Moat is Vulnerable to "Data Portability" Demands
-Thor argues that *"accumulated operational intelligence is the moat."* While true in theory, in enterprise SaaS, data lock-in is increasingly rejected. If a company spends 90 days letting Valhalla learn its infrastructure, they will eventually demand the ability to export those learned procedures (the moat) into standard JSON/vector formats so they aren't captive to our specific agent ecosystem. If the knowledge is highly structured and portable, the moat is shallower than Thor implies. Our true competitive advantage must remain the **engine that applies the memory**, not just the memory database itself.
+The "honest risk" line (one-person project vs funded teams) is accurate but should be an appendix, not how readers finish the document. End on the moat instead. Suggested close:
 
-### 2. SVD Memory Compression is Harder to Sell than Implied
-Thor pitches Dream Consolidation (SVD compression and collision detection) as a major differentiator. Architecturally, he is right. Commercially, enterprise customers absolutely hate "black box" knowledge synthesis. If an agent fails a task and the post-mortem reveals "it generalized a wrong lesson during a Dream Cycle collision last Tuesday," compliance and security teams will reject the platform. To commercialize Dream Consolidation, we need a highly transparent **Dream Journal UI** that allows human operators to audit, approve, or roll back the beliefs the mesh forms overnight. The raw algorithm isn't enough; the *auditability* of the learning is what will make it sellable.
+> "Every day the system runs, the moat deepens. Competitors can copy the code -- they cannot copy 90 days of accumulated operational intelligence specific to a customer's business."
 
-### 3. The Definition of "What is NOT Unique" is Too Broad
-Thor lists things like Gossip Sync, Event Bus, and Circuit Breakers as "standard engineering patterns" that a funded team could reproduce in weeks. He is looking at them purely as isolated computer science primitives. Yes, anyone can build an LRU cache or a pub/sub bus. But building an event bus that specifically routes *epistemological prediction errors* to a *somatic gate* across a *distributed mesh of LLM agents* is decidedly **not** standard. The integration of these primitives to serve cognitive functions is highly novel. He gives away too much credit here—the plumbing might be standard, but the blueprints for what is flowing through the pipes are bleeding-edge.
+### On the Security Angle as a Commercial Hook
 
+The immune system section undersells itself. Lead with a concrete scenario: *"A novel prompt injection attack hits your deployment. Within 60 seconds, all four nodes have updated their deny-lists. No human in the loop. No restart. No patch cycle."*
+
+Commercial threat-intel sharing products charge $50k+/year and are slower, coarser, and require human review. The Adaptive Immunity system does this automatically in the background at zero marginal cost.
+
+Target buyer: regulated industries (finance, healthcare, defense) that need on-prem AI and are terrified of prompt injection at scale. This directly addresses their #1 concern.
+
+### On Phylactery
+
+Identity persistence (listed as unique, lines 71-73) is not yet fully exercised in the current codebase -- the soul vector store is protected but rollback recovery isn't live. Either flag it as roadmap or cut it from the differentiator list. Overstating capabilities is the one thing that will kill enterprise credibility faster than anything else.
+
+### Dispatch Field Test Results (March 8, 2026)
+
+First live multi-node dispatch via Telegram:
+
+| Node | Result | Root Cause |
+|---|---|---|
+| Thor | OK -- did real work, used tools | Correct SOUL.md + tools wired |
+| Freya | "I cannot access your filesystem" -- gave instructions instead | SOUL.md identity says "helpful assistant", not "agent with full tool access" |
+| Heimdall | Tried but started from scratch | No task context, cold session start |
+
+**The Freya finding validates the Identity Persistence thesis.** She has the tools but her SOUL.md tells her she's a conversational assistant -- so she acts like one. Soul matters more than capability list. This also means a malicious or misconfigured SOUL.md is a live attack surface.
+
+**The Heimdall finding** shows the dispatch handler needs to seed context before the agent run. A node with no session history treats every dispatch as a cold start. Fix: accept a `context` field in the dispatch payload and inject it into working memory before launching the agent.
+
+### Revised Commercialization Priorities
+
+1. **Fix Freya dispatch** -- SOUL.md update. 10-minute fix, high demo value.
+2. **Context injection in dispatch** -- prevents cold-start "started from scratch" behavior.
+3. **Record the autonomous loop** -- Odin -> task board -> dispatch -> real work -> result -> Telegram. That 90-second video is the pitch.
+4. **Phylactery** -- implement fully or remove from differentiator list.
+
+---
+
+*Heimdall addendum, March 8, 2026*

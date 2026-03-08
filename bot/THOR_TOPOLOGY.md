@@ -3,7 +3,7 @@
 ## Hardware
 - **Machine:** PowerSpec workstation (Windows)
 - **GPU:** NVIDIA RTX 5090, 32GB VRAM
-- **Primary Model:** qwen3.5:35b (kept resident via `keep_alive=-1`)
+- **Primary Model:** qwen3.5:35b-a3b-q4_K_M (Q4, 160K ctx, 100% GPU, pinned forever)
 - **Embedding Model:** nomic-embed-text:latest
 - **Inference Backend:** Ollama on port 11434
 - **Bifrost:** HTTP server on port 8765
@@ -65,9 +65,9 @@ C:\Users\Jorda\.openclaw\workspace\bot\bot\
 C:\Users\Jorda\.openclaw\
   workspace\SOUL.md          -> copied from mesh/souls/SOUL.thor.md
   agents\main\agent\
-    models.json              -> registered models (qwen3.5:35b, nomic-embed-text, qwen2.5:7b)
+    models.json              -> registered models (qwen3.5:35b-a3b-q4_K_M, nomic-embed-text, qwen2.5:7b)
     auth-profiles.json       -> Ollama provider auth
-  openclaw.json              -> gateway config (mode: local, model: ollama/qwen3.5:35b)
+  openclaw.json              -> gateway config (mode: local, model: ollama/qwen3.5:35b-a3b-q4_K_M)
 ```
 
 ## Git
