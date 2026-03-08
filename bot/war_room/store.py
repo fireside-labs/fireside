@@ -440,9 +440,9 @@ class WarRoomStore:
                 agent = t.get("assigned_to", t.get("claimed_by", "unknown"))
                 title = t.get("title", t.get("id", "?"))
                 result = (t.get("result", "") or "")[:300]
-                text = f"\u2705 *{agent}* completed task:\n_{title}_\n\n{result}"
+                text = f"\u2705 {agent.upper()} completed task:\n\U0001f4cb {title}\n\n{result}"
                 body = _json.dumps({
-                    "chat_id": _chat, "text": text, "parse_mode": "Markdown"
+                    "chat_id": _chat, "text": text
                 }).encode()
                 req = _urlreq.Request(
                     f"https://api.telegram.org/bot{_token}/sendMessage",
