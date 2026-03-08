@@ -4,7 +4,7 @@
     "agent": {
         "id": "thor",
         "role": "backend_engineer",
-        "local_model": "qwen3.5:35b",
+        "local_model": "qwen3.5:35b-a3b-q4_K_M",
         "cloud_model": "deepseek-ai/deepseek-r1",
         "cloud_base_url": "https://integrate.api.nvidia.com/v1"
     },

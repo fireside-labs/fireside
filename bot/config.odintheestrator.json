@@ -4,7 +4,9 @@
     "agent": {
         "id": "odin",
         "role": "orchestrator",
-        "local_model": "qwen3.5:9b",
+        "local_model": "Qwen/Qwen2.5-7B-Instruct",
+        "backend": "mlx",
+        "mlx_base": "http://127.0.0.1:8080",
         "cloud_model": "z-ai/glm5",
         "cloud_base_url": "https://integrate.api.nvidia.com/v1"
     }
