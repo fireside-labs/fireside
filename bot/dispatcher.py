@@ -63,7 +63,7 @@ def _get(url: str, timeout: int = 10) -> dict:
 # Core loop
 # ---------------------------------------------------------------------------
 def poll_and_dispatch():
-    """One poll cycle: find open tasks -> claim -> dispatch -> complete."""
+    """One poll cycle: find open tasks -> claim ALL -> dispatch sequentially."""
     try:
         tasks = _get(f"{LOCAL_BIFROST}/war-room/tasks")
     except Exception as e:
@@ -76,38 +76,48 @@ def poll_and_dispatch():
     if not isinstance(tasks, list):
         return
 
+    # Phase 1: Find and claim ALL dispatchable tasks immediately
+    claimed = []
     for task in tasks:
         status = task.get("status", "")
         assigned = (task.get("assigned_to") or "").lower()
         task_id = task.get("id", task.get("task_id", ""))
 
-        # Only process open tasks assigned to known remote nodes
         if status != "open" or assigned not in NODES:
             continue
 
-        node_url = NODES[assigned]
-        title = task.get("title", "untitled")[:60]
-        description = task.get("description", task.get("title", ""))
-
-        log.info("> Dispatching task %s to %s: %s", task_id[:14], assigned, title)
-
-        # 1. Claim the task
         try:
             _post(f"{LOCAL_BIFROST}/war-room/claim", {
                 "task_id": task_id,
                 "agent_id": assigned,
             })
+            log.info("  Claimed %s for %s", task_id[:14], assigned)
+            claimed.append(task)
         except Exception as e:
             log.warning("  X Failed to claim %s: %s", task_id[:14], e)
-            continue
 
-        # 2. Dispatch to the remote node's /dispatch endpoint
+    if not claimed:
+        return
+
+    log.info("> Dispatching %d claimed task(s)", len(claimed))
+
+    # Phase 2: Dispatch all claimed tasks sequentially
+    for task in claimed:
+        assigned = (task.get("assigned_to") or "").lower()
+        task_id = task.get("id", task.get("task_id", ""))
+        node_url = NODES[assigned]
+        title = task.get("title", "untitled")[:60]
+        description = task.get("description", task.get("title", ""))
+
+        log.info("> Dispatching %s to %s: %s", task_id[:14], assigned, title)
+
+        # Dispatch to the remote node's /dispatch endpoint
         try:
             result = _post(f"{node_url}/dispatch", {
                 "task_id": task_id,
                 "description": description,
                 "timeout": DISPATCH_TIMEOUT,
-            }, timeout=DISPATCH_TIMEOUT + 60)  # extra buffer for HTTP overhead
+            }, timeout=DISPATCH_TIMEOUT + 60)
         except urllib.error.URLError as e:
             log.error("  X Node %s unreachable: %s", assigned, e)
             _try_block(task_id, assigned, f"Node unreachable: {e}")
@@ -117,7 +127,7 @@ def poll_and_dispatch():
             _try_block(task_id, assigned, str(e))
             continue
 
-        # 3. Post result back to War Room
+        # Post result back to War Room
         dispatch_status = result.get("status", "error")
         if dispatch_status == "ok":
             agent_result = result.get("result", "completed (no output)")
