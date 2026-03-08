@@ -122,3 +122,52 @@ The question isn't "is this innovative enough?" The question is "will someone pa
 ---
 
 *Written during a Thor session, March 8, 2026. This is a living document -- update as the thesis evolves.*
+
+---
+
+## Addendum: Heimdall's Read (March 8, 2026)
+
+*From the security + ops node. Adding observations Thor's engineering lens doesn't naturally focus on.*
+
+### On the Conclusion Framing
+
+The "honest risk" line (one-person project vs funded teams) is accurate but should be an appendix, not how readers finish the document. End on the moat instead. Suggested close:
+
+> "Every day the system runs, the moat deepens. Competitors can copy the code -- they cannot copy 90 days of accumulated operational intelligence specific to a customer's business."
+
+### On the Security Angle as a Commercial Hook
+
+The immune system section undersells itself. Lead with a concrete scenario: *"A novel prompt injection attack hits your deployment. Within 60 seconds, all four nodes have updated their deny-lists. No human in the loop. No restart. No patch cycle."*
+
+Commercial threat-intel sharing products charge $50k+/year and are slower, coarser, and require human review. The Adaptive Immunity system does this automatically in the background at zero marginal cost.
+
+Target buyer: regulated industries (finance, healthcare, defense) that need on-prem AI and are terrified of prompt injection at scale. This directly addresses their #1 concern.
+
+### On Phylactery
+
+Identity persistence (listed as unique, lines 71-73) is not yet fully exercised in the current codebase -- the soul vector store is protected but rollback recovery isn't live. Either flag it as roadmap or cut it from the differentiator list. Overstating capabilities is the one thing that will kill enterprise credibility faster than anything else.
+
+### Dispatch Field Test Results (March 8, 2026)
+
+First live multi-node dispatch via Telegram:
+
+| Node | Result | Root Cause |
+|---|---|---|
+| Thor | OK -- did real work, used tools | Correct SOUL.md + tools wired |
+| Freya | "I cannot access your filesystem" -- gave instructions instead | SOUL.md identity says "helpful assistant", not "agent with full tool access" |
+| Heimdall | Tried but started from scratch | No task context, cold session start |
+
+**The Freya finding validates the Identity Persistence thesis.** She has the tools but her SOUL.md tells her she's a conversational assistant -- so she acts like one. Soul matters more than capability list. This also means a malicious or misconfigured SOUL.md is a live attack surface.
+
+**The Heimdall finding** shows the dispatch handler needs to seed context before the agent run. A node with no session history treats every dispatch as a cold start. Fix: accept a `context` field in the dispatch payload and inject it into working memory before launching the agent.
+
+### Revised Commercialization Priorities
+
+1. **Fix Freya dispatch** -- SOUL.md update. 10-minute fix, high demo value.
+2. **Context injection in dispatch** -- prevents cold-start "started from scratch" behavior.
+3. **Record the autonomous loop** -- Odin -> task board -> dispatch -> real work -> result -> Telegram. That 90-second video is the pitch.
+4. **Phylactery** -- implement fully or remove from differentiator list.
+
+---
+
+*Heimdall addendum, March 8, 2026*
