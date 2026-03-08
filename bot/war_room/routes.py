@@ -446,7 +446,7 @@ class WarRoomRoutes:
         # versions -- this ensures the correct node identity is always in
         # place before the agent runs.
         try:
-            import pathlib
+            import pathlib, json as _json2, socket as _sock2
             _p = pathlib.Path(__file__).parent
             for _ in range(6):
                 if (_p / "mesh" / "souls").exists():
@@ -454,7 +454,12 @@ class WarRoomRoutes:
                 _p = _p.parent
             souls_dir = _p / "mesh" / "souls"
             workspace = pathlib.Path.home() / ".openclaw" / "workspace"
-            node = self.store.this_node
+            # Resolve node name: config.json → this_node, else hostname
+            _cfg_path = _p / "config.json"
+            node = _json2.loads(_cfg_path.read_text()).get("this_node", "") if _cfg_path.exists() else ""
+            if not node:
+                node = _sock2.gethostname().lower().split(".")[0]
+
             for src_name, dst_name in [
                 (f"SOUL.{node}.md", "SOUL.md"),
                 (f"USER.{node}.md", "USER.md"),
