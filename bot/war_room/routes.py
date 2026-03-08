@@ -410,3 +410,76 @@ class WarRoomRoutes:
         entry = self.store.update_progress(task_id, agent, note, percent)
         log.info("[progress] %s → %s: %s", agent, task_id, note[:60])
         return 200, {"ok": True, "progress": entry}
+
+    # POST /dispatch — run a full OpenClaw agent session on this node.
+    #
+    #     This is the bridge endpoint. When Odin's dispatcher sends a task
+    #     here, the node runs `openclaw agent` with full tool access using
+    #     its own local GPU and filesystem.
+    #
+    #     Body: {"task_id": "...", "description": "...", "timeout": 300}
+    #     Returns: {"status": "ok", "result": "<agent output>"}
+    #
+    def handle_dispatch(self, body: dict) -> tuple[int, dict]:
+        """POST /dispatch — execute a full OpenClaw agent turn locally."""
+        import subprocess
+        import shutil
+
+        description = body.get("description", "")
+        task_id = body.get("task_id", "")
+        timeout = int(body.get("timeout", 300))
+
+        if not description:
+            return 400, {"error": "description required"}
+
+        # Check that openclaw CLI is available
+        openclaw_bin = shutil.which("openclaw")
+        if not openclaw_bin:
+            log.error("[dispatch] openclaw binary not found in PATH")
+            return 503, {"error": "openclaw not installed on this node"}
+
+        log.info("[dispatch] Running agent turn for task %s (timeout=%ds)",
+                 task_id[:14] if task_id else "adhoc", timeout)
+
+        try:
+            result = subprocess.run(
+                [openclaw_bin, "agent", "-m", description, "--json",
+                 "--timeout", str(timeout)],
+                capture_output=True, text=True, timeout=timeout + 30,
+            )
+
+            if result.returncode != 0:
+                log.warning("[dispatch] Agent exited %d: %s",
+                            result.returncode, result.stderr[:200])
+                return 500, {
+                    "status": "error",
+                    "task_id": task_id,
+                    "error": result.stderr[:500] or "agent exited non-zero",
+                    "returncode": result.returncode,
+                }
+
+            # Parse JSON output if possible
+            output = result.stdout.strip()
+            try:
+                import json as _json
+                parsed = _json.loads(output)
+                agent_response = parsed.get("response", parsed.get("content", output))
+            except Exception:
+                agent_response = output
+
+            log.info("[dispatch] Task %s completed (%d chars)",
+                     task_id[:14] if task_id else "adhoc", len(agent_response))
+
+            return 200, {
+                "status": "ok",
+                "task_id": task_id,
+                "result": agent_response,
+            }
+
+        except subprocess.TimeoutExpired:
+            log.error("[dispatch] Task %s timed out after %ds", task_id[:14], timeout)
+            return 504, {
+                "status": "timeout",
+                "task_id": task_id,
+                "error": f"agent turn timed out after {timeout}s",
+            }
