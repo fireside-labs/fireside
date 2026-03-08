@@ -942,6 +942,8 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     Private chats go straight to Odin without needing @ prefix.
     """
     text = (update.message.text or "").strip()
+    log.info("[telegram] incoming message: %r from chat_type=%s",
+             text[:80], update.message.chat.type)
     if not text:
         return
 
