@@ -130,7 +130,7 @@ THIS_NODE        = CONFIG.get("this_node", "unknown")
 NODES            = CONFIG.get("nodes", {})
 MEMORY_MASTER    = CONFIG.get("memory_master", "freya")  # node hosting canonical LanceDB
 TELEGRAM_POLLING = CONFIG.get("telegram_polling", True)
-AGENT_CONFIG     = CONFIG.get("agent", {"id": THIS_NODE, "role": "general", "local_model": "qwen3.5:27b"})
+AGENT_CONFIG     = CONFIG.get("agent", {"id": THIS_NODE, "role": "general", "local_model": "qwen3.5:9b"})
 WAR_ROOM_CONFIG  = CONFIG.get("war_room", {})
 
 # ---------------------------------------------------------------------------

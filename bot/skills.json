@@ -41,6 +41,6 @@
         "3d",
         "frontend"
     ],
-    "model": "qwen3.5:27b",
+    "model": "qwen3.5:9b",
     "max_parallel_tasks": 3
 }
