@@ -1803,12 +1803,24 @@ def main():
         _event_loop.run_forever()  # asyncio owns main thread
         return
 
+    async def _debug_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Temporary catch-all to trace incoming updates."""
+        log.info("[telegram-debug] update type=%s has_message=%s msg_text=%r",
+                 type(update).__name__,
+                 update.message is not None,
+                 (update.message.text if update.message else None))
+
+    async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+        log.error("[telegram-error] %s | update: %s", context.error, update)
+
     app = (
         Application.builder()
         .token(BOT_TOKEN)
         .post_init(on_startup)
         .build()
     )
+    app.add_error_handler(_error_handler)
+    app.add_handler(MessageHandler(filters.ALL, _debug_all), group=-1)  # catch-all debug
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
     app.run_polling(allowed_updates=Update.ALL_TYPES)
