@@ -1340,13 +1340,52 @@ class BifrostHandler(BaseHTTPRequestHandler):
         """Pull latest codebase via git and re-exec this process."""
         try:
             import subprocess
-            log.info("self-update: Running git pull in %s", BASE.parent)
+            repo_root = str(BASE.parent)
+            log.info("self-update: repo at %s", repo_root)
+
+            # Auto-detect the git remote name (origin, github, etc.)
+            try:
+                remotes = subprocess.check_output(
+                    ["git", "remote"], cwd=repo_root, text=True, timeout=5
+                ).strip().split("\n")
+                # Prefer 'origin', then 'github', then first available
+                remote = "origin"
+                if "origin" in remotes:
+                    remote = "origin"
+                elif "github" in remotes:
+                    remote = "github"
+                elif remotes and remotes[0]:
+                    remote = remotes[0]
+            except Exception:
+                remote = "origin"
+
+            # Stash any local changes to prevent "uncommitted changes" errors
+            subprocess.run(
+                ["git", "stash", "--include-untracked"],
+                cwd=repo_root, capture_output=True, text=True, timeout=10
+            )
+
+            # Pull latest
             result = subprocess.run(
-                ["git", "pull", "--rebase", "origin", "main"],
-                cwd=str(BASE.parent),
+                ["git", "pull", "--rebase", remote, "main"],
+                cwd=repo_root,
                 capture_output=True, text=True, timeout=60
             )
             out = result.stdout.strip() or result.stderr.strip()
+
+            # If rebase failed, try plain pull
+            if result.returncode != 0:
+                subprocess.run(
+                    ["git", "rebase", "--abort"],
+                    cwd=repo_root, capture_output=True, timeout=10
+                )
+                result = subprocess.run(
+                    ["git", "pull", remote, "main"],
+                    cwd=repo_root,
+                    capture_output=True, text=True, timeout=60
+                )
+                out = result.stdout.strip() or result.stderr.strip()
+
             log.info("self-update result: %s", out)
             self._respond(200, {"status": "ok", "output": out, "note": "restarting"})
             
