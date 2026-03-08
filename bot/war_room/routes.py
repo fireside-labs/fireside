@@ -441,21 +441,33 @@ class WarRoomRoutes:
         log.info("[dispatch] Running agent turn for task %s (timeout=%ds)",
                  task_id[:14] if task_id else "adhoc", timeout)
 
-        # Pre-seed SOUL.md with this node's identity before every dispatch.
-        # OpenClaw may overwrite SOUL.md with a generic version -- this ensures
-        # the correct node soul is always in place before the agent runs.
+        # Pre-seed SOUL.md, USER.md, IDENTITY.md with this node's identity
+        # before every dispatch.  OpenClaw may overwrite these with generic
+        # versions -- this ensures the correct node identity is always in
+        # place before the agent runs.
         try:
             import pathlib
             script_dir = pathlib.Path(__file__).parent.parent
-            node_soul = script_dir / "mesh" / "souls" / f"SOUL.{self.store.this_node}.md"
-            workspace_soul = pathlib.Path.home() / ".openclaw" / "workspace" / "SOUL.md"
-            if node_soul.exists() and workspace_soul.parent.exists():
-                import shutil as _shutil
-                workspace_soul.chmod(0o644)  # ensure writable before copy
-                _shutil.copy2(str(node_soul), str(workspace_soul))
-                log.info("[dispatch] Pre-seeded SOUL.md from %s", node_soul.name)
+            souls_dir = script_dir / "mesh" / "souls"
+            workspace = pathlib.Path.home() / ".openclaw" / "workspace"
+            node = self.store.this_node
+            for src_name, dst_name in [
+                (f"SOUL.{node}.md", "SOUL.md"),
+                (f"USER.{node}.md", "USER.md"),
+                (f"IDENTITY.{node}.md", "IDENTITY.md"),
+            ]:
+                src = souls_dir / src_name
+                dst = workspace / dst_name
+                if src.exists() and dst.parent.exists():
+                    import shutil as _shutil
+                    try:
+                        dst.chmod(0o644)
+                    except Exception:
+                        pass
+                    _shutil.copy2(str(src), str(dst))
+                    log.info("[dispatch] Pre-seeded %s from %s", dst_name, src_name)
         except Exception as _e:
-            log.warning("[dispatch] Could not pre-seed SOUL.md: %s", _e)
+            log.warning("[dispatch] Could not pre-seed identity files: %s", _e)
 
         try:
             # --session-id: dedicated session per dispatch task
