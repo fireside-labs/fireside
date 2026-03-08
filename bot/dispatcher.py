@@ -108,6 +108,14 @@ def poll_and_dispatch():
         node_url = NODES[assigned]
         title = task.get("title", "untitled")[:60]
         description = task.get("description", task.get("title", ""))
+        # Append standard dispatch instructions
+        description += (
+            "\n\n---\n"
+            "DISPATCH RULES: When you finish, report a brief summary of what "
+            "you did and the file paths you created or modified. Do NOT paste "
+            "file contents or code in your response. If there are bugs or "
+            "errors, describe them briefly."
+        )
 
         log.info("> Dispatching %s to %s: %s", task_id[:14], assigned, title)
 
