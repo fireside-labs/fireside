@@ -178,7 +178,7 @@ class AskHandler:
         messages.append({"role": "user", "content": prompt})
 
         payload = {
-            "model": "mlx-qwen3.5-9b",  # label only, MLX serves whatever was loaded
+            "model": "mlx-community/Qwen3.5-9B-4bit",  # must match the loaded model ID
             "messages": messages,
             "max_tokens": max_tokens,
             "stream": False,
