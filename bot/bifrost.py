@@ -938,26 +938,34 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 _KNOWN_AGENTS = {a: info for a, info in NODES.items()}  # name → {ip, port}
 
 async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Parse @agentname messages and route to that agent's /ask endpoint."""
+    """Parse @agentname messages and route to that agent's /ask endpoint.
+    Private chats go straight to Odin without needing @ prefix.
+    """
     text = (update.message.text or "").strip()
-    if not text.startswith("@"):
-        return  # ignore non-mention messages
-
-    parts = text.split(None, 1)  # ["@thor", "check the memory sync"]
-    agent_tag = parts[0].lstrip("@").lower()
-    query = parts[1].strip() if len(parts) > 1 else ""
-
-    if not query:
-        await update.message.reply_text(f"Usage: @{agent_tag} <your message>")
+    if not text:
         return
+
+    # Determine target agent and query
+    if text.startswith("@"):
+        # Explicit @mention — route to that agent
+        parts = text.split(None, 1)  # ["@thor", "check the memory sync"]
+        agent_tag = parts[0].lstrip("@").lower()
+        query = parts[1].strip() if len(parts) > 1 else ""
+        if not query:
+            await update.message.reply_text(f"Usage: @{agent_tag} <your message>")
+            return
+    else:
+        # Private/direct message — route to Odin
+        agent_tag = "odin"
+        query = text
 
     node_info = NODES.get(agent_tag)
     if not node_info:
         known = ", ".join(f"@{n}" for n in NODES)
-        await update.message.reply_text(f"Unknown agent `{agent_tag}`.\nKnown: {known}", parse_mode="Markdown")
+        await update.message.reply_text(f"Unknown agent '{agent_tag}'.\nKnown: {known}")
         return
 
-    await update.message.reply_text(f"_Routing to {agent_tag}..._", parse_mode="Markdown")
+    await update.message.reply_text(f"Routing to {agent_tag}...")
 
     def _call_ask():
         url = f"http://{node_info['ip']}:{node_info.get('port', 8765)}/ask"
@@ -1708,8 +1716,10 @@ class TaskPoller:
                 "task_id": tid, "agent_id": self.node, "status": "in_progress"
             })
 
-            # 3. Process via /ask
-            _ping("Thinking...", 25)
+            # 3. Process via /ask — use cloud model for "deep" tier tasks
+            tier = task.get("tier", "fast")
+            model = "cloud" if tier == "deep" else "local"
+            _ping(f"Thinking ({tier})...", 25)
             prompt = (
                 f"You have been assigned a task from the War Room.\n"
                 f"Task: {title}\n"
@@ -1717,7 +1727,7 @@ class TaskPoller:
                 f"Complete this task thoroughly. Provide your result."
             )
             result_data = self._post(f"{self.base}/ask", {
-                "prompt": prompt, "model": "local"
+                "prompt": prompt, "model": model
             })
             result_text = result_data.get("response", result_data.get("answer", str(result_data)))
 
