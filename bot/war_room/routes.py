@@ -496,7 +496,8 @@ class WarRoomRoutes:
                 }
 
             # Parse JSON output if possible
-            output = result.stdout.strip()
+            output = (result.stdout or "").strip()
+
             try:
                 import json as _json
                 parsed = _json.loads(output)
