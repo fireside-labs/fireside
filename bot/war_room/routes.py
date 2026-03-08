@@ -291,12 +291,12 @@ class WarRoomRoutes:
                     if _tg_token and _tg_chat and _node == "odin":
                         _preview = (result or "")[:300]
                         _tg_text = (
-                            f"\u2705 *{agent_id}* completed task:\n"
-                            f"_{task.get('title', task_id)}_\n\n"
+                            f"\u2705 {agent_id.upper()} completed task:\n"
+                            f"\U0001f4cb {task.get('title', task_id)}\n\n"
                             f"{_preview}"
                         )
                         _tg_body = _json.dumps({
-                            "chat_id": _tg_chat, "text": _tg_text, "parse_mode": "Markdown"
+                            "chat_id": _tg_chat, "text": _tg_text
                         }).encode()
                         _tg_req = _urlreq.Request(
                             f"https://api.telegram.org/bot{_tg_token}/sendMessage",
@@ -305,7 +305,7 @@ class WarRoomRoutes:
                         )
                         _urlreq.urlopen(_tg_req, timeout=5)
             except Exception as _te:
-                log.debug("[routes] Telegram notify failed: %s", _te)
+                log.warning("[routes] Telegram notify failed: %s", _te)
             # --- end Telegram ---
             return 200, task
         except (KeyError, ValueError) as e:
