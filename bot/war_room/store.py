@@ -439,7 +439,14 @@ class WarRoomStore:
             for t in tasks:
                 agent = t.get("assigned_to", t.get("claimed_by", "unknown"))
                 title = t.get("title", t.get("id", "?"))
-                result = (t.get("result", "") or "")[:300]
+                # Extract readable text from dispatch result JSON if possible
+                raw_result = (t.get("result", "") or "")
+                try:
+                    _rj = _json.loads(raw_result)
+                    _payloads = _rj.get("payloads", [])
+                    result = _payloads[0].get("text", raw_result)[:600] if _payloads else raw_result[:600]
+                except Exception:
+                    result = raw_result[:600]
                 text = f"\u2705 {agent.upper()} completed task:\n\U0001f4cb {title}\n\n{result}"
                 body = _json.dumps({
                     "chat_id": _chat, "text": text
