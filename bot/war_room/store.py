@@ -397,20 +397,62 @@ class WarRoomStore:
             self._save_messages()
             return count
 
-    def merge_tasks(self, remote_tasks: dict[str, dict]) -> int:
+    def merge_tasks(self, remote_tasks: dict) -> int:
         """Merge tasks from a remote node. Latest 'updated' wins. Returns count of updates."""
         updated_count = 0
+        newly_done = []
         with self._lock:
             for tid, remote_task in remote_tasks.items():
                 local = self._tasks.get(tid)
                 if not local or remote_task.get("updated", "") > local.get("updated", ""):
+                    # Detect transition to "done"
+                    old_status = local.get("status", "") if local else ""
+                    new_status = remote_task.get("status", "")
+                    if new_status == "done" and old_status != "done":
+                        newly_done.append(remote_task)
                     self._tasks[tid] = remote_task
                     updated_count += 1
             if updated_count:
                 self._save_tasks()
         # Housekeeping: archive stale done tasks
         self.archive_stale_tasks()
+        # Telegram notification for newly completed tasks (Odin only)
+        if newly_done:
+            self._notify_task_completions(newly_done)
         return updated_count
+
+    def _notify_task_completions(self, tasks: list) -> None:
+        """Send Telegram notifications for completed tasks (orchestrator only)."""
+        try:
+            import json as _json, urllib.request as _urlreq
+            from pathlib import Path as _Path
+            _cfg_path = _Path(__file__).parent.parent / "config.json"
+            if not _cfg_path.exists():
+                return
+            _cfg = _json.loads(_cfg_path.read_text())
+            if _cfg.get("node_id", "") != "odin":
+                return
+            _token = _cfg.get("telegram_bot_token", "")
+            _chat = _cfg.get("telegram_chat_id", "")
+            if not _token or not _chat:
+                return
+            for t in tasks:
+                agent = t.get("assigned_to", t.get("claimed_by", "unknown"))
+                title = t.get("title", t.get("id", "?"))
+                result = (t.get("result", "") or "")[:300]
+                text = f"\u2705 *{agent}* completed task:\n_{title}_\n\n{result}"
+                body = _json.dumps({
+                    "chat_id": _chat, "text": text, "parse_mode": "Markdown"
+                }).encode()
+                req = _urlreq.Request(
+                    f"https://api.telegram.org/bot{_token}/sendMessage",
+                    data=body,
+                    headers={"Content-Type": "application/json"}, method="POST"
+                )
+                _urlreq.urlopen(req, timeout=5)
+        except Exception as e:
+            import logging
+            logging.getLogger("war-room.store").warning("[store] Telegram notify failed: %s", e)
 
     def archive_stale_tasks(self) -> int:
         """Move done tasks older than ARCHIVE_AFTER_DAYS to an archive file."""
