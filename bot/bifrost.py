@@ -1337,19 +1337,19 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 self._respond(200, result)
 
     def _handle_self_update(self, body: dict):
-        """Pull latest bifrost.py from Odin and re-exec this process."""
+        """Pull latest codebase via git and re-exec this process."""
         try:
-            src = body.get("src", f"http://{SYNC_ODIN_IP}:{SYNC_ODIN_PORT}")
-            url = f"{src}/workspace-file?path=" + urllib.parse.quote("bot/bot/bifrost.py", safe="")
-            with urllib.request.urlopen(url, timeout=15) as r:
-                payload = json.loads(r.read())
-            data = base64.b64decode(payload["data_b64"])
-            target = BASE / "bifrost.py"
-            tmp = target.with_suffix(".py.tmp")
-            tmp.write_bytes(data)
-            tmp.replace(target)
-            log.info("self-update: bifrost.py updated (%d bytes), restarting...", len(data))
-            self._respond(200, {"status": "ok", "bytes": len(data), "note": "restarting"})
+            import subprocess
+            log.info("self-update: Running git pull in %s", BASE.parent)
+            result = subprocess.run(
+                ["git", "pull", "--rebase", "origin", "main"],
+                cwd=str(BASE.parent),
+                capture_output=True, text=True, timeout=60
+            )
+            out = result.stdout.strip() or result.stderr.strip()
+            log.info("self-update result: %s", out)
+            self._respond(200, {"status": "ok", "output": out, "note": "restarting"})
+            
             # Restart: re-exec current interpreter with same args
             def _restart():
                 import time as _t; _t.sleep(0.5)
