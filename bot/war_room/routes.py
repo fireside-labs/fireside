@@ -441,6 +441,7 @@ class WarRoomRoutes:
         log.info("[dispatch] Running agent turn for task %s (timeout=%ds)",
                  task_id[:14] if task_id else "adhoc", timeout)
 
+<<<<<<< Updated upstream
         # Pre-seed SOUL.md before each agent run.
         # OpenClaw's agent framework can overwrite SOUL.md with its generic
         # default during a session. Re-copy from the repo to ensure the
@@ -464,6 +465,23 @@ class WarRoomRoutes:
                     log.info("[dispatch] Pre-seeded SOUL.md from %s", _soul_src)
         except Exception as _se:
             log.warning("[dispatch] SOUL pre-seed failed: %s", _se)
+=======
+        # Pre-seed SOUL.md with this node's identity before every dispatch.
+        # OpenClaw may overwrite SOUL.md with a generic version — this ensures
+        # the correct node soul is always in place before the agent runs.
+        try:
+            import pathlib
+            script_dir = pathlib.Path(__file__).parent.parent
+            node_soul = script_dir / "mesh" / "souls" / f"SOUL.{self.store.this_node}.md"
+            workspace_soul = pathlib.Path.home() / ".openclaw" / "workspace" / "SOUL.md"
+            if node_soul.exists() and workspace_soul.parent.exists():
+                import shutil as _shutil
+                workspace_soul.chmod(0o644)  # ensure writable before copy
+                _shutil.copy2(str(node_soul), str(workspace_soul))
+                log.info("[dispatch] Pre-seeded SOUL.md from %s", node_soul.name)
+        except Exception as _e:
+            log.warning("[dispatch] Could not pre-seed SOUL.md: %s", _e)
+>>>>>>> Stashed changes
 
         try:
             # --session-id: dedicated session per dispatch task
@@ -475,6 +493,7 @@ class WarRoomRoutes:
                  "--timeout", str(timeout)],
                 capture_output=True, text=True, timeout=timeout + 30,
             )
+
 
             if result.returncode != 0:
                 log.warning("[dispatch] Agent exited %d: %s",
