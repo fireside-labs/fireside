@@ -130,7 +130,7 @@ THIS_NODE        = CONFIG.get("this_node", "unknown")
 NODES            = CONFIG.get("nodes", {})
 MEMORY_MASTER    = CONFIG.get("memory_master", "freya")  # node hosting canonical LanceDB
 TELEGRAM_POLLING = CONFIG.get("telegram_polling", True)
-AGENT_CONFIG     = CONFIG.get("agent", {"id": THIS_NODE, "role": "general", "local_model": "qwen3.5:27b"})
+AGENT_CONFIG     = CONFIG.get("agent", {"id": THIS_NODE, "role": "general", "local_model": "qwen3.5:9b"})
 WAR_ROOM_CONFIG  = CONFIG.get("war_room", {})
 
 # ---------------------------------------------------------------------------
@@ -1196,6 +1196,9 @@ class BifrostHandler(BaseHTTPRequestHandler):
             if self.path.startswith("/war-room/tombstones"):
                 code, data = _war_room_routes.handle_tombstones(self.path)
                 self._respond(code, data); return
+            if self.path.startswith("/war-room/progress"):
+                progress = _war_room_routes.store.get_progress()
+                self._respond(200, progress); return
         if self.path.startswith("/leaderboard"):
             self._respond(*_compute_leaderboard()); return
 
@@ -1218,7 +1221,8 @@ class BifrostHandler(BaseHTTPRequestHandler):
         war_room_routes = ("/war-room/post", "/war-room/task", "/war-room/claim",
                            "/war-room/complete", "/war-room/status", "/ask",
                            "/war-room/delete-task", "/war-room/delete-message",
-                           "/war-room/clear-messages", "/war-room/summon")
+                           "/war-room/clear-messages", "/war-room/summon",
+                           "/war-room/progress")
         all_routes = bifrost_routes + war_room_routes
 
         if self.path not in all_routes:
@@ -1243,6 +1247,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 "/war-room/delete-message": "handle_delete_message",
                 "/war-room/clear-messages": "handle_clear_messages",
                 "/war-room/summon": "handle_summon",
+                "/war-room/progress": "handle_progress",
             }
             method_name = wr_map.get(self.path)
             wr_handler = getattr(_war_room_routes, method_name, None) if method_name else None
@@ -1332,19 +1337,19 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 self._respond(200, result)
 
     def _handle_self_update(self, body: dict):
-        """Pull latest bifrost.py from Odin and re-exec this process."""
+        """Pull latest codebase via git and re-exec this process."""
         try:
-            src = body.get("src", f"http://{SYNC_ODIN_IP}:{SYNC_ODIN_PORT}")
-            url = f"{src}/workspace-file?path=" + urllib.parse.quote("bot/bot/bifrost.py", safe="")
-            with urllib.request.urlopen(url, timeout=15) as r:
-                payload = json.loads(r.read())
-            data = base64.b64decode(payload["data_b64"])
-            target = BASE / "bifrost.py"
-            tmp = target.with_suffix(".py.tmp")
-            tmp.write_bytes(data)
-            tmp.replace(target)
-            log.info("self-update: bifrost.py updated (%d bytes), restarting...", len(data))
-            self._respond(200, {"status": "ok", "bytes": len(data), "note": "restarting"})
+            import subprocess
+            log.info("self-update: Running git pull in %s", BASE.parent)
+            result = subprocess.run(
+                ["git", "pull", "--rebase", "origin", "main"],
+                cwd=str(BASE.parent),
+                capture_output=True, text=True, timeout=60
+            )
+            out = result.stdout.strip() or result.stderr.strip()
+            log.info("self-update result: %s", out)
+            self._respond(200, {"status": "ok", "output": out, "note": "restarting"})
+            
             # Restart: re-exec current interpreter with same args
             def _restart():
                 import time as _t; _t.sleep(0.5)
@@ -1636,15 +1641,25 @@ class TaskPoller:
             ).start()
 
     def _process_task(self, task: dict):
-        """Claim → process via /ask → complete."""
+        """Claim → progress ping → process via /ask → complete."""
         import urllib.request
         tid = task["id"]
         title = task.get("title", "untitled")
         desc = task.get("description", title)
         log.info("[task-poller] Processing: %s (%s)", title, tid[:8])
 
+        def _ping(note, pct=-1):
+            try:
+                self._post(f"{self.base}/war-room/progress", {
+                    "task_id": tid, "agent": self.node,
+                    "note": note, "percent": pct
+                })
+            except Exception:
+                pass
+
         try:
             # 1. Claim the task
+            _ping("Claiming task...")
             self._post(f"{self.base}/war-room/claim", {
                 "task_id": tid, "agent_id": self.node
             })
@@ -1655,6 +1670,7 @@ class TaskPoller:
             })
 
             # 3. Process via /ask
+            _ping("Thinking...", 25)
             prompt = (
                 f"You have been assigned a task from the War Room.\n"
                 f"Task: {title}\n"
@@ -1667,15 +1683,18 @@ class TaskPoller:
             result_text = result_data.get("response", result_data.get("answer", str(result_data)))
 
             # 4. Complete the task
+            _ping("Submitting result...", 90)
             self._post(f"{self.base}/war-room/complete", {
                 "task_id": tid,
                 "agent_id": self.node,
                 "result": result_text[:2000]  # cap result size
             })
+            _ping("Done ✓", 100)
             log.info("[task-poller] Completed: %s (%s)", title, tid[:8])
 
         except Exception as e:
             log.error("[task-poller] Failed task %s: %s", tid[:8], e)
+            _ping(f"Blocked: {str(e)[:80]}")
             # Mark blocked so it shows up in Guild Hall
             try:
                 self._post(f"{self.base}/war-room/status", {

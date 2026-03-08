@@ -31,6 +31,8 @@ class WarRoomStore:
         self._tasks: dict[str, dict] = self._load(self._task_file, default={})
         # tombstones: {id: iso_timestamp} ΓÇö propagated to peers so deletes replicate
         self._tombstones: dict[str, str] = self._load(self._tombstone_file, default={})
+        # Progress: {task_id: {agent, note, ts, percent}} — runtime only, not persisted
+        self._progress: dict[str, dict] = {}
 
     # ------------------------------------------------------------------
     # Persistence
@@ -155,7 +157,8 @@ class WarRoomStore:
         valid = [m for m in remote_messages if self._is_valid_message(m)]
         with self._lock:
             existing_ids = {m["id"] for m in self._messages}
-            new_msgs = [m for m in valid if m["id"] not in existing_ids]
+            new_msgs = [m for m in valid if m["id"] not in existing_ids
+                        and m["id"] not in self._tombstones]
             if not new_msgs:
                 return 0
             self._messages.extend(new_msgs)
@@ -319,6 +322,37 @@ class WarRoomStore:
             self._save_tombstones()
             return count
 
+    # ------------------------------------------------------------------
+    # Task Progress
+    # ------------------------------------------------------------------
+
+    def update_progress(self, task_id: str, agent: str, note: str,
+                        percent: int = -1) -> dict:
+        """Record a progress ping for a task. Runtime only — not persisted."""
+        from datetime import datetime, timezone
+        entry = {
+            "task_id": task_id,
+            "agent": agent,
+            "note": note[:200],
+            "percent": max(-1, min(100, percent)),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        with self._lock:
+            self._progress[task_id] = entry
+            # Cap at 200 entries
+            if len(self._progress) > 200:
+                oldest = sorted(self._progress, key=lambda k: self._progress[k]["ts"])
+                for k in oldest[:50]:
+                    del self._progress[k]
+        return entry
+
+    def get_progress(self, task_id: str = ""):
+        """Get progress for one task or all tasks."""
+        with self._lock:
+            if task_id:
+                return self._progress.get(task_id, {})
+            return list(self._progress.values())
+
     def get_tasks(
         self,
         status: Optional[str] = None,
@@ -363,20 +397,62 @@ class WarRoomStore:
             self._save_messages()
             return count
 
-    def merge_tasks(self, remote_tasks: dict[str, dict]) -> int:
+    def merge_tasks(self, remote_tasks: dict) -> int:
         """Merge tasks from a remote node. Latest 'updated' wins. Returns count of updates."""
         updated_count = 0
+        newly_done = []
         with self._lock:
             for tid, remote_task in remote_tasks.items():
                 local = self._tasks.get(tid)
                 if not local or remote_task.get("updated", "") > local.get("updated", ""):
+                    # Detect transition to "done"
+                    old_status = local.get("status", "") if local else ""
+                    new_status = remote_task.get("status", "")
+                    if new_status == "done" and old_status != "done":
+                        newly_done.append(remote_task)
                     self._tasks[tid] = remote_task
                     updated_count += 1
             if updated_count:
                 self._save_tasks()
         # Housekeeping: archive stale done tasks
         self.archive_stale_tasks()
+        # Telegram notification for newly completed tasks (Odin only)
+        if newly_done:
+            self._notify_task_completions(newly_done)
         return updated_count
+
+    def _notify_task_completions(self, tasks: list) -> None:
+        """Send Telegram notifications for completed tasks (orchestrator only)."""
+        try:
+            import json as _json, urllib.request as _urlreq
+            from pathlib import Path as _Path
+            _cfg_path = _Path(__file__).parent.parent / "config.json"
+            if not _cfg_path.exists():
+                return
+            _cfg = _json.loads(_cfg_path.read_text())
+            if _cfg.get("node_id", "") != "odin":
+                return
+            _token = _cfg.get("telegram_bot_token", "")
+            _chat = _cfg.get("telegram_chat_id", "")
+            if not _token or not _chat:
+                return
+            for t in tasks:
+                agent = t.get("assigned_to", t.get("claimed_by", "unknown"))
+                title = t.get("title", t.get("id", "?"))
+                result = (t.get("result", "") or "")[:300]
+                text = f"\u2705 {agent.upper()} completed task:\n\U0001f4cb {title}\n\n{result}"
+                body = _json.dumps({
+                    "chat_id": _chat, "text": text
+                }).encode()
+                req = _urlreq.Request(
+                    f"https://api.telegram.org/bot{_token}/sendMessage",
+                    data=body,
+                    headers={"Content-Type": "application/json"}, method="POST"
+                )
+                _urlreq.urlopen(req, timeout=5)
+        except Exception as e:
+            import logging
+            logging.getLogger("war-room.store").warning("[store] Telegram notify failed: %s", e)
 
     def archive_stale_tasks(self) -> int:
         """Move done tasks older than ARCHIVE_AFTER_DAYS to an archive file."""
