@@ -47,6 +47,7 @@ def _report_cost_to_heimdall(node: str, model: str, provider: str,
     t.start()
 
 OLLAMA_BASE = "http://127.0.0.1:11434"
+MLX_BASE = "http://127.0.0.1:8080"       # MLX-lm server (OpenAI-compatible, ~2x faster on Apple Silicon)
 INFERENCE_TIMEOUT = 300  # seconds — increased for large local models (qwen3.5)
 
 
@@ -155,6 +156,59 @@ class AskHandler:
         }
 
     def _ask_local(self, prompt: str, system: str, max_tokens: int) -> dict:
+        """Query local model — tries MLX first (faster on Apple Silicon), falls back to Ollama."""
+        # Try MLX first (OpenAI-compatible endpoint)
+        mlx_result = self._try_mlx(prompt, system, max_tokens)
+        if mlx_result is not None:
+            return mlx_result
+        # Fall back to Ollama
+        return self._ask_ollama(prompt, system, max_tokens)
+
+    def _try_mlx(self, prompt: str, system: str, max_tokens: int) -> Optional[dict]:
+        """Try MLX-lm server. Returns None if MLX is not running."""
+        try:
+            # Quick health check — fail fast if MLX isn't running
+            urllib.request.urlopen(f"{MLX_BASE}/v1/models", timeout=1)
+        except Exception:
+            return None  # MLX not available, caller should use Ollama
+
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": "mlx-community/Qwen3.5-9B-4bit",  # must match the loaded model ID
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        try:
+            data = json.dumps(payload).encode()
+            req = urllib.request.Request(
+                f"{MLX_BASE}/v1/chat/completions", data=data,
+                headers={"Content-Type": "application/json"}, method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=INFERENCE_TIMEOUT) as resp:
+                result = json.loads(resp.read())
+                choice = result.get("choices", [{}])[0]
+                text = choice.get("message", {}).get("content", "")
+                # Strip <think>...</think> tags from qwen3.5 output
+                if "<think>" in text:
+                    import re
+                    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+                tokens = result.get("usage", {}).get("completion_tokens", 0)
+                log.info("[ask] MLX response: %d tokens", tokens)
+                return {
+                    "response": text,
+                    "model": f"mlx:{self.local_model}",
+                    "tokens": tokens,
+                }
+        except Exception as e:
+            log.warning("[ask] MLX request failed, falling back to Ollama: %s", e)
+            return None  # fall back to Ollama
+
+    def _ask_ollama(self, prompt: str, system: str, max_tokens: int) -> dict:
         """Query local Ollama instance."""
         url = f"{OLLAMA_BASE}/api/generate"
         payload = {
@@ -177,11 +231,6 @@ class AskHandler:
             )
             with urllib.request.urlopen(req, timeout=INFERENCE_TIMEOUT) as resp:
                 result = json.loads(resp.read())
-                # qwen3.5 is a thinking model — Ollama returns separate
-                # "thinking" and "response" fields.  When num_predict is
-                # tight the model spends all tokens on thinking and the
-                # visible "response" comes back empty.  Fall back to the
-                # thinking content so callers always get something.
                 text = result.get("response", "")
                 if not text and result.get("thinking"):
                     text = result["thinking"]
