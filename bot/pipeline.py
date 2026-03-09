@@ -64,60 +64,78 @@ def _parse_result(text: str) -> str:
     return "fail"
 
 
-def _huginn(prompt: str, system: str = "", timeout: int = 60) -> str:
-    """Call Huginn (GLM 5 / NVIDIA NIM) via Odin's /ask endpoint.
+# Cloud model routing — pick the best brain for each task type
+CLOUD_MODELS = {
+    "spec":       "z-ai/glm5",                           # GLM 5: good at structured specs
+    "bug":        "deepseek-ai/deepseek-v3.2",            # DeepSeek: best at code reasoning
+    "regression": "deepseek-ai/deepseek-v3.2",            # DeepSeek: judges quality trajectory
+    "memory":     "moonshotai/kimi-k2.5",                 # Kimi: 128K context, reads histories
+    "audit":      "nvidia/llama-3.1-nemotron-70b-instruct", # Nemotron: structured analysis
+    "review":     "z-ai/glm5",                            # GLM 5: creative + analytical
+    "default":    "z-ai/glm5",                            # fallback
+}
 
-    Uses model:cloud which routes through AskHandler._ask_cloud().
-    Free on NVIDIA NIM. Falls back gracefully if unavailable.
+
+def _raven(prompt: str, system: str = "", task_type: str = "default",
+           cloud_model: str = "", timeout: int = 60,
+           max_tokens: int = 1500) -> str:
+    """Call a cloud model (NVIDIA NIM) via Odin's /ask endpoint.
+
+    Selects the best model per task type from CLOUD_MODELS, or uses
+    an explicit cloud_model override. All models are free on NVIDIA NIM.
+    Falls back gracefully if unavailable.
     """
+    model_id = cloud_model or CLOUD_MODELS.get(task_type, CLOUD_MODELS["default"])
     try:
         result = _post(f"{LOCAL_BIFROST}/ask", {
             "from": "odin",
             "prompt": prompt,
             "system": system or (
-                "You are Huginn, Odin's raven of Thought. "
-                "You advise on software architecture and code quality. "
+                "You are a senior AI advisor. "
                 "Be concise and specific. No filler."
             ),
             "model": "cloud",
-            "max_tokens": 1500,
+            "cloud_model": model_id,
+            "max_tokens": max_tokens,
         }, timeout=timeout)
         response = result.get("response", "")
         if response:
-            log.info("[huginn] responded (%d chars)", len(response))
+            log.info("[raven] %s responded via %s (%d chars)",
+                     task_type, model_id, len(response))
             return response
     except Exception as e:
-        log.warning("[huginn] unavailable: %s — proceeding without raven guidance", e)
+        log.warning("[raven] %s unavailable (%s): %s — proceeding without",
+                    task_type, model_id, e)
     return ""
+
+
+def _huginn(prompt: str, system: str = "", task_type: str = "spec",
+            timeout: int = 60) -> str:
+    """Huginn — raven of Thought. Routes to best model per task type."""
+    if not system:
+        system = (
+            "You are Huginn, Odin's raven of Thought. "
+            "You advise on software architecture and code quality. "
+            "Be concise and specific. No filler."
+        )
+    return _raven(prompt, system, task_type=task_type, timeout=timeout)
 
 
 def _muninn(prompt: str, timeout: int = 120) -> str:
-    """Call Muninn (Kimi 2.5 / NVIDIA NIM) for memory distillation.
+    """Muninn — raven of Memory. Always uses Kimi K2.5 (128K context)."""
+    return _raven(
+        prompt,
+        system=(
+            "You are Muninn, Odin's raven of Memory. "
+            "You distill experiences into dense, reusable lessons. "
+            "Be specific and actionable. Write lessons that a future "
+            "AI agent can use to avoid repeating mistakes."
+        ),
+        task_type="memory",
+        timeout=timeout,
+        max_tokens=800,
+    )
 
-    Kimi 2.5 has 128K context — ideal for reading full pipeline histories
-    and compressing them into dense lessons. Timeout is longer because
-    distillation can be verbose.
-    """
-    try:
-        result = _post(f"{LOCAL_BIFROST}/ask", {
-            "from": "odin",
-            "prompt": prompt,
-            "system": (
-                "You are Muninn, Odin's raven of Memory. "
-                "You distill experiences into dense, reusable lessons. "
-                "Be specific and actionable. Write lessons that a future "
-                "AI agent can use to avoid repeating mistakes."
-            ),
-            "model": "cloud",
-            "max_tokens": 800,
-        }, timeout=timeout)
-        response = result.get("response", "")
-        if response:
-            log.info("[muninn] distilled lesson (%d chars)", len(response))
-            return response
-    except Exception as e:
-        log.warning("[muninn] unavailable: %s — lesson not saved", e)
-    return ""
 
 
 def _recall_lessons(project_desc: str, agent: str) -> str:
@@ -455,6 +473,7 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
                 prev_report = meta["qa_history"][-2]
                 curr_report = meta["qa_history"][-1]
                 regression_check = _huginn(
+                    task_type="regression",
                     prompt=(
                         f"Compare these two QA reports from consecutive iterations:\n\n"
                         f"ITERATION {meta['iteration']-1} REPORT:\n{prev_report}\n\n"
@@ -478,6 +497,7 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
             log.info("[huginn] Interpreting %s failure for pipeline %s (iter %d)...",
                      stage_name, pipeline_id[:14], meta["iteration"])
             fix_brief = _huginn(
+                task_type="bug",
                 prompt=(
                     f"A QA agent reported the following failure on this project:\n\n"
                     f"Project: {project_desc}\n\n"

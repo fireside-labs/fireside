@@ -109,6 +109,7 @@ class AskHandler:
         system = body.get("system", "")
         max_tokens = body.get("max_tokens", 2000)
         mode = body.get("model", "local")
+        cloud_model_override = body.get("cloud_model", "")  # per-request model override
 
         if not prompt:
             return {"error": "prompt is required"}
@@ -141,7 +142,8 @@ class AskHandler:
         start = time.time()
 
         if mode == "cloud" and self.cloud_model and self.cloud_base_url:
-            result = self._ask_cloud(prompt, system, max_tokens)
+            result = self._ask_cloud(prompt, system, max_tokens,
+                                    model_override=cloud_model_override)
         else:
             result = self._ask_local(prompt, system, max_tokens)
 
@@ -253,8 +255,10 @@ class AskHandler:
             log.error("Local Ollama request failed: %s", e)
             return {"error": f"Local inference failed: {e}"}
 
-    def _ask_cloud(self, prompt: str, system: str, max_tokens: int) -> dict:
+    def _ask_cloud(self, prompt: str, system: str, max_tokens: int,
+                   model_override: str = "") -> dict:
         """Query NVIDIA NIM cloud endpoint (OpenAI-compatible API)."""
+        model_id = model_override or self.cloud_model
         url = f"{self.cloud_base_url}/chat/completions"
         messages = []
         if system:
@@ -262,7 +266,7 @@ class AskHandler:
         messages.append({"role": "user", "content": prompt})
 
         payload = {
-            "model": self.cloud_model,
+            "model": model_id,
             "messages": messages,
             "max_tokens": max_tokens,
             "stream": False,
