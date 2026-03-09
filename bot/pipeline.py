@@ -91,6 +91,60 @@ def _huginn(prompt: str, system: str = "", timeout: int = 60) -> str:
     return ""
 
 
+def _muninn(prompt: str, timeout: int = 120) -> str:
+    """Call Muninn (Kimi 2.5 / NVIDIA NIM) for memory distillation.
+
+    Kimi 2.5 has 128K context — ideal for reading full pipeline histories
+    and compressing them into dense lessons. Timeout is longer because
+    distillation can be verbose.
+    """
+    try:
+        result = _post(f"{LOCAL_BIFROST}/ask", {
+            "from": "odin",
+            "prompt": prompt,
+            "system": (
+                "You are Muninn, Odin's raven of Memory. "
+                "You distill experiences into dense, reusable lessons. "
+                "Be specific and actionable. Write lessons that a future "
+                "AI agent can use to avoid repeating mistakes."
+            ),
+            "model": "cloud",
+            "max_tokens": 800,
+        }, timeout=timeout)
+        response = result.get("response", "")
+        if response:
+            log.info("[muninn] distilled lesson (%d chars)", len(response))
+            return response
+    except Exception as e:
+        log.warning("[muninn] unavailable: %s — lesson not saved", e)
+    return ""
+
+
+def _recall_lessons(project_desc: str, agent: str) -> str:
+    """Query LanceDB for relevant past lessons for this agent/task."""
+    try:
+        result = _post(f"{LOCAL_BIFROST}/ask", {
+            "from": "odin",
+            "prompt": f"Search for lessons related to: {project_desc[:200]}",
+            "system": "Return only the raw memory results.",
+            "model": "local",
+            "max_tokens": 500,
+        }, timeout=10)
+        # Try the memory query endpoint directly
+        memories = _post(f"{LOCAL_BIFROST}/war-room/message", {
+            "from": "odin",
+            "to": agent,
+            "type": "memory-query",
+            "body": project_desc[:200],
+        }, timeout=10)
+        body = memories.get("body", memories.get("results", ""))
+        if body:
+            return str(body)[:1000]
+    except Exception as e:
+        log.debug("[memory-recall] unavailable: %s", e)
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Pipeline creation
 # ---------------------------------------------------------------------------
@@ -219,6 +273,15 @@ def _start_stage(pipeline_id: str, meta: dict, project_description: str,
     # Inject Huginn's spec on first build (iter 0, stage 0)
     if stage_idx == 0 and meta.get("huginn_spec") and not prev_results:
         context += f"\n--- Build Spec (from Huginn) ---\n{meta['huginn_spec']}\n--- End Spec ---\n"
+
+    # Inject lessons from memory (LanceDB) for the target agent(s)
+    if stage_idx == 0:  # build stage
+        agents_in_stage = ([p["agent"] for p in stage.get("parallel", [])]
+                          if "parallel" in stage else [stage.get("agent", "")])
+        for a in agents_in_stage:
+            lessons = _recall_lessons(project_description, a)
+            if lessons:
+                context += f"\n--- Past Lessons for {a} ---\n{lessons}\n--- End Lessons ---\n"
 
     if prev_results:
         context += "\n--- Previous stage feedback ---\n"
@@ -381,6 +444,36 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
                 _escalate(pipeline_id, meta, combined_result)
                 return
 
+            # Store QA report for regression analysis
+            if "qa_history" not in meta:
+                meta["qa_history"] = []
+            meta["qa_history"].append(combined_result[:500])
+
+            # Regression detection: if iter > 1, ask Huginn if quality
+            # is progressing or regressing (not naive bug counting)
+            if meta["iteration"] > 1 and len(meta["qa_history"]) >= 2:
+                prev_report = meta["qa_history"][-2]
+                curr_report = meta["qa_history"][-1]
+                regression_check = _huginn(
+                    prompt=(
+                        f"Compare these two QA reports from consecutive iterations:\n\n"
+                        f"ITERATION {meta['iteration']-1} REPORT:\n{prev_report}\n\n"
+                        f"ITERATION {meta['iteration']} REPORT:\n{curr_report}\n\n"
+                        f"Is the code PROGRESSING (getting better, even if bugs remain) "
+                        f"or REGRESSING (fundamentally worse, new architectural problems)?\n"
+                        f"Answer with exactly one word: PROGRESS or REGRESS"
+                    )
+                )
+                if "regress" in regression_check.lower():
+                    log.warning("Pipeline %s: Huginn detected REGRESSION at iter %d!",
+                                pipeline_id[:14], meta["iteration"])
+                    _escalate(pipeline_id, meta,
+                              f"Regression detected by Huginn:\n{regression_check}\n\n"
+                              f"Latest QA:\n{combined_result}")
+                    return
+                log.info("Pipeline %s: Huginn says PROGRESS, continuing loop",
+                         pipeline_id[:14])
+
             # Ask Huginn to interpret the failure and produce a targeted fix brief
             log.info("[huginn] Interpreting %s failure for pipeline %s (iter %d)...",
                      stage_name, pipeline_id[:14], meta["iteration"])
@@ -418,9 +511,45 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
 
 
 def _complete_pipeline(pipeline_id: str, meta: dict):
-    """Mark pipeline as done and clean up."""
+    """Mark pipeline as done, distill lessons, and clean up."""
     log.info("Pipeline %s SHIPPED! (%d iterations total)",
              pipeline_id[:14], meta["iteration"])
+
+    # --- Lesson distillation via Muninn ---
+    try:
+        history_text = json.dumps(meta.get("stage_history", []), indent=2)[:3000]
+        qa_text = "\n".join(meta.get("qa_history", []))[:2000]
+        spec_text = meta.get("huginn_spec", "")[:1000]
+
+        lesson = _muninn(
+            prompt=(
+                f"A pipeline for this project just shipped:\n\n"
+                f"Spec:\n{spec_text}\n\n"
+                f"Stage history:\n{history_text}\n\n"
+                f"QA reports during iteration:\n{qa_text}\n\n"
+                f"Distill this into 2-5 dense, reusable lessons. Format:\n"
+                f"- LESSON: [one-line summary]\n"
+                f"  DETAIL: [what specifically to do/avoid]\n"
+                f"  AGENT: [which agent this applies to]\n"
+                f"Focus on mistakes that were made and how they were fixed."
+            )
+        )
+        if lesson:
+            # Save lesson to memory (fire-and-forget)
+            try:
+                _post(f"{LOCAL_BIFROST}/war-room/message", {
+                    "from": "odin",
+                    "to": "all",
+                    "type": "memory-ingest",
+                    "subject": f"Pipeline lesson: {pipeline_id[:14]}",
+                    "body": lesson,
+                })
+                log.info("[muninn] Lesson saved to memory for pipeline %s",
+                         pipeline_id[:14])
+            except Exception as e:
+                log.warning("[muninn] Failed to save lesson: %s", e)
+    except Exception as e:
+        log.warning("[muninn] Lesson distillation failed: %s", e)
 
     # Complete the parent task
     try:
