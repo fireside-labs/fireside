@@ -124,13 +124,16 @@ def _dispatch_one(task: dict):
 
     log.info("> Dispatching %s to %s (%s): %s", task_id[:14], assigned, node_url, title)
 
-    # Dispatch to the remote node's /dispatch endpoint
+    # Fire-and-forget: send dispatch with short timeout.
+    # The node returns 202 Accepted immediately and runs the agent in
+    # a background thread. When done, the node self-reports via
+    # /war-room/complete.  No more blocking here.
     try:
         result = _post(f"{node_url}/dispatch", {
             "task_id": task_id,
             "description": description,
             "timeout": DISPATCH_TIMEOUT,
-        }, timeout=DISPATCH_TIMEOUT + 60)
+        }, timeout=30)  # 30s is plenty for the 202 ack
     except urllib.error.URLError as e:
         log.error("  X Node %s unreachable: %s", assigned, e)
         _try_block(task_id, assigned, f"Node unreachable: {e}")
@@ -140,23 +143,13 @@ def _dispatch_one(task: dict):
         _try_block(task_id, assigned, str(e))
         return
 
-    # Post result back to War Room
     dispatch_status = result.get("status", "error")
-    if dispatch_status == "ok":
-        agent_result = result.get("result", "completed (no output)")
-        try:
-            _post(f"{LOCAL_BIFROST}/war-room/complete", {
-                "task_id": task_id,
-                "agent_id": assigned,
-                "result": agent_result[:2000],
-            })
-            log.info("  OK Task %s completed by %s (%d chars)",
-                     task_id[:14], assigned, len(agent_result))
-        except Exception as e:
-            log.error("  X Failed to post result for %s: %s", task_id[:14], e)
+    if dispatch_status in ("accepted", "ok"):
+        log.info("  -> %s accepted task %s (running in background)",
+                 assigned, task_id[:14])
     else:
         error_msg = result.get("error", "unknown error")
-        log.warning("  X Task %s failed on %s: %s", task_id[:14], assigned, error_msg)
+        log.warning("  X Task %s rejected by %s: %s", task_id[:14], assigned, error_msg)
         _try_block(task_id, assigned, error_msg)
 
 # ---------------------------------------------------------------------------
