@@ -207,8 +207,13 @@ class WorkspaceSyncThread(threading.Thread):
         # 2. Build local manifest
         local = _build_manifest(SYNC_LOCAL_WORKSPACE)
         # 3. Pull files that are missing or changed
+        # Never sync identity files — these are node-specific
+        _SYNC_EXCLUDE = {"SOUL.md", "USER.md", "IDENTITY.md", "CORE.md"}
         updated = []
         for rel, rhash in remote.items():
+            basename = rel.rsplit("/", 1)[-1] if "/" in rel else rel
+            if basename in _SYNC_EXCLUDE:
+                continue
             if local.get(rel) != rhash:
                 self._pull_file(base_url, rel)
                 updated.append(rel)
