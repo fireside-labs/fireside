@@ -215,8 +215,17 @@ def poll_and_dispatch():
         t.join(timeout=DISPATCH_TIMEOUT + 120)
 
 
+# Track recovery attempts per task to prevent infinite re-dispatch loops
+_recovery_count: dict = {}  # task_id -> count
+MAX_RECOVERY = 2  # block after this many recoveries
+
+
 def _recover_stuck(tasks: list):
-    """Find tasks stuck in 'claimed' past STUCK_TIMEOUT and re-open them."""
+    """Find tasks stuck in 'claimed' past STUCK_TIMEOUT.
+
+    First recovery: re-open the task so the dispatcher can retry.
+    After MAX_RECOVERY attempts: mark as blocked (stops the loop).
+    """
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     for task in tasks:
@@ -231,15 +240,25 @@ def _recover_stuck(tasks: list):
             if age > STUCK_TIMEOUT:
                 task_id = task.get("id", "")
                 agent = task.get("assigned_to", "unknown")
-                log.warning("  Recovering stuck task %s (claimed by %s, %ds ago)",
-                            task_id[:14], agent, int(age))
-                try:
-                    _post(f"{LOCAL_BIFROST}/war-room/status", {
-                        "task_id": task_id,
-                        "status": "open",
-                    })
-                except Exception:
-                    pass
+                count = _recovery_count.get(task_id, 0) + 1
+                _recovery_count[task_id] = count
+
+                if count > MAX_RECOVERY:
+                    log.warning("  Blocking stuck task %s (claimed by %s, %d recovery attempts)",
+                                task_id[:14], agent, count)
+                    _try_block(task_id, agent,
+                               f"Stuck after {count} recovery attempts ({int(age)}s)")
+                    _recovery_count.pop(task_id, None)
+                else:
+                    log.warning("  Recovering stuck task %s (claimed by %s, %ds ago, attempt %d/%d)",
+                                task_id[:14], agent, int(age), count, MAX_RECOVERY)
+                    try:
+                        _post(f"{LOCAL_BIFROST}/war-room/status", {
+                            "task_id": task_id,
+                            "status": "open",
+                        })
+                    except Exception:
+                        pass
         except (ValueError, TypeError):
             continue
 
