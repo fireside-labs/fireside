@@ -34,3 +34,4 @@ Thumbs.db
 bot/war_room_data/*.json
 
 config.json
+status.json
