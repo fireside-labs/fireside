@@ -528,12 +528,33 @@ class WarRoomRoutes:
             """Background thread: run agent, then post result back."""
             try:
                 session_id = f"dispatch-{task_id}" if task_id else "dispatch-adhoc"
+                # Build full environment: merge process env with User env vars
+                # so the subprocess has PATH, API keys, etc. even if Bifrost
+                # was started without them (e.g. from a bare scheduled task).
+                import os as _os
+                agent_env = dict(_os.environ)
+                if _sys.platform == "win32":
+                    try:
+                        import winreg
+                        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                           r"Environment") as key:
+                            i = 0
+                            while True:
+                                try:
+                                    name, value, _ = winreg.EnumValue(key, i)
+                                    agent_env[name] = value
+                                    i += 1
+                                except OSError:
+                                    break
+                    except Exception as _we:
+                        log.debug("[dispatch] Could not read User env: %s", _we)
                 result = subprocess.run(
                     [openclaw_bin, "agent", "-m", description, "--json",
                      "--session-id", session_id, "--agent", "main",
                      "--timeout", str(timeout)],
                     capture_output=True, text=True, timeout=timeout + 30,
                     shell=(_sys.platform == "win32"),
+                    env=agent_env,
                 )
 
                 if result.returncode != 0:
