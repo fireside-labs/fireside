@@ -1626,8 +1626,19 @@ def _load_local_extensions():
         log.error("Failed to load bifrost_local.py: %s", e)
 
 def run_http_server():
+    import signal
     _load_local_extensions()
     server = ThreadingHTTPServer(("0.0.0.0", LISTEN_PORT), BifrostHandler)
+
+    # Signal handlers only work in the main thread
+    if threading.current_thread() is threading.main_thread():
+        def _handle_sigterm(sig, frame):
+            log.info("SIGTERM received — shutting down Bifrost")
+            threading.Thread(target=server.shutdown, daemon=True).start()
+
+        signal.signal(signal.SIGTERM, _handle_sigterm)
+        signal.signal(signal.SIGINT, _handle_sigterm)
+
     log.info("HTTP listening on port %d", LISTEN_PORT)
     server.serve_forever()
 
@@ -1886,6 +1897,8 @@ def main():
     app.add_handler(MessageHandler(filters.ALL, _debug_all), group=-1)  # catch-all debug
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
+    # HTTP server must run alongside Telegram polling
+    threading.Thread(target=run_http_server, daemon=True, name="http-server").start()
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
