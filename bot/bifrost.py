@@ -1800,6 +1800,23 @@ def main():
             global _task_poller
             _task_poller = TaskPoller(THIS_NODE)
             _task_poller.start()
+        # Gateway health check -- warn loudly if OpenClaw gateway isn't running
+        # so the issue is visible immediately, not silently on first dispatch.
+        try:
+            import socket as _sock_gw
+            _gw = _sock_gw.create_connection(("127.0.0.1", 18789), timeout=2)
+            _gw.close()
+            log.info("[gateway] OpenClaw gateway OK on port 18789")
+        except OSError:
+            log.warning(
+                "\n"
+                "  ╔══════════════════════════════════════════════════════════╗\n"
+                "  ║  ⚠️  OpenClaw gateway NOT running on port 18789           ║\n"
+                "  ║  Dispatch calls will FAIL with 500 until it is started.  ║\n"
+                "  ║  Fix:  run  scripts/start-gateway.ps1                    ║\n"
+                "  ║        or   openclaw gateway                             ║\n"
+                "  ╚══════════════════════════════════════════════════════════╝"
+            )
         log.info("Bifrost v5 SEND-ONLY ready on '%s' (war_room=%s)", THIS_NODE, WAR_ROOM_AVAILABLE)
         _event_loop.run_forever()  # asyncio owns main thread
         return
