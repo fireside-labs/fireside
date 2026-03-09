@@ -544,43 +544,70 @@ class WarRoomRoutes:
                             while True:
                                 try:
                                     name, value, _ = winreg.EnumValue(key, i)
-                                    agent_env[name] = value
+                                    # Skip PATH — we merge it separately (case mismatch:
+                                    # registry has "Path", os.environ has "PATH")
+                                    if name.upper() != "PATH":
+                                        agent_env[name] = value
                                     i += 1
                                 except OSError:
                                     break
-                        # Merge PATHs: User PATH may overwrite System PATH.
-                        # Combine both so node.exe, git, etc. are always found.
-                        _user_path = agent_env.get("PATH", "")
-                        _merged = _user_path
-                        for _seg in _parent_path.split(";"):
-                            if _seg and _seg not in _merged:
+                        # Read User PATH from registry separately
+                        try:
+                            _user_path, _ = winreg.QueryValueEx(
+                                winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment"),
+                                "Path")
+                        except OSError:
+                            _user_path = ""
+                        # Merge: parent PATH + User PATH + essential dirs
+                        _essential = [
+                            r"C:\Program Files\nodejs",
+                            _os.path.expandvars(r"%APPDATA%\npm"),
+                        ]
+                        _merged = _parent_path
+                        for _seg in (_user_path.split(";") + _essential):
+                            if _seg and _seg.lower() not in _merged.lower():
                                 _merged += ";" + _seg
                         agent_env["PATH"] = _merged
                     except Exception as _we:
                         log.debug("[dispatch] Could not read User env: %s", _we)
-                # On Windows with shell=True, the list args get joined without
-                # quoting, so multi-word description splits.  Pass as a string.
-                _cmd_parts = [
-                    openclaw_bin, "agent",
-                    "-m", f'"{description}"' if _sys.platform == "win32" else description,
-                    "--json",
-                    "--session-id", session_id,
-                    "--agent", "main",
-                    "--timeout", str(timeout),
-                ]
-                if _sys.platform == "win32":
-                    result = subprocess.run(
-                        " ".join(_cmd_parts),
-                        capture_output=True, text=True, timeout=timeout + 30,
-                        shell=True,
-                        env=agent_env,
-                    )
+                # On Windows, avoid shell=True + .cmd files entirely — cmd.exe
+                # mangles quotes and eats flags like --session-id.
+                # Call node.exe directly with the openclaw .mjs entry point.
+                if _sys.platform == "win32" and openclaw_bin and openclaw_bin.endswith(".cmd"):
+                    import os.path as _osp
+                    _openclaw_dir = _osp.dirname(openclaw_bin)
+                    _mjs = _osp.join(_openclaw_dir, "node_modules", "openclaw", "openclaw.mjs")
+                    # Find node.exe — check multiple locations
+                    _node = None
+                    for _candidate in [
+                        _osp.join(_openclaw_dir, "node.exe"),
+                        shutil.which("node"),
+                        r"C:\Program Files\nodejs\node.exe",
+                        _osp.expandvars(r"%ProgramFiles%\nodejs\node.exe"),
+                    ]:
+                        if _candidate and _osp.isfile(_candidate):
+                            _node = _candidate
+                            break
+                    if not _node:
+                        raise FileNotFoundError("node.exe not found")
+                    _cmd = [_node, _mjs, "agent",
+                            "-m", description,
+                            "--json",
+                            "--session-id", session_id,
+                            "--agent", "main",
+                            "--timeout", str(timeout)]
                 else:
-                    result = subprocess.run(
-                        _cmd_parts,
-                        capture_output=True, text=True, timeout=timeout + 30,
-                        env=agent_env,
-                    )
+                    _cmd = [openclaw_bin, "agent",
+                            "-m", description,
+                            "--json",
+                            "--session-id", session_id,
+                            "--agent", "main",
+                            "--timeout", str(timeout)]
+                result = subprocess.run(
+                    _cmd,
+                    capture_output=True, text=True, timeout=timeout + 30,
+                    env=agent_env,
+                )
 
                 if result.returncode != 0:
                     log.warning("[dispatch] Agent exited %d: %s",
