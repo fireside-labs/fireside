@@ -478,62 +478,95 @@ class WarRoomRoutes:
         except Exception as _e:
             log.warning("[dispatch] Could not pre-seed identity files: %s", _e)
 
-        try:
-            # --session-id: dedicated session per dispatch task
-            # --agent main: explicit agent target (required on Windows)
-            session_id = f"dispatch-{task_id}" if task_id else "dispatch-adhoc"
-            result = subprocess.run(
-                [openclaw_bin, "agent", "-m", description, "--json",
-                 "--session-id", session_id, "--agent", "main",
-                 "--timeout", str(timeout)],
-                capture_output=True, text=True, timeout=timeout + 30,
-            )
+        # --- Fire-and-forget: run agent in background thread ---
+        # Return 202 immediately so the dispatcher doesn't block.
+        # The background thread self-reports completion via /war-room/complete.
+        import threading as _threading
 
-
-            if result.returncode != 0:
-                log.warning("[dispatch] Agent exited %d: %s",
-                            result.returncode, result.stderr[:200])
-                return 500, {
-                    "status": "error",
-                    "task_id": task_id,
-                    "error": result.stderr[:500] or "agent exited non-zero",
-                    "returncode": result.returncode,
-                }
-
-            # Parse JSON output if possible
-            output = (result.stdout or "").strip()
-
+        def _run_agent_bg():
+            """Background thread: run agent, then post result back."""
             try:
-                import json as _json
-                parsed = _json.loads(output)
-                agent_response = parsed.get("response", parsed.get("content", output))
-            except Exception:
-                agent_response = output
+                session_id = f"dispatch-{task_id}" if task_id else "dispatch-adhoc"
+                result = subprocess.run(
+                    [openclaw_bin, "agent", "-m", description, "--json",
+                     "--session-id", session_id, "--agent", "main",
+                     "--timeout", str(timeout)],
+                    capture_output=True, text=True, timeout=timeout + 30,
+                )
 
-            # Strip <think>...</think> reasoning tokens (Qwen thinking mode)
-            import re as _re
-            agent_response = _re.sub(
-                r"<think>[\s\S]*?</think>\s*", "", str(agent_response)
-            ).strip()
-            # Also strip "Thinking Process:" style prefixes
-            agent_response = _re.sub(
-                r"^(?:Thinking Process:?|Thought:?)[\s\S]*?(?=\n[A-Z]|\n\*\*|\n#|\n---)",
-                "", agent_response, count=1
-            ).strip()
+                if result.returncode != 0:
+                    log.warning("[dispatch] Agent exited %d: %s",
+                                result.returncode, result.stderr[:200])
+                    _self_report(task_id, node, None,
+                                 result.stderr[:500] or "agent exited non-zero")
+                    return
 
-            log.info("[dispatch] Task %s completed (%d chars)",
-                     task_id[:14] if task_id else "adhoc", len(agent_response))
+                # Parse JSON output if possible
+                output = (result.stdout or "").strip()
+                try:
+                    import json as _json
+                    parsed = _json.loads(output)
+                    agent_response = parsed.get("response", parsed.get("content", output))
+                except Exception:
+                    agent_response = output
 
-            return 200, {
-                "status": "ok",
-                "task_id": task_id,
-                "result": agent_response,
-            }
+                # Strip <think>...</think> reasoning tokens (Qwen thinking mode)
+                import re as _re
+                agent_response = _re.sub(
+                    r"<think>[\s\S]*?</think>\s*", "", str(agent_response)
+                ).strip()
+                agent_response = _re.sub(
+                    r"^(?:Thinking Process:?|Thought:?)[\s\S]*?(?=\n[A-Z]|\n\*\*|\n#|\n---)",
+                    "", agent_response, count=1
+                ).strip()
 
-        except subprocess.TimeoutExpired:
-            log.error("[dispatch] Task %s timed out after %ds", task_id[:14], timeout)
-            return 504, {
-                "status": "timeout",
-                "task_id": task_id,
-                "error": f"agent turn timed out after {timeout}s",
-            }
+                log.info("[dispatch] Task %s completed (%d chars)",
+                         task_id[:14] if task_id else "adhoc", len(agent_response))
+                _self_report(task_id, node, agent_response, None)
+
+            except subprocess.TimeoutExpired:
+                log.error("[dispatch] Task %s timed out after %ds", task_id[:14], timeout)
+                _self_report(task_id, node, None, f"agent timed out after {timeout}s")
+            except Exception as ex:
+                log.error("[dispatch] Task %s crashed: %s", task_id[:14], ex)
+                _self_report(task_id, node, None, str(ex)[:500])
+
+        def _self_report(tid, agent, result_text, error):
+            """Report task completion/failure back to local War Room."""
+            import json as _json3
+            try:
+                import urllib.request as _ur
+                if result_text is not None:
+                    body = _json3.dumps({
+                        "task_id": tid, "agent_id": agent,
+                        "result": result_text[:2000],
+                    }).encode()
+                    req = _ur.Request("http://127.0.0.1:8765/war-room/complete",
+                                     data=body,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+                    _ur.urlopen(req, timeout=10)
+                    log.info("[dispatch] Self-reported completion for %s", tid[:14])
+                else:
+                    body = _json3.dumps({
+                        "task_id": tid, "status": "blocked",
+                        "reason": f"[dispatch] {agent}: {error}",
+                    }).encode()
+                    req = _ur.Request("http://127.0.0.1:8765/war-room/status",
+                                     data=body,
+                                     headers={"Content-Type": "application/json"},
+                                     method="POST")
+                    _ur.urlopen(req, timeout=10)
+                    log.info("[dispatch] Self-reported failure for %s", tid[:14])
+            except Exception as rpt_e:
+                log.error("[dispatch] Failed to self-report for %s: %s", tid[:14], rpt_e)
+
+        t = _threading.Thread(target=_run_agent_bg, daemon=True,
+                              name=f"dispatch-{task_id[:8]}")
+        t.start()
+
+        return 202, {
+            "status": "accepted",
+            "task_id": task_id,
+            "message": f"Agent session started in background (timeout={timeout}s)",
+        }
