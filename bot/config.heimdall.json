@@ -5,7 +5,7 @@
         "id": "heimdall",
         "role": "security_monitor",
         "local_model": "qwen3.5:35b",
-        "cloud_model": "mistralai/mistral-large-2-instruct",
+        "cloud_model": "z-ai/glm5",
         "cloud_base_url": "https://integrate.api.nvidia.com/v1"
     }
 }
