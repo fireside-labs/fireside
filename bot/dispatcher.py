@@ -109,10 +109,11 @@ def _dispatch_one(task: dict):
     # Append standard dispatch instructions
     description += (
         "\n\n---\n"
-        "DISPATCH RULES: When you finish, report a brief summary of what "
-        "you did and the file paths you created or modified. Do NOT paste "
-        "file contents or code in your response. If there are bugs or "
-        "errors, describe them briefly."
+        "DISPATCH RULES: When you finish, git add, commit (using conventional "
+        "commits with your agent name, e.g. 'feat: description (by thor)'), "
+        "and git push your work. Report a brief summary of what you did and "
+        "the file paths you created or modified. Do NOT paste file contents "
+        "or code in your response."
     )
 
     try:
