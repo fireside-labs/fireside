@@ -47,17 +47,28 @@ def _get(url: str, timeout: int = 10) -> dict:
 def _parse_result(text: str) -> str:
     """Parse agent result text into a verdict: pass, fail, or ship.
 
-    Uses keyword detection on the result. Agents are instructed in their
-    dispatch to use these keywords explicitly.
+    PRIORITY ORDER:
+    1. Explicit VERDICT: line (agents are instructed to use this)
+    2. Keyword fallback (only if no VERDICT: found)
+    3. Default: fail (needs iteration)
     """
-    t = text.lower().strip()
+    t = text.strip()
+    tl = t.lower()
 
-    # Check for explicit verdicts first
-    if re.search(r'\b(ship|lgtm|approved|all\s+(?:tests?\s+)?pass)', t):
+    # --- Priority 1: Explicit VERDICT: line ---
+    verdict_match = re.search(r'VERDICT:\s*(PASS|FAIL|SHIP|IMPROVE|LGTM)', t, re.IGNORECASE)
+    if verdict_match:
+        v = verdict_match.group(1).upper()
+        if v in ("PASS", "SHIP", "LGTM"):
+            return "pass"
+        return "fail"  # FAIL or IMPROVE
+
+    # --- Priority 2: Keyword fallback (weaker signal) ---
+    # Only match keywords that appear as standalone verdicts, not in prose
+    # e.g. "all tests pass" → pass, but "I fixed the bug" should NOT → fail
+    if re.search(r'\ball\s+(?:tests?\s+)?pass', tl):
         return "pass"
-    if re.search(r'\b(fail|bug|error|broken|syntax\s+error|crash)', t):
-        return "fail"
-    if re.search(r'\bpass\b', t):
+    if re.search(r'\bstatus:\s*done\b', tl):
         return "pass"
 
     # Default: treat as feedback (needs iteration)
@@ -141,14 +152,6 @@ def _muninn(prompt: str, timeout: int = 120) -> str:
 def _recall_lessons(project_desc: str, agent: str) -> str:
     """Query LanceDB for relevant past lessons for this agent/task."""
     try:
-        result = _post(f"{LOCAL_BIFROST}/ask", {
-            "from": "odin",
-            "prompt": f"Search for lessons related to: {project_desc[:200]}",
-            "system": "Return only the raw memory results.",
-            "model": "local",
-            "max_tokens": 500,
-        }, timeout=10)
-        # Try the memory query endpoint directly
         memories = _post(f"{LOCAL_BIFROST}/war-room/message", {
             "from": "odin",
             "to": agent,
