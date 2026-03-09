@@ -289,7 +289,7 @@ class AskHandler:
                 provider = "nvidia" if "nvidia" in (self.cloud_base_url or "") else "cloud"
                 _report_cost_to_heimdall(
                     node=self.agent_id,
-                    model=self.cloud_model,
+                    model=model_id,
                     provider=provider,
                     tokens_in=tokens_in,
                     tokens_out=tokens_out,
