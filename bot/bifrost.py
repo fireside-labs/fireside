@@ -1724,20 +1724,24 @@ class TaskPoller:
                 "task_id": tid, "agent_id": self.node, "status": "in_progress"
             })
 
-            # 3. Process via /ask — use cloud model for "deep" tier tasks
-            tier = task.get("tier", "fast")
-            model = "cloud" if tier == "deep" else "local"
-            _ping(f"Thinking ({tier})...", 25)
+            # 3. Process via /dispatch — full agent session with tools
+            _ping("Dispatching...", 25)
             prompt = (
                 f"You have been assigned a task from the War Room.\n"
                 f"Task: {title}\n"
                 f"Description: {desc}\n\n"
                 f"Complete this task thoroughly. Provide your result."
             )
-            result_data = self._post(f"{self.base}/ask", {
-                "prompt": prompt, "model": model
+            result_data = self._post(f"{self.base}/dispatch", {
+                "task_id": tid,
+                "description": prompt,
+                "timeout": 300,
             })
-            result_text = result_data.get("response", result_data.get("answer", str(result_data)))
+            dispatch_status = result_data.get("status", "error")
+            if dispatch_status == "ok":
+                result_text = result_data.get("result", "completed (no output)")
+            else:
+                raise RuntimeError(result_data.get("error", "dispatch failed"))
 
             # 4. Complete the task
             _ping("Submitting result...", 90)
