@@ -85,6 +85,17 @@ if (Test-Port $BIFROST_PORT) {
         Write-Host "  [ERROR] bifrost.py not found at: $BIFROST" -ForegroundColor Red
         exit 1
     }
+    Write-Host "  Loading persistent env vars (NVIDIA_API_KEY etc)..." -ForegroundColor Gray
+    # Explicitly pull User-scope env vars from registry so they're inherited by Bifrost
+    # even when this script is launched from Task Scheduler or a non-interactive shell.
+    $userEnvKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+    if ($userEnvKey) {
+        foreach ($name in $userEnvKey.GetValueNames()) {
+            $val = $userEnvKey.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+            if ($val -ne $null) { [System.Environment]::SetEnvironmentVariable($name, $val, "Process") }
+        }
+        $userEnvKey.Close()
+    }
     Write-Host "  Starting Bifrost ($BIFROST)..." -ForegroundColor Gray
     Start-Process -FilePath $PYTHON -ArgumentList $BIFROST `
         -WorkingDirectory $BOT_DIR -WindowStyle Minimized
