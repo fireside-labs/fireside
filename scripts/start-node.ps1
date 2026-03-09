@@ -8,13 +8,14 @@
 # All three services stay running in background windows after this script exits.
 
 param(
-    [switch]$SkipOllama
+    [switch]$SkipLlamaServer
 )
 
 $ErrorActionPreference = "Stop"
-$BIFROST_PORT  = 8765
-$GATEWAY_PORT  = 18789
-$OLLAMA_PORT   = 11434
+$BIFROST_PORT     = 8765
+$GATEWAY_PORT     = 18789
+$LLAMA_PORT       = 11434
+$LLAMA_SERVER_CMD = "C:\llama-server\llama-server.cmd"
 
 # Locate the bot directory relative to this script
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -46,18 +47,23 @@ Write-Host ""
 Write-Host "=== Valhalla Mesh Node Startup ===" -ForegroundColor Cyan
 Write-Host ""
 
-# ── Step 1: Ollama ──────────────────────────────────────────────────────────
-if (-not $SkipOllama) {
-    Write-Host "[1/3] Ollama..." -ForegroundColor Yellow
-    if (Test-Port $OLLAMA_PORT) {
-        Write-Host "  [OK] Ollama already running on port $OLLAMA_PORT" -ForegroundColor Green
+# ── Step 1: llama-server (replaces Ollama) ──────────────────────────────────
+if (-not $SkipLlamaServer) {
+    Write-Host "[1/3] llama-server..." -ForegroundColor Yellow
+    if (Test-Port $LLAMA_PORT) {
+        Write-Host "  [OK] llama-server already running on port $LLAMA_PORT" -ForegroundColor Green
     } else {
-        Write-Host "  Starting Ollama..." -ForegroundColor Gray
-        Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Minimized
-        if (-not (Wait-Port $OLLAMA_PORT "Ollama" 20)) { exit 1 }
+        if (-not (Test-Path $LLAMA_SERVER_CMD)) {
+            Write-Host "  [ERROR] $LLAMA_SERVER_CMD not found -- run the llama-server setup first" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "  Starting llama-server (160K ctx, flash attn, q8_0 KV)..." -ForegroundColor Gray
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$LLAMA_SERVER_CMD`"" -WindowStyle Minimized
+        # llama-server takes ~10-15s to load the model before it starts listening
+        if (-not (Wait-Port $LLAMA_PORT "llama-server" 60)) { exit 1 }
     }
 } else {
-    Write-Host "[1/3] Ollama -- skipped (use -SkipOllama flag)" -ForegroundColor Gray
+    Write-Host "[1/3] llama-server -- skipped (-SkipLlamaServer flag)" -ForegroundColor Gray
 }
 
 # ── Step 2: OpenClaw Gateway ─────────────────────────────────────────────────
@@ -88,7 +94,8 @@ if (Test-Port $BIFROST_PORT) {
 # ── All up ───────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "=== Node is READY ===" -ForegroundColor Cyan
-Write-Host "  Ollama:  http://localhost:$OLLAMA_PORT" -ForegroundColor White
-Write-Host "  Gateway: http://localhost:$GATEWAY_PORT" -ForegroundColor White
-Write-Host "  Bifrost: http://localhost:$BIFROST_PORT/health" -ForegroundColor White
+Write-Host "  llama-server: http://localhost:$LLAMA_PORT (generation)" -ForegroundColor White
+Write-Host "  Ollama:       http://localhost:11435    (embeddings only)" -ForegroundColor White
+Write-Host "  Gateway:      http://localhost:$GATEWAY_PORT" -ForegroundColor White
+Write-Host "  Bifrost:      http://localhost:$BIFROST_PORT/health" -ForegroundColor White
 Write-Host ""
