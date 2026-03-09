@@ -1754,8 +1754,29 @@ class TaskPoller:
             dispatch_status = result_data.get("status", "error")
             if dispatch_status == "ok":
                 result_text = result_data.get("result", "completed (no output)")
-            else:
-                raise RuntimeError(result_data.get("error", "dispatch failed"))
+            elif dispatch_status == "accepted":
+                # Async dispatch — agent running in background.
+                # Wait for it to self-report via /war-room/complete.
+                _ping("Agent running...", 50)
+                import time as _time
+                _deadline = _time.time() + 330  # 5.5 min
+                result_text = None
+                while _time.time() < _deadline:
+                    _time.sleep(15)
+                    try:
+                        check_url = f"{self.base}/war-room/tasks?assigned_to={self.node}&status=done"
+                        req2 = urllib.request.Request(check_url)
+                        with urllib.request.urlopen(req2, timeout=5) as r2:
+                            done_tasks = json.loads(r2.read())
+                        if isinstance(done_tasks, dict):
+                            done_tasks = list(done_tasks.values())
+                        if any(t.get("id") == tid for t in done_tasks):
+                            result_text = "completed via async dispatch"
+                            break
+                    except Exception:
+                        pass
+                if result_text is None:
+                    raise RuntimeError("async dispatch timed out — agent did not complete")
 
             # 4. Complete the task
             _ping("Submitting result...", 90)
