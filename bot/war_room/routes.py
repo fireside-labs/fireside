@@ -161,6 +161,41 @@ class WarRoomRoutes:
 
         return 200, task
 
+    def handle_pipeline(self, body: dict) -> tuple[int, dict]:
+        """POST /war-room/pipeline — create a multi-stage pipeline.
+
+        Body: {title, description, stages: [...], max_iterations: 3}
+        Stages can be sequential or parallel:
+          {"name": "build", "parallel": [
+              {"agent": "thor", "description": "..."},
+              {"agent": "freya", "description": "..."},
+          ]}
+          {"name": "test", "agent": "heimdall", "description": "..."}
+        """
+        title = body.get("title")
+        description = body.get("description", "")
+        stages = body.get("stages")
+        max_iterations = body.get("max_iterations", 3)
+
+        if not title or not stages:
+            return 400, {"error": "Missing required: title, stages"}
+
+        try:
+            import sys, os
+            sys.path.insert(0, os.path.dirname(__file__) + "/..")
+            from pipeline import create_pipeline
+            parent = create_pipeline(
+                title=title,
+                description=description,
+                stages=stages,
+                max_iterations=max_iterations,
+                posted_by=body.get("posted_by", "odin"),
+            )
+            return 200, {"status": "pipeline_created", "pipeline": parent}
+        except Exception as e:
+            log.error("[pipeline] Failed to create: %s", e)
+            return 500, {"error": str(e)}
+
     def _auto_decompose(self, parent_task: dict):
         """Break a task into 3-5 subtasks using /ask, then post them as children."""
         import json

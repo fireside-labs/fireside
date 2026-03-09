@@ -158,6 +158,13 @@ def _dispatch_one(task: dict):
 # ---------------------------------------------------------------------------
 def poll_and_dispatch():
     """One poll cycle: find open tasks -> claim ALL -> dispatch in parallel."""
+    # Check active pipelines for completed stages
+    try:
+        from pipeline import check_pipelines
+        check_pipelines()
+    except Exception as e:
+        log.debug("Pipeline check: %s", e)
+
     try:
         tasks = _get(f"{LOCAL_BIFROST}/war-room/tasks")
     except Exception as e:

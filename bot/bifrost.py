@@ -1237,7 +1237,8 @@ class BifrostHandler(BaseHTTPRequestHandler):
                            "/war-room/complete", "/war-room/status", "/ask",
                            "/war-room/delete-task", "/war-room/delete-message",
                            "/war-room/clear-messages", "/war-room/summon",
-                           "/war-room/progress", "/dispatch")
+                           "/war-room/progress", "/dispatch",
+                           "/war-room/pipeline")
         all_routes = bifrost_routes + war_room_routes
 
         if self.path not in all_routes:
@@ -1264,6 +1265,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 "/war-room/summon": "handle_summon",
                 "/war-room/progress": "handle_progress",
                 "/dispatch": "handle_dispatch",
+                "/war-room/pipeline": "handle_pipeline",
             }
             method_name = wr_map.get(self.path)
             wr_handler = getattr(_war_room_routes, method_name, None) if method_name else None
