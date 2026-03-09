@@ -439,21 +439,40 @@ class WarRoomStore:
             for t in tasks:
                 agent = t.get("assigned_to", t.get("claimed_by", "unknown"))
                 title = t.get("title", t.get("id", "?"))
-                # Extract readable text from dispatch result JSON
-                # Format: {runId, status, result: {payloads: [{text: "..."}]}}
+                # Extract readable info from dispatch result
                 raw_result = (t.get("result", "") or "")
+                response_text = ""
+                model_info = ""
+                duration = ""
                 try:
-                    _rj = _json.loads(raw_result)
-                    # Try double-nested (dispatch wrapper -> openclaw result)
-                    _inner = _rj.get("result", _rj)
+                    _rj = raw_result if isinstance(raw_result, dict) else _json.loads(raw_result)
+                    _inner = _rj.get("result", _rj) if isinstance(_rj, dict) else _rj
+                    # Extract agent response text
                     if isinstance(_inner, dict):
                         _payloads = _inner.get("payloads", [])
-                    else:
-                        _payloads = _rj.get("payloads", [])
-                    result = _payloads[0].get("text", "")[:600] if _payloads else (_rj.get("summary", raw_result))[:600]
+                        if _payloads and isinstance(_payloads[0], dict):
+                            response_text = _payloads[0].get("text", "")[:400]
+                        # Extract model + duration from meta
+                        _meta = _inner.get("meta", {})
+                        _agent_meta = _meta.get("agentMeta", {})
+                        _model = _agent_meta.get("model", "")
+                        _provider = _agent_meta.get("provider", "")
+                        _dur_ms = _meta.get("durationMs", 0)
+                        _usage = _agent_meta.get("usage", {})
+                        _tokens = _usage.get("total", 0)
+                        if _model:
+                            model_info = f"\n\U0001f916 {_provider}/{_model}" if _provider else f"\n\U0001f916 {_model}"
+                        if _dur_ms:
+                            duration = f" \u2022 {_dur_ms/1000:.1f}s"
+                        if _tokens:
+                            duration += f" \u2022 {_tokens} tok"
+                    elif isinstance(_inner, str):
+                        response_text = _inner[:400]
+                    if not response_text:
+                        response_text = _rj.get("summary", "done") if isinstance(_rj, dict) else str(_rj)[:400]
                 except Exception:
-                    result = raw_result[:600]
-                text = f"\u2705 {agent.upper()} completed task:\n\U0001f4cb {title}\n\n{result}"
+                    response_text = str(raw_result)[:400]
+                text = f"\u2705 {agent.upper()} completed task:\n\U0001f4cb {title}\n\n{response_text}{model_info}{duration}"
                 body = _json.dumps({
                     "chat_id": _chat, "text": text
                 }).encode()
