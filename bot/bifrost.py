@@ -1626,8 +1626,19 @@ def _load_local_extensions():
         log.error("Failed to load bifrost_local.py: %s", e)
 
 def run_http_server():
+    import signal
     _load_local_extensions()
     server = ThreadingHTTPServer(("0.0.0.0", LISTEN_PORT), BifrostHandler)
+
+    # Signal handlers only work in the main thread
+    if threading.current_thread() is threading.main_thread():
+        def _handle_sigterm(sig, frame):
+            log.info("SIGTERM received — shutting down Bifrost")
+            threading.Thread(target=server.shutdown, daemon=True).start()
+
+        signal.signal(signal.SIGTERM, _handle_sigterm)
+        signal.signal(signal.SIGINT, _handle_sigterm)
+
     log.info("HTTP listening on port %d", LISTEN_PORT)
     server.serve_forever()
 
@@ -1743,8 +1754,29 @@ class TaskPoller:
             dispatch_status = result_data.get("status", "error")
             if dispatch_status == "ok":
                 result_text = result_data.get("result", "completed (no output)")
-            else:
-                raise RuntimeError(result_data.get("error", "dispatch failed"))
+            elif dispatch_status == "accepted":
+                # Async dispatch — agent running in background.
+                # Wait for it to self-report via /war-room/complete.
+                _ping("Agent running...", 50)
+                import time as _time
+                _deadline = _time.time() + 330  # 5.5 min
+                result_text = None
+                while _time.time() < _deadline:
+                    _time.sleep(15)
+                    try:
+                        check_url = f"{self.base}/war-room/tasks?assigned_to={self.node}&status=done"
+                        req2 = urllib.request.Request(check_url)
+                        with urllib.request.urlopen(req2, timeout=5) as r2:
+                            done_tasks = json.loads(r2.read())
+                        if isinstance(done_tasks, dict):
+                            done_tasks = list(done_tasks.values())
+                        if any(t.get("id") == tid for t in done_tasks):
+                            result_text = "completed via async dispatch"
+                            break
+                    except Exception:
+                        pass
+                if result_text is None:
+                    raise RuntimeError("async dispatch timed out — agent did not complete")
 
             # 4. Complete the task
             _ping("Submitting result...", 90)
@@ -1886,6 +1918,8 @@ def main():
     app.add_handler(MessageHandler(filters.ALL, _debug_all), group=-1)  # catch-all debug
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message))
+    # HTTP server must run alongside Telegram polling
+    threading.Thread(target=run_http_server, daemon=True, name="http-server").start()
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":

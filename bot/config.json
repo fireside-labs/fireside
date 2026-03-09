@@ -2,13 +2,14 @@
   "telegram_bot_token": "8742485890:AAEuXE8U41GO7na64WLUiXGhBArLzMqd2AQ",
   "telegram_chat_id": 7111843831,
   "listen_port": 8765,
-  "_note": "this_node intentionally absent — each node discovers identity via hostname → config.<node>.json",
+  "_note": "this_node intentionally absent \u2014 each node discovers identity via hostname \u2192 config.<node>.json",
   "agent": {
     "id": "odin",
     "role": "orchestrator",
     "local_model": "qwen3.5:27b",
     "cloud_model": "z-ai/glm5",
-    "cloud_base_url": "https://integrate.api.nvidia.com/v1"
+    "cloud_base_url": "https://integrate.api.nvidia.com/v1",
+    "cloud_api_key": "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"
   },
   "war_room": {
     "sync_interval_seconds": 30,
@@ -84,5 +85,6 @@
       "event_log",
       "heimdall_audit"
     ]
-  }
+  },
+  "node_id": "odin"
 }
