@@ -533,6 +533,7 @@ class WarRoomRoutes:
                      "--session-id", session_id, "--agent", "main",
                      "--timeout", str(timeout)],
                     capture_output=True, text=True, timeout=timeout + 30,
+                    shell=(_sys.platform == "win32"),
                 )
 
                 if result.returncode != 0:
