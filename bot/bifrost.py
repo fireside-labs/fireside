@@ -1754,37 +1754,52 @@ class TaskPoller:
             dispatch_status = result_data.get("status", "error")
             if dispatch_status == "ok":
                 result_text = result_data.get("result", "completed (no output)")
+                # Sync dispatch — complete the task ourselves
+                _ping("Submitting result...", 90)
+                self._post(f"{self.base}/war-room/complete", {
+                    "task_id": tid,
+                    "agent_id": self.node,
+                    "result": result_text[:2000]
+                })
             elif dispatch_status == "accepted":
                 # Async dispatch — agent running in background.
-                # Wait for it to self-report via /war-room/complete.
+                # The dispatch background thread will self-report via
+                # /war-room/complete when done.  We just wait for the
+                # task status to change (done or blocked).
                 _ping("Agent running...", 50)
                 import time as _time
-                _deadline = _time.time() + 330  # 5.5 min
-                result_text = None
+                _deadline = _time.time() + 600  # 10 min for complex tasks
+                _completed = False
                 while _time.time() < _deadline:
                     _time.sleep(15)
                     try:
-                        check_url = f"{self.base}/war-room/tasks?assigned_to={self.node}&status=done"
+                        check_url = f"{self.base}/war-room/tasks"
                         req2 = urllib.request.Request(check_url)
                         with urllib.request.urlopen(req2, timeout=5) as r2:
-                            done_tasks = json.loads(r2.read())
-                        if isinstance(done_tasks, dict):
-                            done_tasks = list(done_tasks.values())
-                        if any(t.get("id") == tid for t in done_tasks):
-                            result_text = "completed via async dispatch"
+                            all_tasks = json.loads(r2.read())
+                        if isinstance(all_tasks, dict):
+                            all_tasks = list(all_tasks.values())
+                        for t in all_tasks:
+                            if t.get("id") == tid:
+                                if t.get("status") == "done":
+                                    _completed = True
+                                    break
+                                elif t.get("status") == "blocked":
+                                    # Self-report marked it blocked (agent error)
+                                    raise RuntimeError(
+                                        f"agent self-reported failure: {t.get('result', 'unknown')}"
+                                    )
+                        if _completed:
                             break
+                    except RuntimeError:
+                        raise
                     except Exception:
                         pass
-                if result_text is None:
-                    raise RuntimeError("async dispatch timed out — agent did not complete")
+                if not _completed:
+                    raise RuntimeError("async dispatch timed out (10min) — agent did not complete")
+            else:
+                raise RuntimeError(result_data.get("error", "dispatch failed"))
 
-            # 4. Complete the task
-            _ping("Submitting result...", 90)
-            self._post(f"{self.base}/war-room/complete", {
-                "task_id": tid,
-                "agent_id": self.node,
-                "result": result_text[:2000]  # cap result size
-            })
             _ping("Done ✓", 100)
             log.info("[task-poller] Completed: %s (%s)", title, tid[:8])
 
