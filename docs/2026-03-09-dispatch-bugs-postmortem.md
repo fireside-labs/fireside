@@ -2,129 +2,72 @@
 
 ## Summary
 
-Two separate dispatch bugs were blocking all pipeline execution across the mesh. They appeared as a single symptom ("pipeline tasks go `blocked` immediately") but had different root causes on different code paths.
+Six dispatch bugs were blocking pipeline execution. All found and fixed in one session.
+
+**Verification:** Thor completed both pipeline build tasks. Telegram confirmed `BUILD COMPLETE` via `llama/qwen3.5-35b` local Q6_K inference.
 
 ---
 
-## Bug 1: TaskPoller `accepted` vs `ok` Status Mismatch (FIXED)
+## Bug 1: TaskPoller `accepted` vs `ok` (FIXED — `3380c3e`)
 
-**Severity:** Critical — broke ALL pipeline execution on ALL nodes  
-**Commit:** `3380c3e`  
-**Affected file:** `bifrost.py` — `TaskPoller._process_task()`
+`/dispatch` returns `"accepted"` (async 202), TaskPoller only checked for `"ok"`. Every pipeline task immediately went `blocked`.
 
-### Root Cause
+**Fix:** Handle `"accepted"` status, poll every 15s for completion.
 
-The `/dispatch` endpoint (`routes.py:458`) was refactored to run the OpenClaw agent **asynchronously** in a background thread, returning immediately with:
+## Bug 2: `openclaw.ps1` Blocked on Windows (FIXED — `82d35a2`)
 
-```json
-{"status": "accepted", "task_id": "...", "message": "Agent session started in background"}
-```
+`shutil.which("openclaw")` finds `.ps1` first. Execution policy blocks it. Agent subprocess silently fails.
 
-But `TaskPoller._process_task()` (`bifrost.py:1744`) only checked for `"ok"`:
+**Fix:** Prefer `openclaw.cmd` on `win32`.
 
-```python
-dispatch_status = result_data.get("status", "error")
-if dispatch_status == "ok":
-    result_text = result_data.get("result", "completed (no output)")
-else:
-    raise RuntimeError(result_data.get("error", "dispatch failed"))  # ← BUG
-```
+## Bug 3: Gateway Dying (Start-Job GC) (FIXED — manual)
 
-Since `"accepted" != "ok"`, every dispatch raised `RuntimeError`, which triggered the exception handler at line 1759 that marks the task `blocked`. The background agent would eventually complete and self-report via `/war-room/complete`, but by then the task was already marked `blocked` — and the TaskPoller wouldn't retry it.
+Gateway launched via `Start-Job` dies when job is garbage collected.
 
-### Why Simple Tasks Worked
+**Fix:** Launch via `cmd.exe` detached process. Needs scheduled task for persistence.
 
-Simple tasks (ping, reply, etc.) were dispatched via **direct HTTP POST to `/dispatch`** from external callers (Odin, test scripts). Those callers didn't check the status field — they just fired and forgot. The background agent ran, completed, and self-reported via `/war-room/complete`. This path never went through `TaskPoller._process_task()`.
+## Bug 4: API Key Mismatch `local` vs `ollama` (FIXED)
 
-Pipeline subtasks were different: they were created as `open` tasks in the War Room by `pipeline.py:_start_stage()`, then picked up by the `TaskPoller`, which **did** check the status field — and failed.
+Gateway sends `Bearer local`, llama-server expected `--api-key ollama`. Agent gets 401.
 
-### Fix
+**Fix:** Changed `llama-server.cmd` to `--api-key local`.
 
-Accept both `"ok"` (sync) and `"accepted"` (async) status values. For async, poll the War Room every 15s until the task moves to `done` or times out after 5.5 minutes.
+## Bug 5: Thor Identifying as Freya (FIXED)
 
-### The Flow (Before vs After)
+`config.json` had `"this_node": "freya"` — cloned from Freya, never updated. Dispatch self-reported as Freya for tasks assigned to Thor. Completions silently mismatched.
 
-```
-BEFORE (broken):
-  TaskPoller picks up open task
-  → POST /dispatch → returns {status: "accepted"}
-  → "accepted" != "ok" → RuntimeError
-  → task marked "blocked" (instantly, ~0ms)
-  → background agent finishes 30s later, calls /war-room/complete
-  → but task is already blocked, completion ignored
+**Fix:** Changed to `"this_node": "thor"`, `"agent.id": "thor"`.
 
-AFTER (fixed):
-  TaskPoller picks up open task
-  → POST /dispatch → returns {status: "accepted"}
-  → "accepted" handled → polls every 15s for completion
-  → background agent finishes → calls /war-room/complete → task = "done"
-  → TaskPoller sees done → exits poll loop → task complete
-```
+## Bug 6: Odin Gateway localhost-only (FIXED by Odin)
+
+Gateway bound to `127.0.0.1:18789`. Separate channel from pipelines.
+
+**Fix:** `openclaw config set gateway.bind lan`.
 
 ---
 
-## Bug 2: Odin Gateway Bound to localhost (OPEN — needs Odin-side fix)
+## All Commits
 
-**Severity:** Medium — blocks the OpenClaw node client dispatch channel  
-**Affected:** Odin's `openclaw.json` on Mac
+| Commit | Fix |
+|--------|-----|
+| `3477e6b` | `OLLAMA_BASE` / `MLX_BASE` env vars |
+| `9461440` | `OLLAMA_EMBED_BASE` env var |
+| `3380c3e` | TaskPoller async dispatch handling |
+| `82d35a2` | Prefer `openclaw.cmd` on Windows |
 
-### Root Cause
-
-Odin's OpenClaw gateway is listening on `127.0.0.1:18789` instead of `0.0.0.0:18789`. All three node clients (`node.cmd` on Thor, Freya, Heimdall) connect to Odin's Tailscale IP `100.105.27.121:18789` — but since the gateway only binds to localhost, TCP connections from other nodes stay in `SYN_SENT` indefinitely.
-
-Telegram correctly reports all nodes as "paired but disconnected."
-
-### Why Pipelines Still Work
-
-Pipeline dispatch does NOT use this path. The two dispatch channels are:
-
-| Channel | Path | Used By | Status |
-|---------|------|---------|--------|
-| **Bifrost TaskPoller** | War Room (8765) → local `/dispatch` → local `openclaw agent` → local gateway (18789) | Pipeline subtasks | ✅ Fixed (Bug 1) |
-| **OpenClaw Node Client** | `node.cmd` → WebSocket → Odin gateway (18789) → agent dispatch | Direct Odin → Node dispatch | ❌ Blocked (Bug 2) |
-
-The pipeline path is entirely local to each node — TaskPoller reads from the local War Room, dispatches to the local `/dispatch` endpoint, which runs `openclaw agent` against the LOCAL gateway at `127.0.0.1:18789`. No cross-node gateway traffic needed.
-
-The node client path is for Odin to push work directly to a specific node's agent without going through the War Room. This is currently broken for all nodes because Odin's gateway doesn't accept remote connections.
-
-### Fix (Odin needs to run)
-
-```bash
-# On Odin's Mac:
-openclaw config set gateway.bind lan
-
-# Then restart:
-lsof -ti:18789 | xargs kill -9
-sleep 2
-launchctl load ~/Library/LaunchAgents/ai.openclaw.gateway.plist
-
-# Verify:
-lsof -i:18789 | grep LISTEN
-# Should show *:18789, not 127.0.0.1:18789
-```
-
----
-
-## Other Fixes Shipped Tonight
-
-| Commit | Fix | Impact |
-|--------|-----|--------|
-| `3477e6b` | `OLLAMA_BASE` / `MLX_BASE` configurable via env vars | `/ask local` works on nodes where Ollama moved to 11435 |
-| `9461440` | `OLLAMA_EMBED_BASE` env var (default 11435) | Embedding calls in `hydra.py` and `bifrost.py` no longer hit llama-server |
-| `3380c3e` | TaskPoller `accepted` status handling | Pipeline subtasks actually execute instead of going blocked |
-
-## Config Fixes Applied to Thor
+## Config Fixes on Thor
 
 | Item | Change |
 |------|--------|
-| `openclaw.json` gateway | Added `"bind": "lan"` for Tailscale-accessible gateway |
-| Windows Firewall | Inbound rules for ports 8765, 18789, 8080 |
-| Env vars | `NVIDIA_API_KEY`, `OLLAMA_BASE=11435`, `OLLAMA_EMBED_BASE=11435` set persistent |
-| Q6_K model | Swapped from Q4_K_M → Q6_K (28GB, ~137 tok/s, q8_0 KV cache, flash-attn) |
+| `config.json` | `this_node: "thor"`, `agent.id: "thor"` |
+| `openclaw.json` | Added `"bind": "lan"` |
+| `llama-server.cmd` | `--api-key local` |
+| `models.json` | Ollama port 11434 → 11435 |
+| Firewall | Ports 8765, 18789, 8080 |
 
-## Nodes That Need `git pull github main` + Bifrost Restart
+## Deployment Status
 
-- [x] Thor — pulled and restarted
-- [ ] Freya — needs pull + restart for Bug 1 fix
-- [ ] Heimdall — needs pull + restart for Bug 1 fix
-- [ ] Odin — needs pull + restart for Bug 1 fix, PLUS `gateway.bind = lan` for Bug 2
+- [x] Thor — all fixes, pipeline verified ✅
+- [x] Freya — pulled code fixes
+- [x] Heimdall — pulled code fixes
+- [x] Odin — gateway.bind = lan
