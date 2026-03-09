@@ -46,8 +46,8 @@ def _report_cost_to_heimdall(node: str, model: str, provider: str,
     t = threading.Thread(target=_send, daemon=True)
     t.start()
 
-OLLAMA_BASE = "http://127.0.0.1:11434"
-MLX_BASE = "http://127.0.0.1:8080"       # MLX-lm server (OpenAI-compatible, ~2x faster on Apple Silicon)
+OLLAMA_BASE = os.environ.get("OLLAMA_BASE", "http://127.0.0.1:11434")
+MLX_BASE    = os.environ.get("MLX_BASE",    "http://127.0.0.1:8080")   # empty string to disable
 INFERENCE_TIMEOUT = 300  # seconds — increased for large local models (qwen3.5)
 
 
