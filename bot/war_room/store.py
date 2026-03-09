@@ -414,40 +414,50 @@ class WarRoomStore:
             for t in tasks:
                 agent = t.get("assigned_to", t.get("claimed_by", "unknown"))
                 title = t.get("title", t.get("id", "?"))
-                # Extract readable info from dispatch result
+                # ---- Extract human-readable response from dispatch JSON ----
                 raw_result = (t.get("result", "") or "")
                 response_text = ""
                 model_info = ""
                 duration = ""
                 try:
                     _rj = raw_result if isinstance(raw_result, dict) else _json.loads(raw_result)
+                    _status = _rj.get("status", "") if isinstance(_rj, dict) else ""
+                    _summary = _rj.get("summary", "") if isinstance(_rj, dict) else ""
                     _inner = _rj.get("result", _rj) if isinstance(_rj, dict) else _rj
-                    # Extract agent response text
+
+                    # Extract text from payloads[0].text
                     if isinstance(_inner, dict):
                         _payloads = _inner.get("payloads", [])
                         if _payloads and isinstance(_payloads[0], dict):
-                            response_text = _payloads[0].get("text", "")[:400]
-                        # Extract model + duration from meta
+                            response_text = _payloads[0].get("text", "")
+                        # Model + timing metadata
                         _meta = _inner.get("meta", {})
                         _agent_meta = _meta.get("agentMeta", {})
                         _model = _agent_meta.get("model", "")
-                        _provider = _agent_meta.get("provider", "")
                         _dur_ms = _meta.get("durationMs", 0)
-                        _usage = _agent_meta.get("usage", {})
-                        _tokens = _usage.get("total", 0)
                         if _model:
-                            model_info = f"\n\U0001f916 {_provider}/{_model}" if _provider else f"\n\U0001f916 {_model}"
+                            model_info = f"\n\U0001f916 {_model}"
                         if _dur_ms:
                             duration = f" \u2022 {_dur_ms/1000:.1f}s"
-                        if _tokens:
-                            duration += f" \u2022 {_tokens} tok"
                     elif isinstance(_inner, str):
-                        response_text = _inner[:400]
-                    if not response_text:
-                        response_text = _rj.get("summary", "done") if isinstance(_rj, dict) else str(_rj)[:400]
+                        response_text = _inner
+
+                    # Strip <think>...</think> reasoning blocks
+                    import re as _re
+                    response_text = _re.sub(r"<think>[\s\S]*?</think>\s*", "", response_text).strip()
+
+                    # If empty or looks like raw JSON, use the summary
+                    if not response_text or response_text.startswith("{"):
+                        response_text = _summary or _status or "done"
                 except Exception:
-                    response_text = str(raw_result)[:400]
-                text = f"\u2705 {agent.upper()} completed task:\n\U0001f4cb {title}\n\n{response_text}{model_info}{duration}"
+                    # Last resort: show first 200 chars of raw, or just "done"
+                    response_text = str(raw_result)[:200] if raw_result else "done"
+
+                # Cap length for Telegram readability
+                if len(response_text) > 300:
+                    response_text = response_text[:297] + "..."
+
+                text = f"\u2705 {agent.upper()} completed task:\n\U0001f4cb {title}\n\n\U0001f4ac {response_text}{model_info}{duration}"
                 body = _json.dumps({
                     "chat_id": _chat, "text": text
                 }).encode()
