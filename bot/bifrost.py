@@ -1778,6 +1778,39 @@ def main():
     _check_single_instance()
     log.info("Starting Bifrost v5 on '%s' (polling=%s)", THIS_NODE, TELEGRAM_POLLING)
 
+    # ---- Startup identity pre-seed ----
+    # Copy node-specific SOUL/USER/IDENTITY from mesh/souls/ to workspace.
+    # OpenClaw gateway may overwrite these with generic Odin versions on
+    # restart, so we seed them here at boot AND before each dispatch.
+    try:
+        import pathlib, shutil
+        _script = pathlib.Path(__file__).parent
+        _p = _script
+        for _ in range(6):
+            if (_p / "mesh" / "souls").exists():
+                break
+            _p = _p.parent
+        _souls = _p / "mesh" / "souls"
+        _ws = pathlib.Path.home() / ".openclaw" / "workspace"
+        _node = THIS_NODE
+        if _souls.exists() and _ws.exists():
+            for _src_name, _dst_name in [
+                (f"SOUL.{_node}.md", "SOUL.md"),
+                (f"USER.{_node}.md", "USER.md"),
+                (f"IDENTITY.{_node}.md", "IDENTITY.md"),
+            ]:
+                _src = _souls / _src_name
+                _dst = _ws / _dst_name
+                if _src.exists():
+                    try:
+                        _dst.chmod(0o644)
+                    except Exception:
+                        pass
+                    shutil.copy2(str(_src), str(_dst))
+                    log.info("[startup] Pre-seeded %s from %s", _dst_name, _src_name)
+    except Exception as _e:
+        log.warning("[startup] Identity pre-seed failed: %s", _e)
+
     if not TELEGRAM_POLLING:
         log.info("Send-only mode (no callback handling)")
         _event_loop = asyncio.new_event_loop()

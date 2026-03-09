@@ -510,6 +510,17 @@ class WarRoomRoutes:
             except Exception:
                 agent_response = output
 
+            # Strip <think>...</think> reasoning tokens (Qwen thinking mode)
+            import re as _re
+            agent_response = _re.sub(
+                r"<think>[\s\S]*?</think>\s*", "", str(agent_response)
+            ).strip()
+            # Also strip "Thinking Process:" style prefixes
+            agent_response = _re.sub(
+                r"^(?:Thinking Process:?|Thought:?)[\s\S]*?(?=\n[A-Z]|\n\*\*|\n#|\n---)",
+                "", agent_response, count=1
+            ).strip()
+
             log.info("[dispatch] Task %s completed (%d chars)",
                      task_id[:14] if task_id else "adhoc", len(agent_response))
 
