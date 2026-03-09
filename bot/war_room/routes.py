@@ -468,7 +468,13 @@ class WarRoomRoutes:
             return 400, {"error": "description required"}
 
         # Check that openclaw CLI is available
-        openclaw_bin = shutil.which("openclaw")
+        # On Windows, shutil.which("openclaw") may find openclaw.ps1 which
+        # is blocked by execution policy.  Prefer .cmd explicitly.
+        import sys as _sys
+        if _sys.platform == "win32":
+            openclaw_bin = shutil.which("openclaw.cmd") or shutil.which("openclaw")
+        else:
+            openclaw_bin = shutil.which("openclaw")
         if not openclaw_bin:
             log.error("[dispatch] openclaw binary not found in PATH")
             return 503, {"error": "openclaw not installed on this node"}
