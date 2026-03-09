@@ -109,10 +109,11 @@ def _dispatch_one(task: dict):
     # Append standard dispatch instructions
     description += (
         "\n\n---\n"
-        "DISPATCH RULES: When you finish, report a brief summary of what "
-        "you did and the file paths you created or modified. Do NOT paste "
-        "file contents or code in your response. If there are bugs or "
-        "errors, describe them briefly."
+        "DISPATCH RULES: When you finish, git add, commit (using conventional "
+        "commits with your agent name, e.g. 'feat: description (by thor)'), "
+        "and git push your work. Report a brief summary of what you did and "
+        "the file paths you created or modified. Do NOT paste file contents "
+        "or code in your response."
     )
 
     try:
@@ -124,13 +125,16 @@ def _dispatch_one(task: dict):
 
     log.info("> Dispatching %s to %s (%s): %s", task_id[:14], assigned, node_url, title)
 
-    # Dispatch to the remote node's /dispatch endpoint
+    # Fire-and-forget: send dispatch with short timeout.
+    # The node returns 202 Accepted immediately and runs the agent in
+    # a background thread. When done, the node self-reports via
+    # /war-room/complete.  No more blocking here.
     try:
         result = _post(f"{node_url}/dispatch", {
             "task_id": task_id,
             "description": description,
             "timeout": DISPATCH_TIMEOUT,
-        }, timeout=DISPATCH_TIMEOUT + 60)
+        }, timeout=30)  # 30s is plenty for the 202 ack
     except urllib.error.URLError as e:
         log.error("  X Node %s unreachable: %s", assigned, e)
         _try_block(task_id, assigned, f"Node unreachable: {e}")
@@ -140,23 +144,13 @@ def _dispatch_one(task: dict):
         _try_block(task_id, assigned, str(e))
         return
 
-    # Post result back to War Room
     dispatch_status = result.get("status", "error")
-    if dispatch_status == "ok":
-        agent_result = result.get("result", "completed (no output)")
-        try:
-            _post(f"{LOCAL_BIFROST}/war-room/complete", {
-                "task_id": task_id,
-                "agent_id": assigned,
-                "result": agent_result[:2000],
-            })
-            log.info("  OK Task %s completed by %s (%d chars)",
-                     task_id[:14], assigned, len(agent_result))
-        except Exception as e:
-            log.error("  X Failed to post result for %s: %s", task_id[:14], e)
+    if dispatch_status in ("accepted", "ok"):
+        log.info("  -> %s accepted task %s (running in background)",
+                 assigned, task_id[:14])
     else:
         error_msg = result.get("error", "unknown error")
-        log.warning("  X Task %s failed on %s: %s", task_id[:14], assigned, error_msg)
+        log.warning("  X Task %s rejected by %s: %s", task_id[:14], assigned, error_msg)
         _try_block(task_id, assigned, error_msg)
 
 # ---------------------------------------------------------------------------
@@ -164,6 +158,13 @@ def _dispatch_one(task: dict):
 # ---------------------------------------------------------------------------
 def poll_and_dispatch():
     """One poll cycle: find open tasks -> claim ALL -> dispatch in parallel."""
+    # Check active pipelines for completed stages
+    try:
+        from pipeline import check_pipelines
+        check_pipelines()
+    except Exception as e:
+        log.debug("Pipeline check: %s", e)
+
     try:
         tasks = _get(f"{LOCAL_BIFROST}/war-room/tasks")
     except Exception as e:
@@ -215,8 +216,17 @@ def poll_and_dispatch():
         t.join(timeout=DISPATCH_TIMEOUT + 120)
 
 
+# Track recovery attempts per task to prevent infinite re-dispatch loops
+_recovery_count: dict = {}  # task_id -> count
+MAX_RECOVERY = 2  # block after this many recoveries
+
+
 def _recover_stuck(tasks: list):
-    """Find tasks stuck in 'claimed' past STUCK_TIMEOUT and re-open them."""
+    """Find tasks stuck in 'claimed' past STUCK_TIMEOUT.
+
+    First recovery: re-open the task so the dispatcher can retry.
+    After MAX_RECOVERY attempts: mark as blocked (stops the loop).
+    """
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     for task in tasks:
@@ -231,15 +241,25 @@ def _recover_stuck(tasks: list):
             if age > STUCK_TIMEOUT:
                 task_id = task.get("id", "")
                 agent = task.get("assigned_to", "unknown")
-                log.warning("  Recovering stuck task %s (claimed by %s, %ds ago)",
-                            task_id[:14], agent, int(age))
-                try:
-                    _post(f"{LOCAL_BIFROST}/war-room/status", {
-                        "task_id": task_id,
-                        "status": "open",
-                    })
-                except Exception:
-                    pass
+                count = _recovery_count.get(task_id, 0) + 1
+                _recovery_count[task_id] = count
+
+                if count > MAX_RECOVERY:
+                    log.warning("  Blocking stuck task %s (claimed by %s, %d recovery attempts)",
+                                task_id[:14], agent, count)
+                    _try_block(task_id, agent,
+                               f"Stuck after {count} recovery attempts ({int(age)}s)")
+                    _recovery_count.pop(task_id, None)
+                else:
+                    log.warning("  Recovering stuck task %s (claimed by %s, %ds ago, attempt %d/%d)",
+                                task_id[:14], agent, int(age), count, MAX_RECOVERY)
+                    try:
+                        _post(f"{LOCAL_BIFROST}/war-room/status", {
+                            "task_id": task_id,
+                            "status": "open",
+                        })
+                    except Exception:
+                        pass
         except (ValueError, TypeError):
             continue
 

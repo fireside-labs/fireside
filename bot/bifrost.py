@@ -207,8 +207,13 @@ class WorkspaceSyncThread(threading.Thread):
         # 2. Build local manifest
         local = _build_manifest(SYNC_LOCAL_WORKSPACE)
         # 3. Pull files that are missing or changed
+        # Never sync identity files — these are node-specific
+        _SYNC_EXCLUDE = {"SOUL.md", "USER.md", "IDENTITY.md", "CORE.md"}
         updated = []
         for rel, rhash in remote.items():
+            basename = rel.rsplit("/", 1)[-1] if "/" in rel else rel
+            if basename in _SYNC_EXCLUDE:
+                continue
             if local.get(rel) != rhash:
                 self._pull_file(base_url, rel)
                 updated.append(rel)
@@ -1232,7 +1237,8 @@ class BifrostHandler(BaseHTTPRequestHandler):
                            "/war-room/complete", "/war-room/status", "/ask",
                            "/war-room/delete-task", "/war-room/delete-message",
                            "/war-room/clear-messages", "/war-room/summon",
-                           "/war-room/progress", "/dispatch")
+                           "/war-room/progress", "/dispatch",
+                           "/war-room/pipeline")
         all_routes = bifrost_routes + war_room_routes
 
         if self.path not in all_routes:
@@ -1259,6 +1265,7 @@ class BifrostHandler(BaseHTTPRequestHandler):
                 "/war-room/summon": "handle_summon",
                 "/war-room/progress": "handle_progress",
                 "/dispatch": "handle_dispatch",
+                "/war-room/pipeline": "handle_pipeline",
             }
             method_name = wr_map.get(self.path)
             wr_handler = getattr(_war_room_routes, method_name, None) if method_name else None
@@ -1719,20 +1726,24 @@ class TaskPoller:
                 "task_id": tid, "agent_id": self.node, "status": "in_progress"
             })
 
-            # 3. Process via /ask — use cloud model for "deep" tier tasks
-            tier = task.get("tier", "fast")
-            model = "cloud" if tier == "deep" else "local"
-            _ping(f"Thinking ({tier})...", 25)
+            # 3. Process via /dispatch — full agent session with tools
+            _ping("Dispatching...", 25)
             prompt = (
                 f"You have been assigned a task from the War Room.\n"
                 f"Task: {title}\n"
                 f"Description: {desc}\n\n"
                 f"Complete this task thoroughly. Provide your result."
             )
-            result_data = self._post(f"{self.base}/ask", {
-                "prompt": prompt, "model": model
+            result_data = self._post(f"{self.base}/dispatch", {
+                "task_id": tid,
+                "description": prompt,
+                "timeout": 300,
             })
-            result_text = result_data.get("response", result_data.get("answer", str(result_data)))
+            dispatch_status = result_data.get("status", "error")
+            if dispatch_status == "ok":
+                result_text = result_data.get("result", "completed (no output)")
+            else:
+                raise RuntimeError(result_data.get("error", "dispatch failed"))
 
             # 4. Complete the task
             _ping("Submitting result...", 90)
