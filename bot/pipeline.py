@@ -64,6 +64,33 @@ def _parse_result(text: str) -> str:
     return "fail"
 
 
+def _huginn(prompt: str, system: str = "", timeout: int = 60) -> str:
+    """Call Huginn (GLM 5 / NVIDIA NIM) via Odin's /ask endpoint.
+
+    Uses model:cloud which routes through AskHandler._ask_cloud().
+    Free on NVIDIA NIM. Falls back gracefully if unavailable.
+    """
+    try:
+        result = _post(f"{LOCAL_BIFROST}/ask", {
+            "from": "odin",
+            "prompt": prompt,
+            "system": system or (
+                "You are Huginn, Odin's raven of Thought. "
+                "You advise on software architecture and code quality. "
+                "Be concise and specific. No filler."
+            ),
+            "model": "cloud",
+            "max_tokens": 1500,
+        }, timeout=timeout)
+        response = result.get("response", "")
+        if response:
+            log.info("[huginn] responded (%d chars)", len(response))
+            return response
+    except Exception as e:
+        log.warning("[huginn] unavailable: %s — proceeding without raven guidance", e)
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # Pipeline creation
 # ---------------------------------------------------------------------------
@@ -113,6 +140,24 @@ def create_pipeline(title: str, description: str, stages: list,
 
     log.info("Created pipeline %s: %s (%d stages, max %d iterations)",
              parent_id[:14], title, len(stages), max_iterations)
+
+    # Ask Huginn to generate a build spec before first stage
+    log.info("[huginn] Generating build spec for pipeline %s...", parent_id[:14])
+    spec = _huginn(
+        prompt=(
+            f"Project: {title}\n\nDescription: {description}\n\n"
+            f"Generate a concise build spec for this project. Include:\n"
+            f"1. File structure (exact paths under projects/{title.lower().replace(' ', '-')}/)"
+            f"2. Key functions or components each file should contain\n"
+            f"3. Any API contracts between backend and frontend\n"
+            f"4. Exact CSS theme values if UI is involved\n"
+            f"Keep it under 400 words. This will be given directly to the build agents."
+        )
+    )
+    if spec:
+        meta["huginn_spec"] = spec
+        _save_pipeline_meta(parent_id, meta)
+        log.info("[huginn] Spec saved to pipeline meta")
 
     # Kick off first stage
     _start_stage(parent_id, meta, description)
@@ -170,6 +215,11 @@ def _start_stage(pipeline_id: str, meta: dict, project_description: str,
 
     # Build context from previous results
     context = f"Project: {project_description}\n"
+
+    # Inject Huginn's spec on first build (iter 0, stage 0)
+    if stage_idx == 0 and meta.get("huginn_spec") and not prev_results:
+        context += f"\n--- Build Spec (from Huginn) ---\n{meta['huginn_spec']}\n--- End Spec ---\n"
+
     if prev_results:
         context += "\n--- Previous stage feedback ---\n"
         context += "\n".join(prev_results)
@@ -331,6 +381,25 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
                 _escalate(pipeline_id, meta, combined_result)
                 return
 
+            # Ask Huginn to interpret the failure and produce a targeted fix brief
+            log.info("[huginn] Interpreting %s failure for pipeline %s (iter %d)...",
+                     stage_name, pipeline_id[:14], meta["iteration"])
+            fix_brief = _huginn(
+                prompt=(
+                    f"A QA agent reported the following failure on this project:\n\n"
+                    f"Project: {project_desc}\n\n"
+                    f"QA Report:\n{combined_result}\n\n"
+                    f"Write a concise fix brief for the developer. Include:\n"
+                    f"1. Exact files and line numbers to fix\n"
+                    f"2. What the fix should be (not just what's wrong)\n"
+                    f"3. What NOT to change (avoid regressions)\n"
+                    f"Keep under 300 words. Be surgical."
+                )
+            )
+
+            # Use Huginn's analysis if available, otherwise raw QA output
+            feedback = [fix_brief] if fix_brief else results
+
             # Loop back to the build stage (stage 0)
             meta["current_stage"] = 0
             _save_pipeline_meta(pipeline_id, meta)
@@ -340,7 +409,7 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
                      meta["iteration"], meta["max_iterations"])
 
             _start_stage(pipeline_id, meta, project_desc,
-                         prev_results=results)
+                         prev_results=feedback)
     else:
         # Build/plan stage completed — move to next stage
         meta["current_stage"] += 1
@@ -413,5 +482,3 @@ def _escalate(pipeline_id: str, meta: dict, last_feedback: str):
     meta_path = meta_dir / f"{pipeline_id}.json"
     if meta_path.exists():
         meta_path.unlink()
-""",
-<parameter name="Complexity">8
