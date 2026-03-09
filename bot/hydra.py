@@ -29,11 +29,15 @@ Snapshot schema (stored as permanent memory):
 
 import json
 import logging
+import os
 import socket
 import time
 import urllib.request
 import uuid
 from pathlib import Path
+
+# Ollama embedding port — configurable so nodes that moved Ollama off 11434 still work
+OLLAMA_EMBED_BASE = os.environ.get("OLLAMA_EMBED_BASE", "http://127.0.0.1:11435")
 
 try:
     from circuit_breaker import call as cb_call  # type: ignore
@@ -88,7 +92,7 @@ def _get(url: str, timeout: int = 10) -> dict:
         return json.loads(r.read())
 
 
-def _embed(text: str, ollama_base: str = "http://127.0.0.1:11434") -> list[float]:
+def _embed(text: str, ollama_base: str = OLLAMA_EMBED_BASE) -> list[float]:
     payload = json.dumps({"model": "nomic-embed-text", "prompt": text}).encode()
     req = urllib.request.Request(
         f"{ollama_base}/api/embeddings",
@@ -121,7 +125,7 @@ def _recent_tasks(limit: int = 50) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def generate_snapshot(node: str = None, memory_sync_url: str = "http://127.0.0.1:8765/memory-sync",
-                      ollama_base: str = "http://127.0.0.1:11434") -> dict:
+                      ollama_base: str = OLLAMA_EMBED_BASE) -> dict:
     """
     Build a full state snapshot for this node and POST it to /memory-sync.
     Returns the snapshot dict.

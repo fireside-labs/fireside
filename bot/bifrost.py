@@ -1132,7 +1132,8 @@ class BifrostHandler(BaseHTTPRequestHandler):
         if self.path == "/health":
             load_info = {"ollama_available": False}
             try:
-                with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=2) as r:
+                _ollama_embed_base = os.environ.get("OLLAMA_EMBED_BASE", "http://127.0.0.1:11435")
+                with urllib.request.urlopen(f"{_ollama_embed_base}/api/ps", timeout=2) as r:
                     ps = json.loads(r.read())
                     models = ps.get("models", [])
                     load_info = {
