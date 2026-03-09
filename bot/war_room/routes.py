@@ -536,6 +536,8 @@ class WarRoomRoutes:
                 if _sys.platform == "win32":
                     try:
                         import winreg
+                        # Save parent process PATH before merging User vars
+                        _parent_path = agent_env.get("PATH", "")
                         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
                                            r"Environment") as key:
                             i = 0
@@ -546,16 +548,39 @@ class WarRoomRoutes:
                                     i += 1
                                 except OSError:
                                     break
+                        # Merge PATHs: User PATH may overwrite System PATH.
+                        # Combine both so node.exe, git, etc. are always found.
+                        _user_path = agent_env.get("PATH", "")
+                        _merged = _user_path
+                        for _seg in _parent_path.split(";"):
+                            if _seg and _seg not in _merged:
+                                _merged += ";" + _seg
+                        agent_env["PATH"] = _merged
                     except Exception as _we:
                         log.debug("[dispatch] Could not read User env: %s", _we)
-                result = subprocess.run(
-                    [openclaw_bin, "agent", "-m", description, "--json",
-                     "--session-id", session_id, "--agent", "main",
-                     "--timeout", str(timeout)],
-                    capture_output=True, text=True, timeout=timeout + 30,
-                    shell=(_sys.platform == "win32"),
-                    env=agent_env,
-                )
+                # On Windows with shell=True, the list args get joined without
+                # quoting, so multi-word description splits.  Pass as a string.
+                _cmd_parts = [
+                    openclaw_bin, "agent",
+                    "-m", f'"{description}"' if _sys.platform == "win32" else description,
+                    "--json",
+                    "--session-id", session_id,
+                    "--agent", "main",
+                    "--timeout", str(timeout),
+                ]
+                if _sys.platform == "win32":
+                    result = subprocess.run(
+                        " ".join(_cmd_parts),
+                        capture_output=True, text=True, timeout=timeout + 30,
+                        shell=True,
+                        env=agent_env,
+                    )
+                else:
+                    result = subprocess.run(
+                        _cmd_parts,
+                        capture_output=True, text=True, timeout=timeout + 30,
+                        env=agent_env,
+                    )
 
                 if result.returncode != 0:
                     log.warning("[dispatch] Agent exited %d: %s",
