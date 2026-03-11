@@ -1967,6 +1967,127 @@ docs/mobile-ux-review.md
 
 ---
 
+# SPRINT 10 — Pre-Launch Polish (Ship-It Sprint)
+
+> [!IMPORTANT]
+> **This is the final sprint before launch.** No new features. Wiring fixes, cosmetic polish, and launch prep only. Every item is from Valkyrie's launch readiness report.
+
+## 🔨 THOR — Chat Wiring + XP Fix
+
+**Goal:** Wire the chat page to real inference and close the XP farming exploit.
+
+### Tasks
+
+1. **Wire Chat → Brain** (CRITICAL — the #1 user experience gap):
+   - In chat page's `handleSend` function:
+     - `POST /api/v1/chat` with user message
+     - Include SOUL.md + IDENTITY.md as system prompt context
+     - Include personality slider values as system prompt modifiers
+     - Stream response tokens via SSE (Server-Sent Events)
+     - Display tokens as they arrive (typing effect)
+   - Test: send a message, get a real response from installed brain
+   - This is one function. Do not over-engineer.
+
+2. **XP Anti-Farming**:
+   - Cap chat-based XP at 20/day per agent
+   - Track daily chat XP in agent profile data
+   - Reset counter at midnight local time
+   - Don't show +5 toasts for file reads (too small, too frequent)
+
+3. **Learning Page → Real Data**:
+   - Connect `/api/v1/learning/summary` to actual procedure store
+   - Return real counts: procedures learned, crucible survival rate, week-over-week delta
+   - Remove mock data fallback
+
+### Files to Modify
+```
+dashboard/app/chat/page.tsx        (wire handleSend)
+plugins/consumer-api/handler.py    (real learning data)
+plugins/agent-profiles/leveling.py (XP cap)
+```
+
+---
+
+## 🎨 FREYA — Landing Page + Stat Polish
+
+**Goal:** Update the landing page for launch and apply Valkyrie's UX recommendations.
+
+### Tasks
+
+1. **Landing Page Update**:
+   - Hero: "AI that runs on your hardware, learns overnight, and never forgets"
+   - Feature grid: update with current features (guild hall, voice, marketplace, Telegram)
+   - Add pricing section (Free core + marketplace model)
+   - Add "How It Works" section (install → onboard → chat → it learns overnight)
+   - CTA: "Get Started Free" → links to install instructions
+   - Social proof section placeholder (for testimonials post-launch)
+
+2. **Stat Descriptions** — add one-line description under each stat card:
+   ```
+   📋 47 Tasks Completed
+   Things your AI has done for you
+
+   🧠 247 Things It Knows
+   Facts learned from your work
+
+   ✅ 94% Reliable
+   How accurate its knowledge is
+   ```
+
+3. **Personality Slider Previews** — as user drags, show example text:
+   ```
+   Creative ●───○───○───○───○ Precise
+   "I'll try completely new approaches — might surprise you!"
+   ```
+   Update `PersonalitySliders.tsx` to include preview text per notch.
+
+### Files to Modify
+```
+landing/app/page.tsx                         (landing page content)
+dashboard/components/AgentProfile.tsx        (stat descriptions)
+dashboard/components/PersonalitySliders.tsx  (preview text)
+```
+
+---
+
+## 👑 VALKYRIE — Desktop Test + Product Hunt
+
+**Goal:** Final validation and launch materials.
+
+### Tasks
+
+1. **Desktop Build Test**:
+   - Run `npm run build:desktop` (or equivalent Tauri build)
+   - Test on clean macOS: does the .app open? Onboarding start? Brain install?
+   - Test close + reopen: state preserved?
+   - Document results in `docs/desktop-build-test.md`
+   - Note: code signing cert needed for "identified developer" — OK to ship without (Gatekeeper warning is acceptable for v1)
+
+2. **Product Hunt Prep**:
+   - Refresh listing copy (Sprint 3 copy is stale)
+   - Update screenshots with current UI (guild hall, chat, agent profiles)
+   - Write tagline: "AI that lives on your hardware and learns while you sleep"
+   - Maker story: the "Why This Exists" section from README
+   - Output: `docs/product-hunt-listing.md`
+
+3. **Final Smoke Test**:
+   - Fresh install on clean machine (use `install.sh`)
+   - Complete onboarding
+   - Install a brain
+   - Send a chat message → get real response
+   - Check guild hall shows agent activity
+   - Check Telegram bot responds
+   - Sign off on launch readiness
+   - Output: update `docs/launch-readiness.md` with final results
+
+### Files to Create
+```
+docs/desktop-build-test.md
+docs/product-hunt-listing.md
+```
+
+---
+
 ## V1 Files Reference
 
 ### Keep (port to V2 as plugins)

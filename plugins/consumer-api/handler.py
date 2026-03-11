@@ -417,6 +417,8 @@ def get_activity_summary() -> dict:
 
 def get_learning_summary(base_dir: Path) -> dict:
     """Aggregate knowledge stats for the 'How It's Learning' page."""
+    import datetime
+
     # Count procedures
     proc_file = base_dir / "war_room_data" / "procedures.json"
     total_procedures = 0
@@ -438,38 +440,85 @@ def get_learning_summary(base_dir: Path) -> dict:
 
     reliability = round((high_confidence / max(total_procedures, 1)) * 100)
 
-    # Check crucible results
+    # Check crucible results — compute knowledge check score
     crucible_file = base_dir / "war_room_data" / "crucible_results.json"
     crucible_runs = 0
+    crucible_survived = 0
     if crucible_file.exists():
         try:
             data = json.loads(crucible_file.read_text(encoding="utf-8"))
             if isinstance(data, list):
                 crucible_runs = len(data)
+                crucible_survived = sum(
+                    1 for r in data
+                    if isinstance(r, dict) and r.get("survived", r.get("passed", False))
+                )
         except Exception:
             pass
 
-    # Check predictions accuracy
+    knowledge_check_score = round(
+        (crucible_survived / max(crucible_runs, 1)) * 100
+    )
+
+    # Check predictions accuracy + week-over-week improvement
     pred_file = base_dir / "war_room_data" / "predictions.json"
     prediction_count = 0
+    correct_predictions = 0
+    wow_improvement = 0.0
     if pred_file.exists():
         try:
             data = json.loads(pred_file.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                prediction_count = len(data)
-            elif isinstance(data, dict):
-                prediction_count = len(data)
+            preds = data if isinstance(data, list) else list(data.values()) if isinstance(data, dict) else []
+            prediction_count = len(preds)
+
+            # Calculate accuracy
+            for p in preds:
+                if isinstance(p, dict) and p.get("correct", False):
+                    correct_predictions += 1
+
+            # Week-over-week improvement
+            now = datetime.datetime.utcnow()
+            week_ago = now - datetime.timedelta(days=7)
+            two_weeks_ago = now - datetime.timedelta(days=14)
+
+            this_week = []
+            last_week = []
+            for p in preds:
+                if not isinstance(p, dict):
+                    continue
+                ts = p.get("timestamp", p.get("created_at", 0))
+                if isinstance(ts, str):
+                    try:
+                        ts = datetime.datetime.fromisoformat(ts).timestamp()
+                    except Exception:
+                        ts = 0
+                if ts >= week_ago.timestamp():
+                    this_week.append(p)
+                elif ts >= two_weeks_ago.timestamp():
+                    last_week.append(p)
+
+            if this_week and last_week:
+                this_acc = sum(1 for p in this_week if p.get("correct", False)) / len(this_week)
+                last_acc = sum(1 for p in last_week if p.get("correct", False)) / len(last_week)
+                wow_improvement = round((this_acc - last_acc) * 100, 1)
         except Exception:
             pass
+
+    accuracy_pct = round((correct_predictions / max(prediction_count, 1)) * 100)
 
     return {
         "things_it_knows": total_procedures,
         "reliable_pct": reliability,
         "crucible_tests_run": crucible_runs,
+        "knowledge_check_score": knowledge_check_score,
         "predictions_made": prediction_count,
+        "accuracy_pct": accuracy_pct,
+        "week_over_week_improvement": wow_improvement,
         "summary": f"Things it knows: {total_procedures}. "
                    f"Reliable: {reliability}%. "
-                   f"Tested {crucible_runs} time{'s' if crucible_runs != 1 else ''}.",
+                   f"Knowledge check: {knowledge_check_score}%. "
+                   f"Tested {crucible_runs} time{'s' if crucible_runs != 1 else ''}. "
+                   f"WoW: {'+' if wow_improvement >= 0 else ''}{wow_improvement}%.",
     }
 
 

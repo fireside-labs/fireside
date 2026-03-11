@@ -148,14 +148,43 @@ def _get_active_brain() -> dict | None:
 
 
 async def _stream_chat(message: str, system_prompt: str, brain: dict):
-    """Stream chat response from active brain via SSE."""
+    """Stream chat response from active brain via SSE.
+
+    Supports: local (oMLX/llama-server), cloud (NIM), BYOK (OpenAI/Anthropic/Google).
+    """
     import urllib.request
 
     runtime = brain.get("runtime", "cloud")
+    provider = brain.get("provider")
     port = brain.get("port", 8080)
 
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": message},
+    ]
+
+    # BYOK providers: route through model-router adapters
+    if provider in ("openai", "anthropic", "google"):
+        try:
+            if provider == "openai":
+                from plugins.model_router.providers.openai import chat
+            elif provider == "anthropic":
+                from plugins.model_router.providers.anthropic import chat
+            else:
+                from plugins.model_router.providers.google import chat
+
+            api_key = brain.get("api_key", "")
+            model_id = brain.get("model_id", "")
+            gen = chat(api_key, messages, model=model_id, stream=True)
+            for chunk in gen:
+                yield chunk
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
+        return
+
+    # Cloud inference via NVIDIA NIM
     if runtime == "cloud":
-        # Cloud inference via NVIDIA NIM
         from plugins.brain_installer.installers.cloud import get_api_key
         api_key = get_api_key()
         if not api_key:
@@ -176,10 +205,7 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
 
     payload = json.dumps({
         "model": model_id,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": message},
-        ],
+        "messages": messages,
         "stream": True,
         "max_tokens": 2048,
     }).encode()

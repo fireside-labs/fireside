@@ -21,6 +21,7 @@ from pathlib import Path
 log = logging.getLogger("valhalla.agent-profiles.leveling")
 
 XP_PER_LEVEL = 500
+CHAT_XP_DAILY_CAP = 20  # Max chat XP per day (anti-farming)
 
 XP_REWARDS = {
     "pipeline.shipped": 100,
@@ -32,6 +33,29 @@ XP_REWARDS = {
 }
 
 STREAK_BONUS = 10  # per consecutive task
+
+
+def _today_key() -> str:
+    """UTC date string for daily tracking."""
+    import datetime
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d")
+
+
+def _get_chat_xp_today(profile: dict) -> int:
+    """Get total chat XP awarded today."""
+    today = _today_key()
+    return profile.get("_daily_chat_xp", {}).get(today, 0)
+
+
+def _record_chat_xp(profile: dict, amount: int) -> None:
+    """Record chat XP for daily cap tracking."""
+    today = _today_key()
+    if "_daily_chat_xp" not in profile:
+        profile["_daily_chat_xp"] = {}
+    # Clean old entries (keep only today)
+    profile["_daily_chat_xp"] = {
+        today: profile["_daily_chat_xp"].get(today, 0) + amount,
+    }
 
 
 def _profiles_dir() -> Path:
@@ -132,8 +156,19 @@ def award_event_xp(agent_name: str, event_name: str) -> dict | None:
 
     profile = load_profile(agent_name)
 
+    # Chat XP daily cap (anti-farming)
+    if event_name == "chat.response":
+        today_used = _get_chat_xp_today(profile)
+        remaining = CHAT_XP_DAILY_CAP - today_used
+        if remaining <= 0:
+            return {"agent": agent_name, "xp_added": 0, "capped": True,
+                    "reason": f"Chat XP capped at {CHAT_XP_DAILY_CAP}/day"}
+        xp = min(xp, remaining)
+        _record_chat_xp(profile, xp)
+        save_profile(agent_name, profile)
+
     # Streak tracking
-    if event_name == "pipeline.shipped":
+    elif event_name == "pipeline.shipped":
         profile["stats"]["tasks_completed"] += 1
         profile["stats"]["streak"] += 1
         if profile["stats"]["streak"] > profile["stats"]["best_streak"]:

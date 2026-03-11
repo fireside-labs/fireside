@@ -15,6 +15,7 @@ interface PersonalitySlidersProps {
     values: Record<string, number>;
     onChange?: (id: string, value: number) => void;
     readOnly?: boolean;
+    showPreview?: boolean;
 }
 
 const SLIDER_PAIRS: Omit<SliderPair, "value">[] = [
@@ -24,7 +25,49 @@ const SLIDER_PAIRS: Omit<SliderPair, "value">[] = [
     { id: "warm_formal", leftLabel: "Warm", rightLabel: "Formal", leftEmoji: "😊", rightEmoji: "💼" },
 ];
 
-export default function PersonalitySliders({ values, onChange, readOnly }: PersonalitySlidersProps) {
+const PREVIEW_RESPONSES: Record<string, { low: string; mid: string; high: string }> = {
+    creative_precise: {
+        low: "Based on the data, the optimal solution is X with 94% confidence.",
+        mid: "I'd suggest trying X — it's the most reliable approach, though Y could also work.",
+        high: "What if we tried something completely different? Here's a wild idea...",
+    },
+    verbose_concise: {
+        low: "Use X.",
+        mid: "I'd recommend X. Here's why: it handles edge cases well and is easy to maintain.",
+        high: "Great question! Let me walk you through this step by step. First, we need to understand the underlying problem. The core issue is...",
+    },
+    bold_cautious: {
+        low: "I'd recommend testing this thoroughly before deploying. Let me verify a few things first.",
+        mid: "This looks good to ship. I've checked the main cases — want me to run a final test?",
+        high: "Ship it! I already pushed to prod. We'll fix any issues as they come up. 🚀",
+    },
+    warm_formal: {
+        low: "Per your request, please find the analysis attached. Regards.",
+        mid: "Here's what I found — let me know if you need anything else!",
+        high: "Hey! 😊 So I looked into this and omg it's actually really cool — check this out!",
+    },
+};
+
+function getPreviewText(values: Record<string, number>): string {
+    // Pick the most extreme slider to show its preview
+    let maxDelta = 0;
+    let activeId = "creative_precise";
+    for (const pair of SLIDER_PAIRS) {
+        const val = values[pair.id] ?? 0.5;
+        const delta = Math.abs(val - 0.5);
+        if (delta > maxDelta) {
+            maxDelta = delta;
+            activeId = pair.id;
+        }
+    }
+    const val = values[activeId] ?? 0.5;
+    const responses = PREVIEW_RESPONSES[activeId];
+    if (val < 0.33) return responses.low;
+    if (val > 0.67) return responses.high;
+    return responses.mid;
+}
+
+export default function PersonalitySliders({ values, onChange, readOnly, showPreview = true }: PersonalitySlidersProps) {
     return (
         <div className="space-y-4">
             {SLIDER_PAIRS.map((pair) => {
@@ -86,6 +129,17 @@ export default function PersonalitySliders({ values, onChange, readOnly }: Perso
                     </div>
                 );
             })}
+
+            {/* Preview text */}
+            {showPreview && !readOnly && (
+                <div className="mt-3 p-3 rounded-lg bg-[var(--color-glass)] border border-[var(--color-glass-border)]">
+                    <p className="text-[10px] text-[var(--color-rune-dim)] mb-1.5">💬 Example response with these settings:</p>
+                    <p className="text-xs text-[var(--color-rune)] italic leading-relaxed">
+                        &quot;{getPreviewText(values)}&quot;
+                    </p>
+                </div>
+            )}
         </div>
     );
 }
+
