@@ -2420,6 +2420,287 @@ docs/companion-security-model.md        [NEW]
 
 ---
 
+# SPRINT 14 — Adventures, Loot & Morning Briefing
+
+> **Theme:** Turn walks into stories. Turn stories into attachment.
+> **Code principle:** Everything is data. Adventures = dictionaries. Loot = dictionaries. Inventory = list of dictionaries. Zero new infrastructure.
+
+## 🔨 THOR — Adventure Engine
+
+**Goal:** 10% of walks trigger a random adventure. Adventures have choices. Choices have rewards.
+
+### Adventure System Architecture
+
+```python
+# It's literally this simple — extends the existing walk() function
+def walk(state):
+    # ... existing walk logic ...
+    
+    # 10% chance of adventure
+    if random.random() < 0.10:
+        adventure = random.choice(ADVENTURES[species])
+        return {"ok": True, "adventure": adventure, ...}
+```
+
+### 8 Encounter Types
+
+Each encounter is a dictionary. The UI renders them. No game engine required.
+
+#### 1. 🗿 Riddle Guardian
+```python
+{
+    "type": "riddle",
+    "intro": "A stone golem blocks the path. It speaks: 'Answer my riddle to pass.'",
+    "riddle": "I have cities but no houses, forests but no trees, water but no fish. What am I?",
+    "answer": "a map",
+    "accept_answers": ["map", "a map"],
+    "reward": {"item": "ancient_compass", "xp": 25, "happiness": 15},
+    "fail_text": "The golem shakes its head. 'Perhaps next time, little one.'",
+    "fail_reward": {"xp": 5, "happiness": 5},  # still get something for trying
+}
+```
+- 15 riddles, varying difficulty
+- Species-specific golem dialogue (dragon golem breathes fire, penguin golem is formal)
+- Wrong answer = consolation XP (never punish)
+
+#### 2. 🎁 Treasure Chest
+```python
+{
+    "type": "treasure",
+    "intro": "Your fox spots something glinting under a root...",
+    "loot_table": [
+        {"item": "golden_treat", "chance": 0.4, "happiness": 30},
+        {"item": "tiny_hat", "chance": 0.3, "equippable": True},
+        {"item": "mystery_egg", "chance": 0.2, "description": "It's warm..."},
+        {"item": "legendary_bone", "chance": 0.1, "happiness": 50, "rare": True},
+    ]
+}
+```
+- Weighted loot tables (common → legendary)
+- Rare items have sparkle emoji ✨
+- Species-specific discovery text
+
+#### 3. 👻 Ghostly Merchant
+```python
+{
+    "type": "merchant",
+    "intro": "A translucent figure appears. 'I have wares, if you have coin...'",
+    "trades": [
+        {"give": "golden_treat", "get": "star_collar", "equippable": True},
+        {"give": "3x fish", "get": "speed_boots", "walk_bonus": True},
+    ]
+}
+```
+- Trade found loot for accessories
+- Species-specific merchants (owl merchant = "The Librarian", dragon = "The Forgemaster")
+
+#### 4. 🌿 Herb Foraging (your crops idea, simplified)
+```python
+{
+    "type": "forage",
+    "intro": "A patch of wild herbs! Your owl investigates...",
+    "finds": [
+        {"item": "moonpetal", "effect": "happiness +25 when used", "chance": 0.5},
+        {"item": "sunroot", "effect": "double XP on next walk", "chance": 0.3},
+        {"item": "dreamberry", "effect": "morning briefing is extra detailed", "chance": 0.2},
+    ]
+}
+```
+- **This IS the farming mechanic** — without planting/watering/waiting. Just find → use.
+- Herbs are consumable items in inventory
+
+#### 5. 🐾 Lost Pet Encounter
+```python
+{
+    "type": "lost_pet",
+    "intro": "A tiny hamster is shivering in the bushes. It looks lost...",
+    "choices": [
+        {"text": "Help it find home", "reward": {"xp": 20, "happiness": 25, "item": "friendship_badge"}},
+        {"text": "Give it some food", "reward": {"xp": 10, "happiness": 15}},
+        {"text": "Ignore it", "reward": {"xp": 0, "happiness": -5}},  # mild consequence
+    ]
+}
+```
+- Moral choices that affect happiness
+- The "help" option always gives more — teaches kindness as the optimal strategy
+- Encounter species cycles through unlockable species (foreshadows future store pets)
+
+#### 6. ⛈️ Weather Event
+```python
+{
+    "type": "weather",
+    "intro": "Sudden rain! Your dragon's fire sputters out...",
+    "effect": "shelter_found",
+    "text": "You find a cozy cave. +15 happiness. Your dragon finds a shiny rock in the back.",
+    "reward": {"happiness": 15, "item": "cave_crystal"},
+}
+```
+- Rain, snow, aurora, shooting star, rainbow
+- Each weather event tells a micro-story
+- Some are species-specific (penguin LOVES snow: +30 happiness)
+
+#### 7. 🎭 The Storyteller
+```python
+{
+    "type": "storyteller",
+    "intro": "An old raven perches nearby. 'Would you like to hear a tale?'",
+    "story": "Once, a fox cached 100 acorns for winter. When spring came, 100 oak trees grew. Sometimes hoarding becomes generosity by accident.",
+    "moral": "Small actions compound.",
+    "reward": {"xp": 10, "happiness": 10, "item": "story_fragment"},
+    "collect_all": "Collect 10 story fragments → unlock a secret achievement"
+}
+```
+- 30 micro-stories (Norse mythology, fables, wisdom)
+- Story fragments are collectible — 10 fragments = achievement
+- The stories are actually life advice wrapped in narrative
+
+#### 8. 🏴‍☠️ The Challenger
+```python
+{
+    "type": "challenge",
+    "intro": "A rival fox appears! 'I bet I can pounce farther than you!'",
+    "mini_game": "tap_count",  # UI: tap button 10 times in 5 seconds
+    "win_reward": {"xp": 30, "happiness": 20, "item": "champion_scarf"},
+    "lose_reward": {"xp": 10, "happiness": 5},
+    "species_rival": True,  # always same species as your pet
+}
+```
+- Simple tap/click mini-games (5 seconds each)
+- Always same species rival (dragon vs dragon)
+- Win or lose, you get something
+
+### Inventory System
+
+```python
+# Added to companion state
+"inventory": [
+    {"item": "golden_treat", "count": 3, "emoji": "🍬✨"},
+    {"item": "tiny_hat", "count": 1, "emoji": "🎩", "equipped": True},
+    {"item": "story_fragment", "count": 7, "emoji": "📜"},
+    {"item": "moonpetal", "count": 2, "emoji": "🌿", "consumable": True},
+]
+```
+
+- Max 20 inventory slots (prevents hoarding)
+- Use consumables from inventory screen
+- Equip accessories → changes pet's emoji display
+- Trade with ghostly merchants
+
+### Files to Create/Modify
+```
+plugins/companion/adventures.py     [NEW] — encounter data + adventure logic
+plugins/companion/inventory.py      [NEW] — inventory management
+plugins/companion/sim.py            [MODIFY] — add adventure trigger to walk()
+dashboard/components/AdventureCard.tsx   [NEW] — adventure UI with choices
+dashboard/components/InventoryGrid.tsx   [NEW] — bag/inventory display
+```
+
+---
+
+## 🎨 FREYA — Morning Briefing + Daily Gifts + Teach Me
+
+**Goal:** Three features that create daily ritual and connect the companion to the learning loop.
+
+### 1. Morning Briefing Toast
+When user opens Fireside for the first time each day:
+
+```
+┌────────────────────────────────────────────────┐
+│ ☀️ Good morning, Odin!                          │
+│                                                │
+│ While you slept, I:                            │
+│   📚 Reviewed 12 conversations                 │
+│   ✅ Tested 8 facts (7 passed, 1 refined)      │
+│   📈 Got 2% smarter overall                    │
+│                                                │
+│ *purrs contentedly* Luna found a moonpetal     │
+│ on her overnight walk! Check your inventory.   │
+│                                                │
+│              [Start a Fireside →]              │
+└────────────────────────────────────────────────┘
+```
+
+- Pulls real data from learning page stats
+- Pet's mood prefix included
+- **Overnight walk event** — pet auto-walks while you sleep, sometimes finding loot
+- Tone matches pet personality (dog: "OMG I LEARNED 12 THINGS!!")
+
+### 2. Daily Gift
+Once per day, pet offers a random gift:
+
+```python
+DAILY_GIFTS = [
+    {"text": "Luna found this behind the sofa", "item": "dust_bunny", "emoji": "🐰"},
+    {"text": "Luna organized your browser tabs. You had 47.", "bonus": "happiness +10"},
+    {"text": "Fun fact: octopuses have 3 hearts. Luna thought you should know.", "type": "fact"},
+    {"text": "Luna wrote you a haiku:\n  Quiet morning light\n  Human sleeps, I guard the door\n  This is my purpose", "type": "poem"},
+    {"text": "Luna stared at the wall for 20 mins and had an idea: you should drink water.", "type": "advice"},
+]
+```
+
+- Rotates through gift types: items, facts, poems, productivity nudges, compliments
+- Species-specific gift style (penguin gives formal reports, dragon gives "treasures")
+- **This is the Wordle effect** — one reason to open the app every single day
+
+### 3. "Teach Me" Button
+```
+[💡 Teach Me]
+┌────────────────────────────────────────┐
+│ What should I remember?                │
+│ ┌────────────────────────────────────┐ │
+│ │ I'm allergic to shellfish          │ │
+│ └────────────────────────────────────┘ │
+│ [Remember This] [Cancel]               │
+└────────────────────────────────────────┘
+```
+
+- Stores fact in procedural memory
+- Pet confirms: "*purrs* Got it. No shellfish for Odin."
+- Facts are retrievable in future conversations
+- Links directly to the learning loop — user-initiated teaching
+
+### Files to Create/Modify
+```
+dashboard/components/MorningBriefing.tsx  [NEW]
+dashboard/components/DailyGift.tsx        [NEW]
+dashboard/components/TeachMe.tsx          [NEW]
+plugins/companion/gifts.py               [NEW] — daily gift data + rotation
+```
+
+---
+
+## 👑 VALKYRIE — Pet Evolution + Achievement Hooks
+
+### Pet Evolution (visual progression)
+```
+Level 1-9:    Baby      🐱 (small emoji)
+Level 10-24:  Juvenile  🐱‍👤 (emoji + accessory slot unlocked)
+Level 25-49:  Adult     🐱‍🚀 (emoji + title)
+Level 50+:    Elder     🐱‍👓 (emoji + golden border + "Elder" title)
+```
+
+- Evolution is a **toast notification** with celebration animation
+- Each evolution unlocks something:
+  - Level 10: accessory slot
+  - Level 25: second walk per day (more adventure chances)
+  - Level 50: pet can auto-forage overnight (passive loot)
+
+### Sprint 14 Achievement Hooks
+```python
+NEW_ACHIEVEMENTS = [
+    {"id": "first_adventure", "name": "Into the Unknown", "desc": "Complete your first adventure"},
+    {"id": "riddle_master", "name": "Riddlewright", "desc": "Solve 10 riddle guardian encounters"},
+    {"id": "collector", "name": "Hoarder", "desc": "Fill all 20 inventory slots"},
+    {"id": "kind_heart", "name": "Good Samaritan", "desc": "Help 5 lost pets"},
+    {"id": "storyteller", "name": "Saga Keeper", "desc": "Collect all 10 story fragments"},
+    {"id": "challenger", "name": "Champion", "desc": "Win 10 challenges"},
+    {"id": "teach_10", "name": "Professor", "desc": "Teach your companion 10 facts"},
+    {"id": "streak_30", "name": "Bonded", "desc": "30-day check-in streak"},
+]
+```
+
+---
+
 ## V1 Files Reference
 
 ### Keep (port to V2 as plugins)
