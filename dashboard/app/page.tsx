@@ -24,17 +24,31 @@ export default function ChatHomePage() {
         setUserName(name);
     }, []);
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!message.trim()) return;
-        setChatHistory([...chatHistory, { role: "user", content: message.trim() }]);
-        // Mock AI response
-        setTimeout(() => {
+        const userMessage = message.trim();
+        setChatHistory(prev => [...prev, { role: "user", content: userMessage }]);
+        setMessage("");
+
+        try {
+            const res = await fetch("http://127.0.0.1:8337/api/v1/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: userMessage, stream: false }),
+            });
+
+            if (!res.ok) throw new Error(`API error: ${res.status}`);
+            const data = await res.json();
             setChatHistory(prev => [...prev, {
                 role: "assistant",
-                content: `I'd be happy to help with that! Let me work on "${message.trim()}" for you. This is a mock response — connect a real model to get started.`
+                content: data.response || data.content || "I received your message but couldn't generate a response.",
             }]);
-        }, 800);
-        setMessage("");
+        } catch {
+            setChatHistory(prev => [...prev, {
+                role: "assistant",
+                content: "I'm not connected to a brain yet. Go to Settings → Brain to install one, or check that your inference server is running.",
+            }]);
+        }
     };
 
     const handlePrompt = (prompt: string) => {
