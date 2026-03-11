@@ -72,7 +72,7 @@ ACHIEVEMENTS = {
     # Crucible achievements
     "crucible_100": {
         "name": "Forged in Fire",
-        "desc": "100% crucible survival rate (min 10 tests)",
+        "desc": "100% knowledge check score (min 10 tests)",
         "emoji": "🔨",
         "check": lambda p: p["stats"]["crucible_survival"] >= 1.0 and p["stats"].get("crucible_tests", 0) >= 10,
     },

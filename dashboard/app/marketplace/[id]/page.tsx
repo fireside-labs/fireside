@@ -191,7 +191,7 @@ export default function AgentDetailPage() {
                                 <span className="text-sm text-white font-bold">{agent.procedures.toLocaleString()}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-[var(--color-rune)]">Crucible Survival</span>
+                                <span className="text-xs text-[var(--color-rune)]">Knowledge Check Score</span>
                                 <span className="text-sm font-bold" style={{
                                     color: agent.crucible_survival >= 95 ? "var(--color-neon)" : agent.crucible_survival >= 85 ? "var(--color-info)" : "var(--color-warning)"
                                 }}>

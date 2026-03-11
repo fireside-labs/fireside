@@ -19,7 +19,7 @@ const AGENT_DATA: Record<string, {
         personality: { creative_precise: 0.3, verbose_concise: 0.4, bold_cautious: 0.8, warm_formal: 0.5 },
         achievements: [
             { id: "streak_10", name: "Unstoppable", desc: "10 tasks without failure", earned: true, date: "Mar 8" },
-            { id: "crucible_100", name: "Forged in Fire", desc: "100% crucible survival rate", earned: false },
+            { id: "crucible_100", name: "Forged in Fire", desc: "100% knowledge check score", earned: false },
             { id: "debate_win_3", name: "Silver Tongue", desc: "Won 3 Socratic debates", earned: true, date: "Mar 6" },
             { id: "tasks_50", name: "Workhorse", desc: "50 tasks completed", earned: false },
             { id: "first_task", name: "First Steps", desc: "Completed first task", earned: true, date: "Feb 20" },
@@ -45,7 +45,7 @@ const AGENT_DATA: Record<string, {
         stats: { tasks_completed: 28, knowledge_count: 156, accuracy: 0.97, crucible_survival: 0.95, streak: 8, skills: { security: 5, auditing: 5, testing: 4, python: 3, docs: 3 } },
         personality: { creative_precise: 0.15, verbose_concise: 0.3, bold_cautious: 0.2, warm_formal: 0.25 },
         achievements: [
-            { id: "crucible_100", name: "Forged in Fire", desc: "100% crucible survival rate", earned: true, date: "Mar 7" },
+            { id: "crucible_100", name: "Forged in Fire", desc: "100% knowledge check score", earned: true, date: "Mar 7" },
             { id: "first_task", name: "First Steps", desc: "Completed first task", earned: true, date: "Feb 23" },
         ],
         status: "online",
