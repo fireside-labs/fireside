@@ -1,0 +1,16 @@
+name: alerts
+version: 1.0.0
+description: "Proactive alerts — pattern detection, push to Telegram/toast/mobile"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/alerts
+  - method: PUT
+    path: /api/v1/alerts/settings
+
+events:
+  - alert.triggered
+
+config_keys:
+  - alerts

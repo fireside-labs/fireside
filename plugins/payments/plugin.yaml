@@ -1,0 +1,23 @@
+name: payments
+version: 1.0.0
+description: "Stripe payments — marketplace checkout, seller payouts, purchase tracking"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/payments/connect
+  - method: POST
+    path: /api/v1/payments/checkout
+  - method: POST
+    path: /api/v1/payments/webhook
+  - method: GET
+    path: /api/v1/purchases
+  - method: GET
+    path: /api/v1/earnings
+
+events:
+  - payment.completed
+  - payment.failed
+
+config_keys:
+  - payments

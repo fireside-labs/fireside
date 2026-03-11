@@ -1,0 +1,18 @@
+name: model-router
+version: 1.0.0
+description: "Smart model routing — picks the right model for each task type"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/model-router/stats
+  - method: POST
+    path: /api/v1/model-router/route
+
+events:
+  - model.routed
+
+config_keys:
+  - model_router.routing
+  - model_router.fallback
+  - model_router.cost_tracking

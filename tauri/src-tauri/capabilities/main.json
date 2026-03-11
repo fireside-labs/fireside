@@ -1,0 +1,80 @@
+{
+    "$schema": "https://raw.githubusercontent.com/nicholasVilela/tauri-plugin-capabilities/main/schema.json",
+    "identifier": "main-window",
+    "description": "Valhalla Desktop — main window capabilities (Heimdall security config)",
+    "windows": [
+        "main"
+    ],
+    "permissions": [
+        "core:default",
+        "core:window:default",
+        "core:window:allow-close",
+        "core:window:allow-set-title",
+        "core:window:allow-set-size",
+        "core:window:allow-set-fullscreen",
+        "core:window:allow-center",
+        "core:window:allow-minimize",
+        "core:window:allow-maximize",
+        "core:window:allow-unmaximize",
+        "core:window:allow-is-maximized",
+        "core:window:allow-show",
+        "core:window:allow-hide",
+        "core:app:default",
+        "core:app:allow-version",
+        "shell:allow-open"
+    ],
+    "security": {
+        "csp": {
+            "default-src": "'self'",
+            "script-src": "'self'",
+            "style-src": "'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "font-src": "'self' https://fonts.gstatic.com",
+            "connect-src": "'self' http://127.0.0.1:8337 ws://127.0.0.1:8337",
+            "img-src": "'self' data: blob:",
+            "frame-src": "'none'",
+            "object-src": "'none'",
+            "base-uri": "'self'",
+            "form-action": "'self'"
+        },
+        "freeze_prototype": true,
+        "dangerous_remote_domain_ipc_access": []
+    },
+    "denied_permissions": [
+        "core:window:allow-set-decorations",
+        "shell:allow-execute",
+        "fs:default",
+        "fs:allow-read-dir",
+        "fs:allow-write-dir",
+        "fs:allow-read-file",
+        "fs:allow-write-file",
+        "fs:allow-remove",
+        "fs:allow-rename",
+        "http:default",
+        "http:allow-fetch",
+        "process:allow-restart",
+        "process:allow-exit"
+    ],
+    "_heimdall_notes": {
+        "csp_rationale": [
+            "default-src 'self' — blocks all remote resources by default",
+            "connect-src locked to localhost:8337 — dashboard can ONLY talk to local Bifrost API",
+            "frame-src 'none' — no iframes (prevents clickjacking)",
+            "object-src 'none' — no plugins/embeds",
+            "No 'unsafe-eval' — prevents eval() and dynamic code execution",
+            "freeze_prototype = true — prevents prototype pollution attacks"
+        ],
+        "denied_permissions_rationale": [
+            "shell:allow-execute — CRITICAL: prevents the webview from executing system commands",
+            "fs:* — prevents webview from reading/writing filesystem (all file ops go through API)",
+            "http:allow-fetch — prevents webview from making requests to external servers",
+            "process:* — prevents webview from killing/restarting the backend process"
+        ],
+        "auto_update": {
+            "verify_with": "ed25519",
+            "key_location": "embedded in binary at build time",
+            "update_endpoint": "https://releases.valhalla.ai/{{target}}/{{arch}}/{{current_version}}",
+            "reject_unsigned": true,
+            "reject_downgrade": true
+        }
+    }
+}

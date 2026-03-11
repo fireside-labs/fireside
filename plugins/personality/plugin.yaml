@@ -1,0 +1,17 @@
+name: personality
+version: 1.0.0
+description: "Epigenetic personality — traits, prompts, event-driven evolution"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/personality
+  - method: POST
+    path: /api/v1/personality/evolve
+
+events:
+  - personality.evolved
+
+config_keys:
+  - node.name
+  - soul

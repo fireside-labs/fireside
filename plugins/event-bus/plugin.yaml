@@ -1,0 +1,15 @@
+name: event-bus
+version: 1.0.0
+description: In-process pub/sub event hub with WebSocket streaming
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/events
+  - method: WEBSOCKET
+    path: /api/v1/events/stream
+
+events:
+  - "*.* (backbone — all events flow through this plugin)"
+
+config_keys: []

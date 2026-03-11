@@ -1,0 +1,130 @@
+# ─────────────────────────────────────────────────────────────
+# Valhalla Mesh V2 — Unified Node Config
+# This file replaces all scattered JSON configs from V1.
+# One valhalla.yaml per node. This is Odin's.
+# ─────────────────────────────────────────────────────────────
+
+node:
+  name: odin
+  role: orchestrator
+  port: 8765
+
+mesh:
+  auth_token: "change-me-to-a-long-random-string"
+  nodes:
+    thor:
+      ip: 100.117.255.38
+      port: 8765
+      role: backend
+    freya:
+      ip: 100.102.105.3
+      port: 8765
+      role: memory
+    heimdall:
+      ip: 100.108.153.23
+      port: 8765
+      role: security
+    hermes:
+      ip: 100.86.195.123
+      port: 8765
+      role: courier
+
+dashboard:
+  auth_key: "change-me-dashboard-key"
+  allow_localhost: true
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+
+models:
+  default: llama/Qwen3.5-35B-A3B-8bit
+  providers:
+    llama:
+      url: http://127.0.0.1:8080/v1
+      key: local
+      api: openai-completions
+    nvidia:
+      url: https://integrate.api.nvidia.com/v1
+      key: ${NVIDIA_API_KEY}
+      api: openai-completions
+  aliases:
+    odin: llama/Qwen3.5-35B-A3B-8bit
+    local: llama/Qwen3.5-35B-A3B-8bit
+    qwen: llama/Qwen3.5-35B-A3B-8bit
+    hugs: nvidia/z-ai/glm-5
+    huginn: nvidia/z-ai/glm-5
+    moon: nvidia/moonshotai/kimi-k2.5
+    munnin: nvidia/moonshotai/kimi-k2.5
+    kimi: nvidia/moonshotai/kimi-k2.5
+
+plugins:
+  enabled:
+    - model-switch
+    - watchdog
+    - event-bus
+    - working-memory
+    - predictions
+    - self-model
+    - hypotheses
+    - hydra
+    - pipeline
+    - crucible
+    - philosopher-stone
+    - model-router
+    - belief-shadows
+    - personality
+    - socratic
+    - marketplace
+    - consumer-api
+    - brain-installer
+    - telegram
+    - agent-profiles
+    - voice
+    - payments
+    - alerts
+
+payments:
+  stripe_key: "${STRIPE_SECRET_KEY}"
+  webhook_secret: "${STRIPE_WEBHOOK_SECRET}"
+
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  allowed_users: []
+  notify_on:
+    - pipeline.shipped
+    - pipeline.escalated
+    - debate.deadlock
+    - crucible.broken
+
+pipeline:
+  git_branching: true
+  auto_merge: true
+  branch_prefix: pipeline
+
+model_router:
+  routing:
+    spec: nvidia/z-ai/glm-5
+    review: nvidia/z-ai/glm-5
+    regression: nvidia/deepseek-ai/deepseek-r1
+    memory: nvidia/moonshotai/kimi-k2.5
+    build: llama/Qwen3.5-35B-A3B-8bit
+    test: llama/Qwen3.5-35B-A3B-8bit
+    fallback: llama/Qwen3.5-35B-A3B-8bit
+  cost_tracking: true
+
+crucible:
+  schedule_hour: 4
+  model: qwen3.5:9b
+
+philosopher_stone:
+  schedule_hour: 3
+
+war_room:
+  sync_interval_seconds: 30
+  max_messages: 500
+  overseer_interval_seconds: 60
+
+soul:
+  identity: mesh/souls/IDENTITY.odin.md
+  personality: mesh/souls/SOUL.odin.md
+  user_profile: mesh/souls/USER.odin.md

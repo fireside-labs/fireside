@@ -1,0 +1,20 @@
+name: telegram
+version: 1.0.0
+description: "Telegram bot — chat, commands, and push notifications from your mesh"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/telegram/setup
+  - method: GET
+    path: /api/v1/telegram/status
+  - method: POST
+    path: /api/v1/telegram/test
+
+events:
+  - telegram.connected
+  - telegram.message.received
+  - telegram.message.sent
+
+config_keys:
+  - telegram

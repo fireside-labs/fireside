@@ -1,0 +1,17 @@
+name: philosopher-stone
+version: 1.0.0
+description: "Nightly wisdom distillation — aggregates mesh knowledge into a session prompt"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/philosopher-stone/build
+  - method: GET
+    path: /api/v1/philosopher-stone/prompt
+
+events:
+  - wisdom.rebuilt
+
+config_keys:
+  - philosopher_stone.schedule_hour
+  - mesh.nodes

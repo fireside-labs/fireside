@@ -1,0 +1,26 @@
+name: consumer-api
+version: 1.0.0
+description: "Consumer-friendly API responses — hardware detection, friendly names, activity & learning summaries"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/system/hardware
+  - method: GET
+    path: /api/v1/friendly/nodes
+  - method: GET
+    path: /api/v1/friendly/pipeline
+  - method: GET
+    path: /api/v1/friendly/personality
+  - method: GET
+    path: /api/v1/activity/today
+  - method: GET
+    path: /api/v1/learning/summary
+
+events:
+  - activity.recorded
+
+config_keys:
+  - node
+  - models
+  - soul

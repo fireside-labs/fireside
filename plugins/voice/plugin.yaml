@@ -1,0 +1,24 @@
+name: voice
+version: 1.0.0
+description: "Voice I/O — Whisper STT + Kokoro TTS. Local processing, zero cloud."
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/voice/status
+  - method: POST
+    path: /api/v1/voice/enable
+  - method: POST
+    path: /api/v1/voice/disable
+  - method: GET
+    path: /api/v1/voice/voices
+  - method: PUT
+    path: /api/v1/voice/select
+
+events:
+  - voice.enabled
+  - voice.disabled
+  - voice.transcribed
+
+config_keys:
+  - voice

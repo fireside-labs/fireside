@@ -1,0 +1,18 @@
+name: working-memory
+version: 1.0.0
+description: Short-term memory buffer with token-budget-aware prompt injection
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/working-memory
+  - method: POST
+    path: /api/v1/working-memory/observe
+  - method: POST
+    path: /api/v1/working-memory/recall
+
+events:
+  - memory.observed
+  - memory.recalled
+
+config_keys: []

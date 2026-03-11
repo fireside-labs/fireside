@@ -1,0 +1,28 @@
+name: brain-installer
+version: 1.0.0
+description: "One-click brain (model) installation — oMLX for Mac, llama-server for NVIDIA, cloud for everyone"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/brains/available
+  - method: GET
+    path: /api/v1/brains/installed
+  - method: POST
+    path: /api/v1/brains/install
+  - method: POST
+    path: /api/v1/brains/restart
+  - method: POST
+    path: /api/v1/brains/stop
+  - method: POST
+    path: /api/v1/brains/cloud/setup
+
+events:
+  - brain.installed
+  - brain.started
+  - brain.stopped
+  - brain.download.progress
+
+config_keys:
+  - models
+  - node

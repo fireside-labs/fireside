@@ -1,0 +1,14 @@
+name: predictions
+version: 1.0.0
+description: Predictive processing engine — Free Energy Principle for /ask
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/predictions
+
+events:
+  - prediction.scored
+
+config_keys:
+  - models.default

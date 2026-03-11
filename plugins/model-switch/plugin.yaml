@@ -1,0 +1,13 @@
+name: model-switch
+version: 1.0.0
+description: Switch LLM models via API or chat alias
+author: valhalla-core
+routes:
+  - method: POST
+    path: /model-switch
+events:
+  - model.switched
+config_keys:
+  - models.aliases
+  - models.default
+  - models.providers

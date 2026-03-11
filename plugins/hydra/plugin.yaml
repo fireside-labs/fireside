@@ -1,0 +1,23 @@
+name: hydra
+version: 1.0.0
+description: "Fracture resilience — when a node dies, another absorbs its role"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/hydra/snapshot
+  - method: POST
+    path: /api/v1/hydra/absorb
+  - method: GET
+    path: /api/v1/hydra/status
+  - method: POST
+    path: /api/v1/hydra/release
+
+events:
+  - hydra.snapshot
+  - hydra.absorbed
+  - hydra.released
+
+config_keys:
+  - node.name
+  - mesh.nodes

@@ -1,0 +1,25 @@
+name: socratic
+version: 1.0.0
+description: "Socratic Review — structured multi-perspective debate engine"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/socratic/debate
+  - method: GET
+    path: /api/v1/socratic/debate/{id}
+  - method: GET
+    path: /api/v1/socratic/debate/{id}/transcript
+  - method: POST
+    path: /api/v1/socratic/debate/{id}/intervene
+
+events:
+  - debate.started
+  - debate.round_complete
+  - debate.consensus
+  - debate.deadlock
+  - debate.escalated
+
+config_keys:
+  - models.providers
+  - model_router.routing

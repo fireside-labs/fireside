@@ -1,0 +1,19 @@
+name: belief-shadows
+version: 1.0.0
+description: "Theory of Mind — track peer belief vs reality gaps"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/belief-shadows
+  - method: GET
+    path: /api/v1/belief-shadows/{node}
+  - method: POST
+    path: /api/v1/belief-shadows/update
+
+events:
+  - belief.updated
+  - belief.gap_detected
+
+config_keys:
+  - mesh.nodes

@@ -1,37 +1,52 @@
-# Node-specific local extensions — NEVER commit these
-# Each node maintains its own version
-bot/bifrost_local.py
-bot/bifrost_local.*.py
+# === Node.js (Dashboard) ===
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+landing/node_modules/
+landing/.next/
+landing/out/
 
-# Python cache
+# === Python ===
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
+venv/
+.venv/
+*.egg-info/
 
-# Data files — too large/sensitive for git
-bot/war_room/data/
-bot/war_room/*.json
-bot/data/
+# === Data & Models ===
 *.db
 *.lance
+*.gguf
+models/
 
-# Secrets
+# === Secrets & Credentials ===
 .env
+.env.local
 config.json
-bot/config.json
-bot/bot/config.json
+credentials
+*.key
+*.pem
 
-# Logs
+# === Logs ===
 *.log
 logs/
 
-# OS
+# === OS ===
 .DS_Store
 Thumbs.db
 
-bot/war_room_data/*.json
+# === Tauri Build ===
+tauri/src-tauri/target/
 
-config.json
+# === V1 Legacy (to be cleaned up) ===
+bot/bifrost_local.py
+bot/bifrost_local.*.py
+bot/war_room/data/
+bot/war_room/*.json
+bot/data/
+bot/war_room_data/*.json
 status.json
+bot/sandbox_runs/

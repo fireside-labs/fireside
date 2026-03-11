@@ -1,0 +1,14 @@
+name: watchdog
+version: 1.0.0
+description: Health monitoring — polls mesh peers, auto-detects failures
+author: valhalla-core
+routes:
+  - method: GET
+    path: /watchdog-status
+  - method: POST
+    path: /watchdog/toggle
+events:
+  - node.offline
+  - node.recovered
+config_keys:
+  - mesh.nodes

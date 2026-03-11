@@ -1,0 +1,30 @@
+name: pipeline
+version: 1.0.0
+description: "Multi-stage pipeline orchestrator — iterative quality loop"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/pipeline
+  - method: GET
+    path: /api/v1/pipeline
+  - method: GET
+    path: /api/v1/pipeline/{id}
+  - method: POST
+    path: /api/v1/pipeline/{id}/advance
+  - method: DELETE
+    path: /api/v1/pipeline/{id}
+
+events:
+  - pipeline.created
+  - pipeline.stage_complete
+  - pipeline.iteration
+  - pipeline.regression
+  - pipeline.shipped
+  - pipeline.escalated
+
+config_keys:
+  - models.providers
+  - models.aliases
+  - mesh.nodes
+  - model_router.routing

@@ -1,0 +1,23 @@
+name: hypotheses
+version: 1.0.0
+description: "Artificial Epistemology — dream cycles generate beliefs from memory collisions"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/hypotheses
+  - method: POST
+    path: /api/v1/hypotheses/generate
+  - method: POST
+    path: /api/v1/hypotheses/test
+  - method: POST
+    path: /api/v1/hypotheses/share
+
+events:
+  - hypothesis.generated
+  - hypothesis.confirmed
+  - hypothesis.refuted
+
+config_keys:
+  - models.default
+  - node.name

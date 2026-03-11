@@ -1,0 +1,17 @@
+name: self-model
+version: 1.0.0
+description: "Default Mode Network — self-awareness through reflection cycles"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/self-model
+  - method: POST
+    path: /api/v1/reflect
+
+events:
+  - self_model.updated
+
+config_keys:
+  - models.default
+  - node.name

@@ -1,0 +1,20 @@
+name: crucible
+version: 1.0.0
+description: "Adversarial stress-testing of learned procedures"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/crucible/run
+  - method: GET
+    path: /api/v1/crucible/results
+
+events:
+  - crucible.tested
+  - crucible.broken
+  - crucible.unbreakable
+
+config_keys:
+  - crucible.schedule_hour
+  - crucible.model
+  - crucible.limit

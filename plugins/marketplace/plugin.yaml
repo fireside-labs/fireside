@@ -1,0 +1,33 @@
+name: marketplace
+version: 1.0.0
+description: "Agent Marketplace — export, import, browse, and trade evolved agents"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/agents/export
+  - method: GET
+    path: /api/v1/agents/export/{name}
+  - method: POST
+    path: /api/v1/agents/import
+  - method: GET
+    path: /api/v1/agents
+  - method: GET
+    path: /api/v1/marketplace
+  - method: GET
+    path: /api/v1/marketplace/{id}
+  - method: POST
+    path: /api/v1/marketplace/publish
+  - method: POST
+    path: /api/v1/marketplace/{id}/review
+
+events:
+  - agent.exported
+  - agent.imported
+  - agent.published
+  - agent.reviewed
+
+config_keys:
+  - marketplace.registry_path
+  - marketplace.export_dir
+  - soul

@@ -1,0 +1,23 @@
+name: agent-profiles
+version: 1.0.0
+description: "RPG agent profiles — levels, XP, achievements, personality sliders, agent stats"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/agents/{name}/profile
+  - method: PUT
+    path: /api/v1/agents/{name}/personality
+  - method: POST
+    path: /api/v1/agents/{name}/xp
+  - method: POST
+    path: /api/v1/chat
+
+events:
+  - agent.levelup
+  - agent.achievement
+  - agent.xp
+
+config_keys:
+  - soul
+  - node
