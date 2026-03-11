@@ -2088,6 +2088,156 @@ docs/product-hunt-listing.md
 
 ---
 
+# SPRINT 11 — Install Test + Rebrand to Fireside
+
+> **Domain secured:** `getfireside.ai`
+> **Brand:** Fireside — "Your AI companion, always by your side."
+> **Chat CTA:** "Start a Fireside →"
+
+## Tasks
+
+1. **Fresh Install Test** (Valkyrie):
+   - Back up everything, nuke `~/.openclaw/`
+   - Run `install.sh` from scratch, screen record entire flow
+   - Document: time to first conversation, any errors, confusion points
+   - Output: install video (first "building in public" content)
+
+2. **Rebrand** (Freya):
+   - Replace "Valhalla" → "Fireside" across dashboard, landing page, README
+   - Update install script URLs to `getfireside.ai`
+   - "Start a Fireside →" as chat button text
+   - Update SOUL.md references
+   - Keep Norse theme for Guild Hall (the aesthetic stays, just the product name changes)
+
+3. **Landing Page Live** (Freya):
+   - Deploy landing page to `getfireside.ai`
+   - Hero: "Your AI companion, always by your side."
+   - CTA: "Get Started Free" → install instructions
+   - No pricing tiers — free at launch
+
+4. **GitHub Metadata** (Thor):
+   - Rename repo to `fireside` (or `fireside-ai`)
+   - Update description, topics, README header
+   - Add social preview image (guild hall screenshot)
+
+---
+
+# SPRINT 12 — Competitive Features + Task Persistence
+
+> Features inspired by OpenClaw's recent releases (v2026.2.15 → v2026.3.7) plus task resilience.
+
+## 🔨 THOR — Adaptive Thinking + Task Persistence
+
+**Goal:** Make the brain smarter about effort allocation and make agents resilient to crashes.
+
+### Tasks
+
+1. **Adaptive Thinking Levels**:
+   - Simple questions → fast, low-token response (System 1)
+   - Complex questions → full reasoning chain (System 2)
+   - Classification: embed the question, score against complexity heuristics
+   - Simple: factual recall, yes/no, greetings → `max_tokens: 256, temperature: 0.3`
+   - Complex: analysis, creative writing, multi-step → `max_tokens: 2048, temperature: 0.7`
+   - This saves tokens and makes simple responses feel instant
+
+2. **Task Persistence + Resume on Heal**:
+   - When an agent starts a task:
+     - Write task state to `data/tasks/{task_id}.json`: status, progress, checkpoint data
+     - Update state at each major step (checkpoint pattern)
+   - If agent goes offline mid-task:
+     - On restart, scan `data/tasks/` for `status: in_progress`
+     - Resume from last checkpoint, not from scratch
+     - Log gap: "I was offline for 47 minutes. Resuming from step 3/5."
+   - Notify user via Telegram: "I'm back. Picking up where I left off on [task]."
+   - This is the biological equivalent of waking from unconsciousness and remembering what you were doing
+
+3. **Context Compaction** (ContextEngine):
+   - During long firesides, monitor token count
+   - When context exceeds 75% of window:
+     - Summarize earlier messages into a compressed block
+     - Replace message history with: `[Compressed: 47 messages] + last 10 messages`
+   - User sees full history in UI, but brain gets compressed version
+   - Enables 2+ hour conversations without hitting limits
+
+### Files to Create/Modify
+```
+plugins/adaptive-thinking/         [NEW] plugin
+plugins/task-persistence/          [NEW] plugin
+plugins/context-compactor/         [NEW] plugin
+```
+
+---
+
+## 🎨 FREYA — Telegram Streaming + Discord
+
+**Goal:** Make chat platforms feel alive.
+
+### Tasks
+
+1. **Telegram Streaming Replies**:
+   - Replace "send full message" with streaming:
+     - Send initial message with "..."
+     - Edit message every 500ms with new tokens
+     - Final edit with complete response
+   - User sees text appearing in real-time on their phone
+   - Feels like the AI is thinking, not just dumping a wall of text
+
+2. **Discord Integration** (stretch):
+   - Discord bot with slash commands
+   - `/chat` — start a fireside in a thread
+   - `/status` — mesh health
+   - Interactive buttons (Components v2): "More detail" / "Simplify" / "Remember this"
+
+3. **"What I Learned This Week" Monday Summary**:
+   - Every Monday, surface a dashboard card:
+     ```
+     🧠 This Week with Fireside
+     - Learned 12 new things about you
+     - Remembered 3 conversations
+     - Knowledge check score: 89% → 94%
+     - "You talked about your presentation anxiety twice.
+        Want me to help you prepare next time?"
+     ```
+   - This is the proof that learning works — visible, tangible, weekly
+
+### Files to Create/Modify
+```
+plugins/telegram/handler.py        (streaming edits)
+plugins/discord/                   [NEW] plugin
+dashboard/components/WeeklyCard.tsx [NEW] component
+```
+
+---
+
+## 👑 VALKYRIE — Cloud Deploy Option
+
+**Goal:** Solve "but I don't have a GPU" problem.
+
+### Tasks
+
+1. **One-Click Cloud Deploy**:
+   - AWS Lightsail / DigitalOcean / Hetzner template
+   - User clicks "Deploy to Cloud" → gets a Fireside instance with a GPU
+   - $15-30/month cloud cost (user pays provider, not us)
+   - Same install, same UI, just hosted
+   - This removes the hardware barrier Heimdall flagged
+
+2. **Cloud vs Local Comparison Page**:
+   - Landing page section explaining both options:
+     ```
+     🏠 Local: Free forever. Your hardware. Max privacy.
+     ☁️ Cloud: $15/mo. We host it. Still private (your instance).
+     ```
+
+### Files to Create
+```
+deploy/lightsail-template.yaml     [NEW]
+deploy/digitalocean-template.yaml  [NEW]
+docs/cloud-deploy-guide.md         [NEW]
+```
+
+---
+
 ## V1 Files Reference
 
 ### Keep (port to V2 as plugins)
