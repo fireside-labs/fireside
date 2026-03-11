@@ -26,19 +26,28 @@ def _load_module(plugin_name: str, filename: str = "handler.py"):
 
 
 # ---------------------------------------------------------------------------
-# CompanionSim Engine
+# CompanionSim Engine (Valkyrie-approved: single happiness bar)
 # ---------------------------------------------------------------------------
 
 class TestCompanionSim:
     def test_default_companion(self):
         mod = _load_module("companion", "sim.py")
-        c = mod.default_companion("Luna", "cat")
+        c = mod.default_companion("Luna", "cat", "Odin")
         assert c["name"] == "Luna"
         assert c["species"] == "cat"
-        assert c["hunger"] == 80
-        assert c["mood"] == 80
-        assert c["energy"] == 100
+        assert c["owner"] == "Odin"
+        assert c["happiness"] == 80
         assert c["level"] == 1
+        assert c["streak_days"] == 0
+
+    def test_single_happiness_bar(self):
+        """Valkyrie approved: 3 bars → single happiness."""
+        mod = _load_module("companion", "sim.py")
+        c = mod.default_companion("Test", "cat")
+        assert "happiness" in c
+        assert "hunger" not in c
+        assert "mood" not in c
+        assert "energy" not in c
 
     def test_all_species(self):
         mod = _load_module("companion", "sim.py")
@@ -48,18 +57,18 @@ class TestCompanionSim:
         mod = _load_module("companion", "sim.py")
         assert len(mod.FOOD_ITEMS) == 4
         assert "fish" in mod.FOOD_ITEMS
-        assert mod.FOOD_ITEMS["fish"]["hunger"] == 30
+        assert "happiness" in mod.FOOD_ITEMS["fish"]
 
     def test_feed(self):
         mod = _load_module("companion", "sim.py")
         state = mod.default_companion("Test", "dog")
-        state["hunger"] = 50
+        state["happiness"] = 50
         with tempfile.TemporaryDirectory() as tmpdir:
             orig = mod._state_file
             mod._state_file = lambda: Path(tmpdir) / "state.json"
             result = mod.feed(state, "fish")
             assert result["ok"]
-            assert state["hunger"] == 80  # 50 + 30
+            assert state["happiness"] == 65  # 50 + 15
             mod._state_file = orig
 
     def test_feed_unknown_food(self):
@@ -67,6 +76,18 @@ class TestCompanionSim:
         state = mod.default_companion("Test", "cat")
         result = mod.feed(state, "pizza")
         assert not result.get("ok")
+
+    def test_feed_includes_owner_name(self):
+        """Valkyrie: pet says user's name."""
+        mod = _load_module("companion", "sim.py")
+        state = mod.default_companion("Luna", "cat", "Odin")
+        state["happiness"] = 50
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig = mod._state_file
+            mod._state_file = lambda: Path(tmpdir) / "state.json"
+            result = mod.feed(state, "fish")
+            assert "Odin" in result["message"]
+            mod._state_file = orig
 
     def test_walk_events_per_species(self):
         mod = _load_module("companion", "sim.py")
@@ -86,30 +107,42 @@ class TestCompanionSim:
             assert result["xp_gained"] > 0
             mod._state_file = orig
 
-    def test_walk_too_tired(self):
+    def test_wandered_off_blocks_walk(self):
+        """Valkyrie: at 0 happiness, pet wanders off."""
         mod = _load_module("companion", "sim.py")
         state = mod.default_companion("Sleepy", "owl")
-        state["energy"] = 5
+        state["wandered_off"] = True
         result = mod.walk(state)
         assert not result.get("ok")
-        assert "tired" in result["error"].lower()
+        assert "wandered" in result["error"].lower()
+
+    def test_feeding_brings_back_wanderer(self):
+        mod = _load_module("companion", "sim.py")
+        state = mod.default_companion("Lost", "cat")
+        state["wandered_off"] = True
+        state["happiness"] = 0
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig = mod._state_file
+            mod._state_file = lambda: Path(tmpdir) / "state.json"
+            result = mod.feed(state, "cake")
+            assert result["ok"]
+            assert not state["wandered_off"]
+            mod._state_file = orig
 
     def test_xp_leveling(self):
         mod = _load_module("companion", "sim.py")
         state = mod.default_companion("XPTest", "fox")
-        state["xp"] = 19  # 1 XP from level-up (level 1 needs 20)
+        state["xp"] = 19
         leveled = mod._add_xp(state, 5)
         assert leveled
         assert state["level"] == 2
 
     def test_mood_prefix(self):
         mod = _load_module("companion", "sim.py")
-        # Happy cat
-        state = {"species": "cat", "mood": 90}
+        state = {"species": "cat", "happiness": 90}
         prefix = mod.get_mood_prefix(state)
         assert "purr" in prefix.lower()
-        # Grumpy dog
-        state = {"species": "dog", "mood": 10}
+        state = {"species": "dog", "happiness": 10}
         prefix = mod.get_mood_prefix(state)
         assert "whimper" in prefix.lower()
 
@@ -117,6 +150,28 @@ class TestCompanionSim:
         mod = _load_module("companion", "sim.py")
         total = sum(len(events) for events in mod.WALK_EVENTS.values())
         assert total == 30
+
+    def test_slow_decay_rate(self):
+        """Valkyrie: ~1% per 12 min, not 60s."""
+        mod = _load_module("companion", "sim.py")
+        # 1/12 ≈ 0.083 per minute
+        assert mod.DECAY_PER_MINUTE < 0.1
+        assert mod.DECAY_PER_MINUTE > 0.05
+
+    def test_status_message_miss(self):
+        """Valkyrie: below 30% → 'misses you'."""
+        mod = _load_module("companion", "sim.py")
+        state = mod.default_companion("Buddy", "dog", "Odin")
+        state["happiness"] = 20
+        status = mod.get_status(state)
+        assert "misses" in status["status_message"].lower()
+
+    def test_streak_tracking(self):
+        mod = _load_module("companion", "sim.py")
+        state = mod.default_companion("Streak", "fox")
+        state = mod._check_streak(state)
+        assert state["streak_days"] == 1
+        assert state["last_check_in"] is not None
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +188,7 @@ class TestTaskQueue:
         with tempfile.TemporaryDirectory() as tmpdir:
             orig = mod._queue_file
             mod._queue_file = lambda: Path(tmpdir) / "queue.json"
-            result = mod.add_task("draft_text", {"to": "Mom", "topic": "birthday"})
+            result = mod.add_task("draft_text", {"to": "Mom"})
             assert result["ok"]
             assert result["task"]["type"] == "draft_text"
             assert result["task"]["status"] == "pending"

@@ -38,15 +38,24 @@ These aren't just cute — they're **personality previews that set expectations.
 | Walks | 30 events (5/species) | ✅ Variety |
 | XP / Level up | `level × 20` XP | ✅ Quick early levels |
 
-**Concern: What does Energy do?**
-Hunger → feed. Mood → interact. But Energy → ? The user has 3 bars but only clear actions for 2. 
+### ✅ APPROVED CHANGE: Simplify to One Bar — Happiness
 
-**Fix:** Energy should gate walks. "Too tired for a walk right now" when energy is low. Sleep restores energy (pet gets energy back on its own over time, or when user closes the app). This creates a natural rhythm: feed → walk → pet sleeps → repeat.
+**Problem:** Three bars (hunger, mood, energy) with 60-second decay = Tamagotchi anxiety. Adults won't micromanage a virtual pet. Nobody over 12 wants to "feed their app."
 
-**Concern: 60-second decay is AGGRESSIVE.**
-At 60-second intervals, the user has to interact every few minutes or the pet gets sad. That's Tamagotchi accurate but smartphone exhausting. People will abandon.
+**Approved fix:** Replace all three bars with **one bar: Happiness.**
 
-**Fix:** 5-minute decay intervals for hunger, 10-minute for mood, passive energy regen. The pet should be happy if you check in 2-3 times a day, not every 2 minutes. Think Neko Atsume (cats come and go, no pressure) not Tamagotchi (constant anxiety).
+```
+Happiness: 💚💚💚💚💚💚💚💚💚🤍  92%
+
+Goes up:   Chat, complete a task together, walk event
+Goes down: ~1% every 12 minutes (passive drift)
+Below 30%: "Your companion misses you 🥺"
+At 0%:     Pet wanders off, comes back when you interact
+```
+
+**Decay interval: 2 hours** to go from full to needing attention. Check in 3x/day = happy pet. That's the Wordle cadence — morning, lunch, evening. Adults have exactly that much spare attention.
+
+**Thor action:** Refactor `CompanionSim.tsx` — replace `hunger`, `mood`, `energy` with single `happiness: number`. Simpler code, simpler UX, happier adults.
 
 ---
 
@@ -180,4 +189,25 @@ The companion is the engagement driver. Users who adopt a pet open the app 3x mo
 | Emotional attachment | 7/10 | Add naming, daily streaks, pet memory |
 | Monetization potential | 8/10 | Species packs + accessories = easy revenue |
 
-**Overall: 8.3/10 — Ship it, with the decay fix.** The connection animations alone are worth the feature. The penguin saying "the pigeon mail service is on strike" when your PC is offline is the kind of delight that makes people tell their friends. 🐧
+**Overall: 8.3/10 — Ship it, with the happiness simplification.** The connection animations alone are worth the feature. The penguin saying "the pigeon mail service is on strike" when your PC is offline is the kind of delight that makes people tell their friends. 🐧
+
+---
+
+## 8. Cross-Product Recommendations (Fireside-Wide)
+
+These aren't companion-specific — they apply to the whole product.
+
+### 8.1 The "Why" Screen
+Onboarding currently goes: Name → Brain → Personality → Ready. Add one screen BEFORE everything: *"Fireside is an AI that lives on your computer and gets smarter every day. Nothing you say ever leaves this machine."* Five seconds. Sets the frame. Without it, people think it's another ChatGPT clone.
+
+### 8.2 The Silence Nudge
+If someone doesn't open Fireside for 48 hours, send ONE Telegram message: *"Hey, I learned 3 new things while you were away. Want to see?"* Not spammy. Just enough to re-engage. This is the difference between a tool people forget and a companion that reaches out.
+
+### 8.3 The "Show a Friend" Card
+Add a **shareable card**: "My AI learned 247 things this month · 94% reliable · 15-day streak." Like Spotify Wrapped but for your AI. One-tap share to Twitter/Instagram. Free viral marketing from happy users.
+
+### 8.4 The First Overnight Moment
+Day 1 → Day 2 is the most important transition. When users open Fireside the first morning after install, show a **morning briefing toast**: *"Good morning! While you slept, I reviewed 12 conversations, tested 8 facts, and got 2% smarter. Here's what I learned..."* That's the moment they go "holy shit, it actually works."
+
+### 8.5 The Exit Interview
+If someone clicks "Release into the wild" on their pet, or uninstalls the app, ask ONE question: *"What would have made you stay?"* Free product research from the people who matter most — the ones who left.

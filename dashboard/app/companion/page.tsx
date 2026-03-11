@@ -6,6 +6,10 @@ import CompanionSim from "@/components/CompanionSim";
 import CompanionChat from "@/components/CompanionChat";
 import TaskQueue from "@/components/TaskQueue";
 import AvatarSprite from "@/components/AvatarSprite";
+import MorningBriefing from "@/components/MorningBriefing";
+import DailyGift from "@/components/DailyGift";
+import TeachMe from "@/components/TeachMe";
+import InventoryGrid from "@/components/InventoryGrid";
 import type { PetState, PetSpecies } from "@/components/CompanionSim";
 
 const STORAGE_KEY = "fireside_companion";
@@ -24,7 +28,7 @@ function saveCompanion(state: PetState) {
 export default function CompanionPage() {
     const [companion, setCompanion] = useState<PetState | null>(null);
     const [loaded, setLoaded] = useState(false);
-    const [tab, setTab] = useState<"chat" | "care" | "tasks">("chat");
+    const [tab, setTab] = useState<"chat" | "care" | "bag" | "tasks">("chat");
 
     useEffect(() => {
         setCompanion(loadCompanion());
@@ -33,7 +37,7 @@ export default function CompanionPage() {
 
     const handleAdopt = (species: PetSpecies, name: string) => {
         const newPet: PetState = {
-            name, species, hunger: 80, mood: 100, energy: 100, xp: 0, level: 1,
+            name, species, happiness: 80, xp: 0, level: 1, streak: 0,
         };
         setCompanion(newPet);
         saveCompanion(newPet);
@@ -57,17 +61,38 @@ export default function CompanionPage() {
 
     return (
         <div className="max-w-lg mx-auto">
+            {/* Morning Briefing — shows once per day */}
+            <MorningBriefing
+                petName={companion.name}
+                species={companion.species}
+                onDismiss={() => { }}
+            />
+
+            {/* Daily Gift — shows once per day */}
+            <DailyGift
+                petName={companion.name}
+                species={companion.species}
+                onCollect={(gift) => {
+                    if (gift.happinessBoost) {
+                        handleStateChange({
+                            ...companion,
+                            happiness: Math.min(100, companion.happiness + gift.happinessBoost),
+                        });
+                    }
+                }}
+            />
+
             {/* Companion header */}
-            <div className="flex items-center gap-4 mb-5 pt-4">
+            <div className="flex items-center gap-4 mb-5 pt-2">
                 <AvatarSprite
                     config={{ style: "pixel", hairStyle: 0, hairColor: "#333", skinTone: "#fad7a0", outfit: companion.species, accessory: "none" }}
                     size={64}
-                    status={companion.mood < 20 ? "hurt" : companion.mood < 50 ? "busy" : "online"}
+                    status={companion.happiness <= 0 ? "hurt" : companion.happiness < 30 ? "busy" : "online"}
                 />
                 <div>
                     <h1 className="text-xl font-bold text-white">{companion.name}</h1>
                     <p className="text-xs text-[var(--color-rune-dim)]">
-                        Level {companion.level} {companion.species} · {companion.mood > 70 ? "Happy 😊" : companion.mood > 40 ? "Content 😐" : "Needs attention 😢"}
+                        Level {companion.level} {companion.species} · {companion.happiness > 70 ? "Happy 😊" : companion.happiness > 30 ? "Content 😐" : companion.happiness > 0 ? "Needs attention 😢" : "Wandered off 🌫️"}
                     </p>
                 </div>
             </div>
@@ -75,8 +100,9 @@ export default function CompanionPage() {
             {/* Tabs */}
             <div className="flex gap-1 mb-4 bg-[var(--color-glass)] rounded-lg p-1">
                 {[
-                    { id: "chat" as const, label: "💬 Chat", },
+                    { id: "chat" as const, label: "💬 Chat" },
                     { id: "care" as const, label: "🐾 Care" },
+                    { id: "bag" as const, label: "🎒 Bag" },
                     { id: "tasks" as const, label: "📋 Tasks" },
                 ].map((t) => (
                     <button
@@ -95,7 +121,10 @@ export default function CompanionPage() {
 
             {/* Tab content */}
             {tab === "chat" && (
-                <CompanionChat species={companion.species} petName={companion.name} mood={companion.mood} />
+                <div className="space-y-3">
+                    <CompanionChat species={companion.species} petName={companion.name} mood={companion.happiness} />
+                    <TeachMe petName={companion.name} species={companion.species} />
+                </div>
             )}
 
             {tab === "care" && (
@@ -110,6 +139,10 @@ export default function CompanionPage() {
                         Release {companion.name} into the wild (reset)
                     </button>
                 </div>
+            )}
+
+            {tab === "bag" && (
+                <InventoryGrid petName={companion.name} />
             )}
 
             {tab === "tasks" && <TaskQueue />}

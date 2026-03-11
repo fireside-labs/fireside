@@ -46,6 +46,18 @@ class QueueTaskRequest(BaseModel):
     payload: Optional[dict] = None
 
 
+class TranslateRequest(BaseModel):
+    text: str
+    target_lang: str
+    source_lang: str = ""
+
+
+class GuardianRequest(BaseModel):
+    text: str
+    hour: int = -1
+    recipient: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
@@ -130,10 +142,7 @@ def register_routes(app, config: dict) -> None:
         if not state:
             raise HTTPException(404, "No companion adopted.")
 
-        # Build personality profile for phone
         status = get_status(state)
-
-        # Load agent personality if available
         personality = {}
         try:
             from plugins.agent_profiles.leveling import load_profile
@@ -159,5 +168,30 @@ def register_routes(app, config: dict) -> None:
             f.unlink()
         return {"ok": True, "message": "Released into the wild. 🌲"}
 
+    # --- Sprint 14: Translation + Guardian ---
+
+    @router.post("/api/v1/companion/translate")
+    async def api_translate(req: TranslateRequest):
+        """Translate text using NLLB-200."""
+        from plugins.companion.nllb import translate
+        result = translate(req.text, req.target_lang, req.source_lang)
+        return result
+
+    @router.get("/api/v1/companion/translate/languages")
+    async def api_languages():
+        """List supported languages."""
+        from plugins.companion.nllb import get_languages, get_info
+        return {"languages": get_languages(), **get_info()}
+
+    @router.post("/api/v1/companion/guardian")
+    async def api_guardian(req: GuardianRequest):
+        """Analyze a message before sending (regret detection)."""
+        from plugins.companion.sim import load_state
+        from plugins.companion.guardian import analyze_message
+        state = load_state()
+        species = state.get("species", "cat") if state else "cat"
+        result = analyze_message(req.text, req.hour, req.recipient, species)
+        return result
+
     app.include_router(router)
-    log.info("[companion] Plugin loaded.")
+    log.info("[companion] Plugin loaded (with translation + guardian).")
