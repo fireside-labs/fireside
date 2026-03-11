@@ -1,0 +1,28 @@
+name: companion
+version: 1.0.0
+description: "Pocket companion — AI pet sim engine, task queue, phone sync"
+author: valhalla-core
+
+routes:
+  - method: GET
+    path: /api/v1/companion/status
+  - method: POST
+    path: /api/v1/companion/feed
+  - method: POST
+    path: /api/v1/companion/walk
+  - method: POST
+    path: /api/v1/companion/queue
+  - method: GET
+    path: /api/v1/companion/queue
+  - method: POST
+    path: /api/v1/companion/sync
+
+events:
+  - companion.fed
+  - companion.walked
+  - companion.levelup
+  - companion.task.queued
+  - companion.task.completed
+
+config_keys:
+  - companion

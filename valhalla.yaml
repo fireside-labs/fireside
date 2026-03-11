@@ -82,6 +82,10 @@ plugins:
     - voice
     - payments
     - alerts
+    - adaptive-thinking
+    - task-persistence
+    - context-compactor
+    - companion
 
 payments:
   stripe_key: "${STRIPE_SECRET_KEY}"

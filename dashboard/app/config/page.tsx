@@ -17,7 +17,7 @@ export default function SettingsPage() {
     };
 
     // Mock raw config for Advanced view
-    const rawYaml = `# Valhalla Configuration
+    const rawYaml = `# Fireside Configuration
 name: odin
 role: orchestrator
 model: llama-3.1-8b

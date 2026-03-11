@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/ThemeToggle";
 import { OnboardingGate } from "@/components/OnboardingGate";
 
 export const metadata: Metadata = {
-    title: "Valhalla — Mission Control",
+    title: "Fireside — Your AI Companion",
     description: "AI mesh dashboard — nodes, models, souls, and plugins",
 };
 

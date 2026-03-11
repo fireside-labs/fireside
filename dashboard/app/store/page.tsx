@@ -12,8 +12,8 @@ const STORE_ITEMS: Record<string, { id: string; name: string; creator: string; d
         { id: "a3", name: "Content Writer", creator: "WordSmith", description: "Writes blogs, social posts, and newsletters in your voice.", emoji: "✍️", price: 0, rating: 4.2, reviews: 31 },
     ],
     themes: [
-        { id: "t1", name: "Valhalla", creator: "Valhalla Team", description: "Norse great hall with forge, mead hall, and rune bookshelves.", emoji: "🏰", price: 0, rating: 5, reviews: 89, featured: true },
-        { id: "t2", name: "Office", creator: "Valhalla Team", description: "Modern workspace with desks, whiteboard, and coffee machine.", emoji: "🏢", price: 0, rating: 4.6, reviews: 45 },
+        { id: "t1", name: "Valhalla", creator: "Fireside Team", description: "Norse great hall with forge, mead hall, and rune bookshelves.", emoji: "🏰", price: 0, rating: 5, reviews: 89, featured: true },
+        { id: "t2", name: "Office", creator: "Fireside Team", description: "Modern workspace with desks, whiteboard, and coffee machine.", emoji: "🏢", price: 0, rating: 4.6, reviews: 45 },
         { id: "t3", name: "Space Station", creator: "CosmicDesigns", description: "Sci-fi space station with hologram displays and zero-G lounge.", emoji: "🚀", price: 2.99, rating: 4.9, reviews: 18 },
         { id: "t4", name: "Cozy Cabin", creator: "HomeVibes", description: "Warm living room with bookshelf, cat, and crackling fireplace.", emoji: "🏡", price: 2.99, rating: 4.7, reviews: 22 },
         { id: "t5", name: "Pixel Dungeon", creator: "RetroGuild", description: "8-bit RPG dungeon with treasure chests and campfire.", emoji: "⚔️", price: 3.99, rating: 4.8, reviews: 14 },

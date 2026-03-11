@@ -1,7 +1,7 @@
 {
-    "name": "Valhalla",
-    "short_name": "Valhalla",
-    "description": "Your own AI assistant that runs on your computer",
+    "name": "Fireside",
+    "short_name": "Fireside",
+    "description": "Your AI companion, always by your side",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#0a0a0f",

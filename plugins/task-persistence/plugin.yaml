@@ -1,0 +1,23 @@
+name: task-persistence
+version: 1.0.0
+description: "Crash-resilient tasks — checkpoint pattern, resume on heal"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/tasks
+  - method: GET
+    path: /api/v1/tasks
+  - method: GET
+    path: /api/v1/tasks/{task_id}
+  - method: PUT
+    path: /api/v1/tasks/{task_id}/checkpoint
+
+events:
+  - task.created
+  - task.checkpoint
+  - task.completed
+  - task.resumed
+
+config_keys:
+  - tasks

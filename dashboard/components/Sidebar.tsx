@@ -22,6 +22,7 @@ const NAV_SECTIONS: NavSection[] = [
     {
         title: "Tools",
         items: [
+            { href: "/companion", label: "Companion", icon: "🐾" },
             { href: "/pipeline", label: "Task Builder", icon: "📋" },
             { href: "/learning", label: "How It's Learning", icon: "📊" },
             { href: "/guildhall", label: "Guild Hall", icon: "🏰" },
@@ -69,7 +70,7 @@ export function Sidebar() {
                 <div className="p-6 border-b border-[var(--color-glass-border)]">
                     <Link href="/" className="block">
                         <h1 className="text-xl font-bold font-[var(--font-family-heading)] tracking-tight">
-                            <span className="text-[var(--color-neon)]">⚡</span> Valhalla
+                            <span className="text-[var(--color-neon)]">🔥</span> Fireside
                         </h1>
                     </Link>
                 </div>
@@ -133,7 +134,7 @@ export function Sidebar() {
                     <SystemStatus className="mb-2" />
                     <div className="flex items-center justify-between">
                         <p className="text-xs text-[var(--color-rune-dim)]">
-                            Valhalla v2.0
+                            Fireside v2.0
                         </p>
                         <ThemeToggle />
                     </div>

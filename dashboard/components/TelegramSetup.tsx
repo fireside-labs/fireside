@@ -104,7 +104,7 @@ export default function TelegramSetup() {
                     <div className="bg-[var(--color-glass)] rounded-lg p-4 text-xs text-[var(--color-rune)] space-y-2 mb-4">
                         <p>1. Open Telegram and search for <strong className="text-white">@BotFather</strong></p>
                         <p>2. Send <code className="text-[var(--color-neon)] bg-[var(--color-void)] px-1.5 py-0.5 rounded">/newbot</code></p>
-                        <p>3. Choose a name (e.g. &quot;My Valhalla AI&quot;)</p>
+                        <p>3. Choose a name (e.g. &quot;My Fireside AI&quot;)</p>
                         <p>4. Copy the bot token it gives you</p>
                     </div>
                     <button onClick={() => setStep("token")} className="btn-neon px-5 py-2 text-sm">

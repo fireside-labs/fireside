@@ -90,7 +90,7 @@ export default function QRAuth({ className }: QRAuthProps) {
                                 <rect key={i} x={x} y={y} width="5" height="5" fill="black" />
                             ) : null;
                         })}
-                        {/* Valhalla logo in center */}
+                        {/* Fireside logo in center */}
                         <circle cx="50" cy="50" r="8" fill="white" />
                         <text x="50" y="53" textAnchor="middle" fontSize="10">⚡</text>
                     </svg>

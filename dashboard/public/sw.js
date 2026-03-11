@@ -1,4 +1,4 @@
-// Valhalla Service Worker — Cache-first for static, network-first for API
+// Fireside Service Worker — Cache-first for static, network-first for API
 const CACHE_NAME = 'valhalla-v2';
 const STATIC_ASSETS = ['/', '/manifest.json'];
 

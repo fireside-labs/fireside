@@ -1,0 +1,15 @@
+name: adaptive-thinking
+version: 1.0.0
+description: "System 1/2 thinking — fast responses for simple questions, full reasoning for complex ones"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/thinking/classify
+
+events:
+  - thinking.system1
+  - thinking.system2
+
+config_keys:
+  - thinking

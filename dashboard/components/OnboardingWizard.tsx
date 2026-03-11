@@ -45,7 +45,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         // 0: Welcome
         <div key="welcome" className="text-center py-8">
             <div className="text-5xl mb-6">⚡</div>
-            <h2 className="text-2xl font-bold text-white mb-3">Welcome to Valhalla</h2>
+            <h2 className="text-2xl font-bold text-white mb-3">Welcome to Fireside</h2>
             <p className="text-[var(--color-rune-dim)] mb-1">Your own AI assistant that runs on this computer,</p>
             <p className="text-[var(--color-rune-dim)] mb-8">learns from your work, and never forgets.</p>
             <p className="text-sm text-[var(--color-rune-dim)] mb-8">Let&apos;s set it up. Takes about 2 minutes.</p>

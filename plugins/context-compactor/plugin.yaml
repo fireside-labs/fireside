@@ -1,0 +1,14 @@
+name: context-compactor
+version: 1.0.0
+description: "Automatic context compaction for long firesides — never hit token limits"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/context/compact
+
+events:
+  - context.compacted
+
+config_keys:
+  - context

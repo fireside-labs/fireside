@@ -1,10 +1,14 @@
 <div align="center">
 
-# ⚡ Valhalla Mesh
+# 🔥 Fireside
 
-### AI that runs on your hardware, learns from your work, and never forgets.
+### Your AI companion, always by your side.
 
-<!-- TODO: Replace with actual screenshot -->
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Plugins](https://img.shields.io/badge/Plugins-22-7c3aed)](ARCHITECTURE.md)
+[![Tests](https://img.shields.io/badge/Tests-503%20passed-00ff88)](tests/)
+
+<!-- TODO: Replace with guild hall screenshot for social preview -->
 <!-- ![Dashboard Screenshot](docs/assets/dashboard-hero.png) -->
 *[Screenshot: Dashboard showing a live node card with GPU stats, an agent mid-conversation, and real-time tool usage]*
 
@@ -12,9 +16,9 @@
 
 ---
 
-**Stop teaching your AI the same things every session.** Valhalla deploys persistent agents on your own machines. They use your tools, remember what works, and get smarter every day — and nothing ever leaves your network.
+**Stop teaching your AI the same things every session.** Fireside deploys persistent agents on your own machines. They use your tools, remember what works, and get smarter every day — and nothing ever leaves your network.
 
-### Why Valhalla?
+### Why Fireside?
 
 🧠 **Agents that learn.** Procedural memory ranks what worked and what didn't. Dream cycles consolidate knowledge overnight. Day 1 it's generic. Day 90 it has instinct about your codebase.
 
@@ -28,10 +32,10 @@
 
 ```bash
 # One command. Auto-detects your hardware, installs dependencies, starts everything.
-curl -fsSL https://get.valhalla.ai | bash
+curl -fsSL https://getfireside.ai/install.sh | bash
 
 # → Dashboard opens at localhost:3000
-# → Onboarding wizard: pick a name, install a brain (one click), start chatting
+# → Onboarding wizard: pick a name, install a brain (one click), start a Fireside →
 ```
 
 **Time to first conversation: under 5 minutes.** No terminal knowledge needed after this.
@@ -101,7 +105,7 @@ flowchart TB
 
 ## What Makes This Different
 
-| | ChatGPT / Claude | OpenClaw | **Valhalla** |
+| | ChatGPT / Claude | OpenClaw | **Fireside** |
 |---|---|---|---|
 | Runs locally | ✗ | ✔ | ✔ Any GPU (auto-detected) |
 | Remembers across sessions | ✗ | Partial | ✔ Procedural memory |
@@ -152,7 +156,7 @@ Start with one machine. Add more when you need them.
 
 ```bash
 # On a second machine:
-valhalla join --mesh odin@192.168.1.10:8765
+fireside join --mesh odin@192.168.1.10:8765
 ```
 
 The node appears in your dashboard automatically. Assign it a role (backend, memory, security), pick a model, give it a personality — all from the UI. See the [Add-a-Node Guide](docs/add-a-node.md).
@@ -194,7 +198,7 @@ Browse and install plugins from the dashboard — one click, no restart. See the
 | [Marketplace](docs/marketplace.md) | Buy and sell trained agents |
 | [Telegram](docs/telegram-ux.md) | Chat with your AI from your phone |
 | [Voice](docs/voice-privacy-policy.md) | Privacy-first local voice |
-| [Architecture](ARCHITECTURE.md) | Full system design (9 sprints) |
+| [Architecture](ARCHITECTURE.md) | Full system design (12 sprints) |
 | [Security](SECURITY.md) | Trust model, auth, and audit results |
 
 ---
@@ -227,8 +231,8 @@ This is that friend, for everyone. Running on your hardware, learning overnight,
 
 *Day 1, it follows instructions. Day 90, it has instinct.*
 
-**[Get Started →](#quick-start)**
+**[Start a Fireside →](#quick-start)**
 
-MIT License · Built with 4 AI agents in 9 sprints 🪶
+MIT License · Built with 4 AI agents in 12 sprints · [getfireside.ai](https://getfireside.ai) 🔥
 
 </div>

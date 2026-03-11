@@ -45,7 +45,7 @@ export default function ChatInput() {
         const tools = ["file_read", "git_log"];
         const response: Message = {
             role: "assistant",
-            content: "Based on your recent activity, you've been working on the Valhalla Mesh V2 dashboard — specifically the War Room visualization, plugin marketplace, and WebSocket integration. The latest commits show Sprint 2 completion with all 3 new pages verified.",
+            content: "Based on your recent activity, you've been working on the Fireside dashboard — specifically the Guild Hall, agent profiles, and the marketplace. The latest commits show Sprint 11 completion with the rebrand finished.",
             tools,
         };
 
@@ -103,7 +103,7 @@ export default function ChatInput() {
                     className="btn-neon text-xs px-4 py-2"
                     style={{ opacity: !input.trim() || streaming ? 0.4 : 1 }}
                 >
-                    {streaming ? "⏳" : "Send"}
+                    {streaming ? "⏳" : input.trim() ? "Send" : "Start a Fireside →"}
                 </button>
             </div>
         </div>

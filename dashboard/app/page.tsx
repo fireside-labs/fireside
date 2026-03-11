@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import WeeklyCard from "@/components/WeeklyCard";
 
 const SUGGESTED_PROMPTS = [
     "Summarize my emails from this week",
@@ -20,7 +21,7 @@ export default function ChatHomePage() {
     const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
 
     useEffect(() => {
-        const name = localStorage.getItem("valhalla_user_name") || "";
+        const name = localStorage.getItem("fireside_user_name") || "";
         setUserName(name);
     }, []);
 
@@ -63,6 +64,11 @@ export default function ChatHomePage() {
                     Hi{userName ? ` ${userName}` : " there"} 👋
                 </h1>
                 <p className="text-[var(--color-rune-dim)]">Your AI is ready. What can I help you with?</p>
+            </div>
+
+            {/* Weekly summary */}
+            <div className="mb-6">
+                <WeeklyCard />
             </div>
 
             {/* Chat messages */}

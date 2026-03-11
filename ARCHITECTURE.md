@@ -2238,6 +2238,188 @@ docs/cloud-deploy-guide.md         [NEW]
 
 ---
 
+# SPRINT 13 — Pocket Companion (On-Phone AI Pet)
+
+> **The pet is the face, the brain is the mind.** A tiny AI companion on the user's phone that works offline, translates, entertains, and routes complex tasks to the home PC. This sprint builds the dashboard-side companion system. Native mobile app (Capacitor) is a follow-up.
+
+## 🔨 THOR — Pet Sim Engine + Task Queue Backend
+
+**Goal:** Build the Tamagotchi mechanics and offline task queue.
+
+### Tasks
+
+1. **CompanionSim Engine** ✅ BUILT:
+   - Hunger, mood, energy bars with passive decay (60-second intervals)
+   - 4 food items: fish (+30 hunger), treat (+20/+15 mood), salad (+15), cake (+10/+25 mood)
+   - 30 walk events (5 per species) with unique outcomes per animal
+   - XP system: walks + feeding grant XP, level up at `level × 20` XP
+   - Mood affects chat response quality (grumpier when unhappy)
+
+2. **Task Queue Backend** (future):
+   - `POST /api/v1/companion/queue` — add task from phone
+   - `GET /api/v1/companion/queue` — poll for results
+   - `POST /api/v1/companion/sync` — sync personality profile to phone
+   - Tasks processed by home PC agents in order received
+
+### Files
+```
+dashboard/components/CompanionSim.tsx    ✅ BUILT
+plugins/companion/queue.py              [NEW - future]
+```
+
+---
+
+## 🎨 FREYA — Companion UI + Connection Animations
+
+**Goal:** Build the companion picker, chat, and themed connection animations.
+
+### Tasks
+
+1. **CompanionPicker** ✅ BUILT:
+   - 6-pet grid: cat, dog, penguin, fox, owl, dragon
+   - Personality preview with example response
+   - Name input with species-specific placeholders (Sir Wadsworth for penguin)
+   - Adopt button saves to localStorage
+
+2. **CompanionChat** ✅ BUILT:
+   - Mood-aware responses (30 total, 5 per species)
+   - Mood prefixes: `*purrs*`, `*tail wagging*`, `*adjusts bowtie*`, etc.
+   - Online/offline detection via `navigator.onLine`
+   - Quick phone task buttons: clean photos, organize apps, draft text, reminders, math, weather
+
+3. **CompanionConnectionAnim** ✅ BUILT:
+   - 18 unique animations (6 pets × 3 states: connecting/failed/reconnected)
+   - Cat failed: "Your PC isn't answering. Typical."
+   - Penguin failed: "The pigeon mail service is on strike."
+   - Dog reconnected: "THEY'RE BACK!! YOUR PC IS BACK!! 🎉🎉🎉"
+
+4. **TaskQueue UI** ✅ BUILT:
+   - Shows pending/sent/completed tasks
+   - Expandable results with styled status badges
+
+5. **Companion Page** ✅ BUILT:
+   - `/companion` route with 3-tab layout: Chat / Care / Tasks
+   - Pet state persisted in localStorage
+   - Avatar with mood-based status indicator
+   - "Release into the wild" reset option
+
+### Files
+```
+dashboard/components/CompanionPicker.tsx          ✅ BUILT
+dashboard/components/CompanionChat.tsx             ✅ BUILT
+dashboard/components/CompanionConnectionAnim.tsx   ✅ BUILT
+dashboard/components/TaskQueue.tsx                 ✅ BUILT
+dashboard/app/companion/page.tsx                   ✅ BUILT
+dashboard/components/Sidebar.tsx                   (updated: added 🐾 Companion)
+```
+
+---
+
+## 👑 VALKYRIE — Pet Experience Review
+
+**Goal:** Review the companion experience and propose enhancements.
+
+### Tasks
+
+1. **UX Audit**: Full walkthrough of adopt → chat → care → tasks flow
+2. **Feature Gap Analysis**: What do the pets need more of? More walk events? More food types? Pet accessories? Mini-games?
+3. **Emotional Connection Assessment**: Do users feel attached? What triggers attachment?
+4. **Monetization Review**: Which companion features are marketplace-sellable?
+
+---
+
+# SPRINT 14 — Translation + Message Guardian + Networking
+
+> **On-phone AI features that require no home brain.** NLLB translation (200 languages, 600MB), sentiment-based message guardian, and auto-discovery networking.
+
+## 🔨 THOR — NLLB Translation + Message Guardian Backend
+
+**Goal:** Implement the translation and tone-check engines.
+
+### Tasks
+
+1. **NLLB Translation Wrapper**:
+   - Download and serve NLLB-200-distilled-600M model via ONNX Runtime
+   - `POST /api/v1/companion/translate` — source_lang, target_lang, text → translated text
+   - Auto-detect source language from text
+   - Support 200 languages (prioritize: Spanish, Chinese, Arabic, Hindi, Korean, Tagalog, Vietnamese, French, German, Japanese, Portuguese, Russian, Urdu, Bengali, Turkish)
+
+2. **Message Guardian Engine**:
+   - Sentiment classifier (<50MB): angry / sad / neutral / happy
+   - Regret detection heuristics: time-of-day (2am flag), recipient category (ex flag), all-caps detection, reply-all detection
+   - Returns structured advice: { risk_level, suggestion, softer_version }
+
+### Files
+```
+plugins/companion/nllb.py             [NEW]
+plugins/companion/guardian.py         [NEW]
+```
+
+---
+
+## 🎨 FREYA — Translation Bubble + Guardian UI
+
+**Goal:** Build the inline translation and guardian UX.
+
+### Tasks
+
+1. **TranslationBubble Component**:
+   - Inline translated message with original collapsed below
+   - Pet commentary on translation: 🐱 "She says eat more vegetables. Typical mom."
+   - Language selector (auto-detect default)
+   - Toggle: show original / show translation / show both
+
+2. **MessageGuardian Component**:
+   - Pre-send interception: pet warns before you send
+   - Per-species warnings:
+     - 🐱 Cat: "Are you sure? This sounds like 2am energy."
+     - 🐕 Dog: "Hey buddy... are we sure about this one? 🥺"
+     - 🐧 Penguin: "Sir. This is a reply-all. To 200 recipients."
+     - 🐉 Dragon: "I RESPECT THE ENERGY but your boss might not."
+   - "Send anyway" / "Edit" / "Save as draft" options
+
+3. **NetworkDiscovery Component**:
+   - Level 1: mDNS/Bonjour scan → "Found your PC! Connect?"
+   - Level 2: QR code fallback → "Scan this on your computer"
+   - Level 3: Relay connection status
+   - Level 4: Tailscale setup (hidden in Advanced)
+   - Pet narrates discovery: 🐱 "Sniffing for your PC..."
+
+### Files
+```
+dashboard/components/TranslationBubble.tsx   [NEW]
+dashboard/components/MessageGuardian.tsx      [NEW]
+dashboard/components/NetworkDiscovery.tsx     [NEW]
+```
+
+---
+
+## 🔒 HEIMDALL — Offline Security + Relay Server
+
+**Goal:** Ensure companion data stays private and relay is secure.
+
+### Tasks
+
+1. **Relay Server**:
+   - WebSocket pass-through: phone ↔ relay ↔ home PC
+   - End-to-end encryption: relay CANNOT read message content
+   - Connection tokens rotated daily
+   - Rate limiting: max 100 messages/minute per device
+
+2. **Offline Security Audit**:
+   - Companion conversations never leave phone
+   - Task queue encrypted at rest (AES-256)
+   - Photo-to-avatar upload uses existing auth token
+   - No cloud fallback — if home PC is off, pet handles it alone
+
+### Files
+```
+plugins/companion/relay.py              [NEW]
+docs/companion-security-model.md        [NEW]
+```
+
+---
+
 ## V1 Files Reference
 
 ### Keep (port to V2 as plugins)

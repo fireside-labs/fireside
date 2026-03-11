@@ -12,7 +12,7 @@ interface Purchase {
 
 const MOCK_PURCHASES: Purchase[] = [
     { id: "1", name: "Smart & Fast", emoji: "⚡", type: "Brain", price: 0, date: "Mar 8", installed: true },
-    { id: "2", name: "Valhalla Theme", emoji: "🏰", type: "Theme", price: 0, date: "Mar 8", installed: true },
+    { id: "2", name: "Nordic Hall Theme", emoji: "🏰", type: "Theme", price: 0, date: "Mar 8", installed: true },
     { id: "3", name: "Office Theme", emoji: "🏢", type: "Theme", price: 0, date: "Mar 10", installed: false },
 ];
 
