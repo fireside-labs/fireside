@@ -53,9 +53,9 @@ export default function LandingPage() {
           </h1>
 
           <p className="fade-up fade-up-delay-2 text-lg md:text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
-            Deploy persistent AI agents on your own hardware.
-            They use your tools, remember what works, dream about what
-            they&apos;ve learned, and wake up smarter every morning.
+            A personal AI companion that runs on your hardware,
+            learns from every conversation, and gets smarter while you sleep.
+            Pick a pet. Start a fireside. Wake up to a smarter friend.
           </p>
 
           <div className="fade-up fade-up-delay-3 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -132,11 +132,12 @@ export default function LandingPage() {
             </div>
 
             <div className="glass p-8 fade-up fade-up-delay-2">
-              <div className="feature-icon">🔌</div>
-              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Plugin Ecosystem</h3>
+              <div className="feature-icon">🐧</div>
+              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Pocket Companion</h3>
               <p className="text-[var(--color-text-muted)] leading-relaxed">
-                Every capability is a plugin — two files, hot-reloadable, no restarts.
-                Install from the marketplace or build your own. The mesh grows with you.
+                Adopt a pet that lives inside your AI. It translates your mom&apos;s texts,
+                stops you from drunk-texting your ex at 2am, and writes you haikus.
+                Six species. Real personality. Gets smarter with you.
               </p>
             </div>
           </div>
@@ -158,16 +159,14 @@ export default function LandingPage() {
 
         <div className="max-w-2xl mx-auto">
           <div className="code-block glow-amber">
-            <div><span className="comment"># Install</span></div>
-            <div><span className="prompt">$</span> brew install fireside</div>
-            <div className="mt-4"><span className="comment"># Initialize — auto-detects your GPU and downloads the right model</span></div>
-            <div><span className="prompt">$</span> fireside init</div>
-            <div className="mt-4"><span className="comment"># Launch — dashboard opens automatically</span></div>
-            <div><span className="prompt">$</span> fireside start</div>
+            <div><span className="comment"># One command. That&apos;s it.</span></div>
+            <div><span className="prompt">$</span> curl -fsSL getfireside.ai/install | bash</div>
+            <div className="mt-4"><span className="comment"># Auto-detects your GPU, downloads the right model, opens the dashboard</span></div>
             <div className="mt-3"><span className="success">✔</span> Engine &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; http://localhost:8765</div>
             <div><span className="success">✔</span> Dashboard &nbsp;&nbsp;&nbsp; http://localhost:3000</div>
             <div><span className="success">✔</span> Model &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Qwen 3.5 35B (local, free)</div>
-            <div><span className="success">✔</span> Plugins &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 8 loaded</div>
+            <div><span className="success">✔</span> Plugins &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 29 available</div>
+            <div><span className="success">✔</span> Companion &nbsp;&nbsp;&nbsp; 🐧 Ready to adopt</div>
           </div>
         </div>
       </section>
