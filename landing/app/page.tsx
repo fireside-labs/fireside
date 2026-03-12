@@ -31,6 +31,8 @@ export default function LandingPage() {
             <a href="#features" className="hover:text-[var(--color-foreground)] transition-colors">Features</a>
             <a href="#how" className="hover:text-[var(--color-foreground)] transition-colors">How It Works</a>
             <a href="#compare" className="hover:text-[var(--color-foreground)] transition-colors">Compare</a>
+            <a href="/docs" className="hover:text-[var(--color-foreground)] transition-colors">Docs</a>
+            <a href="/about" className="hover:text-[var(--color-foreground)] transition-colors">About</a>
             <a href="#waitlist" className="cta-outline !py-2 !px-5 !text-sm !rounded-full">
               Get Early Access
             </a>
@@ -53,9 +55,8 @@ export default function LandingPage() {
           </h1>
 
           <p className="fade-up fade-up-delay-2 text-lg md:text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
-            Deploy AI agents that run your workflows, learn from every outcome,
-            and get smarter while you sleep. Desktop orchestration.
-            Mobile companion. One brain.
+            An AI companion that runs on your computer, learns from every conversation,
+            and gets smarter while you sleep.
           </p>
 
           <div className="fade-up fade-up-delay-3 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -114,20 +115,21 @@ export default function LandingPage() {
 
             <div className="glass p-8 fade-up">
               <div className="feature-icon">🛡️</div>
-              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Adaptive Immunity</h3>
+              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Message Guardian</h3>
               <p className="text-[var(--color-text-muted)] leading-relaxed">
-                One node detects an attack. Within 60 seconds, every node in your mesh
-                has the defense. No human in the loop. Every attack makes the system stronger.
+                About to send that 2am text? Your companion checks the vibe,
+                the time, and your history — then gently talks you out of it.
+                Saves relationships. Literally.
               </p>
             </div>
 
             <div className="glass p-8 fade-up fade-up-delay-1">
-              <div className="feature-icon">💓</div>
-              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Gut Instinct</h3>
+              <div className="feature-icon">🌍</div>
+              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Live Translation</h3>
               <p className="text-[var(--color-text-muted)] leading-relaxed">
-                Before high-stakes actions, agents check their &ldquo;somatic markers&rdquo; —
-                compressed past experiences that flag danger before reasoning even starts.
-                Bad feeling? Action blocked.
+                Your mom texts you in Spanish. Your colleague writes in Japanese.
+                Your companion translates in real-time — and learns context,
+                not just words.
               </p>
             </div>
 
@@ -415,6 +417,24 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── SOCIAL PROOF ─── */}
+      <section className="py-20 px-6">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="glass p-10">
+            <p className="text-lg md:text-xl text-[var(--color-text-muted)] leading-relaxed mb-6">
+              Built by a solo developer. Open source.
+              Backed by 0 VCs and 1 stubborn vision.
+            </p>
+            <p className="text-[var(--color-text-dim)] text-sm leading-relaxed max-w-lg mx-auto">
+              Fireside started as a weekend project to prove that AI can learn like we do —
+              not from bigger models, but from experience. Every line of code is written
+              by one person who believes your data should stay yours and your AI should
+              get smarter every day it runs.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ─── WAITLIST CTA ─── */}
       <section className="py-24 px-6" id="waitlist">
         <div className="divider max-w-6xl mx-auto mb-24" />
@@ -460,6 +480,9 @@ export default function LandingPage() {
           <div className="flex items-center gap-6 text-sm text-[var(--color-text-dim)]">
             <a href="#features" className="hover:text-[var(--color-text-muted)] transition-colors">Features</a>
             <a href="#compare" className="hover:text-[var(--color-text-muted)] transition-colors">Compare</a>
+            <a href="/docs" className="hover:text-[var(--color-text-muted)] transition-colors">Docs</a>
+            <a href="/about" className="hover:text-[var(--color-text-muted)] transition-colors">About</a>
+            <a href="/privacy" className="hover:text-[var(--color-text-muted)] transition-colors">Privacy</a>
             <a href="#waitlist" className="hover:text-[var(--color-text-muted)] transition-colors">Early Access</a>
           </div>
           <p className="text-sm text-[var(--color-text-dim)]">
