@@ -1,18 +1,22 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #050508;
-  --color-foreground: #e4e4e7;
-  --color-surface: #0a0a12;
-  --color-surface-2: #12121e;
-  --color-neon: #00ff88;
-  --color-neon-dim: #00cc6a;
-  --color-purple: #7c3aed;
-  --color-blue: #3b82f6;
-  --color-amber: #f59e0b;
-  --color-border: #1e1e2e;
+  --color-background: #0D0B09;
+  --color-foreground: #F5F0E8;
+  --color-surface: #141210;
+  --color-surface-2: #1C1915;
+  --color-amber: #E2A336;
+  --color-amber-dim: #C48B2A;
+  --color-orange: #F0913A;
+  --color-rose: #FB7185;
+  --color-purple-glow: #C084FC;
+  --color-border: #2A2520;
+  --color-text-muted: #9C9488;
+  --color-text-dim: #6B655C;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Outfit', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 @layer base {
@@ -35,154 +39,265 @@
   }
 
   ::selection {
-    background: var(--color-neon);
+    background: var(--color-amber);
     color: var(--color-background);
   }
 }
 
-/* Glass card */
+/* ─── Glass card — warm tint ─── */
 .glass {
-  background: linear-gradient(135deg, rgba(10, 10, 18, 0.8), rgba(18, 18, 30, 0.6));
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(20, 18, 16, 0.9),
+    rgba(28, 25, 21, 0.7)
+  );
+  border: 1px solid rgba(226, 163, 54, 0.08);
+  border-radius: 20px;
+  transition: all 0.3s ease;
 }
 
 .glass:hover {
-  border-color: rgba(0, 255, 136, 0.15);
+  border-color: rgba(226, 163, 54, 0.2);
+  box-shadow: 0 0 40px rgba(226, 163, 54, 0.05);
+  transform: translateY(-2px);
 }
 
-/* Glow effects */
-.glow-neon {
-  box-shadow: 0 0 40px rgba(0, 255, 136, 0.08), 0 0 80px rgba(0, 255, 136, 0.04);
+/* ─── Glow effects ─── */
+.glow-amber {
+  box-shadow: 0 0 60px rgba(226, 163, 54, 0.06), 0 0 120px rgba(226, 163, 54, 0.03);
 }
 
 .text-glow {
-  text-shadow: 0 0 30px rgba(0, 255, 136, 0.3), 0 0 60px rgba(0, 255, 136, 0.1);
+  text-shadow: 0 0 40px rgba(226, 163, 54, 0.4), 0 0 80px rgba(226, 163, 54, 0.15);
 }
 
-/* Gradient text */
+/* ─── Gradient text — amber to orange ─── */
 .gradient-text {
-  background: linear-gradient(135deg, #00ff88, #3b82f6);
+  background: linear-gradient(135deg, #E2A336, #F0913A);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Pulse animation for status dot */
-@keyframes pulse-glow {
+.gradient-text-rose {
+  background: linear-gradient(135deg, #E2A336, #FB7185);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-  0%,
-  100% {
-    box-shadow: 0 0 4px rgba(0, 255, 136, 0.4), 0 0 12px rgba(0, 255, 136, 0.2);
+/* ─── Pulse animation — warm ─── */
+@keyframes pulse-warm {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(226, 163, 54, 0.4), 0 0 12px rgba(226, 163, 54, 0.2);
   }
-
   50% {
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.6), 0 0 24px rgba(0, 255, 136, 0.3);
+    box-shadow: 0 0 8px rgba(226, 163, 54, 0.6), 0 0 24px rgba(226, 163, 54, 0.3);
   }
 }
 
 .pulse-dot {
-  animation: pulse-glow 2s ease-in-out infinite;
+  animation: pulse-warm 2s ease-in-out infinite;
 }
 
-/* Fade in animation */
+/* ─── Fade in animation ─── */
 @keyframes fade-up {
   from {
     opacity: 0;
     transform: translateY(24px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.fade-up {
-  animation: fade-up 0.8s ease-out forwards;
-  opacity: 0;
+.fade-up { animation: fade-up 0.8s ease-out forwards; opacity: 0; }
+.fade-up-delay-1 { animation-delay: 0.15s; }
+.fade-up-delay-2 { animation-delay: 0.3s; }
+.fade-up-delay-3 { animation-delay: 0.45s; }
+.fade-up-delay-4 { animation-delay: 0.6s; }
+
+/* ─── Ember float particles ─── */
+@keyframes ember-float {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  10% { opacity: 0.6; }
+  90% { opacity: 0.6; }
+  100% { transform: translateY(-120vh) scale(0.3); opacity: 0; }
 }
 
-.fade-up-delay-1 {
-  animation-delay: 0.15s;
+.ember-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-amber);
+  pointer-events: none;
+  animation: ember-float linear infinite;
 }
 
-.fade-up-delay-2 {
-  animation-delay: 0.3s;
-}
-
-.fade-up-delay-3 {
-  animation-delay: 0.45s;
-}
-
-.fade-up-delay-4 {
-  animation-delay: 0.6s;
-}
-
-/* Subtle grid background */
+/* ─── Subtle grid background — warm ─── */
 .bg-grid {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 64px 64px;
+    linear-gradient(rgba(226, 163, 54, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 163, 54, 0.015) 1px, transparent 1px);
+  background-size: 72px 72px;
 }
 
-/* CTA button */
+/* ─── CTA button — pill shape, warm ─── */
 .cta {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 32px;
-  background: var(--color-neon);
+  padding: 16px 36px;
+  background: linear-gradient(135deg, var(--color-amber), var(--color-orange));
   color: var(--color-background);
   font-weight: 700;
   font-size: 16px;
-  border-radius: 12px;
+  border-radius: 999px;
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
   border: none;
   cursor: pointer;
 }
 
 .cta:hover {
-  background: var(--color-neon-dim);
-  transform: translateY(-1px);
-  box-shadow: 0 0 24px rgba(0, 255, 136, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(226, 163, 54, 0.3);
 }
 
 .cta-outline {
   background: transparent;
-  color: var(--color-neon);
-  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: var(--color-amber);
+  border: 1px solid rgba(226, 163, 54, 0.3);
 }
 
 .cta-outline:hover {
-  background: rgba(0, 255, 136, 0.08);
-  border-color: var(--color-neon);
+  background: rgba(226, 163, 54, 0.06);
+  border-color: var(--color-amber);
+  box-shadow: 0 8px 32px rgba(226, 163, 54, 0.1);
 }
 
-/* Code block */
+/* ─── Code block — warm theme ─── */
 .code-block {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 20px 24px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  border-radius: 16px;
+  padding: 24px 28px;
+  font-family: var(--font-mono);
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.8;
   overflow-x: auto;
-  color: #a1a1aa;
+  color: var(--color-text-muted);
 }
 
 .code-block .prompt {
-  color: var(--color-neon);
+  color: var(--color-amber);
 }
 
 .code-block .comment {
-  color: #52525b;
+  color: var(--color-text-dim);
 }
 
 .code-block .success {
-  color: var(--color-neon);
+  color: var(--color-amber);
+}
+
+/* ─── Section divider — warm gradient line ─── */
+.divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(226, 163, 54, 0.15),
+    transparent
+  );
+}
+
+/* ─── Hero aurora glow ─── */
+.hero-glow {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 500px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(226, 163, 54, 0.07) 0%,
+    rgba(192, 132, 252, 0.03) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  filter: blur(2px);
+}
+
+/* ─── Feature icon container ─── */
+.feature-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(226, 163, 54, 0.08);
+  border: 1px solid rgba(226, 163, 54, 0.12);
+  font-size: 22px;
+  margin-bottom: 20px;
+}
+
+/* ─── Comparison table ─── */
+.compare-table {
+  width: 100%;
+  text-align: left;
+  font-size: 15px;
+}
+
+.compare-table thead th {
+  padding: 16px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.compare-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(42, 37, 32, 0.5);
+  color: var(--color-text-muted);
+}
+
+.compare-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.compare-check {
+  color: var(--color-amber);
+  font-weight: 500;
+}
+
+.compare-no {
+  color: var(--color-text-dim);
+}
+
+/* ─── Waitlist form ─── */
+.waitlist-input {
+  width: 100%;
+  max-width: 320px;
+  padding: 14px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.waitlist-input::placeholder {
+  color: var(--color-text-dim);
+}
+
+.waitlist-input:focus {
+  border-color: var(--color-amber);
+  box-shadow: 0 0 0 3px rgba(226, 163, 54, 0.1);
 }
