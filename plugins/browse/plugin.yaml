@@ -1,0 +1,18 @@
+name: browse
+version: 1.0.0
+description: Web browsing via accessibility-tree parsing — 90% fewer tokens than raw DOM
+routes:
+  - method: POST
+    path: /browse
+  - method: POST
+    path: /browse/summarize
+  - method: POST
+    path: /browse/compare
+  - method: POST
+    path: /browse/links
+events:
+  subscribes: [chat.url_detected]
+  publishes: [browse.completed, browse.failed]
+dependencies:
+  - httpx
+  - beautifulsoup4
