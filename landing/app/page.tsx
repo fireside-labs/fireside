@@ -209,6 +209,78 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── MEET YOUR COMPANION ─── */}
+      <section className="py-24 px-6" id="companions">
+        <div className="divider max-w-6xl mx-auto mb-24" />
+
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="font-[var(--font-display)] text-3xl md:text-5xl font-bold mb-4">
+              Pick a <span className="gradient-text">companion</span>
+            </h2>
+            <p className="text-[var(--color-text-muted)] text-lg max-w-xl mx-auto">
+              Your AI comes with a pocket pet. Feed it, walk it, teach it your world.
+              It grows with you — and it never judges.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="glass p-6 text-center group cursor-default">
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">🐱</div>
+              <h4 className="font-[var(--font-display)] font-bold text-sm mb-1">Cat</h4>
+              <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
+                Finds sunny spots. Knocks things over. Pretends it was on purpose.
+              </p>
+            </div>
+
+            <div className="glass p-6 text-center group cursor-default">
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">🐶</div>
+              <h4 className="font-[var(--font-display)] font-bold text-sm mb-1">Dog</h4>
+              <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
+                Found a stick. THE stick. Life complete. Best day ever!!
+              </p>
+            </div>
+
+            <div className="glass p-6 text-center group cursor-default">
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">🐧</div>
+              <h4 className="font-[var(--font-display)] font-bold text-sm mb-1">Penguin</h4>
+              <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
+                Waddles with purpose. Adjusts bowtie. Organizes rocks by size.
+              </p>
+            </div>
+
+            <div className="glass p-6 text-center group cursor-default">
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">🦊</div>
+              <h4 className="font-[var(--font-display)] font-bold text-sm mb-1">Fox</h4>
+              <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
+                Investigates suspicious bushes. Caches snacks. Watches sunsets.
+              </p>
+            </div>
+
+            <div className="glass p-6 text-center group cursor-default">
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">🦉</div>
+              <h4 className="font-[var(--font-display)] font-bold text-sm mb-1">Owl</h4>
+              <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
+                Counted every tree. 47. You&apos;re welcome. Blinks slowly at squirrels.
+              </p>
+            </div>
+
+            <div className="glass p-6 text-center group cursor-default">
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">🐉</div>
+              <h4 className="font-[var(--font-display)] font-bold text-sm mb-1">Dragon</h4>
+              <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
+                Breathes fire at dandelions. Hoards shiny rocks. Count: 847.
+              </p>
+            </div>
+          </div>
+
+          <p className="text-center text-[var(--color-text-dim)] text-sm mt-8">
+            Each companion has unique walk events, mood expressions, and personality.
+            They level up, maintain streaks, and get smarter alongside your AI.
+          </p>
+        </div>
+      </section>
+
       {/* ─── COMPARISON ─── */}
       <section className="py-24 px-6" id="compare">
         <div className="divider max-w-6xl mx-auto mb-24" />
