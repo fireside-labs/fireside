@@ -2701,6 +2701,196 @@ NEW_ACHIEVEMENTS = [
 
 ---
 
+# SPRINT 15 — Fireside Browse + Ship Week
+
+> **Theme:** Your pet reads the internet for you. Then we ship.
+> **Inspired by:** PinchTab — uses Accessibility Trees instead of DOM for 90% token savings.
+
+## 🔨 THOR — Fireside Browse Engine
+
+**Goal:** Companion can read, summarize, and interact with web pages. All local. Personality-driven responses.
+
+### Architecture (PinchTab Pattern)
+
+```
+User: "What's the weather in LA?"
+                    │
+                    ▼
+┌─────────────────────────────────────────────┐
+│ Fireside Browse Plugin                       │
+│                                             │
+│ 1. Fetch URL (requests/httpx)               │
+│ 2. Parse Accessibility Tree (not full DOM)  │
+│    - Strip: ads, nav, footers, scripts      │
+│    - Keep: headings, text, links, tables    │
+│    - Result: ~90% fewer tokens than raw HTML │
+│ 3. Feed clean text to brain                 │
+│ 4. Brain responds in pet personality         │
+│                                             │
+│ 🐧 "The forecast for Los Angeles is 73°F   │
+│     and sunny. Acceptable conditions."       │
+└─────────────────────────────────────────────┘
+```
+
+### Why Accessibility Tree?
+
+The DOM of a typical web page is 50,000-200,000 tokens. The Accessibility Tree is 2,000-5,000 tokens — **same information, 90% smaller.** PinchTab proved this works. We just need the parsing layer.
+
+```python
+# Core function — surprisingly simple
+from bs4 import BeautifulSoup
+import httpx
+
+def browse(url: str) -> str:
+    """Fetch a URL and return accessibility-tree-like clean text."""
+    html = httpx.get(url, timeout=10).text
+    soup = BeautifulSoup(html, "html.parser")
+    
+    # Kill noise
+    for tag in soup(["script", "style", "nav", "footer", "iframe", "noscript"]):
+        tag.decompose()
+    
+    # Extract structure
+    sections = []
+    for el in soup.find_all(["h1", "h2", "h3", "p", "li", "td", "th", "a"]):
+        role = el.name
+        text = el.get_text(strip=True)
+        if text and len(text) > 3:
+            if el.name == "a" and el.get("href"):
+                sections.append(f"[link] {text} → {el['href']}")
+            else:
+                sections.append(f"[{role}] {text}")
+    
+    return "\n".join(sections[:200])  # Cap at 200 elements
+```
+
+### 5 Browse Features (all use same parser)
+
+#### 1. 🔍 "Look this up"
+User says "look up how to make sourdough bread" → companion fetches a recipe site, summarizes it in character.
+
+```
+🐕 "OK I LOOKED IT UP!! You need flour, water, salt, and a starter.
+    Day 1: Mix. Day 2-7: Feed starter. Day 8: BREAD!! 🍞
+    Want the full recipe?"
+```
+
+#### 2. 📄 Page Summary
+User pastes a URL → companion reads it and gives a summary.
+
+```
+You: "What does this say? https://news.example.com/article/123"
+🐱 "Some politics thing. Two people disagree. Neither is right.
+    Want the actual summary or was that enough?"
+```
+
+#### 3. 🛒 Comparison Helper
+```
+You: "Compare these two laptops" [paste 2 URLs]
+🐧 "I've reviewed both specifications.
+
+    MacBook Air M4: $1,299 · 16GB · 13.6" · 18hr battery
+    ThinkPad X1:    $1,199 · 16GB · 14"   · 15hr battery
+
+    Sir Wadsworth recommends the MacBook. Superior battery.
+    The ThinkPad is acceptable if you prefer a larger display."
+```
+
+#### 4. 📰 Morning News Digest
+In the morning briefing, pull headlines from 3 user-configured news sources:
+
+```
+☀️ Good morning, Odin!
+
+📰 Headlines:
+  • Tech: Apple announces M5 Ultra
+  • World: Climate summit reaches agreement
+  • Local: New coffee shop opens on Main St
+
+*tail wagging* Buddy thinks the coffee shop sounds AMAZING.
+```
+
+#### 5. 🔗 Link Extraction
+"Find all the links on this page" → companion returns a clean list. Useful for research.
+
+### Privacy: Browse is Local-Only
+
+- Fetching happens on your machine (httpx, not a cloud proxy)
+- No browsing data is sent anywhere
+- Pages are not cached unless user explicitly saves
+- User controls which domains are allowed (whitelist mode available)
+
+### Files to Create
+```
+plugins/browse/handler.py     [NEW] — fetch + parse + accessibility tree
+plugins/browse/plugin.yaml    [NEW] — manifest
+plugins/browse/parser.py      [NEW] — BeautifulSoup accessibility tree extractor
+```
+
+---
+
+## 🎨 FREYA — Browse UI + Ship Polish
+
+### Browse UI in Companion Chat
+When companion returns a browsed result, show it in a special card:
+
+```
+┌────────────────────────────────────────────┐
+│ 🌐 Browsed: weather.com/LA                 │
+│ ─────────────────────────────              │
+│ 🐱 "73°F, sunny. You don't need a jacket. │
+│     I checked."                             │
+│                                            │
+│ [View Source] [Browse Another]              │
+└────────────────────────────────────────────┘
+```
+
+### Ship Week Polish
+- Fix any remaining "Valhalla" → "Fireside" references
+- Ensure `install.sh` works on clean macOS
+- Landing page final review at `getfireside.ai`
+- Screenshot all major screens for Product Hunt
+
+### Files
+```
+dashboard/components/BrowseCard.tsx  [NEW]
+```
+
+---
+
+## 🚀 SHIP WEEK SCHEDULE
+
+> **This is the last sprint before launch. No new features after this.**
+
+| Day | Task | Owner |
+|-----|------|-------|
+| **Wed AM** | Fresh install test + screen record | Odin |
+| **Wed PM** | Fix whatever breaks | Thor + Freya |
+| **Thu** | Record 90-second demo video | Odin |
+| **Fri** | Post to r/LocalLLaMA + r/selfhosted | Odin + Saga |
+| **Sat** | Respond to feedback, hotfix if needed | Thor + Heimdall |
+| **Sun** | Product Hunt "Coming Soon" page | Odin + Ragnar |
+
+### The Demo Video Script (90 seconds)
+```
+0:00  Terminal: curl -fsSL getfireside.ai/install | bash
+0:10  Install progress (time-lapse if needed)
+0:20  Browser opens → onboarding wizard
+0:30  Pick a pet (penguin), name it
+0:35  "Start a Fireside →" first chat
+0:45  Ask: "What can you do?"
+0:50  Pet responds in character
+0:55  Morning briefing appears (simulated next day)
+1:00  Walk → riddle guardian adventure
+1:10  Message guardian catches a 2am text
+1:15  Guild Hall with agents at the forge
+1:20  Tagline: "Fireside — Your AI companion, always by your side."
+1:25  getfireside.ai
+1:30  END
+```
+
+---
+
 ## V1 Files Reference
 
 ### Keep (port to V2 as plugins)
