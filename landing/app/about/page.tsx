@@ -43,15 +43,15 @@ export default function AboutPage() {
                                 I wanted to give my grandma an AI she could actually use.
                             </p>
                             <p>
-                                Not a command line. Not a chat window with a blinking cursor and no personality.
-                                Not a $20/month subscription that sends her data to a server farm in Virginia.
-                                Just a friendly companion that runs on her computer, learns her preferences,
-                                and never makes her feel stupid for asking a question.
+                                I set her up with ChatGPT. She liked it for a day. Then she came back
+                                the next morning and it had forgotten her name. She told it again.
+                                Next day — forgot again. She stopped using it.
                             </p>
                             <p>
-                                Every AI product I tried was built by engineers, for engineers. The interfaces
-                                assumed you knew what a &ldquo;prompt&rdquo; was. The setup guides assumed you
-                                had Docker installed. The pricing assumed you had a corporate card.
+                                That stuck with me. The smartest AI on the planet, and it couldn&apos;t
+                                remember a 74-year-old woman&apos;s name for more than one conversation.
+                                Every AI product I tried had the same problem — built by engineers,
+                                for engineers. No memory. No warmth. No personality.
                             </p>
                             <p>
                                 So I built Fireside.
