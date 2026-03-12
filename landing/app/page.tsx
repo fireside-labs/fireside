@@ -53,9 +53,9 @@ export default function LandingPage() {
           </h1>
 
           <p className="fade-up fade-up-delay-2 text-lg md:text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
-            A personal AI companion that runs on your hardware,
-            learns from every conversation, and gets smarter while you sleep.
-            Pick a pet. Start a fireside. Wake up to a smarter friend.
+            Deploy AI agents that run your workflows, learn from every outcome,
+            and get smarter while you sleep. Desktop orchestration.
+            Mobile companion. One brain.
           </p>
 
           <div className="fade-up fade-up-delay-3 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -77,7 +77,7 @@ export default function LandingPage() {
               What makes Fireside <span className="gradient-text">different</span>
             </h2>
             <p className="text-[var(--color-text-muted)] text-lg max-w-xl mx-auto">
-              Not another chatbot wrapper. A cognitive architecture grounded in neuroscience.
+              Not another chatbot wrapper. Agents that remember, learn, and actually do the work.
             </p>
           </div>
 
@@ -157,16 +157,37 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="max-w-2xl mx-auto">
-          <div className="code-block glow-amber">
-            <div><span className="comment"># One command. That&apos;s it.</span></div>
-            <div><span className="prompt">$</span> curl -fsSL getfireside.ai/install | bash</div>
-            <div className="mt-4"><span className="comment"># Auto-detects your GPU, downloads the right model, opens the dashboard</span></div>
-            <div className="mt-3"><span className="success">✔</span> Engine &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; http://localhost:8765</div>
-            <div><span className="success">✔</span> Dashboard &nbsp;&nbsp;&nbsp; http://localhost:3000</div>
-            <div><span className="success">✔</span> Model &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Qwen 3.5 35B (local, free)</div>
-            <div><span className="success">✔</span> Plugins &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 29 available</div>
-            <div><span className="success">✔</span> Companion &nbsp;&nbsp;&nbsp; 🐧 Ready to adopt</div>
+        <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-6">
+          {/* Desktop app — consumer path */}
+          <div className="glass p-8">
+            <div className="flex items-center gap-3 mb-5">
+              <span className="text-2xl">🖥️</span>
+              <h3 className="font-[var(--font-display)] text-lg font-bold">Desktop App</h3>
+            </div>
+            <p className="text-[var(--color-text-muted)] leading-relaxed mb-5">
+              Download, double-click, done. The installer auto-detects your GPU
+              and downloads the right model. No terminal required.
+            </p>
+            <a href="#waitlist" className="cta !text-sm !py-3 !px-6">
+              Download for Mac / Windows
+            </a>
+          </div>
+
+          {/* Terminal — developer path */}
+          <div>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="text-2xl">⚡</span>
+              <h3 className="font-[var(--font-display)] text-lg font-bold">One Command</h3>
+            </div>
+            <div className="code-block glow-amber">
+              <div><span className="comment"># For developers</span></div>
+              <div><span className="prompt">$</span> curl -fsSL getfireside.ai/install | bash</div>
+              <div className="mt-3"><span className="success">✔</span> Engine &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; http://localhost:8765</div>
+              <div><span className="success">✔</span> Dashboard &nbsp;&nbsp;&nbsp; http://localhost:3000</div>
+              <div><span className="success">✔</span> Model &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Qwen 3.5 35B (local, free)</div>
+              <div><span className="success">✔</span> Plugins &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 29 available</div>
+              <div><span className="success">✔</span> Companion &nbsp;&nbsp;&nbsp; 🐧 Ready to adopt</div>
+            </div>
           </div>
         </div>
       </section>
@@ -189,17 +210,17 @@ export default function LandingPage() {
           <div className="glass p-6">
             <div className="text-2xl mb-3">📋</div>
             <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Day&apos;s Work</h4>
-            <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">Tasks completed, tools used, outcomes logged</p>
+            <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">Everything the agent did today — tasks, tools, outcomes</p>
           </div>
           <div className="glass p-6">
             <div className="text-2xl mb-3">🌙</div>
-            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Dream Cycle</h4>
-            <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">Memory collision, pattern extraction, SVD compression</p>
+            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Replay &amp; Learn</h4>
+            <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">Replays the day, finds patterns, compresses into instincts</p>
           </div>
           <div className="glass p-6">
             <div className="text-2xl mb-3">⚔️</div>
-            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Crucible Test</h4>
-            <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">New knowledge stress-tested against adversarial edge cases</p>
+            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Stress Test</h4>
+            <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">New knowledge tested against edge cases before it&apos;s trusted</p>
           </div>
           <div className="glass p-6">
             <div className="text-2xl mb-3">☀️</div>
@@ -278,6 +299,23 @@ export default function LandingPage() {
             Each companion has unique walk events, mood expressions, and personality.
             They level up, maintain streaks, and get smarter alongside your AI.
           </p>
+        </div>
+      </section>
+
+      {/* ─── MOBILE TEASE ─── */}
+      <section className="py-16 px-6">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="glass p-10 glow-amber">
+            <span className="text-4xl mb-4 block">📱</span>
+            <h3 className="font-[var(--font-display)] text-2xl md:text-3xl font-bold mb-3">
+              Desktop today. <span className="gradient-text">Mobile coming soon.</span>
+            </h3>
+            <p className="text-[var(--color-text-muted)] leading-relaxed max-w-lg mx-auto">
+              Your companion rides along in your pocket. Morning briefings on the go,
+              walk your pet on the train, and chat with your AI from anywhere —
+              all synced to your desktop orchestrator.
+            </p>
+          </div>
         </div>
       </section>
 
