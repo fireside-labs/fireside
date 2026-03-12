@@ -1,69 +1,139 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Valhalla Mesh V2 — One-Line Installer
+# 🔥 Fireside Installer
 #
 # Usage:
-#   curl -fsSL https://get.valhalla.ai | bash
+#   curl -fsSL getfireside.ai/install | bash
 #
-# What it does:
-#   1. Detect OS (macOS/Linux)
-#   2. Install Python 3.10+ if needed
-#   3. Install Node.js 18+ if needed
-#   4. Clone valhalla-mesh-v2 repo
-#   5. Install Python + Node dependencies
-#   6. Generate default valhalla.yaml
-#   7. Start Bifrost + dashboard
-#   8. Open browser → onboarding wizard
+# What this does:
+#   1. Check your system (macOS or Linux)
+#   2. Make sure Python and Node.js are ready
+#   3. Download Fireside
+#   4. Set everything up
+#   5. Start your AI companion
+#   6. Open your browser — say hi to your pet!
+#
+# No technical knowledge required.
 # ============================================================================
 
 set -euo pipefail
 
-# Colors
+# ─── Colors ───
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
+AMBER='\033[38;5;214m'
+DIM='\033[0;90m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-VALHALLA_DIR="$HOME/valhalla-mesh-v2"
-REPO_URL="https://github.com/openclaw/valhalla-mesh-v2.git"
+FIRESIDE_DIR="$HOME/.fireside"
+REPO_URL="https://github.com/JordanFableFur/valhalla-mesh.git"
+TOTAL_STEPS=7
+CURRENT_STEP=0
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-info()  { echo -e "${BLUE}ℹ${NC}  $1"; }
-ok()    { echo -e "${GREEN}✅${NC} $1"; }
-warn()  { echo -e "${YELLOW}⚠️${NC}  $1"; }
-fail()  { echo -e "${RED}❌${NC} $1"; exit 1; }
-
+# ─── Helpers ───
+step() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo ""
+    echo -e "${AMBER}[$CURRENT_STEP/$TOTAL_STEPS]${NC} ${BOLD}$1${NC}"
+}
+ok()    { echo -e "  ${GREEN}✔${NC} $1"; }
+info()  { echo -e "  ${DIM}$1${NC}"; }
+warn()  { echo -e "  ${AMBER}⚠${NC} $1"; }
+fail()  { echo -e "\n  ${RED}✗ $1${NC}\n"; exit 1; }
 check_cmd() { command -v "$1" &> /dev/null; }
 
-# ---------------------------------------------------------------------------
-# Header
-# ---------------------------------------------------------------------------
+# ─── Cleanup on exit ───
+cleanup() {
+    echo ""
+    echo -e "${DIM}────────────────────────────────────────${NC}"
+    echo -e "  ${AMBER}🔥${NC} Fireside stopped. See you next time."
+    echo -e "${DIM}────────────────────────────────────────${NC}"
+    echo ""
+    # Kill background jobs
+    jobs -p | xargs -r kill 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# ============================================================================
+# 🔥 HEADER
+# ============================================================================
 
 echo ""
-echo -e "${BOLD}⚡ Valhalla Mesh V2 Installer${NC}"
-echo -e "   ${BLUE}Your personal AI mesh, one click away.${NC}"
-echo ""
+echo -e "${AMBER}${BOLD}"
+echo "    ╔══════════════════════════════════════╗"
+echo "    ║                                      ║"
+echo "    ║     🔥  Fireside Installer  🔥       ║"
+echo "    ║                                      ║"
+echo "    ║   Your AI companion, one step away   ║"
+echo "    ║                                      ║"
+echo "    ╚══════════════════════════════════════╝"
+echo -e "${NC}"
 
-# ---------------------------------------------------------------------------
-# 1. Detect OS
-# ---------------------------------------------------------------------------
+# ============================================================================
+# [1/7] Check your system
+# ============================================================================
+
+step "Checking your system..."
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
-info "Detected: $OS ($ARCH)"
 
-if [[ "$OS" != "Darwin" && "$OS" != "Linux" ]]; then
-    fail "Unsupported OS: $OS. Valhalla supports macOS and Linux."
+if [[ "$OS" == "Darwin" ]]; then
+    os_name="macOS"
+    if [[ "$ARCH" == "arm64" ]]; then
+        hw_name="Apple Silicon"
+    else
+        hw_name="Intel"
+    fi
+elif [[ "$OS" == "Linux" ]]; then
+    os_name="Linux"
+    hw_name="$ARCH"
+else
+    fail "Sorry, Fireside currently supports macOS and Linux. Windows users: try WSL2."
 fi
 
-# ---------------------------------------------------------------------------
-# 2. Python 3.10+
-# ---------------------------------------------------------------------------
+ok "$os_name ($hw_name)"
+
+# Detect RAM
+RAM_GB=0
+if [[ "$OS" == "Darwin" ]]; then
+    RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo "0")
+    RAM_GB=$((RAM_BYTES / 1073741824))
+elif [[ -f /proc/meminfo ]]; then
+    RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    RAM_GB=$((RAM_KB / 1048576))
+fi
+ok "${RAM_GB}GB RAM detected"
+
+# GPU Info
+GPU="none"
+if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
+    GPU="Apple Silicon (shared ${RAM_GB}GB)"
+    ok "GPU: $GPU"
+elif check_cmd nvidia-smi; then
+    GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+    ok "GPU: $GPU"
+else
+    info "No dedicated GPU detected — Fireside will use CPU (slower but works)"
+fi
+
+# Recommend model size
+if [[ "$RAM_GB" -ge 32 ]]; then
+    MODEL_REC="Deep Thinker (35B) — best quality"
+elif [[ "$RAM_GB" -ge 16 ]]; then
+    MODEL_REC="Smart & Fast (7B) — recommended for your hardware"
+else
+    MODEL_REC="Compact (3B) — optimized for your RAM"
+fi
+info "Recommended brain: $MODEL_REC"
+
+# ============================================================================
+# [2/7] Setting up Python
+# ============================================================================
+
+step "Setting up Python..."
 
 PYTHON=""
 for py in python3.12 python3.11 python3.10 python3; do
@@ -79,86 +149,89 @@ for py in python3.12 python3.11 python3.10 python3; do
 done
 
 if [[ -z "$PYTHON" ]]; then
-    warn "Python 3.10+ not found. Installing..."
+    warn "Python 3.10+ not found — installing it for you..."
     if [[ "$OS" == "Darwin" ]]; then
         if ! check_cmd brew; then
-            info "Installing Homebrew..."
+            info "Installing Homebrew first (macOS package manager)..."
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         fi
         brew install python@3.12
         PYTHON="python3.12"
     else
-        sudo apt update && sudo apt install -y python3.12 python3.12-venv python3-pip
+        sudo apt update -qq && sudo apt install -y -qq python3.12 python3.12-venv python3-pip
         PYTHON="python3.12"
     fi
 fi
-ok "Python: $($PYTHON --version)"
+ok "Python ready ($($PYTHON --version 2>&1 | grep -oE 'Python [0-9.]+'))"
 
-# ---------------------------------------------------------------------------
-# 3. Node.js 18+
-# ---------------------------------------------------------------------------
+# ============================================================================
+# [3/7] Setting up Node.js
+# ============================================================================
 
+step "Setting up the dashboard..."
+
+NODE_OK=false
 if check_cmd node; then
     NODE_VER=$(node --version | grep -oE '[0-9]+' | head -1)
-    if [[ "$NODE_VER" -lt 18 ]]; then
-        warn "Node.js $NODE_VER found, need 18+. Upgrading..."
-        if [[ "$OS" == "Darwin" ]]; then
-            brew install node@20
-        else
-            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-            sudo apt install -y nodejs
-        fi
+    if [[ "$NODE_VER" -ge 18 ]]; then
+        NODE_OK=true
     fi
-else
-    warn "Node.js not found. Installing..."
+fi
+
+if [[ "$NODE_OK" == false ]]; then
+    warn "Installing Node.js (needed for the dashboard)..."
     if [[ "$OS" == "Darwin" ]]; then
         brew install node@20
     else
         curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt install -y nodejs
+        sudo apt install -y -qq nodejs
     fi
 fi
-ok "Node.js: $(node --version)"
+ok "Dashboard engine ready (Node $(node --version))"
 
-# ---------------------------------------------------------------------------
-# 4. Clone repo
-# ---------------------------------------------------------------------------
+# ============================================================================
+# [4/7] Download Fireside
+# ============================================================================
 
-if [[ -d "$VALHALLA_DIR" ]]; then
-    info "Valhalla directory already exists at $VALHALLA_DIR"
-    cd "$VALHALLA_DIR"
-    git pull --ff-only 2>/dev/null || true
+step "Downloading Fireside..."
+
+if [[ -d "$FIRESIDE_DIR" ]]; then
+    info "Fireside already installed — updating..."
+    cd "$FIRESIDE_DIR"
+    git pull --ff-only -q 2>/dev/null || true
 else
-    info "Cloning Valhalla Mesh V2..."
-    git clone "$REPO_URL" "$VALHALLA_DIR"
-    cd "$VALHALLA_DIR"
+    git clone -q "$REPO_URL" "$FIRESIDE_DIR"
+    cd "$FIRESIDE_DIR"
 fi
 ok "Source code ready"
 
-# ---------------------------------------------------------------------------
-# 5. Install dependencies
-# ---------------------------------------------------------------------------
+# ============================================================================
+# [5/7] Installing packages
+# ============================================================================
 
-info "Installing Python dependencies..."
-$PYTHON -m pip install --upgrade pip -q
-$PYTHON -m pip install -r requirements.txt -q
-ok "Python dependencies installed"
+step "Installing packages (this may take a minute)..."
 
-info "Installing dashboard dependencies..."
+# Python dependencies
+$PYTHON -m pip install --upgrade pip -q 2>/dev/null
+$PYTHON -m pip install -r requirements.txt -q 2>/dev/null
+ok "Backend packages installed"
+
+# Dashboard dependencies
 cd dashboard
 npm install --silent 2>/dev/null
 cd ..
-ok "Dashboard dependencies installed"
+ok "Dashboard packages installed"
 
-# ---------------------------------------------------------------------------
-# 6. Generate default config (if not exists)
-# ---------------------------------------------------------------------------
+# ============================================================================
+# [6/7] Configuring Fireside
+# ============================================================================
+
+step "Configuring Fireside..."
 
 if [[ ! -f "valhalla.yaml" ]]; then
-    info "Generating default config..."
     cat > valhalla.yaml << 'EOF'
 node:
-  name: my-device
+  name: my-fireside
   role: orchestrator
 
 models:
@@ -175,81 +248,74 @@ plugins:
     - pipeline
     - consumer-api
     - brain-installer
+    - companion
+    - browse
 
 pipeline:
   git_branching: false
 EOF
-    ok "Default config created"
+    ok "Fresh config created"
 else
-    ok "Config exists"
+    ok "Config already exists"
 fi
 
-# ---------------------------------------------------------------------------
-# 7. Detect hardware + recommend brain
-# ---------------------------------------------------------------------------
+# Create data directory
+mkdir -p "$HOME/.valhalla"
+ok "Data directory ready"
 
-echo ""
-info "Detecting hardware..."
-$PYTHON -c "
-import platform, os, subprocess
-cpu = platform.processor() or 'Unknown'
-ram = 0
-try:
-    if platform.system() == 'Darwin':
-        r = subprocess.run(['sysctl', '-n', 'hw.memsize'], capture_output=True, text=True)
-        ram = round(int(r.stdout.strip()) / (1024**3))
-except: pass
-print(f'   CPU: {cpu}')
-print(f'   RAM: {ram} GB')
-gpu = 'None detected'
-try:
-    if platform.system() == 'Darwin':
-        r = subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'], capture_output=True, text=True)
-        if 'Apple' in r.stdout:
-            gpu = r.stdout.strip() + ' (unified memory)'
-except: pass
-print(f'   GPU: {gpu}')
-"
-echo ""
+# ============================================================================
+# [7/7] Starting Fireside!
+# ============================================================================
 
-# ---------------------------------------------------------------------------
-# 8. Start services
-# ---------------------------------------------------------------------------
-
-info "Starting Valhalla..."
+step "Starting Fireside!"
 
 # Start backend
-echo -e "${BLUE}   Starting Bifrost (backend)...${NC}"
 $PYTHON bifrost.py &
 BIFROST_PID=$!
+info "Backend starting..."
 
 # Start dashboard
-echo -e "${BLUE}   Starting Dashboard (frontend)...${NC}"
 cd dashboard
-npm run dev &
+npm run dev &> /dev/null &
 DASH_PID=$!
 cd ..
+info "Dashboard starting..."
 
-sleep 3
+# Wait for services to be ready
+echo ""
+info "Warming up..."
+sleep 4
 
-# ---------------------------------------------------------------------------
-# 9. Open browser
-# ---------------------------------------------------------------------------
+# ============================================================================
+# 🔥 SUCCESS!
+# ============================================================================
 
 echo ""
-echo -e "${GREEN}${BOLD}⚡ Valhalla is running!${NC}"
+echo -e "${GREEN}${BOLD}"
+echo "    ╔══════════════════════════════════════╗"
+echo "    ║                                      ║"
+echo "    ║        🔥 Fireside is running!       ║"
+echo "    ║                                      ║"
+echo "    ╚══════════════════════════════════════╝"
+echo -e "${NC}"
+echo -e "  ${BOLD}Dashboard${NC}   →  ${AMBER}http://localhost:3000${NC}"
+echo -e "  ${BOLD}Backend${NC}     →  ${DIM}http://localhost:8765${NC}"
 echo ""
-echo -e "   Dashboard:  ${BOLD}http://localhost:3000${NC}"
-echo -e "   Backend:    ${BOLD}http://localhost:8000${NC}"
+echo -e "  ${DIM}────────────────────────────────────────${NC}"
 echo ""
-echo -e "   ${BLUE}Opening your browser now...${NC}"
+echo -e "  🐧 ${BOLD}Your companion is waiting.${NC}"
+echo -e "     Open the link above and say hello!"
+echo ""
+echo -e "  ${DIM}────────────────────────────────────────${NC}"
 echo ""
 
+# Open browser
 if [[ "$OS" == "Darwin" ]]; then
     open "http://localhost:3000"
 else
     xdg-open "http://localhost:3000" 2>/dev/null || true
 fi
 
-echo -e "${YELLOW}Press Ctrl+C to stop Valhalla.${NC}"
+echo -e "  ${DIM}Press Ctrl+C to stop Fireside.${NC}"
+echo ""
 wait
