@@ -1,4 +1,4 @@
-# Sprint 5 — THOR (Backend: Platform Bridge + Security Fixes)
+# Sprint 6 — THOR (Backend: Voice Streaming + Marketplace API + WebSocket)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -11,135 +11,100 @@
 > Do NOT use shell echo commands.
 
 > [!IMPORTANT]
-> **Read `FEATURE_INVENTORY.md`** to understand the full platform.
+> **Read `FEATURE_INVENTORY.md`** — you already have a `voice/` plugin (Whisper STT + Kokoro TTS)
+> and a `marketplace/` plugin. This sprint surfaces them for mobile.
 
 ---
 
 ## Context
 
-Heimdall caught that adventure rewards come from the client body (MEDIUM). Valkyrie wants the mobile app to show what the home PC is doing — dream cycles, memory count, uptime. The proactive guardian needs to detect late-night chat opens.
+The voice plugin already exists. The marketplace plugin already exists. The browse plugin already exists. Your job is to ensure mobile can access these and to add real-time sync.
 
-Key files:
-- `plugins/companion/handler.py` — all companion routes
-- `plugins/companion/guardian.py` — message analysis, regret detection
-- `plugins/companion/nllb.py` — 200-language translation (already complete)
-- `plugins/companion/adventure_guard.py` — HMAC signing, loot validation
+Key existing files:
+- `plugins/voice/` — Whisper STT + Kokoro TTS (already implemented)
+- `plugins/marketplace/` — browse, install, sell (already implemented)
+- `plugins/browse/parser.py` — tree-based web page parser (already implemented)
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Fix Adventure Rewards (🟡 MEDIUM from Heimdall Sprint 4)
-**File:** `plugins/companion/handler.py`
+### Task 1 — Voice Endpoint for Mobile
+The voice plugin exists but may not have HTTP-friendly endpoints for mobile. Create or verify:
 
-**Problem:** `/adventure/choose` reads rewards from the client request body. A malicious client could submit inflated rewards.
-
-**Fix:** Store the generated encounter server-side when `/adventure/generate` is called:
-```python
-# In-memory storage (keyed by companion name)
-_active_encounters = {}
-
-# On generate: store the encounter with its rewards
-_active_encounters[companion_name] = {
-    "type": encounter_type,
-    "choices": choices_with_rewards,
-    "generated_at": time.time(),
-    "expires_at": time.time() + 300  # 5 min to choose
-}
-
-# On choose: look up rewards server-side, ignore client values
-encounter = _active_encounters.pop(companion_name, None)
-if not encounter or time.time() > encounter["expires_at"]:
-    return 400 "Encounter expired"
-rewards = encounter["choices"][choice_index]["rewards"]
+**Speech-to-Text:**
+```
+POST /api/v1/voice/transcribe
+Content-Type: multipart/form-data
+Body: audio file (webm/m4a/wav)
+Response: { "text": "transcribed text", "language": "en" }
 ```
 
-### Task 2 — Add `/mobile/unregister-push` (🟢 LOW carried from Sprint 3)
-**File:** `plugins/companion/handler.py`
-
-```python
-@router.post("/api/v1/companion/mobile/unregister-push")
-async def unregister_push():
-    """Remove stored push token. Called when user disables notifications."""
-    token_path = Path.home() / ".valhalla" / "push_token.json"
-    if token_path.exists():
-        token_path.unlink()
-    return {"ok": True}
+**Text-to-Speech:**
+```
+POST /api/v1/voice/speak
+Body: { "text": "Hello!", "voice": "default" }
+Response: audio/wav binary stream
 ```
 
-### Task 3 — Platform Activity in `/mobile/sync`
-**File:** `plugins/companion/handler.py`
+These should use the existing Whisper and Kokoro models. If the voice plugin uses a different interface (e.g., WebSocket or stream), create HTTP wrapper endpoints that the mobile app can call.
 
-Add a `platform` section to the sync response showing what the home PC is doing:
+The voice data must NEVER leave the local network. No cloud STT/TTS. This is a privacy feature.
 
-```json
-{
-  "platform": {
-    "uptime_hours": 42.5,
-    "models_loaded": ["qwen-14b", "whisper-large"],
-    "memory_count": 247,
-    "plugins_active": 12,
-    "last_dream_cycle": "2026-03-15T04:30:00Z",
-    "last_prediction": "Weather confidence: 87%",
-    "mesh_nodes": 2
-  }
-}
+### Task 2 — Marketplace API for Mobile
+Verify or create mobile-friendly marketplace endpoints:
+
+```
+GET  /api/v1/marketplace/browse     — list available items (agents, themes, voice packs)
+GET  /api/v1/marketplace/search?q=  — search marketplace
+GET  /api/v1/marketplace/item/:id   — item detail (description, price, ratings)
+POST /api/v1/marketplace/install    — install a free item
 ```
 
-Pull from:
-- `working-memory` plugin for memory count
-- `model-router` or `model-switch` for loaded models
-- Server uptime from process start time
-- `predictions` plugin for last prediction
-- Node registry for mesh node count
+For paid items, integrate with the existing `payments/` plugin (Stripe). Mobile payments will need App Store IAP eventually, but for now Stripe web checkout is fine.
 
-If any plugin isn't available, return `null` for that field. Don't crash.
+### Task 3 — Web Page Summary Endpoint
+The `browse/parser.py` already parses web pages. Create:
 
-### Task 4 — Proactive Guardian Mode
-**File:** `plugins/companion/guardian.py` or `handler.py`
-
-Add `GET /api/v1/companion/guardian/check-in` that the mobile app calls on chat tab open:
-
-```python
-@router.get("/api/v1/companion/guardian/check-in")
-async def guardian_check_in():
-    """
-    Time-aware check-in. Returns a proactive warning if it's late at night.
-    """
-    hour = datetime.now().hour
-    if 0 <= hour < 5:
-        return {
-            "proactive_warning": True,
-            "message": "It's late. Want me to hold any messages until morning?",
-            "hold_option": True
-        }
-    return {"proactive_warning": False}
+```
+POST /api/v1/browse/summarize
+Body: { "url": "https://example.com" }
+Response: { "title": "...", "summary": "...", "key_points": [...] }
 ```
 
-Species-specific messages would be a bonus (cat: "It's 2AM. Even I think you should sleep." / dog: "It's really late! Maybe sleep first? I'll guard your phone!").
+This powers the iOS share sheet — user shares a URL from Safari, the companion summarizes it.
 
-### Task 5 — Translation API Compatibility Check
-**File:** `plugins/companion/nllb.py`
+### Task 4 — WebSocket for Real-Time Sync
+Add a WebSocket endpoint for the mobile app to get live companion state updates:
 
-The translation API should already work. Verify that these endpoints return proper responses:
-- `GET /api/v1/companion/languages` — returns list of supported languages
-- `POST /api/v1/companion/translate` — accepts `{ text, source_lang, target_lang }`
+```
+WS /api/v1/companion/ws
+```
 
-If they exist and work, document them for Freya. If missing, add them using the existing `nllb.py` functions.
+When companion state changes (happiness decay, task completed, adventure result, chat message from desktop), push an event to connected mobile clients. This replaces the pull-to-refresh polling model.
+
+Events to broadcast:
+- `companion_state_update` — happiness, XP, level changes
+- `task_completed` — task queue item finished
+- `chat_message` — message from desktop chat
+- `notification` — push notification content
+
+### Task 5 — Fix Morning Briefing Placeholders (🟢 LOW from Heimdall Sprint 5)
+When platform data is unavailable, return `null` fields instead of fake data. The frontend should show "data unavailable" instead of random numbers.
 
 ### Task 6 — Drop Your Gate
 Create `sprints/current/gates/gate_thor.md` using write_to_file:
 
 ```markdown
-# Thor Gate — Sprint 5 Backend Complete
-Sprint 5 tasks completed.
+# Thor Gate — Sprint 6 Backend Complete
+Sprint 6 tasks completed.
 
 ## Completed
-- [x] Adventure rewards: server-side encounter storage
-- [x] /mobile/unregister-push endpoint
-- [x] Platform activity in /mobile/sync
-- [x] Proactive guardian check-in (time-aware)
-- [x] Translation API verified for mobile
+- [x] Voice endpoints (transcribe + speak) via existing Whisper/Kokoro
+- [x] Marketplace browse/search/detail/install endpoints
+- [x] Web page summary endpoint (via browse/parser.py)
+- [x] WebSocket for real-time companion sync
+- [x] Morning briefing placeholder fix
 ```
 
 ---

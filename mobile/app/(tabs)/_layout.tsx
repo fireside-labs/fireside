@@ -1,13 +1,19 @@
 /**
- * Tab layout — Bottom tab navigator with 5 tabs.
+ * Tab layout — Mode-aware bottom tab navigator.
  *
- * 💬 Chat | 🐾 Care | 🎒 Bag | 📋 Tasks | ⚔️ Quest
+ * Pet Mode:  💬 Chat | 🐾 Care | 🎒 Bag | 📋 Tasks | ⚔️ Quest
+ * Tool Mode: 💬 Chat | 🔧 Tools | 📋 Tasks
+ *
+ * Sprint 5: Mode toggle via ModeContext.
  */
 import { Tabs } from "expo-router";
-import { View, Text, StyleSheet } from "react-native";
+import { Text, StyleSheet } from "react-native";
+import { useMode } from "../../src/ModeContext";
 import { colors, fontSize } from "../../src/theme";
 
 export default function TabsLayout() {
+    const { isPetMode } = useMode();
+
     return (
         <Tabs
             screenOptions={{
@@ -34,6 +40,17 @@ export default function TabsLayout() {
                     tabBarIcon: ({ focused }) => (
                         <Text style={[styles.icon, focused && styles.iconActive]}>🐾</Text>
                     ),
+                    href: isPetMode ? "/(tabs)/care" : null,
+                }}
+            />
+            <Tabs.Screen
+                name="tools"
+                options={{
+                    title: "Tools",
+                    tabBarIcon: ({ focused }) => (
+                        <Text style={[styles.icon, focused && styles.iconActive]}>🔧</Text>
+                    ),
+                    href: isPetMode ? null : "/(tabs)/tools",
                 }}
             />
             <Tabs.Screen
@@ -43,6 +60,7 @@ export default function TabsLayout() {
                     tabBarIcon: ({ focused }) => (
                         <Text style={[styles.icon, focused && styles.iconActive]}>🎒</Text>
                     ),
+                    href: isPetMode ? "/(tabs)/bag" : null,
                 }}
             />
             <Tabs.Screen
@@ -61,6 +79,7 @@ export default function TabsLayout() {
                     tabBarIcon: ({ focused }) => (
                         <Text style={[styles.icon, focused && styles.iconActive]}>⚔️</Text>
                     ),
+                    href: isPetMode ? "/(tabs)/quest" : null,
                 }}
             />
         </Tabs>

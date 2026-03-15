@@ -1,4 +1,4 @@
-# Sprint 5 — FREYA (Frontend: Mode Split + Translation + Platform Bridge)
+# Sprint 6 — FREYA (Frontend: Voice + Marketplace + OS Integration)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -11,129 +11,117 @@
 > Do NOT use shell echo commands.
 
 > [!IMPORTANT]
-> **Read `FEATURE_INVENTORY.md`** to understand the full platform. Read Valkyrie's Sprint 4 review
-> at `sprints/archive/sprint_04/gates/review_valkyrie.md` — it defines the vision for this sprint.
+> **Read `FEATURE_INVENTORY.md`** — the platform has voice, marketplace, web browsing already built.
+> Read Valkyrie's Sprint 5 review: `sprints/archive/sprint_05/gates/review_valkyrie.md`
 
 ---
 
 ## Context
 
-Valkyrie's key insight: *"Adults and executives who just want the utility can toggle this off."*
-
-The app currently serves one persona (Tamagotchi lover). This sprint adds a second persona (privacy-first utility user) through a **mode toggle**, and surfaces the platform depth through translation, morning briefings, and a "What's Happening at Home" card.
-
-Reference dashboard components:
-- `dashboard/components/TeachMe.tsx` (118 lines)
-- `dashboard/components/MorningBriefing.tsx`
-- `plugins/companion/nllb.py` — translation API reference
+After 5 sprints, the mobile app is a companion viewer. Sprint 6 makes it a **platform surface** — a way to access the full power of your home AI. Voice is the demo-killer: "Talk to your home AI from your phone." Marketplace is the commerce layer. Share sheet integrates the AI into your daily phone usage.
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Companion Mode Toggle (Valkyrie Priority #1)
-Add a settings screen or toggle on the Care tab:
+### Task 1 — Voice Mode (Walkie-Talkie)
+This is the highest-impact feature. "Talk to your home AI from anywhere."
 
-**🐾 Pet Mode** (default):
-- All tabs visible: Chat, Care, Bag, Quest, Tasks
-- Gamification active: feeding, walking, adventures, daily gifts, XP, levels
-- Companion speaks in character (mood prefixes, species personality)
-
-**🔧 Tool Mode:**
-- Simplified tabs: Chat, Tools, Tasks
-- Gamification hidden: no feeding, no walking, no quests, no daily gifts
-- Companion still has personality but skips game mechanics
-- "Tools" tab replaces Care+Bag+Quest with: Guardian settings, Translation, TeachMe
-- Happiness/XP bars hidden
-- Push notifications change: no "feed me" alerts, only task completions and guardian check-ins
-
-Store mode in AsyncStorage. The toggle should be:
-- A gear icon on the Care tab → Settings screen with mode picker
-- OR a profile card at the top of Care tab with a clean toggle
-
-The companion's personality STAYS in both modes — only the game mechanics change.
-
-### Task 2 — Translation UI
-Add a Translation screen (accessible in Tool mode's "Tools" tab, and optionally in Pet mode's chat screen as a button):
-
-1. **Text input** field for text to translate
-2. **Source language** picker (auto-detect option + manual selection)
-3. **Target language** picker (searchable — there are 200 languages)
-4. **Translate button** → calls `POST /api/v1/companion/translate`
-5. **Result display** with copy-to-clipboard button
-6. Show confidence score from the API response
-
-Haptic feedback on translate + copy.
-
-The language picker needs to be searchable (200 languages is too many to scroll). Use a text filter at the top.
-
-### Task 3 — Morning Briefing
-Add a morning briefing card that appears on app open (once per day, mornings only):
-
-1. On app launch between 6AM-11AM, check if a morning briefing is available
-2. Show a card at the top of the Care/Tools tab:
-   - Companion avatar + "Good morning! Here's what happened overnight..."
-   - Summary of platform activity (from `/mobile/sync` → `platform` data)
-   - Any completed tasks
-   - Any companion events (leveled up, learned something, etc.)
-3. Card is dismissible with a gentle swipe or tap
-4. Persist dismissal in AsyncStorage for today
-
-### Task 4 — TeachMe
-Add a TeachMe section (in Tool mode's Tools tab + optionally in Pet mode's Chat tab):
-
-1. "Teach me something" text input
-2. Submit → `POST /api/v1/companion/teach` with `{ fact: string }`
-3. Confirmation with species-specific personality response:
-   - Cat: "I already knew that, but I'll pretend to be impressed."
-   - Dog: "WOW!! That's the BEST fact I've EVER heard!!"
-   - Dragon: "Knowledge is power. I shall remember this."
-4. Show count of learned facts: "Your companion knows 23 facts"
-
-Reference `dashboard/components/TeachMe.tsx` for the pattern.
-
-### Task 5 — "What's Happening at Home" Card
-Add a card to the Care/Tools tab that shows the home PC's activity:
-
-Thor is adding a `platform` section to `/mobile/sync`. Use it to build a compact card:
-
-```
-🏠 Your Home PC
-├── ⏱️ Uptime: 42.5 hours
-├── 🧠 Models loaded: qwen-14b, whisper-large
-├── 💭 Memories: 247 stored
-├── 🔮 Last prediction: Weather confidence 87%
-├── 🌐 Mesh nodes: 2
-└── 🌙 Last dream cycle: 4:30 AM
+```bash
+cd mobile && npx expo install expo-av
 ```
 
-If home PC is offline, show: "Your home PC is offline. Your companion is running on cached data."
+Build a voice screen in both Pet and Tool mode. UX: **hold-to-talk walkie-talkie:**
 
-This creates the "bridge to desktop" that Valkyrie identified as missing.
+1. **Hold button** → start recording audio (use `expo-av` Audio.Recording)
+2. **Release button** → stop recording, send to `POST /api/v1/voice/transcribe`
+3. **Show transcribed text** in chat bubble
+4. **Send to companion chat** → get response
+5. **Play response** via `POST /api/v1/voice/speak` → play audio through speaker
+6. **Waveform animation** while companion is "speaking"
 
-### Task 6 — Proactive Guardian
-On chat tab open, call `GET /api/v1/companion/guardian/check-in`:
+UX details:
+- The button should be a large, prominent mic icon (60px+)
+- While recording: pulsing red ring animation, "Listening..." text
+- While processing: "Thinking..." with companion avatar animation
+- While speaking: waveform or speaker animation with companion avatar
+- Haptic feedback on press (medium impact) and release (light impact)
 
-If `proactive_warning: true`:
-1. Show a gentle notification bar at the top of chat: "It's late. Want me to hold messages until morning?"
-2. Two buttons: "Hold Messages" / "I'm Fine"
-3. If "Hold Messages": disable the send button, show a countdown to 7AM, queued messages send in the morning
-4. Subtle animation — don't be alarming, be caring
+In Pet mode: voice button on Chat tab (alongside text input)
+In Tool mode: voice button on Chat tab (more prominent, maybe primary input)
 
-### Task 7 — Drop Your Gate
+**Privacy note:** Audio goes to your home PC only. Never to a cloud. Show a small 🔒 icon to reinforce this.
+
+### Task 2 — Marketplace Browsing
+Add marketplace browsing. In Pet mode: accessible from Bag tab or a new icon. In Tool mode: accessible from Tools tab.
+
+1. **Browse screen** — grid/list of available items (agent personalities, themes, voice packs)
+2. **Search bar** — search marketplace via `GET /api/v1/marketplace/search?q=`
+3. **Item detail** — tap item → detail screen with description, screenshots, price, ratings
+4. **Install button** — for free items, install directly. For paid, show price + "Buy" button
+5. **Category filters** — Agents, Themes, Voices, Plugins
+
+Each item card should show:
+- Icon/thumbnail
+- Name + creator
+- Star rating + install count
+- Price (or "Free")
+- Install/Installed badge
+
+### Task 3 — iOS Share Sheet Extension
+This lets users share a URL from Safari (or any app) and get a summary from their companion.
+
+```bash
+cd mobile && npx expo install expo-sharing expo-intent-launcher
+```
+
+Note: Full native share extensions in Expo require a config plugin. Create a share-receiving screen:
+
+1. Register the app to receive shared URLs (via `app.json` intent filters)
+2. When a URL is shared to the app → call `POST /api/v1/browse/summarize`
+3. Show the summary in a compact card: title, summary, key points
+4. Options: "Save to notes", "Share summary", "Ask companion about this"
+
+If native share sheet extension is too complex for Expo, alternative: add a "Paste URL" button in the Tools tab that accepts a URL and returns a summary. Simpler, still useful.
+
+### Task 4 — Home Screen Widget
+Show companion mood on the home screen without opening the app.
+
+```bash
+cd mobile && npx expo install react-native-widget-extension
+```
+
+Note: Expo widget support is experimental. If the widget library isn't stable enough, create a simulated widget screen or skip this task and document why.
+
+Widget should show:
+- Companion avatar (mood expression)
+- Happiness bar
+- Last activity ("Fed 2h ago", "Adventure available!")
+- Tap → opens app to Care tab
+
+### Task 5 — WebSocket Real-Time Sync
+Replace the pull-to-refresh polling with WebSocket for live updates:
+
+1. On app launch, connect to `WS /api/v1/companion/ws`
+2. Listen for events: `companion_state_update`, `task_completed`, `chat_message`
+3. Update local state immediately when events arrive
+4. Show a subtle live indicator (green dot) when WebSocket is connected
+5. Fall back to polling if WebSocket fails (keep existing pull-to-refresh as backup)
+6. Reconnect automatically on disconnect (exponential backoff)
+
+### Task 6 — Drop Your Gate
 Create `sprints/current/gates/gate_freya.md` using write_to_file:
 
 ```markdown
-# Freya Gate — Sprint 5 Frontend Complete
-Sprint 5 tasks completed.
+# Freya Gate — Sprint 6 Frontend Complete
+Sprint 6 tasks completed.
 
 ## Completed
-- [x] Companion mode toggle (Pet ↔ Tool)
-- [x] Translation UI (200 languages, searchable picker)
-- [x] Morning briefing card (6-11AM, dismissible)
-- [x] TeachMe with species personality responses
-- [x] "What's Happening at Home" platform card
-- [x] Proactive guardian (2AM check-in)
+- [x] Voice mode (walkie-talkie, hold-to-talk)
+- [x] Marketplace browsing (browse, search, detail, install)
+- [x] Share sheet / URL summary (or paste-URL alternative)
+- [x] Home screen widget (or documented why skipped)
+- [x] WebSocket real-time sync
 ```
 
 ---
@@ -145,8 +133,8 @@ Sprint 5 tasks completed.
 ---
 
 ## Notes
-- **The mode toggle is the #1 priority.** It unlocks the entire Tool mode persona.
-- Translation, TeachMe, morning briefing, and the platform card all live in Tool mode's "Tools" tab.
-- In Pet mode, these features should still be accessible (via the Chat tab or a secondary menu) — just not prominent.
-- The "What's Happening at Home" card is crucial for Valkyrie's "bridge to desktop" requirement.
-- Build ON TOP of Sprint 4 code. Don't rewrite.
+- **Voice is the #1 priority.** This is what makes demos jaw-dropping. "Watch, I'll talk to my home AI from my phone."
+- Audio data must NEVER leave the local network. Show the 🔒 privacy indicator.
+- If widget or native share sheet is too complex for Expo, document the limitation and build the simpler alternative. Don't block the sprint on platform limitations.
+- WebSocket is infrastructure — it makes everything feel instant. Worth the investment.
+- Build ON TOP of Sprint 5 code.

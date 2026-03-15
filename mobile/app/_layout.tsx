@@ -19,6 +19,7 @@ import {
 import { getHost } from "../src/api";
 import { hasOnboarded } from "./onboarding";
 import { registerForPushNotifications, getNotificationRoute } from "../src/notifications";
+import { ModeProvider } from "../src/ModeContext";
 import { colors } from "../src/theme";
 
 export default function RootLayout() {
@@ -85,10 +86,12 @@ export default function RootLayout() {
     }
 
     return (
-        <View style={styles.container}>
-            <StatusBar style="light" />
-            <Slot />
-        </View>
+        <ModeProvider>
+            <View style={styles.container}>
+                <StatusBar style="light" />
+                <Slot />
+            </View>
+        </ModeProvider>
     );
 }
 

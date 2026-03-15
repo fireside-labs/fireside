@@ -2,49 +2,38 @@
 
 > [!IMPORTANT]
 > **ALL AGENTS:** Read this file to understand the FULL platform.
-> The mobile app (Sprints 1-3) only surfaces a fraction of these features.
-> Many backend APIs and dashboard components exist but are NOT yet in the mobile app.
+> Updated after Sprint 5 — see what's shipped vs what's still missing.
 
 ---
 
-## What the Mobile App Currently Has (Sprints 1-3)
+## What the Mobile App Has (Sprints 1-5)
 
-| Feature | Mobile Status |
+| Feature | Sprint |
 |---|---|
-| Chat with companion | ✅ Shipped Sprint 1 |
-| Care (feed/walk/happiness/XP) | ✅ Shipped Sprint 1 |
-| Inventory grid (Bag tab) | ✅ Shipped Sprint 1 |
-| Task queue (phone → home PC) | ✅ Shipped Sprint 1 |
-| Offline mode + action queueing | ✅ Shipped Sprint 1 |
-| Onboarding carousel | ✅ Shipped Sprint 2 |
-| Companion avatar images | ✅ Shipped Sprint 2 |
-| Pull-to-refresh | ✅ Shipped Sprint 2 |
-| Haptic feedback | ✅ Shipped Sprint 2 |
-| Chat history persistence | ✅ Shipped Sprint 2 |
-| Mobile companion adoption | ✅ Shipped Sprint 2 |
-| Animated avatar expressions | ✅ Shipped Sprint 3 |
-| Push notifications (4 triggers) | ✅ Shipped Sprint 3 |
-| Sound effects | ✅ Shipped Sprint 3 |
-| App icon + splash | ✅ Shipped Sprint 3 |
-| Privacy policy | ✅ Shipped Sprint 3 |
+| Chat, Care (feed/walk), Bag, Tasks, Offline mode | Sprint 1 |
+| Onboarding, avatars, haptics, pull-to-refresh, chat persistence, adoption | Sprint 2 |
+| Push notifications (4 triggers), animated avatars, sound effects, icon/splash, privacy policy | Sprint 3 |
+| Adventures (8 types), daily gifts, message guardian, EAS build config, feature flags | Sprint 4 |
+| **Mode toggle (Pet ↔ Tool)**, translation (200 langs), morning briefing, TeachMe, platform bridge card, proactive guardian | Sprint 5 |
 
 ---
 
-## What the Desktop Has But Mobile DOESN'T (Yet)
+## What's Still NOT in Mobile
 
 > [!WARNING]
-> These features have working backend APIs AND dashboard components. They just haven't been ported to the mobile app.
+> These are PLATFORM-LEVEL gaps, not just feature ports.
 
-| Feature | Backend | Dashboard Component | Mobile |
-|---|---|---|---|
-| **Adventures** (8 types: riddle, treasure, merchant, forage, lost_pet, weather, storyteller, challenge) | `adventure_guard.py` | `AdventureCard.tsx` (308 lines) | ❌ NOT IN MOBILE |
-| **Daily Gifts** (species-specific poems, items, facts, advice, compliments) | `sim.py` | `DailyGift.tsx` | ❌ NOT IN MOBILE |
-| **Teach Me** (user teaches companion facts, personality-flavored confirmations) | `handler.py` | `TeachMe.tsx` | ❌ NOT IN MOBILE |
-| **Morning Briefing** (daily summary from companion) | `handler.py` | `MorningBriefing.tsx` | ❌ NOT IN MOBILE |
-| **Message Guardian** (sentiment, regret detection, drunk text filter, PII filter, softer rewrites) | `guardian.py` (284 lines) | integrated in chat | ❌ NOT IN MOBILE |
-| **Translation** (200 languages, offline, NLLB-200) | `nllb.py` (274 lines) | via handler | ❌ NOT IN MOBILE |
-| **Marketplace** (browse, install, sell plugins/agents) | `marketplace/` plugin | `SellerDashboard.tsx` | ❌ NOT IN MOBILE |
-| **Voice** (Whisper STT + Kokoro TTS) | `voice/` plugin | `VoiceSettings.tsx` | ❌ NOT IN MOBILE |
+| Feature | Backend | Dashboard | Mobile | Sprint 6? |
+|---|---|---|---|---|
+| **Voice** (Whisper STT + Kokoro TTS) | `voice/` plugin | `VoiceSettings.tsx` | ❌ | ✅ Sprint 6 |
+| **Marketplace** (browse, install, sell) | `marketplace/` plugin | `SellerDashboard.tsx` | ❌ | ✅ Sprint 6 |
+| **Web browsing** (summarize pages) | `browse/parser.py` | via handler | ❌ | ✅ Sprint 6 |
+| **Real-time sync** (WebSocket) | Not yet | Not yet | ❌ (polling) | ✅ Sprint 6 |
+| **OS integration** (share sheet, widget) | N/A | N/A | ❌ | ✅ Sprint 6 |
+| **Payments** (Stripe / IAP) | `payments/` plugin | `PurchaseHistory.tsx` | ❌ | Sprint 7+ |
+| **Agent profiles** (RPG cards, XP) | `agent-profiles/` | `AgentProfile.tsx` | ❌ | Sprint 7+ |
+| **Pipeline monitoring** | `pipeline/` | `PipelineCard.tsx` | ❌ | Sprint 7+ |
+| **Guild Hall** (animated social) | N/A | `GuildHall.tsx` | ❌ | Sprint 8+ |
 
 ---
 

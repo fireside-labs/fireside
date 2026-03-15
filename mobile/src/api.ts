@@ -139,6 +139,26 @@ export const companionAPI = {
         apiFetch<{ available: boolean; gift?: { text: string; type: string; emoji: string; item?: string; happinessBoost?: number } }>(
             "/api/v1/companion/daily-gift"
         ),
+
+    /** Translate text via NLLB-200 (Sprint 5). */
+    translate: (text: string, sourceLang: string, targetLang: string) =>
+        apiFetch<{ translation: string; confidence?: number; source_lang?: string }>(
+            "/api/v1/companion/translate",
+            { method: "POST", body: JSON.stringify({ text, source: sourceLang, target: targetLang }) }
+        ),
+
+    /** Teach companion a fact (Sprint 5). */
+    teach: (fact: string) =>
+        apiFetch<{ ok: boolean; confirmation?: string; fact_count?: number }>(
+            "/api/v1/companion/teach",
+            { method: "POST", body: JSON.stringify({ fact }) }
+        ),
+
+    /** Proactive guardian check-in (Sprint 5). */
+    guardianCheckIn: () =>
+        apiFetch<{ proactive_warning: boolean; reason?: string }>(
+            "/api/v1/companion/guardian/check-in"
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

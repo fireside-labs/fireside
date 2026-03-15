@@ -53,6 +53,18 @@ export interface MobileSyncResponse {
     pending_tasks: QueuedTask[];
     synced_at: number;
     inventory?: InventoryItem[];
+    platform?: {
+        uptime?: number | string;
+        models_loaded?: string[];
+        memory_count?: number;
+        mesh_nodes?: number;
+        last_dream?: string;
+        conversations_reviewed?: number;
+        facts_tested?: number;
+        overnight_find?: boolean;
+        completed_tasks?: number;
+    };
+    features?: Record<string, boolean>;
 }
 
 export interface StatusResponse {

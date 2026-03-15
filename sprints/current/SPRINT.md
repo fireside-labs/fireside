@@ -1,51 +1,52 @@
-# Sprint 5 — The Mode Split: Pet vs Tool + Platform Bridge
+# Sprint 6 — Full Platform: Voice + Marketplace + OS Integration
 
-**Goal:** Make the companion serve two personas — the user who wants a Tamagotchi and the user who wants a private AI utility. Add translation, morning briefings, proactive guardian, and surface what the home PC is doing.
+**Goal:** Bridge the gap from "companion app" to "platform surface." The mobile app has the companion features. Now it needs the platform features: voice (talk to your home AI), marketplace (commerce), and OS integration (share sheet, widget).
 
-**Valkyrie's thesis:** *"The app creates attachment but doesn't yet create a bridge to the broader platform."*
-
-**Input:** `sprints/archive/sprint_04/gates/review_valkyrie.md` + `audit_heimdall.md`
+**Architecture context:** Fireside is 4 surfaces — Desktop Dashboard, Mobile App, Telegram Bot, CLI. After 5 sprints, mobile handles the companion well but doesn't yet let users:
+- **Talk** to their home AI (voice — Whisper + Kokoro already built)
+- **Buy/browse** marketplace content from their phone (commerce layer)
+- **Use the AI outside the app** (share sheet, widget, Siri)
+- **See real-time updates** from the desktop (currently polling, not WebSocket)
 
 ---
 
-## Sprint 5 Scope
+## Sprint 6 Scope
 
 ### Thor (Backend)
-- Fix adventure rewards from client body (MEDIUM from Heimdall)
-- Add `/mobile/unregister-push` endpoint (LOW carried from Sprint 3)
-- Surface "home PC activity" in sync response (dream cycles, memory count, uptime)
-- Server-side encounter storage for adventure rewards
-- Proactive guardian: time-aware greeting when user opens chat late at night
+- Voice streaming endpoint for mobile (Whisper STT + Kokoro TTS over HTTP)
+- Marketplace API: browse, search, preview agent personalities
+- WebSocket endpoint for real-time companion state sync
+- Fix morning briefing random placeholder stats (Heimdall LOW)
 
 ### Freya (Frontend)
-- **Companion Mode Toggle** — Pet mode (quests/feeding/gamification) vs Tool mode (guardian/translate/tasks)
-- **Translation UI** — 200-language translator (backend: `nllb.py`)
-- **Morning Briefing** — push notification + in-app card for daily updates
-- **TeachMe** — teach companion facts, personality deepens
-- **"What's Happening at Home" card** — show platform activity on Care tab
-- **Proactive guardian** — time-aware opening message at 2AM
+- **Voice mode** — hold-to-talk (walkie-talkie UX), companion speaks back
+- **Marketplace browsing** — browse/preview/install agent personalities from mobile
+- **iOS Share Sheet extension** — "Summarize this page" from Safari
+- **Home screen widget** — companion mood + quick stats (Expo widget)
+- WebSocket connection for real-time sync (replace polling)
 
 ### Heimdall — Same strict rules
 - 🔴 HIGH → automatic FAIL
 - 🟡 MEDIUM → PASS with notes
 - 🟢 LOW → informational
+- Additional scope: review voice data pipeline for privacy (audio never leaves local network)
 
-### Valkyrie — Full platform review
+### Valkyrie — Full platform surface review
 - **MUST READ:** `FEATURE_INVENTORY.md`
-- Assess mode toggle UX (does it feel natural, not confusing?)
-- Does "Tool mode" feel useful enough to stand alone?
-- Does the platform bridge create curiosity about the desktop?
-- Remaining gaps for App Store submission
+- Assess: does the mobile app feel like a platform surface or a standalone toy?
+- Voice UX: is walkie-talkie mode fluid?
+- Marketplace: does browsing create purchase intent?
+- OS integration: does the share sheet feel native?
+- What's still missing for App Store submission?
 
 ---
 
 ## Definition of Done
 
-- [ ] Mode toggle exists and works (Pet ↔ Tool)
-- [ ] Translation UI works (select language, translate text)
-- [ ] Morning briefing appears as push + in-app card
-- [ ] TeachMe works on mobile
-- [ ] "What's Happening at Home" card shows platform activity
-- [ ] Proactive guardian greets appropriately at 2AM
-- [ ] Adventure rewards fixed (server-side lookup)
+- [ ] Voice works: hold button → speak → companion replies with audio
+- [ ] Marketplace: browse, search, preview personalities
+- [ ] Share sheet: share URL from Safari → get summary in app
+- [ ] Widget: companion mood visible on home screen
+- [ ] WebSocket real-time sync replaces polling
+- [ ] Morning briefing placeholder stats fixed
 - [ ] All gates dropped

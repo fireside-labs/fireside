@@ -264,6 +264,9 @@ def register_routes(app, config: dict) -> None:
         last_adventure_ts = state.get("last_adventure", 0)
         adventure_available = (_time.time() - last_adventure_ts) > 3600  # 1h cooldown
 
+        # Sprint 5 Task 3: Platform activity
+        platform_info = _get_platform_activity()
+
         return {
             "ok": True,
             "adopted": True,
@@ -283,6 +286,7 @@ def register_routes(app, config: dict) -> None:
             },
             "daily_gift_available": daily_gift_available,
             "adventure_available": adventure_available,
+            "platform": platform_info,
         }
 
     @router.post("/api/v1/companion/mobile/pair")
@@ -526,6 +530,9 @@ def register_routes(app, config: dict) -> None:
         fired = await check_and_notify(state)
         return {"ok": True, "fired": fired}
 
+    # Sprint 5 Task 1: Server-side encounter storage (fixes Heimdall MEDIUM)
+    _active_encounters = {}
+
     # --- Sprint 4: Adventure endpoints (Task 1) ---
 
     @router.post("/api/v1/companion/adventure/generate")
@@ -533,7 +540,7 @@ def register_routes(app, config: dict) -> None:
         """Generate a random adventure encounter.
 
         Returns an encounter with intro, choices, and loot table.
-        Server-authoritative — rewards are signed.
+        Server-authoritative — encounter stored server-side, rewards cannot be forged.
         """
         import random
         import time as _time
@@ -556,7 +563,17 @@ def register_routes(app, config: dict) -> None:
         enc_type = random.choice(list(VALID_ENCOUNTER_TYPES))
 
         # Generate encounter based on type
-        encounter = _generate_encounter(enc_type, species, state.get("name", "Companion"))
+        companion_name = state.get("name", "Companion")
+        encounter = _generate_encounter(enc_type, species, companion_name)
+
+        # Sprint 5: Store encounter server-side (5-min expiry)
+        _active_encounters[companion_name] = {
+            "type": enc_type,
+            "choices": encounter.get("choices", []),
+            "reward": encounter.get("reward", {}),
+            "generated_at": _time.time(),
+            "expires_at": _time.time() + 300,
+        }
 
         # Mark adventure started
         state["last_adventure"] = _time.time()
@@ -677,8 +694,8 @@ def register_routes(app, config: dict) -> None:
     async def api_adventure_choose(request: Request):
         """Submit a choice for an adventure and receive rewards.
 
-        Body: { "encounter_type": "riddle", "choice_index": 0 }
-        Returns: rewards applied, signed result.
+        Body: { "choice_index": 0 }
+        Sprint 5: Rewards are now looked up server-side — client values ignored.
         """
         import time as _time
         from plugins.companion.sim import load_state, save_state
@@ -688,14 +705,27 @@ def register_routes(app, config: dict) -> None:
         if not state:
             raise HTTPException(404, "No companion adopted yet.")
 
-        body = await request.json()
-        enc_type = body.get("encounter_type", "")
-        choice_idx = body.get("choice_index", 0)
-        choice_rewards = body.get("rewards", {})
+        companion_name = state.get("name", "Companion")
 
-        # Default rewards if not provided
+        # Sprint 5: Look up encounter server-side (ignore client rewards)
+        encounter = _active_encounters.pop(companion_name, None)
+        if not encounter:
+            raise HTTPException(400, "No active encounter. Generate one first.")
+        if _time.time() > encounter["expires_at"]:
+            raise HTTPException(400, "Encounter expired (5-minute limit). Generate a new one.")
+
+        body = await request.json()
+        choice_idx = body.get("choice_index", 0)
+
+        # Get rewards from server-stored encounter (NOT client body)
+        choices = encounter.get("choices", [])
+        if choice_idx < 0 or choice_idx >= len(choices):
+            raise HTTPException(400, f"Invalid choice index: {choice_idx}")
+
+        choice_rewards = choices[choice_idx].get("reward", encounter.get("reward", {}))
         xp = choice_rewards.get("xp", 5)
         happiness = choice_rewards.get("happiness", 5)
+        enc_type = encounter["type"]
 
         # Apply rewards
         state["happiness"] = min(100, state.get("happiness", 50) + happiness)
@@ -846,5 +876,125 @@ def register_routes(app, config: dict) -> None:
             "rewards": {"happiness": 10, "xp": 5},
         }
 
+    # --- Sprint 5 Task 2: Unregister push ---
+
+    @router.post("/api/v1/companion/mobile/unregister-push")
+    async def api_unregister_push():
+        """Remove stored push token. Called when user disables notifications."""
+        from pathlib import Path as _Path
+        token_path = _Path.home() / ".valhalla" / "push_token.json"
+        if token_path.exists():
+            token_path.unlink()
+        return {"ok": True}
+
+    # --- Sprint 5 Task 3: Platform activity helper ---
+
+    def _get_platform_activity() -> dict:
+        """Gather platform activity metrics for /mobile/sync.
+
+        Gracefully returns null for unavailable data.
+        """
+        import os as _os
+        import time as _time
+
+        platform = {
+            "uptime_hours": None,
+            "models_loaded": None,
+            "memory_count": None,
+            "plugins_active": None,
+            "last_dream_cycle": None,
+            "last_prediction": None,
+            "mesh_nodes": None,
+        }
+
+        # Uptime from process start
+        try:
+            import psutil
+            p = psutil.Process(_os.getpid())
+            platform["uptime_hours"] = round((_time.time() - p.create_time()) / 3600, 1)
+        except Exception:
+            try:
+                # Fallback: use a module-level start time
+                if not hasattr(_get_platform_activity, "_start"):
+                    _get_platform_activity._start = _time.time()
+                platform["uptime_hours"] = round((_time.time() - _get_platform_activity._start) / 3600, 1)
+            except Exception:
+                pass
+
+        # Memory count from working-memory plugin
+        try:
+            from plugins import working_memory
+            memories = working_memory.get_memories() if hasattr(working_memory, "get_memories") else []
+            platform["memory_count"] = len(memories)
+        except Exception:
+            platform["memory_count"] = 0
+
+        # Loaded models from model-router
+        try:
+            from plugins import model_router
+            platform["models_loaded"] = model_router.get_loaded_models() if hasattr(model_router, "get_loaded_models") else []
+        except Exception:
+            platform["models_loaded"] = []
+
+        # Active plugins count
+        try:
+            from plugin_loader import loaded_plugins
+            platform["plugins_active"] = len(loaded_plugins())
+        except Exception:
+            platform["plugins_active"] = 0
+
+        # Last prediction
+        try:
+            from plugins import predictions
+            platform["last_prediction"] = predictions.get_last() if hasattr(predictions, "get_last") else None
+        except Exception:
+            pass
+
+        # Mesh nodes
+        try:
+            from plugin_loader import get_config
+            cfg = get_config()
+            peers = cfg.get("mesh", {}).get("peers", [])
+            platform["mesh_nodes"] = len(peers) + 1  # +1 for self
+        except Exception:
+            platform["mesh_nodes"] = 1
+
+        return platform
+
+    # --- Sprint 5 Task 4: Proactive Guardian check-in ---
+
+    @router.get("/api/v1/companion/guardian/check-in")
+    async def api_guardian_checkin():
+        """Time-aware check-in. Returns proactive warning if late at night.
+
+        Called by mobile app when user opens the chat tab.
+        Species-specific messages for extra personality.
+        """
+        from datetime import datetime
+        from plugins.companion.sim import load_state
+
+        hour = datetime.now().hour
+        state = load_state()
+        species = state.get("species", "cat") if state else "cat"
+        name = state.get("name", "Companion") if state else "Companion"
+
+        if 0 <= hour < 5:
+            late_messages = {
+                "cat": f"It's {hour}AM. Even I think you should sleep. 😾",
+                "dog": f"It's really late! Maybe sleep first? I'll guard your phone! 🐕",
+                "penguin": f"It's {hour}AM in human time. We penguins would be huddling for warmth right now. 🐧",
+                "fox": f"Even nocturnal creatures rest sometimes. It's {hour}AM, friend. 🦊",
+                "owl": f"I'm the night owl here, not you. Get some rest! 🦉",
+                "dragon": f"The dragon sleeps at {hour}AM. So should you. 🐉",
+            }
+            return {
+                "proactive_warning": True,
+                "message": late_messages.get(species, f"{name} thinks it's too late to be texting."),
+                "hold_option": True,
+                "hour": hour,
+            }
+
+        return {"proactive_warning": False, "hour": hour}
+
     app.include_router(router)
-    log.info("[companion] Plugin loaded (with translation + guardian + mobile + chat + push + adventures + gifts).")
+    log.info("[companion] Plugin loaded (with translation + guardian + mobile + chat + push + adventures + gifts + platform).")

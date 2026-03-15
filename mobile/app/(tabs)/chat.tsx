@@ -23,6 +23,7 @@ import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize } from "../../src/theme";
 import { playSound } from "../../src/sounds";
 import GuardianModal from "../../src/GuardianModal";
+import ProactiveGuardian from "../../src/ProactiveGuardian";
 import type { Message, PetSpecies } from "../../src/types";
 
 const CHAT_HISTORY_KEY = "valhalla_chat_history";
@@ -227,6 +228,12 @@ export default function ChatTab() {
                 </View>
                 {mood < 30 && <Text style={styles.moodEmoji}>😢</Text>}
             </View>
+
+            {/* Proactive Guardian — Sprint 5 */}
+            <ProactiveGuardian
+                isOnline={isOnline}
+                onHoldMessages={() => { }}
+            />
 
             {/* Messages */}
             <FlatList

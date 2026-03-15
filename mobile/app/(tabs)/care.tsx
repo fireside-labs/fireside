@@ -1,11 +1,10 @@
 /**
  * 🐾 Care Tab — Feed, walk, and monitor your companion.
  *
- * Sprint 2 additions:
- * - Pull-to-refresh (Valkyrie #4)
- * - Haptic feedback on feed/walk (Valkyrie #3)
- * - Companion avatar images replace emoji (Valkyrie #2)
- * - Mobile adoption flow if no companion exists (Valkyrie #6)
+ * Sprint 2: Pull-to-refresh, haptics, avatars, adoption.
+ * Sprint 3: Mood-reactive avatars, sound effects.
+ * Sprint 4: Daily gift.
+ * Sprint 5: Mode toggle, morning briefing.
  */
 import { useState, useCallback } from "react";
 import {
@@ -24,6 +23,8 @@ import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
 import { playSound } from "../../src/sounds";
 import DailyGiftModal from "../../src/DailyGift";
+import MorningBriefing from "../../src/MorningBriefing";
+import { useMode } from "../../src/ModeContext";
 import type { PetSpecies, WalkEvent } from "../../src/types";
 
 // Mood-reactive avatar images — Sprint 3 (3 expressions per species)
@@ -327,6 +328,13 @@ export default function CareTab() {
                 />
             }
         >
+            {/* Morning Briefing — Sprint 5 */}
+            <MorningBriefing
+                petName={petName}
+                species={species}
+                platform={companionData?.platform}
+            />
+
             {/* Daily Gift — Sprint 4 */}
             <DailyGiftModal
                 petName={petName}
@@ -341,7 +349,7 @@ export default function CareTab() {
                 }}
             />
 
-            {/* Header */}
+            {/* Header with mode toggle */}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>{petName}'s Status</Text>
                 <View style={styles.headerMeta}>
@@ -413,17 +421,19 @@ export default function CareTab() {
             </TouchableOpacity>
 
             {/* Walk Result */}
-            {walkResult && (
-                <View style={styles.walkResult}>
-                    <Text style={styles.walkResultText}>
-                        <Text style={styles.walkEmoji}>{walkResult.emoji} </Text>
-                        {petName} {walkResult.text}
-                    </Text>
-                    <Text style={styles.walkBonus}>
-                        +{walkResult.happinessBoost}% happiness · +{walkResult.xpGain} XP
-                    </Text>
-                </View>
-            )}
+            {
+                walkResult && (
+                    <View style={styles.walkResult}>
+                        <Text style={styles.walkResultText}>
+                            <Text style={styles.walkEmoji}>{walkResult.emoji} </Text>
+                            {petName} {walkResult.text}
+                        </Text>
+                        <Text style={styles.walkBonus}>
+                            +{walkResult.happinessBoost}% happiness · +{walkResult.xpGain} XP
+                        </Text>
+                    </View>
+                )
+            }
 
             {/* Feed Buttons */}
             <Text style={styles.sectionLabel}>Feed {petName}</Text>
@@ -441,7 +451,7 @@ export default function CareTab() {
                     </TouchableOpacity>
                 ))}
             </View>
-        </ScrollView>
+        </ScrollView >
     );
 }
 
