@@ -1,7 +1,8 @@
 """
 browse/parser.py — Accessibility-tree-inspired web page parser.
 
-Inspired by PinchTab: instead of sending the full DOM (50K–200K tokens)
+Inspired by PinchTab (https://github.com/pinchtab/pinchtab):
+instead of sending the full DOM (50K–200K tokens)
 to the brain, extract only meaningful content using the accessibility
 tree pattern.  Result: ~2K–5K tokens.  90 % smaller.  Same information.
 
