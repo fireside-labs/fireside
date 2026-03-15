@@ -193,5 +193,91 @@ def register_routes(app, config: dict) -> None:
         result = analyze_message(req.text, req.hour, req.recipient, species)
         return result
 
+    # --- Sprint 1: Mobile endpoints ---
+
+    @router.post("/api/v1/companion/mobile/sync")
+    async def api_mobile_sync():
+        """Single-call sync for mobile app launch.
+
+        Returns: companion status, pending task results, personality, mood prefix.
+        The phone calls this once on launch to get everything it needs in one request.
+        """
+        import time as _time
+        from plugins.companion.sim import load_state, get_status, get_mood_prefix
+        from plugins.companion.queue import get_queue
+
+        state = load_state()
+        if not state:
+            raise HTTPException(404, "No companion adopted yet.")
+
+        companion_status = get_status(state)
+
+        personality = {}
+        try:
+            from plugins.agent_profiles.leveling import load_profile
+            profile = load_profile(state.get("name", "companion"))
+            personality = profile.get("personality", {})
+        except Exception:
+            pass
+
+        # Completed tasks not yet acknowledged by the phone
+        try:
+            pending_tasks = get_queue(status="completed")
+        except Exception:
+            pending_tasks = []
+
+        return {
+            "ok": True,
+            "companion": companion_status,
+            "personality": personality,
+            "mood_prefix": get_mood_prefix(state),
+            "pending_tasks": pending_tasks,
+            "synced_at": _time.time(),
+        }
+
+    @router.post("/api/v1/companion/mobile/pair")
+    async def api_mobile_pair():
+        """Generate a pairing token for the mobile app.
+
+        Creates a 6-character alphanumeric code and stores it in
+        ~/.valhalla/mobile_token.json with a 365-day expiry.
+        Heimdall will harden the auth model in Sprint 2.
+        """
+        import secrets
+        import string
+        import json
+        import time as _time
+        from pathlib import Path
+        from datetime import datetime, timezone, timedelta
+
+        # Generate 6-char uppercase alphanumeric token (easy to type on phone)
+        alphabet = string.ascii_uppercase + string.digits
+        token = "".join(secrets.choice(alphabet) for _ in range(6))
+
+        expires_at = datetime.now(timezone.utc) + timedelta(days=365)
+        expires_ts = expires_at.timestamp()
+
+        # Persist to ~/.valhalla/mobile_token.json
+        token_dir = Path.home() / ".valhalla"
+        token_dir.mkdir(parents=True, exist_ok=True)
+        token_file = token_dir / "mobile_token.json"
+        token_file.write_text(
+            json.dumps({
+                "token": token,
+                "created_at": _time.time(),
+                "expires_at": expires_ts,
+            }),
+            encoding="utf-8",
+        )
+
+        log.info("[companion/pair] Mobile pairing token generated (expires %s)",
+                 expires_at.strftime("%Y-%m-%d"))
+
+        return {
+            "ok": True,
+            "token": token,
+            "expires_at": expires_at.isoformat(),
+        }
+
     app.include_router(router)
-    log.info("[companion] Plugin loaded (with translation + guardian).")
+    log.info("[companion] Plugin loaded (with translation + guardian + mobile).")

@@ -195,6 +195,7 @@ async def get_status():
         "uptime_human": _format_uptime(uptime_seconds),
         "plugins_loaded": len(get_plugins()),
         "status": "online",
+        "mobile_ready": True,
         "gpu": gpu,
         "inference": inference,
     }

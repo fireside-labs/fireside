@@ -16,17 +16,21 @@
 | **Valkyrie** | UX & Business Analyst — writes `sprints/current/gates/review_valkyrie.md`, drops no code |
 | **Odin** | Orchestrator — plans sprints, reads all reports, drives next sprint |
 
-## Your First Action
+## Your First Action — EXACT FILE PATHS
 
-Read your task file:
+> [!CAUTION]
+> There is ANOTHER project called GantryOracle in the same workspace. It has sprint files like `SPRINT_14_FREYA.md`, `SPRINT_23.md`, etc. **IGNORE ALL OF THOSE.** They belong to a different project.
 
-- **Thor:** `sprints/current/SPRINT_THOR.md`
-- **Freya:** `sprints/current/SPRINT_FREYA.md`
-- **Heimdall:** Run `bash sprints/current/gates/poll_heimdall.sh` then audit when gates appear
-- **Valkyrie:** Run `bash sprints/current/gates/poll_valkyrie.sh` then review when Heimdall gate appears
+Read ONLY these exact files (absolute paths):
+
+- **Thor:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT_THOR.md`
+- **Freya:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT_FREYA.md`
+- **Heimdall:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT.md` then start your polling script at `sprints\current\gates\poll_heimdall.sh`
+- **Valkyrie:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT.md` then start your polling script at `sprints\current\gates\poll_valkyrie.sh`
 
 ## What NOT to Do
 
-- ❌ Do NOT read files in `GantryOracle/` — that is a completely separate project
-- ❌ Do NOT read `SPRINT_14_*.md`, `SPRINT_23.md` or any sprint files outside `sprints/current/`
+- ❌ Do NOT search for sprint files — use the EXACT paths above
+- ❌ Do NOT read ANY file in `GantryOracle/` — that is a completely separate project
+- ❌ Do NOT read `SPRINT_14_*.md`, `SPRINT_15_*.md`, `SPRINT_23.md`, or `FREYA_BRIEFING.md`
 - ❌ Do NOT work in any directory other than `valhalla-mesh-github/`

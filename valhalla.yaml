@@ -35,6 +35,7 @@ dashboard:
   cors_origins:
     - "http://localhost:3000"
     - "http://localhost:3001"
+    - "*"  # Sprint 1: allow mobile app on any Tailscale IP. Heimdall tightens in Sprint 2.
 
 models:
   default: llama/Qwen3.5-35B-A3B-8bit
