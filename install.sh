@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 🔥 Fireside Installer
+# 🔥 Fireside — Interactive Install Wizard
 #
 # Usage:
 #   curl -fsSL getfireside.ai/install | bash
 #
 # What this does:
-#   1. Check your system (macOS or Linux)
-#   2. Make sure Python and Node.js are ready
-#   3. Download Fireside
-#   4. Set everything up
-#   5. Start your AI companion
-#   6. Open your browser — say hi to your pet!
-#
-# No technical knowledge required.
+#   1. Check your system
+#   2. Ask your name
+#   3. Let you pick a brain size
+#   4. Let you choose a companion
+#   5. Download & install everything
+#   6. Start Fireside + open your browser
 # ============================================================================
 
 set -euo pipefail
@@ -25,78 +23,78 @@ BLUE='\033[0;34m'
 AMBER='\033[38;5;214m'
 DIM='\033[0;90m'
 BOLD='\033[1m'
+ITALIC='\033[3m'
 NC='\033[0m'
 
 FIRESIDE_DIR="$HOME/.fireside"
 REPO_URL="https://github.com/JordanFableFur/valhalla-mesh.git"
-TOTAL_STEPS=7
-CURRENT_STEP=0
 
 # ─── Helpers ───
-step() {
-    CURRENT_STEP=$((CURRENT_STEP + 1))
-    echo ""
-    echo -e "${AMBER}[$CURRENT_STEP/$TOTAL_STEPS]${NC} ${BOLD}$1${NC}"
-}
 ok()    { echo -e "  ${GREEN}✔${NC} $1"; }
 info()  { echo -e "  ${DIM}$1${NC}"; }
 warn()  { echo -e "  ${AMBER}⚠${NC} $1"; }
 fail()  { echo -e "\n  ${RED}✗ $1${NC}\n"; exit 1; }
 check_cmd() { command -v "$1" &> /dev/null; }
 
+# Simple progress bar
+progress_bar() {
+    local label="$1"
+    local duration="${2:-3}"
+    local width=30
+    echo -ne "  ${DIM}${label}${NC} "
+    for ((i=0; i<=width; i++)); do
+        echo -ne "${AMBER}█${NC}"
+        sleep "$(echo "scale=3; $duration / $width" | bc 2>/dev/null || echo "0.1")"
+    done
+    echo -e " ${GREEN}✔${NC}"
+}
+
 # ─── Cleanup on exit ───
 cleanup() {
     echo ""
-    echo -e "${DIM}────────────────────────────────────────${NC}"
-    echo -e "  ${AMBER}🔥${NC} Fireside stopped. See you next time."
-    echo -e "${DIM}────────────────────────────────────────${NC}"
+    echo -e "  ${AMBER}🔥${NC} ${DIM}Fireside stopped. See you next time.${NC}"
     echo ""
-    # Kill background jobs
     jobs -p | xargs -r kill 2>/dev/null || true
 }
 trap cleanup EXIT
 
 # ============================================================================
-# 🔥 HEADER
+# HEADER
 # ============================================================================
 
+clear
 echo ""
-echo -e "${AMBER}${BOLD}"
-echo "    ╔══════════════════════════════════════╗"
-echo "    ║                                      ║"
-echo "    ║     🔥  Fireside Installer  🔥       ║"
-echo "    ║                                      ║"
-echo "    ║   Your AI companion, one step away   ║"
-echo "    ║                                      ║"
-echo "    ╚══════════════════════════════════════╝"
+echo -e "${AMBER}"
+echo "         ╔═══════════════════════════════╗"
+echo "         ║                               ║"
+echo "         ║    🔥  Welcome to Fireside    ║"
+echo "         ║                               ║"
+echo "         ║   Your AI companion awaits.   ║"
+echo "         ║                               ║"
+echo "         ╚═══════════════════════════════╝"
 echo -e "${NC}"
+sleep 1
 
 # ============================================================================
-# [1/7] Check your system
+# SYSTEM CHECK (silent, fast)
 # ============================================================================
 
-step "Checking your system..."
+echo -e "  ${DIM}Checking your system...${NC}"
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
 if [[ "$OS" == "Darwin" ]]; then
     os_name="macOS"
-    if [[ "$ARCH" == "arm64" ]]; then
-        hw_name="Apple Silicon"
-    else
-        hw_name="Intel"
-    fi
+    [[ "$ARCH" == "arm64" ]] && hw_name="Apple Silicon" || hw_name="Intel"
 elif [[ "$OS" == "Linux" ]]; then
     os_name="Linux"
     hw_name="$ARCH"
 else
-    fail "Sorry, Fireside currently supports macOS and Linux. Windows users: try WSL2."
+    fail "Sorry, Fireside supports macOS and Linux. Windows users: try WSL2."
 fi
 
-ok "$os_name ($hw_name)"
-
-# Detect RAM
+# RAM
 RAM_GB=0
 if [[ "$OS" == "Darwin" ]]; then
     RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo "0")
@@ -105,36 +103,112 @@ elif [[ -f /proc/meminfo ]]; then
     RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
     RAM_GB=$((RAM_KB / 1048576))
 fi
-ok "${RAM_GB}GB RAM detected"
 
-# GPU Info
-GPU="none"
+# GPU
+GPU_NAME="CPU only"
 if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
-    GPU="Apple Silicon (shared ${RAM_GB}GB)"
-    ok "GPU: $GPU"
+    GPU_NAME="Apple Silicon (${RAM_GB}GB shared)"
 elif check_cmd nvidia-smi; then
-    GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
-    ok "GPU: $GPU"
-else
-    info "No dedicated GPU detected — Fireside will use CPU (slower but works)"
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
 fi
 
-# Recommend model size
+ok "$os_name ($hw_name) · ${RAM_GB}GB RAM · $GPU_NAME"
+echo ""
+sleep 0.5
+
+# ============================================================================
+# STEP 1: YOUR NAME
+# ============================================================================
+
+echo -e "  ${BOLD}What should your companion call you?${NC}"
+echo ""
+echo -ne "  ${AMBER}→${NC} "
+read -r USER_NAME
+
+if [[ -z "$USER_NAME" ]]; then
+    USER_NAME="friend"
+fi
+
+echo ""
+echo -e "  ${DIM}Nice to meet you, ${NC}${BOLD}$USER_NAME${NC}${DIM}.${NC}"
+echo ""
+sleep 0.8
+
+# ============================================================================
+# STEP 2: PICK A BRAIN
+# ============================================================================
+
+echo -e "  ${BOLD}Pick a brain for your AI:${NC}"
+echo ""
+
+# Recommend based on RAM
 if [[ "$RAM_GB" -ge 32 ]]; then
-    MODEL_REC="Deep Thinker (35B) — best quality"
+    REC="2"
+    REC_LABEL=" ← recommended"
 elif [[ "$RAM_GB" -ge 16 ]]; then
-    MODEL_REC="Smart & Fast (7B) — recommended for your hardware"
+    REC="1"
+    REC_LABEL=" ← recommended"
 else
-    MODEL_REC="Compact (3B) — optimized for your RAM"
+    REC="1"
+    REC_LABEL=" ← recommended"
 fi
-info "Recommended brain: $MODEL_REC"
+
+echo -e "  ${AMBER}[1]${NC} Smart & Fast ${DIM}(7B model · ~4GB download)${NC}$( [[ "$REC" == "1" ]] && echo -e " ${GREEN}${REC_LABEL}${NC}" )"
+echo -e "  ${AMBER}[2]${NC} Deep Thinker ${DIM}(35B model · ~20GB download)${NC}$( [[ "$REC" == "2" ]] && echo -e " ${GREEN}${REC_LABEL}${NC}" )"
+echo -e "  ${AMBER}[3]${NC} Compact      ${DIM}(3B model · ~2GB download · lower quality)${NC}"
+echo ""
+echo -ne "  ${AMBER}→${NC} "
+read -r BRAIN_CHOICE
+
+case "$BRAIN_CHOICE" in
+    2) BRAIN="deep-thinker-35b"; BRAIN_LABEL="Deep Thinker (35B)" ;;
+    3) BRAIN="compact-3b";       BRAIN_LABEL="Compact (3B)" ;;
+    *) BRAIN="smart-fast-7b";    BRAIN_LABEL="Smart & Fast (7B)" ;;
+esac
+
+echo ""
+ok "Brain selected: $BRAIN_LABEL"
+echo ""
+sleep 0.5
 
 # ============================================================================
-# [2/7] Setting up Python
+# STEP 3: CHOOSE A COMPANION
 # ============================================================================
 
-step "Setting up Python..."
+echo -e "  ${BOLD}Choose your companion:${NC}"
+echo ""
+echo -e "    ${AMBER}[1]${NC} 🐱  Cat       ${DIM}— finds sunny spots, knocks things over${NC}"
+echo -e "    ${AMBER}[2]${NC} 🐶  Dog       ${DIM}— found a stick. THE stick. Best day ever!${NC}"
+echo -e "    ${AMBER}[3]${NC} 🐧  Penguin   ${DIM}— waddles with purpose, adjusts bowtie${NC}"
+echo -e "    ${AMBER}[4]${NC} 🦊  Fox       ${DIM}— investigates suspicious bushes${NC}"
+echo -e "    ${AMBER}[5]${NC} 🦉  Owl       ${DIM}— counted every tree. 47. you're welcome${NC}"
+echo -e "    ${AMBER}[6]${NC} 🐉  Dragon    ${DIM}— breathes fire at dandelions${NC}"
+echo ""
+echo -ne "  ${AMBER}→${NC} "
+read -r PET_CHOICE
 
+case "$PET_CHOICE" in
+    1) PET="cat";     PET_EMOJI="🐱"; PET_NAME="Whiskers" ;;
+    2) PET="dog";     PET_EMOJI="🐶"; PET_NAME="Buddy" ;;
+    4) PET="fox";     PET_EMOJI="🦊"; PET_NAME="Ember" ;;
+    5) PET="owl";     PET_EMOJI="🦉"; PET_NAME="Sage" ;;
+    6) PET="dragon";  PET_EMOJI="🐉"; PET_NAME="Cinder" ;;
+    *) PET="penguin"; PET_EMOJI="🐧"; PET_NAME="Sir Wadsworth" ;;
+esac
+
+echo ""
+ok "Companion: $PET_EMOJI $PET_NAME the ${PET^}"
+echo ""
+sleep 0.8
+
+# ============================================================================
+# INSTALL DEPENDENCIES (quiet, with progress)
+# ============================================================================
+
+echo -e "  ${BOLD}Setting things up...${NC}"
+echo ""
+
+# ─── Python ───
 PYTHON=""
 for py in python3.12 python3.11 python3.10 python3; do
     if check_cmd "$py"; then
@@ -149,95 +223,75 @@ for py in python3.12 python3.11 python3.10 python3; do
 done
 
 if [[ -z "$PYTHON" ]]; then
-    warn "Python 3.10+ not found — installing it for you..."
+    info "Installing Python (one-time)..."
     if [[ "$OS" == "Darwin" ]]; then
         if ! check_cmd brew; then
-            info "Installing Homebrew first (macOS package manager)..."
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" < /dev/null
         fi
-        brew install python@3.12
+        brew install python@3.12 -q
         PYTHON="python3.12"
     else
         sudo apt update -qq && sudo apt install -y -qq python3.12 python3.12-venv python3-pip
         PYTHON="python3.12"
     fi
 fi
-ok "Python ready ($($PYTHON --version 2>&1 | grep -oE 'Python [0-9.]+'))"
+ok "Python ready"
 
-# ============================================================================
-# [3/7] Setting up Node.js
-# ============================================================================
-
-step "Setting up the dashboard..."
-
+# ─── Node.js ───
 NODE_OK=false
 if check_cmd node; then
     NODE_VER=$(node --version | grep -oE '[0-9]+' | head -1)
-    if [[ "$NODE_VER" -ge 18 ]]; then
-        NODE_OK=true
-    fi
+    [[ "$NODE_VER" -ge 18 ]] && NODE_OK=true
 fi
 
 if [[ "$NODE_OK" == false ]]; then
-    warn "Installing Node.js (needed for the dashboard)..."
+    info "Installing Node.js (one-time)..."
     if [[ "$OS" == "Darwin" ]]; then
-        brew install node@20
+        brew install node@20 -q
     else
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - > /dev/null 2>&1
         sudo apt install -y -qq nodejs
     fi
 fi
-ok "Dashboard engine ready (Node $(node --version))"
+ok "Dashboard engine ready"
 
-# ============================================================================
-# [4/7] Download Fireside
-# ============================================================================
-
-step "Downloading Fireside..."
-
+# ─── Clone/Update ───
 if [[ -d "$FIRESIDE_DIR" ]]; then
-    info "Fireside already installed — updating..."
+    info "Updating Fireside..."
     cd "$FIRESIDE_DIR"
     git pull --ff-only -q 2>/dev/null || true
 else
+    info "Downloading Fireside..."
     git clone -q "$REPO_URL" "$FIRESIDE_DIR"
     cd "$FIRESIDE_DIR"
 fi
 ok "Source code ready"
 
-# ============================================================================
-# [5/7] Installing packages
-# ============================================================================
-
-step "Installing packages (this may take a minute)..."
-
-# Python dependencies
+# ─── Pip + npm ───
+progress_bar "Installing backend packages..." 4
 $PYTHON -m pip install --upgrade pip -q 2>/dev/null
 $PYTHON -m pip install -r requirements.txt -q 2>/dev/null
-ok "Backend packages installed"
 
-# Dashboard dependencies
+progress_bar "Installing dashboard..." 5
 cd dashboard
 npm install --silent 2>/dev/null
 cd ..
-ok "Dashboard packages installed"
+
+echo ""
 
 # ============================================================================
-# [6/7] Configuring Fireside
+# GENERATE CONFIG WITH USER'S CHOICES
 # ============================================================================
 
-step "Configuring Fireside..."
-
-if [[ ! -f "valhalla.yaml" ]]; then
-    cat > valhalla.yaml << 'EOF'
+cat > valhalla.yaml << EOF
 node:
-  name: my-fireside
+  name: ${USER_NAME}'s-fireside
   role: orchestrator
 
 models:
   providers: {}
   aliases:
-    default: local/default
+    default: local/${BRAIN}
 
 plugins:
   enabled:
@@ -250,63 +304,87 @@ plugins:
     - brain-installer
     - companion
     - browse
+    - personality
+
+companion:
+  species: ${PET}
+  name: "${PET_NAME}"
+  owner: "${USER_NAME}"
 
 pipeline:
   git_branching: false
 EOF
-    ok "Fresh config created"
-else
-    ok "Config already exists"
-fi
 
 # Create data directory
 mkdir -p "$HOME/.valhalla"
-ok "Data directory ready"
+
+# Save companion state with user's choice
+cat > "$HOME/.valhalla/companion_state.json" << EOF
+{
+  "species": "${PET}",
+  "name": "${PET_NAME}",
+  "owner": "${USER_NAME}",
+  "happiness": 80,
+  "xp": 0,
+  "level": 1,
+  "streak": 0,
+  "born": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+
+ok "Configuration saved"
+echo ""
 
 # ============================================================================
-# [7/7] Starting Fireside!
+# START FIRESIDE
 # ============================================================================
 
-step "Starting Fireside!"
+echo -e "  ${BOLD}Starting Fireside...${NC}"
+echo ""
 
 # Start backend
-$PYTHON bifrost.py &
+$PYTHON bifrost.py &> /dev/null &
 BIFROST_PID=$!
-info "Backend starting..."
 
 # Start dashboard
 cd dashboard
 npm run dev &> /dev/null &
 DASH_PID=$!
 cd ..
-info "Dashboard starting..."
 
-# Wait for services to be ready
-echo ""
-info "Warming up..."
-sleep 4
-
-# ============================================================================
-# 🔥 SUCCESS!
-# ============================================================================
-
-echo ""
-echo -e "${GREEN}${BOLD}"
-echo "    ╔══════════════════════════════════════╗"
-echo "    ║                                      ║"
-echo "    ║        🔥 Fireside is running!       ║"
-echo "    ║                                      ║"
-echo "    ╚══════════════════════════════════════╝"
+# Wait with a friendly animation
+echo -ne "  ${DIM}Warming up"
+for i in 1 2 3 4 5; do
+    sleep 1
+    echo -ne "."
+done
 echo -e "${NC}"
+echo ""
+
+# ============================================================================
+# 🔥 SUCCESS
+# ============================================================================
+
+echo -e "${AMBER}"
+echo "    ╔═══════════════════════════════════════════════╗"
+echo "    ║                                               ║"
+echo "    ║          🔥 Fireside is running! 🔥           ║"
+echo "    ║                                               ║"
+echo "    ╚═══════════════════════════════════════════════╝"
+echo -e "${NC}"
+echo ""
 echo -e "  ${BOLD}Dashboard${NC}   →  ${AMBER}http://localhost:3000${NC}"
 echo -e "  ${BOLD}Backend${NC}     →  ${DIM}http://localhost:8765${NC}"
 echo ""
-echo -e "  ${DIM}────────────────────────────────────────${NC}"
+echo -e "  ${DIM}─────────────────────────────────────────────${NC}"
 echo ""
-echo -e "  🐧 ${BOLD}Your companion is waiting.${NC}"
-echo -e "     Open the link above and say hello!"
+echo -e "  ${PET_EMOJI}  ${BOLD}${PET_NAME}${NC} ${DIM}is ready and waiting for you,${NC} ${BOLD}${USER_NAME}${NC}${DIM}.${NC}"
+echo -e "     ${DIM}Open the link above and say hello!${NC}"
 echo ""
-echo -e "  ${DIM}────────────────────────────────────────${NC}"
+echo -e "  ${DIM}─────────────────────────────────────────────${NC}"
+echo ""
+echo -e "  ${ITALIC}${DIM}\"Day 1, it follows instructions."
+echo -e "   Day 90, it has instinct.\"${NC}"
 echo ""
 
 # Open browser
