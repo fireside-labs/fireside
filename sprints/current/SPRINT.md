@@ -1,39 +1,36 @@
-# Sprint 10 — Two Characters: AI Person + Companion Animal
+# Sprint 11 — The Anywhere Bridge (Connection Choice)
 
-**Goal:** Implement the two-character system from VISION.md. Users create an AI person (lives at home, runs the guild hall) AND a companion animal (goes with them on their phone). The install flow, config, dashboard, and mobile app all update to support both characters.
+**Goal:** Allow users to choose how their companion connects to their AI. Implement a "Connection Choice" flow with an embedded Tailscale node (`tsnet`) for secure, zero-config remote access without requiring the user to install a VPN app. 
 
 **Read first:** `VISION.md` — the product bible.
 
 ---
 
-## Sprint 10 Scope
+## Sprint 11 Scope
 
 ### Thor (Backend)
-- Update install.sh with Step 4 (create AI person — name, style, avatar)
-- Update config/state to store both AI agent and companion separately
-- API endpoint for AI agent profile (`GET /api/v1/agent/profile`)
-- Guild hall agent data wired to real config (not mocked)
+- Integrate Tailscale (`tsnet` via Go binary or wrapper, or standard `tailscaled` with auth key) to expose the backend API/WebSocket securely.
+- If using full Tailscale embedded is too complex in Python, provide the instructions/scripts to set up an ephemeral or pre-auth Tailscale node easily. 
+- Ensure `bifrost.py` listens on the Tailscale IP if available.
+- Create an API endpoint (`/api/v1/network/status`) to report local IP and Tailscale IP.
 
 ### Freya (Frontend)
-- Dashboard: guild hall reads real agent config, shows AI person + companion together
-- Dashboard: onboarding wizard updated for two-character flow
-- Mobile: companion references the AI by name ("Let me check with Atlas...")
-- Mobile: agent profile card shows both characters
+- Mobile Onboarding: Add "Connection Choice" screen (Local, Anywhere Bridge, Hosted).
+- Mobile UI: OAuth/AuthKey input for "Anywhere Bridge".
+- Mobile Network: React Native embedded Tailscale (via `tailscale-react-native` or similar), or logic to resolve the PC's Tailscale IP and route WebSocket traffic through it.
+- Dashboard Settings: Manage Connection Choice.
 
-### Heimdall — Audit the two-character system
-- No credential leaks in new config
-- Agent profile endpoint security
+### Heimdall — Audit the connection
+- Ensure Tailscale integration doesn't expose the node publicly to the broader internet, only to the user's Tailnet.
 
 ### Valkyrie — UX review
-- Does the two-character narrative make sense to a new user?
-- Is the install flow ordering right?
-- Does the guild hall feel alive with both characters?
+- Does the networking terminology alienate non-technical users?
+- Is the "Anywhere Bridge" flow actually zero-config?
 
 ---
 
 ## Definition of Done
-- [ ] install.sh has 6 steps (name, companion, brain, AI persona, confirm, launch)
-- [ ] Config stores both `companion` and `agent` sections
-- [ ] Guild hall shows real agent data, not mocks
-- [ ] Companion on mobile references AI by name
+- [ ] Connect Choice UI exists on dashboard and mobile.
+- [ ] Mobile app can connect to PC over cellular (outside local Wi-Fi) via the bridge.
+- [ ] No manual port-forwarding required.
 - [ ] All gates dropped

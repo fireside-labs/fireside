@@ -1,8 +1,9 @@
 /**
  * ⚙️ Settings Screen — Sprint 8 Task 1.
+ * Sprint 10: Added AI Agent section.
  *
  * One scrollable screen: mode switch, connection, companion info,
- * voice, notifications, privacy, about.
+ * AI agent, voice, notifications, privacy, about.
  *
  * Per CREATIVE_DIRECTION.md: clean, no nested menus.
  */
@@ -20,11 +21,13 @@ import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMode } from "../src/ModeContext";
 import { useConnection } from "../src/hooks/useConnection";
+import { useAgent } from "../src/AgentContext";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../src/theme";
 
 export default function SettingsScreen() {
     const { mode, setMode, isPetMode } = useMode();
     const { isOnline, companionData } = useConnection();
+    const { agent } = useAgent();
 
     const petName = companionData?.companion?.name || "Companion";
     const species = companionData?.companion?.species || "cat";
@@ -118,6 +121,38 @@ export default function SettingsScreen() {
                         <Text style={styles.rowLabel}>Level</Text>
                         <Text style={styles.rowValue}>{level}</Text>
                     </View>
+                </View>
+            </View>
+
+            {/* ———— AI Agent (Sprint 10) ———— */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Your AI at Home</Text>
+                <View style={styles.card}>
+                    <View style={styles.row}>
+                        <Text style={styles.rowLabel}>🏠 AI Name</Text>
+                        <Text style={styles.rowValue}>{agent.name}</Text>
+                    </View>
+                    <View style={styles.divider} />
+                    <View style={styles.row}>
+                        <Text style={styles.rowLabel}>Style</Text>
+                        <Text style={styles.rowValue}>{agent.style.charAt(0).toUpperCase() + agent.style.slice(1)}</Text>
+                    </View>
+                    <View style={styles.divider} />
+                    <View style={styles.row}>
+                        <Text style={styles.rowLabel}>Status</Text>
+                        <Text style={[styles.rowValue, { color: isOnline ? colors.onlineDot : colors.offlineDot }]}>
+                            {isOnline ? "🟢 Online" : "🔴 Offline"}
+                        </Text>
+                    </View>
+                    {agent.uptime && (
+                        <>
+                            <View style={styles.divider} />
+                            <View style={styles.row}>
+                                <Text style={styles.rowLabel}>Uptime</Text>
+                                <Text style={styles.rowValue}>{agent.uptime}</Text>
+                            </View>
+                        </>
+                    )}
                 </View>
             </View>
 

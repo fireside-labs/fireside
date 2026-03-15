@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import GuildHallAgent from "@/components/GuildHallAgent";
 import type { Activity } from "@/components/GuildHallAgent";
 import { useRouter } from "next/navigation";
@@ -68,48 +69,84 @@ const THEME_ELEMENTS: Record<string, { emoji: string; label: string; x: number; 
     ],
 };
 
-// Mock agent states — In production from event bus
-const AGENTS = [
+/** Style → avatar config mapping for the AI agent */
+const STYLE_AVATARS: Record<string, { hairStyle: number; hairColor: string; skinTone: string; outfit: "warrior" | "artist" | "guardian" | "crown"; accessory: "none" | "glasses" }> = {
+    analytical: { hairStyle: 0, hairColor: "#1A1A2E", skinTone: "#D4A574", outfit: "guardian", accessory: "glasses" },
+    creative: { hairStyle: 2, hairColor: "#F4D03F", skinTone: "#FAD7A0", outfit: "artist", accessory: "none" },
+    direct: { hairStyle: 4, hairColor: "#8B4513", skinTone: "#F5CBA7", outfit: "warrior", accessory: "none" },
+    warm: { hairStyle: 3, hairColor: "#C0392B", skinTone: "#FBEEE6", outfit: "crown", accessory: "none" },
+};
+
+const SPECIES_EMOJI: Record<string, string> = {
+    cat: "🐱", dog: "🐶", penguin: "🐧", fox: "🦊", owl: "🦉", dragon: "🐉",
+};
+
+// Fallback mock agents when API is unavailable
+const FALLBACK_AGENTS = [
     {
-        name: "thor",
-        avatar: { style: "pixel" as const, hairStyle: 4, hairColor: "#8B4513", skinTone: "#F5CBA7", outfit: "warrior" as const, accessory: "none" as const },
-        activity: "building" as Activity, status: "online" as const, taskLabel: "Sprint 8 Backend", progress: 65,
-    },
-    {
-        name: "freya",
-        avatar: { style: "pixel" as const, hairStyle: 2, hairColor: "#F4D03F", skinTone: "#FAD7A0", outfit: "artist" as const, accessory: "glasses" as const },
-        activity: "writing" as Activity, status: "busy" as const, taskLabel: "Guild Hall UI",
-    },
-    {
-        name: "heimdall",
-        avatar: { style: "pixel" as const, hairStyle: 0, hairColor: "#1A1A2E", skinTone: "#D4A574", outfit: "guardian" as const, accessory: "none" as const },
-        activity: "reviewing" as Activity, status: "online" as const, taskLabel: "Security Audit",
-    },
-    {
-        name: "valkyrie",
-        avatar: { style: "pixel" as const, hairStyle: 3, hairColor: "#C0392B", skinTone: "#FBEEE6", outfit: "crown" as const, accessory: "none" as const },
-        activity: "researching" as Activity, status: "online" as const, taskLabel: "UX Review",
+        name: "Atlas",
+        avatar: { style: "pixel" as const, ...STYLE_AVATARS.analytical },
+        activity: "idle" as Activity, status: "online" as const, taskLabel: null as string | null, type: "ai" as const,
     },
 ];
 
+interface GuildHallAgentData {
+    name: string;
+    type: "ai" | "companion";
+    style?: string;
+    species?: string;
+    activity: string;
+    status: string;
+    taskLabel?: string | null;
+}
+
 export default function GuildHall({ theme }: GuildHallProps) {
     const router = useRouter();
-    const colors = THEME_COLORS[theme] || THEME_COLORS.valhalla;
+    const themeColors = THEME_COLORS[theme] || THEME_COLORS.valhalla;
     const elements = THEME_ELEMENTS[theme] || THEME_ELEMENTS.valhalla;
+    const [agents, setAgents] = useState(FALLBACK_AGENTS);
+
+    // Sprint 10: Fetch real agent data
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch("http://127.0.0.1:8765/api/v1/guildhall/agents");
+                if (res.ok) {
+                    const data = await res.json();
+                    const mapped = (data.agents || []).map((a: GuildHallAgentData) => {
+                        const styleKey = a.style || "analytical";
+                        const avatarConfig = STYLE_AVATARS[styleKey] || STYLE_AVATARS.analytical;
+                        return {
+                            name: a.name,
+                            type: a.type,
+                            species: a.species,
+                            avatar: { style: "pixel" as const, ...avatarConfig },
+                            activity: (a.activity || "idle") as Activity,
+                            status: (a.status || "online") as "online" | "busy" | "offline",
+                            taskLabel: a.taskLabel || null,
+                        };
+                    });
+                    if (mapped.length > 0) setAgents(mapped);
+                }
+            } catch {
+                // API unavailable — use fallback
+            }
+        })();
+    }, []);
 
     return (
         <div
             className="relative w-full rounded-xl overflow-hidden"
             style={{
                 aspectRatio: "16/9",
-                background: `linear-gradient(180deg, ${colors.bg} 0%, ${colors.floor} 60%, ${colors.floor} 100%)`,
-                border: `1px solid ${colors.accent}33`,
+                background: `linear-gradient(180deg, ${themeColors.bg} 0%, ${themeColors.floor} 60%, ${themeColors.floor} 100%)`,
+                border: `1px solid ${themeColors.accent}33`,
             }}
         >
             {/* Floor line */}
             <div
                 className="absolute inset-x-0"
-                style={{ top: "45%", height: "1px", background: `${colors.accent}22` }}
+                style={{ top: "45%", height: "1px", background: `${themeColors.accent}22` }}
             />
 
             {/* Theme elements (furniture/objects) */}
@@ -126,25 +163,52 @@ export default function GuildHall({ theme }: GuildHallProps) {
                 </div>
             ))}
 
-            {/* Agents */}
-            {AGENTS.map((agent) => {
-                const zone = ACTIVITY_ZONES[agent.activity];
-                // Offset slightly so agents don't overlap exactly
-                const offset = AGENTS.indexOf(agent) * 3;
+            {/* Agents — Sprint 10: AI agent at activity zone, companion near fire */}
+            {agents.map((agent, idx) => {
+                // Companion sits near the fire, AI agent goes to activity zone
+                const isCompanion = (agent as any).type === "companion";
+                const zone = isCompanion
+                    ? { x: 75, y: 88 }  // curled up near fire
+                    : ACTIVITY_ZONES[(agent.activity as Activity)] || ACTIVITY_ZONES.idle;
+                const offset = idx * 3;
+
                 return (
-                    <GuildHallAgent
-                        key={agent.name}
-                        name={agent.name}
-                        avatar={agent.avatar}
-                        activity={agent.activity}
-                        status={agent.status}
-                        taskLabel={agent.taskLabel}
-                        progress={agent.progress}
-                        position={{ x: zone.x + offset, y: zone.y }}
-                        theme={theme}
-                        onClick={() => { }}
-                        onDoubleClick={() => router.push(`/agents/${agent.name}`)}
-                    />
+                    <div key={agent.name}>
+                        {/* Companion species emoji overlay */}
+                        {isCompanion && (
+                            <div
+                                className="absolute text-center"
+                                style={{
+                                    left: `${zone.x}%`,
+                                    top: `${zone.y}%`,
+                                    transform: "translate(-50%, -50%)",
+                                    zIndex: 10,
+                                }}
+                            >
+                                <span className="text-3xl block animate-pulse">
+                                    {SPECIES_EMOJI[(agent as any).species] || "🐱"}
+                                </span>
+                                <span className="text-[9px] text-[var(--color-neon)] font-medium block mt-0.5">
+                                    {agent.name}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* AI agent as GuildHallAgent component */}
+                        {!isCompanion && (
+                            <GuildHallAgent
+                                name={agent.name}
+                                avatar={agent.avatar}
+                                activity={agent.activity}
+                                status={agent.status}
+                                taskLabel={agent.taskLabel}
+                                position={{ x: zone.x + offset, y: zone.y }}
+                                theme={theme}
+                                onClick={() => { }}
+                                onDoubleClick={() => router.push(`/agents/${agent.name}`)}
+                            />
+                        )}
+                    </div>
                 );
             })}
 
@@ -155,3 +219,4 @@ export default function GuildHall({ theme }: GuildHallProps) {
         </div>
     );
 }
+

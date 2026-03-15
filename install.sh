@@ -298,12 +298,58 @@ case "$PET_CHOICE" in
 esac
 
 echo ""
-ok "AI Personality: $PET_EMOJI $PET_NAME the ${PET^}"
+ok "Companion: $PET_EMOJI $PET_NAME the ${PET^}"
 echo ""
 sleep 0.5
 
 # ============================================================================
-# CONFIRMATION CARD
+# STEP 4: WHO'S RUNNING THE SHOW AT HOME?
+# ============================================================================
+
+echo ""
+echo -e "  ${BOLD}Now, who's running the show at home?${NC}"
+echo ""
+echo -e "  ${DIM}Every companion has someone at the fireside.${NC}"
+echo -e "  ${DIM}This is the mind behind ${PET_NAME} — your AI.${NC}"
+echo ""
+echo -e "  ${BOLD}Give your AI a name:${NC}"
+echo -e "  ${DIM}(default: Atlas)${NC}"
+echo ""
+echo -ne "  ${AMBER}→${NC} "
+read -r AGENT_NAME
+
+if [[ -z "$AGENT_NAME" ]]; then
+    AGENT_NAME="Atlas"
+fi
+# Capitalize first letter
+AGENT_NAME="$(echo "${AGENT_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${AGENT_NAME:1}"
+
+echo ""
+echo -e "  ${BOLD}What's ${AGENT_NAME}'s style?${NC}"
+echo ""
+echo -e "    ${AMBER}[1]${NC} 🎯  Analytical  ${DIM}— data-driven, precise, sees the patterns${NC}"
+echo -e "    ${AMBER}[2]${NC} 🎨  Creative    ${DIM}— imaginative, lateral thinker, sees the possibilities${NC}"
+echo -e "    ${AMBER}[3]${NC} ⚡  Direct      ${DIM}— no-nonsense, efficient, gets to the point${NC}"
+echo -e "    ${AMBER}[4]${NC} 🌿  Warm        ${DIM}— empathetic, supportive, reads the room${NC}"
+echo ""
+
+AGENT_STYLE_CHOICE=$(ask_choice "Pick 1-4" 1 4 1)
+
+case "$AGENT_STYLE_CHOICE" in
+    1) AGENT_STYLE="analytical"; AGENT_STYLE_EMOJI="🎯" ;;
+    2) AGENT_STYLE="creative";   AGENT_STYLE_EMOJI="🎨" ;;
+    3) AGENT_STYLE="direct";     AGENT_STYLE_EMOJI="⚡" ;;
+    4) AGENT_STYLE="warm";       AGENT_STYLE_EMOJI="🌿" ;;
+    *) AGENT_STYLE="analytical"; AGENT_STYLE_EMOJI="🎯" ;;
+esac
+
+echo ""
+ok "AI: ${AGENT_NAME} (${AGENT_STYLE_EMOJI} ${AGENT_STYLE^})"
+echo ""
+sleep 0.5
+
+# ============================================================================
+# STEP 5: CONFIRMATION CARD
 # ============================================================================
 
 echo ""
@@ -311,8 +357,9 @@ echo -e "       ${AMBER}${BOLD}◆  Ready to install${NC}"
 echo -e "       ${DIM}─────────────────────────────────────────────${NC}"
 echo ""
 echo -e "          ${DIM}Owner${NC}         ${BOLD}${USER_NAME}${NC}"
-echo -e "          ${DIM}Brain${NC}         ${BOLD}${BRAIN_LABEL}${NC}"
+echo -e "          ${DIM}AI${NC}            ${BOLD}${AGENT_NAME} (${AGENT_STYLE_EMOJI})${NC}"
 echo -e "          ${DIM}Companion${NC}     ${BOLD}${PET_EMOJI} ${PET_NAME}${NC}"
+echo -e "          ${DIM}Brain${NC}         ${BOLD}${BRAIN_LABEL}${NC}"
 echo -e "          ${DIM}Location${NC}      ${BOLD}~/.fireside${NC}"
 echo ""
 echo -e "       ${DIM}─────────────────────────────────────────────${NC}"
@@ -430,6 +477,10 @@ plugins:
     - browse
     - personality
 
+agent:
+  name: "${AGENT_NAME}"
+  style: "${AGENT_STYLE}"
+
 companion:
   species: ${PET}
   name: "${PET_NAME}"
@@ -446,6 +497,10 @@ cat > "$HOME/.valhalla/companion_state.json" << EOF
   "species": "${PET}",
   "name": "${PET_NAME}",
   "owner": "${USER_NAME}",
+  "agent": {
+    "name": "${AGENT_NAME}",
+    "style": "${AGENT_STYLE}"
+  },
   "happiness": 80,
   "xp": 0,
   "level": 1,
@@ -464,6 +519,10 @@ cat > "$HOME/.fireside/onboarding.json" << ONBOARD
   "user_name": "${USER_NAME}",
   "personality": "friendly",
   "brain": "${BRAIN}",
+  "agent": {
+    "name": "${AGENT_NAME}",
+    "style": "${AGENT_STYLE}"
+  },
   "companion": {
     "species": "${PET}",
     "name": "${PET_NAME}"
@@ -494,7 +553,7 @@ cd ..
 
 # Animated waiting
 (sleep 5) &
-spinner $! "${PET_NAME} is stretching and yawning"
+spinner $! "${AGENT_NAME} and ${PET_NAME} are getting ready"
 
 # ============================================================================
 # 🔥 SUCCESS
@@ -505,13 +564,14 @@ echo ""
 echo -e "       ${AMBER}${BOLD}◆  F I R E S I D E   I S   L I V E  ◆${NC}"
 echo -e "       ${DIM}─────────────────────────────────────────────${NC}"
 echo ""
-echo -e "       ${AMBER}🔥🔥🔥${NC}"
+echo -e "       ${AGENT_NAME} is at the fireside.   ${PET_NAME} is by their side."
+echo -e "       ${AMBER}🔥${NC}                          ${PET_EMOJI}"
 echo ""
 
 # ASCII pet
 echo -e "${AMBER}${PET_ART}${NC}"
 echo ""
-echo -e "       ${BOLD}${PET_EMOJI} ${PET_NAME}${NC} ${DIM}is ready and waiting for you,${NC} ${BOLD}${USER_NAME}${NC}${DIM}.${NC}"
+echo -e "       ${BOLD}${AGENT_NAME}${NC} ${DIM}&${NC} ${BOLD}${PET_EMOJI} ${PET_NAME}${NC} ${DIM}are ready for you,${NC} ${BOLD}${USER_NAME}${NC}${DIM}.${NC}"
 echo ""
 echo -e "       ${BOLD}Dashboard${NC}   →  ${AMBER}http://localhost:3000${NC}"
 echo -e "       ${BOLD}Backend${NC}     →  ${DIM}http://localhost:8765${NC}"

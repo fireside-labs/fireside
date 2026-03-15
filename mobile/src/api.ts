@@ -226,6 +226,11 @@ export const companionAPI = {
             "/api/v1/companion/query",
             { method: "POST", body: JSON.stringify({ query }) }
         ),
+    /** Agent profile (Sprint 10). */
+    agentProfile: () =>
+        apiFetch<{ name: string; style: string; uptime?: string; companion?: { name: string; species: string } }>(
+            "/api/v1/agent/profile"
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

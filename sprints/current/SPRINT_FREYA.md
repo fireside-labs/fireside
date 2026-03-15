@@ -1,4 +1,4 @@
-# Sprint 10 — FREYA (Frontend: Two Characters in Dashboard + Mobile)
+# Sprint 11 — FREYA (Frontend: Connection Choice)
 
 // turbo-all
 
@@ -8,95 +8,38 @@
 > [!CAUTION]
 > **GATE FILE IS MANDATORY.** Create `sprints/current/gates/gate_freya.md` when complete.
 
-> [!IMPORTANT]
-> **READ FIRST:** `VISION.md` — the product vision. This sprint brings both characters to life.
-> **READ ALSO:** `sprints/current/CREATIVE_DIRECTION.md` — brand palette.
-
 ---
 
 ## Context
-
-The product now has TWO characters:
-1. **AI Agent** (person) — lives at home, visible in the guild hall on the dashboard
-2. **Companion** (animal) — goes with the user on mobile
-
-This sprint makes both characters visible and connected across desktop and mobile.
-
----
+We are giving users the choice of how their companion connects to their AI out in the world.
 
 ## Your Tasks
 
-### Task 1 — Dashboard: Guild Hall Reads Real Data
+### Task 1 — Mobile Connection Flow
+Create a new screen during mobile onboarding (after QR scan) or in Settings:
+`"How should Ember connect to Atlas?"`
+- **[1] Local Only:** Works only at home on Wi-Fi.
+- **[2] Anywhere Bridge:** Connect securely from anywhere. Requires logging into Tailscale.
 
-Replace the mocked `AGENTS` array in `dashboard/components/GuildHall.tsx` with real data from `GET /api/v1/guildhall/agents`.
+### Task 2 — Mobile WebSocket Routing
+Update `mobile/src/api.ts` and WebSocket logic:
+- The QR code contains the PC's Local IP.
+- The mobile app should hit `http://{local_ip}:8765/api/v1/network/status` (while connected to home Wi-Fi) to fetch the PC's `tailscale_ip`.
+- Store the `tailscale_ip` locally on the device.
+- When making API calls or establishing WebSockets, if `connection_preference == bridge`, use the `tailscale_ip`. Otherwise use `local_ip`.
 
-1. Fetch agents on mount using `useSWR` or `useEffect`
-2. Map each agent to the existing `GuildHallAgent` component
-3. For the AI agent: generate an avatar config from their `style`:
-   - Analytical → structured look (glasses, neat hair)
-   - Creative → artistic look (colorful, flowing)
-   - Direct → military/clean look
-   - Warm → soft, approachable
-4. For the companion: show the species emoji/sprite near the fireplace
-5. Position the AI agent at the activity zone based on their `activity`
-6. Show the companion curled up near the fire (idle) or alert (if chatting/tasks active)
-7. Fallback to existing mocked data if API is unavailable
+### Task 3 — Mobile VPN Guidance
+If the user selects "Anywhere Bridge", instruct them to download the Tailscale app on their iPhone and log in with the same account they used on their PC. 
+*(Note: True embedded SDK `tsnet` for React Native is complex; having them use the official Tailscale app running in the background is the most robust V1 approach for an Expo app)*.
 
-### Task 2 — Dashboard: Onboarding Wizard Two-Character Flow
-
-Update `dashboard/components/OnboardingWizard.tsx` to match the new install flow:
-
-1. Step 1: Your name (existing)
-2. Step 2: Choose companion species + name (existing, reorder if needed)
-3. Step 3: Choose brain size (existing)
-4. **Step 4 (NEW): Create your AI**
-   - "Every companion has someone at the fireside."
-   - Name input (default: "Atlas")
-   - Style picker: Analytical / Creative / Direct / Warm (4 cards with emoji + description)
-5. Step 5: Confirmation with both characters shown
-6. Save both to onboarding config
-
-### Task 3 — Mobile: Companion References AI by Name
-
-Update the mobile companion chat to reference the AI agent by name:
-
-1. Fetch `GET /api/v1/agent/profile` on app launch, store in context
-2. When the companion relays a task home or gets a response from the big model, prepend flavor text:
-   - "Let me check with Atlas..." (when sending to PC)
-   - "Atlas says..." (when showing response from PC brain)
-   - "I can handle this one myself" (when handling locally/cached)
-3. In offline mode: "Atlas is resting right now, but I'll remember this for when we're home."
-4. Show both names in the agent profile card:
-   ```
-   ┌──────────────────┐
-   │  🦊 Ember         │ ← Your companion
-   │  Level 4 · Fox    │
-   │                    │
-   │  🏠 Atlas          │ ← Your AI at home
-   │  Analytical · 🟢   │
-   └──────────────────┘
-   ```
-
-### Task 4 — Mobile: Settings Screen Update
-
-Add an "AI Agent" section to the settings screen:
-
-- **AI Name:** Atlas
-- **Style:** Analytical
-- **Status:** 🟢 Online / 🔴 Offline
-- **Uptime:** 4h 22m (from agent profile API)
+### Task 4 — Dashboard Network Settings
+Add a tab in the Dashboard Settings for "Network / Bridge":
+- Show current Local IP.
+- Show Anywhere Bridge status (Tailscale IP, active/inactive).
+- Show instructions on how to enable it.
 
 ### Task 5 — Drop Your Gate
 
 ---
-
 ## Rework Loop
 - 🔴 HIGH → automatic FAIL, gate deleted → fix and re-drop
-
----
-
-## Notes
-- The guild hall is the "wow" moment on desktop. Make sure the API connection works smoothly.
-- The "Let me check with Atlas..." flavor text is the emotional bridge between phone and PC.
-- Don't break existing functionality — this is additive, not a rewrite.
-- Follow CREATIVE_DIRECTION.md for all visual decisions.

@@ -7,6 +7,7 @@
  * Sprint 5: Proactive guardian.
  * Sprint 6: Voice mode (hold-to-talk walkie-talkie).
  * Sprint 9: Rich action cards.
+ * Sprint 10: Companion references AI agent by name.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -30,6 +31,7 @@ import ProactiveGuardian from "../../src/ProactiveGuardian";
 import VoiceMode from "../../src/VoiceMode";
 import ActionCard from "../../src/ActionCard";
 import SearchAll from "../../src/SearchAll";
+import { useAgent } from "../../src/AgentContext";
 import type { Message, PetSpecies } from "../../src/types";
 
 const CHAT_HISTORY_KEY = "valhalla_chat_history";
@@ -95,6 +97,7 @@ async function loadHistory(): Promise<Message[]> {
 
 export default function ChatTab() {
     const { isOnline, companionData, queueAction } = useConnection();
+    const { agent } = useAgent();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [typing, setTyping] = useState(false);
@@ -144,7 +147,9 @@ export default function ChatTab() {
         if (isOnline) {
             try {
                 const res = await companionAPI.chat(text);
-                const petMsg: Message = { role: "pet", content: res.reply };
+                // Sprint 10: Add relay flavor text
+                const relayPrefix = `Let me check with ${agent.name}... `;
+                const petMsg: Message = { role: "pet", content: relayPrefix + res.reply };
                 if (res.action) petMsg.action = res.action;
                 setMessages((prev) => [...prev, petMsg]);
             } catch {
@@ -154,7 +159,7 @@ export default function ChatTab() {
         } else {
             queueAction({ type: "chat", payload: text, timestamp: Date.now() });
             await new Promise((r) => setTimeout(r, 800 + Math.random() * 700));
-            const reply = getOfflineResponse(species);
+            const reply = `${agent.name} is resting right now, but I'll remember this for when we're home. ` + getOfflineResponse(species);
             setMessages((prev) => [...prev, { role: "pet", content: reply }]);
         }
 
