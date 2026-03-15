@@ -1,4 +1,4 @@
-# Sprint 4 — FREYA (Frontend: Adventures, Daily Gifts, Guardian + App Store)
+# Sprint 5 — FREYA (Frontend: Mode Split + Translation + Platform Bridge)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -11,116 +11,129 @@
 > Do NOT use shell echo commands.
 
 > [!IMPORTANT]
-> **Read `FEATURE_INVENTORY.md` first** to understand what the desktop platform already has.
-> Then read the dashboard components below — they are your design reference.
+> **Read `FEATURE_INVENTORY.md`** to understand the full platform. Read Valkyrie's Sprint 4 review
+> at `sprints/archive/sprint_04/gates/review_valkyrie.md` — it defines the vision for this sprint.
 
 ---
 
 ## Context
 
-The desktop dashboard has adventures, daily gifts, and a message guardian that the mobile app doesn't surface yet. These are the engagement drivers — adventures are the RPG hook, daily gifts create daily check-in habit, and the guardian is a unique differentiator ("the app that stops you from drunk texting").
+Valkyrie's key insight: *"Adults and executives who just want the utility can toggle this off."*
 
-**Reference the existing dashboard components for UX patterns:**
-- `dashboard/components/AdventureCard.tsx` (308 lines) — 8 encounter types with choices and rewards
-- `dashboard/components/DailyGift.tsx` (107 lines) — species-specific daily gifts
-- `dashboard/components/TeachMe.tsx` (118 lines) — teach companion facts
+The app currently serves one persona (Tamagotchi lover). This sprint adds a second persona (privacy-first utility user) through a **mode toggle**, and surfaces the platform depth through translation, morning briefings, and a "What's Happening at Home" card.
 
-Your Sprint 3 code lives in `mobile/` — build on top of it.
+Reference dashboard components:
+- `dashboard/components/TeachMe.tsx` (118 lines)
+- `dashboard/components/MorningBriefing.tsx`
+- `plugins/companion/nllb.py` — translation API reference
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Adventures Screen
-Add a 5th tab or a button on the Care tab that launches adventures.
+### Task 1 — Companion Mode Toggle (Valkyrie Priority #1)
+Add a settings screen or toggle on the Care tab:
 
-Read `AdventureCard.tsx` for the encounter format. Each adventure has:
-- **Type:** riddle, treasure, merchant, forage, lost_pet, weather, storyteller, challenge
-- **Narrative text** (species-specific flavor)
-- **Choices** (2-3 options with different outcomes)
-- **Rewards** (items, XP, happiness boost)
+**🐾 Pet Mode** (default):
+- All tabs visible: Chat, Care, Bag, Quest, Tasks
+- Gamification active: feeding, walking, adventures, daily gifts, XP, levels
+- Companion speaks in character (mood prefixes, species personality)
 
-Build `mobile/app/(tabs)/adventure.tsx` or a modal:
-1. "Start Adventure" button (or auto-trigger on walk success)
-2. Show encounter card with narrative text and companion avatar
-3. Present choices as large tappable buttons
-4. Show result + rewards with celebration animation
-5. Haptic feedback on choice + reward
+**🔧 Tool Mode:**
+- Simplified tabs: Chat, Tools, Tasks
+- Gamification hidden: no feeding, no walking, no quests, no daily gifts
+- Companion still has personality but skips game mechanics
+- "Tools" tab replaces Care+Bag+Quest with: Guardian settings, Translation, TeachMe
+- Happiness/XP bars hidden
+- Push notifications change: no "feed me" alerts, only task completions and guardian check-ins
 
-Species-specific adventure text is the key engagement driver — make the narrative prominent.
+Store mode in AsyncStorage. The toggle should be:
+- A gear icon on the Care tab → Settings screen with mode picker
+- OR a profile card at the top of Care tab with a clean toggle
 
-### Task 2 — Daily Gift
-Add a daily gift popup/modal that appears on app open (once per day):
+The companion's personality STAYS in both modes — only the game mechanics change.
 
-1. On app launch, check if a daily gift is available (via `/api/v1/companion/daily-gift` or sync response)
-2. Show a gift card with species-personality flavor text (e.g., cat: "I found this behind the couch. You may have it." / dog: "LOOK WHAT I FOUND!! FOR YOU!!")
-3. "Open Gift" button with haptic + sound effect + celebration animation
-4. Claim the gift (item, XP, fact, poem, advice, or compliment)
-5. Store claim timestamp in AsyncStorage as fallback
+### Task 2 — Translation UI
+Add a Translation screen (accessible in Tool mode's "Tools" tab, and optionally in Pet mode's chat screen as a button):
 
-Use the design patterns from `DailyGift.tsx` — it's only 107 lines.
+1. **Text input** field for text to translate
+2. **Source language** picker (auto-detect option + manual selection)
+3. **Target language** picker (searchable — there are 200 languages)
+4. **Translate button** → calls `POST /api/v1/companion/translate`
+5. **Result display** with copy-to-clipboard button
+6. Show confidence score from the API response
 
-### Task 3 — Message Guardian Integration
-Before sending a chat message, run it through the guardian:
+Haptic feedback on translate + copy.
 
-1. Before `POST /chat`, call `POST /api/v1/companion/guardian` with `{ message, time_of_day }`
-2. If the guardian returns `safe: false`:
-   - Show a warning modal with the species-appropriate message (e.g., cat: "Are you sure? It's 2AM and this seems... emotional.")
-   - Show the suggested softer rewrite if available
-   - Two buttons: "Send Anyway" and "Use Rewrite"
-3. If `safe: true`, send normally
-4. This check should feel lightweight — don't add noticeable delay
+The language picker needs to be searchable (200 languages is too many to scroll). Use a text filter at the top.
 
-The guardian is a unique feature competitors don't have. Make it feel helpful, not judgmental.
+### Task 3 — Morning Briefing
+Add a morning briefing card that appears on app open (once per day, mornings only):
 
-### Task 4 — EAS Build Configuration
-Set up Expo Application Services (EAS) for App Store builds:
+1. On app launch between 6AM-11AM, check if a morning briefing is available
+2. Show a card at the top of the Care/Tools tab:
+   - Companion avatar + "Good morning! Here's what happened overnight..."
+   - Summary of platform activity (from `/mobile/sync` → `platform` data)
+   - Any completed tasks
+   - Any companion events (leveled up, learned something, etc.)
+3. Card is dismissible with a gentle swipe or tap
+4. Persist dismissal in AsyncStorage for today
 
-```bash
-cd mobile && npx -y eas-cli@latest build:configure
+### Task 4 — TeachMe
+Add a TeachMe section (in Tool mode's Tools tab + optionally in Pet mode's Chat tab):
+
+1. "Teach me something" text input
+2. Submit → `POST /api/v1/companion/teach` with `{ fact: string }`
+3. Confirmation with species-specific personality response:
+   - Cat: "I already knew that, but I'll pretend to be impressed."
+   - Dog: "WOW!! That's the BEST fact I've EVER heard!!"
+   - Dragon: "Knowledge is power. I shall remember this."
+4. Show count of learned facts: "Your companion knows 23 facts"
+
+Reference `dashboard/components/TeachMe.tsx` for the pattern.
+
+### Task 5 — "What's Happening at Home" Card
+Add a card to the Care/Tools tab that shows the home PC's activity:
+
+Thor is adding a `platform` section to `/mobile/sync`. Use it to build a compact card:
+
+```
+🏠 Your Home PC
+├── ⏱️ Uptime: 42.5 hours
+├── 🧠 Models loaded: qwen-14b, whisper-large
+├── 💭 Memories: 247 stored
+├── 🔮 Last prediction: Weather confidence 87%
+├── 🌐 Mesh nodes: 2
+└── 🌙 Last dream cycle: 4:30 AM
 ```
 
-Update `eas.json` with:
-```json
-{
-  "build": {
-    "preview": {
-      "distribution": "internal",
-      "ios": { "simulator": true }
-    },
-    "production": {
-      "ios": { "bundleIdentifier": "com.valhalla.companion" },
-      "android": { "package": "com.valhalla.companion" }
-    }
-  }
-}
-```
+If home PC is offline, show: "Your home PC is offline. Your companion is running on cached data."
 
-Update `app.json` with:
-- `bundleIdentifier`: "com.valhalla.companion"
-- `version`: "1.0.0"
-- `buildNumber`: "1"
+This creates the "bridge to desktop" that Valkyrie identified as missing.
 
-### Task 5 — Update Tab Navigation
-With adventures added, the tab bar may need adjustment. Options:
-- Add a 5th "⚔️ Quest" tab
-- Or keep 4 tabs and put adventures as a prominent button in the Care tab
+### Task 6 — Proactive Guardian
+On chat tab open, call `GET /api/v1/companion/guardian/check-in`:
 
-Use your UX judgment. If 5 tabs fit cleanly, add the tab. If it feels crowded, integrate into Care.
+If `proactive_warning: true`:
+1. Show a gentle notification bar at the top of chat: "It's late. Want me to hold messages until morning?"
+2. Two buttons: "Hold Messages" / "I'm Fine"
+3. If "Hold Messages": disable the send button, show a countdown to 7AM, queued messages send in the morning
+4. Subtle animation — don't be alarming, be caring
 
-### Task 6 — Drop Your Gate
+### Task 7 — Drop Your Gate
 Create `sprints/current/gates/gate_freya.md` using write_to_file:
 
 ```markdown
-# Freya Gate — Sprint 4 Frontend Complete
-Sprint 4 tasks completed.
+# Freya Gate — Sprint 5 Frontend Complete
+Sprint 5 tasks completed.
 
 ## Completed
-- [x] Adventures screen (8 encounter types, choices, rewards)
-- [x] Daily gift popup (once per day, species personality)
-- [x] Message guardian integration (warning modal + rewrite suggestion)
-- [x] EAS Build configuration
-- [x] Tab navigation updated
+- [x] Companion mode toggle (Pet ↔ Tool)
+- [x] Translation UI (200 languages, searchable picker)
+- [x] Morning briefing card (6-11AM, dismissible)
+- [x] TeachMe with species personality responses
+- [x] "What's Happening at Home" platform card
+- [x] Proactive guardian (2AM check-in)
 ```
 
 ---
@@ -132,7 +145,8 @@ Sprint 4 tasks completed.
 ---
 
 ## Notes
-- Adventures and daily gifts are the features that create DAILY engagement. Wordle cadence.
-- The guardian is the unique differentiator — "the app that stops you from drunk texting." Make it feel like a friend warning you, not a firewall.
-- Build ON TOP of Sprint 3 code. Don't rewrite.
-- Read the dashboard components before building — they have the data structures and UX patterns.
+- **The mode toggle is the #1 priority.** It unlocks the entire Tool mode persona.
+- Translation, TeachMe, morning briefing, and the platform card all live in Tool mode's "Tools" tab.
+- In Pet mode, these features should still be accessible (via the Chat tab or a secondary menu) — just not prominent.
+- The "What's Happening at Home" card is crucial for Valkyrie's "bridge to desktop" requirement.
+- Build ON TOP of Sprint 4 code. Don't rewrite.

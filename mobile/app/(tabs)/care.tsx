@@ -23,6 +23,7 @@ import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
 import { playSound } from "../../src/sounds";
+import DailyGiftModal from "../../src/DailyGift";
 import type { PetSpecies, WalkEvent } from "../../src/types";
 
 // Mood-reactive avatar images — Sprint 3 (3 expressions per species)
@@ -326,6 +327,20 @@ export default function CareTab() {
                 />
             }
         >
+            {/* Daily Gift — Sprint 4 */}
+            <DailyGiftModal
+                petName={petName}
+                species={species}
+                onCollect={(gift) => {
+                    if (gift.happinessBoost) {
+                        updateCompanionLocal((prev: any) => ({
+                            ...prev,
+                            happiness: Math.min(100, prev.happiness + gift.happinessBoost),
+                        }));
+                    }
+                }}
+            />
+
             {/* Header */}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>{petName}'s Status</Text>

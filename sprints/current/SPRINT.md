@@ -1,45 +1,51 @@
-# Sprint 4 — Mobile Companion: Feature Parity + App Store Submission
+# Sprint 5 — The Mode Split: Pet vs Tool + Platform Bridge
 
-**Goal:** Port the highest-impact desktop features to mobile and submit to the App Store.
+**Goal:** Make the companion serve two personas — the user who wants a Tamagotchi and the user who wants a private AI utility. Add translation, morning briefings, proactive guardian, and surface what the home PC is doing.
 
-**Input:**
-- `sprints/archive/sprint_03/gates/audit_heimdall.md` + `review_valkyrie.md`
-- `FEATURE_INVENTORY.md` — **READ THIS** to understand EVERYTHING the platform already has
+**Valkyrie's thesis:** *"The app creates attachment but doesn't yet create a bridge to the broader platform."*
 
-> [!IMPORTANT]
-> The desktop platform has features the mobile app doesn't surface yet.
-> This sprint brings the top 3 engagement drivers to mobile and prepares for App Store submission.
+**Input:** `sprints/archive/sprint_04/gates/review_valkyrie.md` + `audit_heimdall.md`
 
 ---
 
-## Sprint 4 Scope
+## Sprint 5 Scope
 
-### Thor (Backend) — No major backend work needed
-The APIs for adventures, daily gifts, guardian, and teach-me already exist. Thor's job is to ensure mobile compatibility and add any missing mobile-specific endpoints.
+### Thor (Backend)
+- Fix adventure rewards from client body (MEDIUM from Heimdall)
+- Add `/mobile/unregister-push` endpoint (LOW carried from Sprint 3)
+- Surface "home PC activity" in sync response (dream cycles, memory count, uptime)
+- Server-side encounter storage for adventure rewards
+- Proactive guardian: time-aware greeting when user opens chat late at night
 
-### Freya (Frontend) — Port 3 killer features + App Store packaging
-- Adventures (8 encounter types — the RPG hook)
-- Daily Gifts (daily check-in mechanic — the Wordle cadence)
-- Message Guardian integration (the "stops you from drunk texting" feature)
-- App Store build configuration
+### Freya (Frontend)
+- **Companion Mode Toggle** — Pet mode (quests/feeding/gamification) vs Tool mode (guardian/translate/tasks)
+- **Translation UI** — 200-language translator (backend: `nllb.py`)
+- **Morning Briefing** — push notification + in-app card for daily updates
+- **TeachMe** — teach companion facts, personality deepens
+- **"What's Happening at Home" card** — show platform activity on Care tab
+- **Proactive guardian** — time-aware opening message at 2AM
 
 ### Heimdall — Same strict rules
 - 🔴 HIGH → automatic FAIL
 - 🟡 MEDIUM → PASS with notes
 - 🟢 LOW → informational
 
-### Valkyrie — MUST READ `FEATURE_INVENTORY.md`
-- Review with full platform knowledge
-- Assess mobile feature coverage vs desktop
-- Final App Store go/no-go decision
-- Prioritize remaining desktop→mobile feature gaps for future sprints
+### Valkyrie — Full platform review
+- **MUST READ:** `FEATURE_INVENTORY.md`
+- Assess mode toggle UX (does it feel natural, not confusing?)
+- Does "Tool mode" feel useful enough to stand alone?
+- Does the platform bridge create curiosity about the desktop?
+- Remaining gaps for App Store submission
 
 ---
 
 ## Definition of Done
 
-- [ ] Adventures work on mobile (encounter → choices → rewards)
-- [ ] Daily gifts appear once per day with species personality
-- [ ] Message guardian warns before sending risky messages
-- [ ] App Store build configuration complete (EAS Build)
+- [ ] Mode toggle exists and works (Pet ↔ Tool)
+- [ ] Translation UI works (select language, translate text)
+- [ ] Morning briefing appears as push + in-app card
+- [ ] TeachMe works on mobile
+- [ ] "What's Happening at Home" card shows platform activity
+- [ ] Proactive guardian greets appropriately at 2AM
+- [ ] Adventure rewards fixed (server-side lookup)
 - [ ] All gates dropped

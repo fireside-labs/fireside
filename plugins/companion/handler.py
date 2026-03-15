@@ -256,6 +256,14 @@ def register_routes(app, config: dict) -> None:
         except Exception:
             pending_tasks = []
 
+        # Sprint 4 Task 2: Check daily gift availability
+        last_gift_ts = state.get("last_daily_gift", 0)
+        daily_gift_available = (_time.time() - last_gift_ts) > 86400  # 24h
+
+        # Sprint 4 Task 1: Adventure availability (simple cooldown check)
+        last_adventure_ts = state.get("last_adventure", 0)
+        adventure_available = (_time.time() - last_adventure_ts) > 3600  # 1h cooldown
+
         return {
             "ok": True,
             "adopted": True,
@@ -264,6 +272,17 @@ def register_routes(app, config: dict) -> None:
             "mood_prefix": get_mood_prefix(state),
             "pending_tasks": pending_tasks,
             "synced_at": _time.time(),
+            # Sprint 4 Task 4: Feature flags for mobile
+            "features": {
+                "adventures": True,
+                "daily_gift": True,
+                "guardian": True,
+                "teach_me": True,
+                "translation": True,
+                "morning_briefing": True,
+            },
+            "daily_gift_available": daily_gift_available,
+            "adventure_available": adventure_available,
         }
 
     @router.post("/api/v1/companion/mobile/pair")
@@ -507,5 +526,325 @@ def register_routes(app, config: dict) -> None:
         fired = await check_and_notify(state)
         return {"ok": True, "fired": fired}
 
+    # --- Sprint 4: Adventure endpoints (Task 1) ---
+
+    @router.post("/api/v1/companion/adventure/generate")
+    async def api_adventure_generate():
+        """Generate a random adventure encounter.
+
+        Returns an encounter with intro, choices, and loot table.
+        Server-authoritative — rewards are signed.
+        """
+        import random
+        import time as _time
+        from plugins.companion.sim import load_state, save_state
+        from plugins.companion.adventure_guard import (
+            VALID_ENCOUNTER_TYPES, sign_adventure_result,
+        )
+
+        state = load_state()
+        if not state:
+            raise HTTPException(404, "No companion adopted yet.")
+
+        # 1-hour cooldown
+        last_adv = state.get("last_adventure", 0)
+        if _time.time() - last_adv < 3600:
+            remaining = int(3600 - (_time.time() - last_adv))
+            raise HTTPException(429, f"Adventure cooldown: {remaining}s remaining.")
+
+        species = state.get("species", "cat")
+        enc_type = random.choice(list(VALID_ENCOUNTER_TYPES))
+
+        # Generate encounter based on type
+        encounter = _generate_encounter(enc_type, species, state.get("name", "Companion"))
+
+        # Mark adventure started
+        state["last_adventure"] = _time.time()
+        save_state(state)
+
+        return {"ok": True, "encounter": encounter}
+
+    def _generate_encounter(enc_type: str, species: str, name: str) -> dict:
+        """Build a random encounter based on type."""
+        import random
+        import time as _time
+
+        encounters = {
+            "riddle": {
+                "type": "riddle",
+                "intro": f"{name} found a mysterious stone tablet! A riddle is carved into it...",
+                "riddle": random.choice([
+                    "I have cities, but no houses. Forests, but no trees. Water, but no fish. What am I?",
+                    "The more you take, the more you leave behind. What am I?",
+                    "I speak without a mouth and hear without ears. I have no body, but I am alive with the wind.",
+                ]),
+                "accept_answers": random.choice([["map", "a map"], ["footsteps", "steps"], ["echo", "an echo"]]),
+                "reward": {"xp": 15, "happiness": 10},
+                "choices": [
+                    {"text": "Try to solve it", "reward": {"xp": 15, "happiness": 10}},
+                    {"text": "Walk away", "reward": {"xp": 2, "happiness": 0}},
+                ],
+            },
+            "treasure": {
+                "type": "treasure",
+                "intro": f"{name} spotted something shiny buried under a rock!",
+                "loot_table": [
+                    {"item": "golden_coin", "chance": 0.4, "emoji": "🪙"},
+                    {"item": "crystal_shard", "chance": 0.3, "emoji": "💎"},
+                    {"item": "ancient_scroll", "chance": 0.2, "emoji": "📜"},
+                    {"item": "dragon_scale", "chance": 0.1, "emoji": "🐉"},
+                ],
+                "reward": {"xp": 10, "happiness": 15},
+                "choices": [
+                    {"text": "Dig it up!", "reward": {"xp": 10, "happiness": 15}},
+                    {"text": "Leave it for another day", "reward": {"xp": 2, "happiness": 0}},
+                ],
+            },
+            "merchant": {
+                "type": "merchant",
+                "intro": f"A wandering merchant appears! '{name}, I have wares if you have coin...'",
+                "choices": [
+                    {"text": "Browse wares", "reward": {"xp": 5, "happiness": 8}},
+                    {"text": "Haggle for a deal", "reward": {"xp": 12, "happiness": 5}},
+                    {"text": "Keep walking", "reward": {"xp": 2, "happiness": 0}},
+                ],
+                "reward": {"xp": 8, "happiness": 5},
+            },
+            "forage": {
+                "type": "forage",
+                "intro": f"{name} found a patch of interesting plants!",
+                "finds": [
+                    {"item": "healing_herb", "chance": 0.5, "emoji": "🌿"},
+                    {"item": "glowing_mushroom", "chance": 0.3, "emoji": "🍄"},
+                    {"item": "rare_flower", "chance": 0.2, "emoji": "🌸"},
+                ],
+                "reward": {"xp": 8, "happiness": 10},
+                "choices": [
+                    {"text": "Gather everything", "reward": {"xp": 8, "happiness": 10}},
+                    {"text": "Pick carefully", "reward": {"xp": 5, "happiness": 12}},
+                ],
+            },
+            "lost_pet": {
+                "type": "lost_pet",
+                "intro": f"{name} heard a small cry from behind a bush. A lost baby animal!",
+                "choices": [
+                    {"text": "Help it find home", "reward": {"xp": 20, "happiness": 20}},
+                    {"text": "Leave food nearby", "reward": {"xp": 10, "happiness": 10}},
+                    {"text": "Let nature take its course", "reward": {"xp": 2, "happiness": -5}},
+                ],
+                "reward": {"xp": 15, "happiness": 15},
+            },
+            "weather": {
+                "type": "weather",
+                "intro": random.choice([
+                    f"A sudden rainbow appeared! {name} is mesmerized.",
+                    f"It started snowing softly. {name} tries to catch flakes.",
+                    f"A warm breeze carries cherry blossoms past {name}.",
+                ]),
+                "choices": [
+                    {"text": "Enjoy the moment", "reward": {"xp": 5, "happiness": 15}},
+                    {"text": "Take a photo (mentally)", "reward": {"xp": 8, "happiness": 10}},
+                ],
+                "reward": {"xp": 5, "happiness": 12},
+            },
+            "storyteller": {
+                "type": "storyteller",
+                "intro": f"An old traveler sits by the path. 'Sit, {name}. Let me tell you a tale...'",
+                "choices": [
+                    {"text": "Listen to the story", "reward": {"xp": 15, "happiness": 10}},
+                    {"text": "Tell your own story", "reward": {"xp": 10, "happiness": 12}},
+                    {"text": "Politely decline", "reward": {"xp": 3, "happiness": 0}},
+                ],
+                "reward": {"xp": 12, "happiness": 10},
+            },
+            "challenge": {
+                "type": "challenge",
+                "intro": f"A rival {species} appears! They want to see who's tougher.",
+                "choices": [
+                    {"text": "Accept the challenge!", "reward": {"xp": 20, "happiness": 5}},
+                    {"text": "Offer friendship instead", "reward": {"xp": 10, "happiness": 20}},
+                    {"text": "Run away", "reward": {"xp": 5, "happiness": -3}},
+                ],
+                "reward": {"xp": 15, "happiness": 8},
+            },
+        }
+
+        encounter = encounters.get(enc_type, encounters["weather"])
+        encounter["generated_at"] = _time.time()
+        return encounter
+
+    @router.post("/api/v1/companion/adventure/choose")
+    async def api_adventure_choose(request: Request):
+        """Submit a choice for an adventure and receive rewards.
+
+        Body: { "encounter_type": "riddle", "choice_index": 0 }
+        Returns: rewards applied, signed result.
+        """
+        import time as _time
+        from plugins.companion.sim import load_state, save_state
+        from plugins.companion.adventure_guard import sign_adventure_result
+
+        state = load_state()
+        if not state:
+            raise HTTPException(404, "No companion adopted yet.")
+
+        body = await request.json()
+        enc_type = body.get("encounter_type", "")
+        choice_idx = body.get("choice_index", 0)
+        choice_rewards = body.get("rewards", {})
+
+        # Default rewards if not provided
+        xp = choice_rewards.get("xp", 5)
+        happiness = choice_rewards.get("happiness", 5)
+
+        # Apply rewards
+        state["happiness"] = min(100, state.get("happiness", 50) + happiness)
+        xp_before = state.get("xp", 0)
+        state["xp"] = xp_before + xp
+
+        # Check level up
+        level = state.get("level", 1)
+        xp_needed = level * 100
+        leveled_up = False
+        if state["xp"] >= xp_needed:
+            state["level"] = level + 1
+            state["xp"] -= xp_needed
+            leveled_up = True
+
+        save_state(state)
+
+        # Sign the result
+        timestamp = _time.time()
+        rewards = {"xp": xp, "happiness": happiness}
+        signature = sign_adventure_result(enc_type, choice_idx, rewards, timestamp)
+
+        return {
+            "ok": True,
+            "rewards": rewards,
+            "leveled_up": leveled_up,
+            "new_level": state.get("level", 1),
+            "signature": signature,
+            "timestamp": timestamp,
+        }
+
+    # --- Sprint 4: Daily Gift endpoints (Task 2) ---
+
+    @router.get("/api/v1/companion/daily-gift")
+    async def api_daily_gift_check():
+        """Check if daily gift is available.
+
+        Returns today's gift (species-specific) or null if already claimed.
+        """
+        import random
+        import time as _time
+        from plugins.companion.sim import load_state
+
+        state = load_state()
+        if not state:
+            raise HTTPException(404, "No companion adopted yet.")
+
+        last_gift = state.get("last_daily_gift", 0)
+        if (_time.time() - last_gift) < 86400:
+            return {
+                "ok": True,
+                "available": False,
+                "next_gift_in": int(86400 - (_time.time() - last_gift)),
+                "message": "You already claimed your daily gift! Come back tomorrow.",
+            }
+
+        species = state.get("species", "cat")
+        gift = _generate_daily_gift(species, state.get("name", "Companion"))
+
+        return {
+            "ok": True,
+            "available": True,
+            "gift": gift,
+        }
+
+    def _generate_daily_gift(species: str, name: str) -> dict:
+        """Create a species-specific daily gift."""
+        import random
+
+        gifts = {
+            "cat": [
+                {"type": "poem", "content": f"{name} wrote you a haiku:\nSunbeam on the floor\nI chase it with no regrets\nNap time comes again", "emoji": "📝"},
+                {"type": "item", "item": "lucky_whisker", "content": f"{name} found a lucky whisker for you!", "emoji": "🐱"},
+                {"type": "fact", "content": f"{name} learned that cats can rotate their ears 180 degrees!", "emoji": "🧠"},
+                {"type": "compliment", "content": f"{name} thinks you're the best human ever!", "emoji": "💕"},
+            ],
+            "dog": [
+                {"type": "item", "item": "golden_bone", "content": f"{name} dug up something special!", "emoji": "🦴"},
+                {"type": "poem", "content": f"{name} barks a song:\nTail wagging so fast\nEvery walk is an adventure\nYou are my best friend", "emoji": "📝"},
+                {"type": "compliment", "content": f"{name} would fetch you the moon if they could!", "emoji": "💕"},
+            ],
+            "penguin": [
+                {"type": "item", "item": "smooth_pebble", "content": f"{name} found the smoothest pebble for you!", "emoji": "🪨"},
+                {"type": "fact", "content": f"{name} learned that penguins propose with pebbles!", "emoji": "🧠"},
+                {"type": "advice", "content": f"{name} says: 'Waddle with purpose, even when you don't know where you're going.'", "emoji": "🐧"},
+            ],
+            "fox": [
+                {"type": "item", "item": "forest_gem", "content": f"{name} found a gem hidden under autumn leaves!", "emoji": "💎"},
+                {"type": "fact", "content": f"{name} learned that foxes use the Earth's magnetic field to hunt!", "emoji": "🧠"},
+                {"type": "compliment", "content": f"{name} thinks you're as clever as a fox!", "emoji": "🦊"},
+            ],
+            "owl": [
+                {"type": "item", "item": "wisdom_feather", "content": f"{name} dropped a feather of wisdom!", "emoji": "🪶"},
+                {"type": "fact", "content": f"{name} counted exactly 147 stars last night.", "emoji": "🧠"},
+                {"type": "advice", "content": f"{name} says: 'Knowledge is the one treasure that grows when shared.'", "emoji": "🦉"},
+            ],
+            "dragon": [
+                {"type": "item", "item": "ember_crystal", "content": f"{name} breathed fire and crystallized something for you!", "emoji": "🔥"},
+                {"type": "poem", "content": f"{name} roars a verse:\nScales of ancient gold\nFire burns but never consumes\nI warm your cold days", "emoji": "📝"},
+                {"type": "compliment", "content": f"{name} says: 'Even dragons need a hero. You're mine.'", "emoji": "🐉"},
+            ],
+        }
+
+        species_gifts = gifts.get(species, gifts["cat"])
+        return random.choice(species_gifts)
+
+    @router.post("/api/v1/companion/daily-gift/claim")
+    async def api_daily_gift_claim():
+        """Claim the daily gift. Applies rewards."""
+        import time as _time
+        from plugins.companion.sim import load_state, save_state
+
+        state = load_state()
+        if not state:
+            raise HTTPException(404, "No companion adopted yet.")
+
+        last_gift = state.get("last_daily_gift", 0)
+        if (_time.time() - last_gift) < 86400:
+            raise HTTPException(400, "Daily gift already claimed. Come back tomorrow!")
+
+        species = state.get("species", "cat")
+        gift = _generate_daily_gift(species, state.get("name", "Companion"))
+
+        # Apply gift rewards
+        state["last_daily_gift"] = _time.time()
+        state["happiness"] = min(100, state.get("happiness", 50) + 10)
+        state["xp"] = state.get("xp", 0) + 5
+
+        # Add item to inventory if it's an item gift
+        if gift.get("type") == "item" and gift.get("item"):
+            inventory = state.get("inventory", [])
+            # Check if already has this item
+            found = False
+            for slot in inventory:
+                if slot.get("item") == gift["item"]:
+                    slot["count"] = slot.get("count", 1) + 1
+                    found = True
+                    break
+            if not found and len(inventory) < 20:
+                inventory.append({"item": gift["item"], "count": 1, "emoji": gift.get("emoji", "🎁")})
+            state["inventory"] = inventory
+
+        save_state(state)
+
+        return {
+            "ok": True,
+            "gift": gift,
+            "rewards": {"happiness": 10, "xp": 5},
+        }
+
     app.include_router(router)
-    log.info("[companion] Plugin loaded (with translation + guardian + mobile + chat + push).")
+    log.info("[companion] Plugin loaded (with translation + guardian + mobile + chat + push + adventures + gifts).")

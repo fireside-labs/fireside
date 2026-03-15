@@ -126,6 +126,19 @@ export const companionAPI = {
             method: "POST",
             body: JSON.stringify({ token }),
         }),
+
+    /** Check message through guardian before sending (Sprint 4). */
+    guardian: (message: string, timeOfDay?: string) =>
+        apiFetch<{ safe: boolean; reason?: string; suggestedRewrite?: string; sentiment?: string }>(
+            "/api/v1/companion/guardian",
+            { method: "POST", body: JSON.stringify({ message, time_of_day: timeOfDay }) }
+        ),
+
+    /** Get daily gift (Sprint 4). */
+    dailyGift: () =>
+        apiFetch<{ available: boolean; gift?: { text: string; type: string; emoji: string; item?: string; happinessBoost?: number } }>(
+            "/api/v1/companion/daily-gift"
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

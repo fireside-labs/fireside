@@ -1,7 +1,7 @@
 /**
- * Tab layout — Bottom tab navigator with 4 tabs.
+ * Tab layout — Bottom tab navigator with 5 tabs.
  *
- * 💬 Chat | 🐾 Care | 🎒 Bag | 📋 Tasks
+ * 💬 Chat | 🐾 Care | 🎒 Bag | 📋 Tasks | ⚔️ Quest
  */
 import { Tabs } from "expo-router";
 import { View, Text, StyleSheet } from "react-native";
@@ -51,6 +51,15 @@ export default function TabsLayout() {
                     title: "Tasks",
                     tabBarIcon: ({ focused }) => (
                         <Text style={[styles.icon, focused && styles.iconActive]}>📋</Text>
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="quest"
+                options={{
+                    title: "Quest",
+                    tabBarIcon: ({ focused }) => (
+                        <Text style={[styles.icon, focused && styles.iconActive]}>⚔️</Text>
                     ),
                 }}
             />

@@ -1,9 +1,9 @@
 /**
  * 💬 Chat Tab — Talk to your companion.
  *
- * Sprint 2 additions:
- * - Chat history persistence via AsyncStorage (Valkyrie #5)
- * - Haptic feedback on send (Valkyrie #3)
+ * Sprint 2: Chat history persistence, haptic feedback.
+ * Sprint 3: Sound effects.
+ * Sprint 4: Message guardian integration.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -22,6 +22,7 @@ import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize } from "../../src/theme";
 import { playSound } from "../../src/sounds";
+import GuardianModal from "../../src/GuardianModal";
 import type { Message, PetSpecies } from "../../src/types";
 
 const CHAT_HISTORY_KEY = "valhalla_chat_history";
@@ -120,13 +121,12 @@ export default function ChatTab() {
         }
     }, [messages, historyLoaded]);
 
-    const handleSend = useCallback(async () => {
-        const text = input.trim();
-        if (!text || typing) return;
+    // Guardian state — Sprint 4
+    const [guardianVisible, setGuardianVisible] = useState(false);
+    const [guardianResult, setGuardianResult] = useState<{ safe: boolean; reason?: string; suggestedRewrite?: string; sentiment?: string }>({ safe: true });
+    const [pendingMessage, setPendingMessage] = useState("");
 
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        playSound("send");
-
+    const actualSend = useCallback(async (text: string) => {
         setMessages((prev) => [...prev, { role: "user", content: text }]);
         setInput("");
         setTyping(true);
@@ -147,7 +147,49 @@ export default function ChatTab() {
         }
 
         setTyping(false);
-    }, [input, typing, isOnline, species, queueAction]);
+    }, [isOnline, species, queueAction]);
+
+    const handleSend = useCallback(async () => {
+        const text = input.trim();
+        if (!text || typing) return;
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        playSound("send");
+
+        // Guardian check — Sprint 4: intercept before sending
+        if (isOnline) {
+            try {
+                const hour = new Date().getHours();
+                const timeOfDay = hour < 6 ? "late_night" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+                const result = await companionAPI.guardian(text, timeOfDay);
+                if (!result.safe) {
+                    setPendingMessage(text);
+                    setGuardianResult(result);
+                    setGuardianVisible(true);
+                    return;
+                }
+            } catch {
+                // Guardian offline — send normally
+            }
+        }
+
+        await actualSend(text);
+    }, [input, typing, isOnline, actualSend]);
+
+    const handleGuardianSendAnyway = useCallback(async () => {
+        setGuardianVisible(false);
+        await actualSend(pendingMessage);
+    }, [pendingMessage, actualSend]);
+
+    const handleGuardianUseRewrite = useCallback(async (rewrite: string) => {
+        setGuardianVisible(false);
+        await actualSend(rewrite);
+    }, [actualSend]);
+
+    const handleGuardianCancel = useCallback(() => {
+        setGuardianVisible(false);
+        setInput(pendingMessage);
+    }, [pendingMessage]);
 
     const renderMessage = ({ item }: { item: Message }) => {
         const isUser = item.role === "user";
@@ -226,6 +268,18 @@ export default function ChatTab() {
                     <Text style={styles.sendText}>{typing ? "⏳" : "Send"}</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Guardian Modal — Sprint 4 */}
+            <GuardianModal
+                visible={guardianVisible}
+                species={species}
+                petName={petName}
+                originalMessage={pendingMessage}
+                guardianResult={guardianResult}
+                onSendAnyway={handleGuardianSendAnyway}
+                onUseRewrite={handleGuardianUseRewrite}
+                onCancel={handleGuardianCancel}
+            />
         </KeyboardAvoidingView>
     );
 }

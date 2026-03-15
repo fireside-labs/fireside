@@ -230,11 +230,11 @@ class TestRegressionChecks(unittest.TestCase):
         self.assertIn('"mobile_ready"', src)
 
     def test_chat_history_still_present(self):
-        src = (REPO_ROOT / "plugins" / "companion" / "handler.py").read_text()
+        src = (REPO_ROOT / "plugins" / "companion" / "handler.py").read_text(encoding="utf-8")
         self.assertIn("/api/v1/companion/chat/history", src)
 
     def test_ip_validation_still_present(self):
-        src = (REPO_ROOT / "plugins" / "companion" / "handler.py").read_text()
+        src = (REPO_ROOT / "plugins" / "companion" / "handler.py").read_text(encoding="utf-8")
         self.assertIn("/api/v1/companion/mobile/validate-host", src)
 
 

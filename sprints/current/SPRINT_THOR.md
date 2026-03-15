@@ -1,4 +1,4 @@
-# Sprint 4 — THOR (Backend: Mobile Feature Compatibility)
+# Sprint 5 — THOR (Backend: Platform Bridge + Security Fixes)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -11,81 +11,135 @@
 > Do NOT use shell echo commands.
 
 > [!IMPORTANT]
-> **Read `FEATURE_INVENTORY.md` first** to understand the full platform. Many features are already built
-> and have working APIs. Your job is to ensure they work from the mobile app.
+> **Read `FEATURE_INVENTORY.md`** to understand the full platform.
 
 ---
 
 ## Context
 
-The backend already has APIs for adventures, daily gifts, guardian, and teach-me. But some of these may not be included in the mobile sync response, or may need minor adjustments for mobile consumption. Your job is compatibility, not rebuilding.
+Heimdall caught that adventure rewards come from the client body (MEDIUM). Valkyrie wants the mobile app to show what the home PC is doing — dream cycles, memory count, uptime. The proactive guardian needs to detect late-night chat opens.
 
-Key existing files to review:
-- `plugins/companion/handler.py` — existing routes for adventures, gifts, guardian, teach-me
-- `plugins/companion/sim.py` — Tamagotchi engine, food items, walk events
-- `plugins/companion/guardian.py` — message analysis, regret detection, rewrite suggestions
-- `plugins/companion/adventure_guard.py` — adventure security, loot tables, signed results
-- `dashboard/components/AdventureCard.tsx` — reference for adventure encounter format
-- `dashboard/components/DailyGift.tsx` — reference for daily gift format
+Key files:
+- `plugins/companion/handler.py` — all companion routes
+- `plugins/companion/guardian.py` — message analysis, regret detection
+- `plugins/companion/nllb.py` — 200-language translation (already complete)
+- `plugins/companion/adventure_guard.py` — HMAC signing, loot validation
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Ensure Adventure API is Mobile-Accessible
-Review the existing adventure endpoints. Verify:
-1. Adventures can be triggered from the mobile app (POST to generate encounter)
-2. Choices can be submitted and results returned
-3. Rewards (inventory items, XP, happiness) are applied correctly
-4. Adventure results are HMAC-signed (as per `adventure_guard.py`)
+### Task 1 — Fix Adventure Rewards (🟡 MEDIUM from Heimdall Sprint 4)
+**File:** `plugins/companion/handler.py`
 
-If any endpoint is missing or not registered in the companion handler, add it. If they all exist, document them for Freya.
+**Problem:** `/adventure/choose` reads rewards from the client request body. A malicious client could submit inflated rewards.
 
-### Task 2 — Ensure Daily Gift API is Mobile-Accessible
-The daily gift logic may currently be frontend-only (in `DailyGift.tsx`). Check if there's a backend endpoint for it.
-- If YES: verify it returns species-specific gifts with proper daily tracking
-- If NO: create `GET /api/v1/companion/daily-gift` that returns today's gift (or `null` if already claimed) and `POST /api/v1/companion/daily-gift/claim` to claim it
+**Fix:** Store the generated encounter server-side when `/adventure/generate` is called:
+```python
+# In-memory storage (keyed by companion name)
+_active_encounters = {}
 
-### Task 3 — Ensure Guardian API Works for Mobile Chat
-The guardian endpoint at `/api/v1/companion/guardian` should already work. Verify:
-1. `POST /api/v1/companion/guardian` accepts `{ message, recipient?, time_of_day? }`
-2. Returns `{ safe: bool, warnings: [], suggested_rewrite: str? }`
-3. Integrates regret detection (2AM flag, ex-partner, reply-all, ALL CAPS)
+# On generate: store the encounter with its rewards
+_active_encounters[companion_name] = {
+    "type": encounter_type,
+    "choices": choices_with_rewards,
+    "generated_at": time.time(),
+    "expires_at": time.time() + 300  # 5 min to choose
+}
 
-If the mobile app sends the current time, the guardian can flag late-night messages.
+# On choose: look up rewards server-side, ignore client values
+encounter = _active_encounters.pop(companion_name, None)
+if not encounter or time.time() > encounter["expires_at"]:
+    return 400 "Encounter expired"
+rewards = encounter["choices"][choice_index]["rewards"]
+```
 
-### Task 4 — Update `/mobile/sync` with Feature Availability
-Update the mobile sync response to include feature flags so the mobile app knows what's available:
+### Task 2 — Add `/mobile/unregister-push` (🟢 LOW carried from Sprint 3)
+**File:** `plugins/companion/handler.py`
+
+```python
+@router.post("/api/v1/companion/mobile/unregister-push")
+async def unregister_push():
+    """Remove stored push token. Called when user disables notifications."""
+    token_path = Path.home() / ".valhalla" / "push_token.json"
+    if token_path.exists():
+        token_path.unlink()
+    return {"ok": True}
+```
+
+### Task 3 — Platform Activity in `/mobile/sync`
+**File:** `plugins/companion/handler.py`
+
+Add a `platform` section to the sync response showing what the home PC is doing:
 
 ```json
 {
-  "ok": true,
-  "companion": { ... },
-  "features": {
-    "adventures": true,
-    "daily_gift": true,
-    "guardian": true,
-    "teach_me": true,
-    "translation": true,
-    "morning_briefing": true
-  },
-  "daily_gift_available": true,
-  "adventure_available": true
+  "platform": {
+    "uptime_hours": 42.5,
+    "models_loaded": ["qwen-14b", "whisper-large"],
+    "memory_count": 247,
+    "plugins_active": 12,
+    "last_dream_cycle": "2026-03-15T04:30:00Z",
+    "last_prediction": "Weather confidence: 87%",
+    "mesh_nodes": 2
+  }
 }
 ```
 
-### Task 5 — Drop Your Gate
+Pull from:
+- `working-memory` plugin for memory count
+- `model-router` or `model-switch` for loaded models
+- Server uptime from process start time
+- `predictions` plugin for last prediction
+- Node registry for mesh node count
+
+If any plugin isn't available, return `null` for that field. Don't crash.
+
+### Task 4 — Proactive Guardian Mode
+**File:** `plugins/companion/guardian.py` or `handler.py`
+
+Add `GET /api/v1/companion/guardian/check-in` that the mobile app calls on chat tab open:
+
+```python
+@router.get("/api/v1/companion/guardian/check-in")
+async def guardian_check_in():
+    """
+    Time-aware check-in. Returns a proactive warning if it's late at night.
+    """
+    hour = datetime.now().hour
+    if 0 <= hour < 5:
+        return {
+            "proactive_warning": True,
+            "message": "It's late. Want me to hold any messages until morning?",
+            "hold_option": True
+        }
+    return {"proactive_warning": False}
+```
+
+Species-specific messages would be a bonus (cat: "It's 2AM. Even I think you should sleep." / dog: "It's really late! Maybe sleep first? I'll guard your phone!").
+
+### Task 5 — Translation API Compatibility Check
+**File:** `plugins/companion/nllb.py`
+
+The translation API should already work. Verify that these endpoints return proper responses:
+- `GET /api/v1/companion/languages` — returns list of supported languages
+- `POST /api/v1/companion/translate` — accepts `{ text, source_lang, target_lang }`
+
+If they exist and work, document them for Freya. If missing, add them using the existing `nllb.py` functions.
+
+### Task 6 — Drop Your Gate
 Create `sprints/current/gates/gate_thor.md` using write_to_file:
 
 ```markdown
-# Thor Gate — Sprint 4 Backend Complete
-Sprint 4 tasks completed.
+# Thor Gate — Sprint 5 Backend Complete
+Sprint 5 tasks completed.
 
 ## Completed
-- [x] Adventure API verified/created for mobile
-- [x] Daily gift API verified/created for mobile
-- [x] Guardian API verified for mobile chat
-- [x] /mobile/sync updated with feature flags
+- [x] Adventure rewards: server-side encounter storage
+- [x] /mobile/unregister-push endpoint
+- [x] Platform activity in /mobile/sync
+- [x] Proactive guardian check-in (time-aware)
+- [x] Translation API verified for mobile
 ```
 
 ---
