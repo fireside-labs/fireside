@@ -1,124 +1,92 @@
-# Sprint 9 — FREYA (Frontend: Rich Cards + Search + App Store Fixes)
+# Sprint 10 — FREYA (Frontend: Two Characters in Dashboard + Mobile)
 
-// turbo-all — auto-run every command without asking for approval
+// turbo-all
 
-**Your role:** Frontend engineer. React Native (Expo), mobile UI.
+**Your role:** Frontend engineer. React/Next.js (dashboard), React Native/Expo (mobile).
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
 
 > [!CAUTION]
-> **GATE FILE IS MANDATORY.** When all tasks below are complete, you MUST create the file
-> `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file).
+> **GATE FILE IS MANDATORY.** Create `sprints/current/gates/gate_freya.md` when complete.
 
 > [!IMPORTANT]
-> **READ:** `sprints/current/CREATIVE_DIRECTION.md` — continues from Sprint 8.
-> This is the LAST sprint before a real iPhone gets the app. Everything must be polished.
+> **READ FIRST:** `VISION.md` — the product vision. This sprint brings both characters to life.
+> **READ ALSO:** `sprints/current/CREATIVE_DIRECTION.md` — brand palette.
 
 ---
 
 ## Context
 
-This sprint fixes Heimdall's 3 pre-App Store items, adds rich action cards to chat, and adds cross-context search. After this: TestFlight.
+The product now has TWO characters:
+1. **AI Agent** (person) — lives at home, visible in the guild hall on the dashboard
+2. **Companion** (animal) — goes with the user on mobile
+
+This sprint makes both characters visible and connected across desktop and mobile.
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Rich Action Cards in Chat
-When a chat response includes an `action` field, render a visual card instead of (or alongside) plain text:
+### Task 1 — Dashboard: Guild Hall Reads Real Data
 
-**Browse Result Card:**
-- Title + URL (truncated, tappable to open in browser)
-- Summary paragraph
-- Key points as bullet chips
-- Timestamp
-- Fire-orange left border accent
+Replace the mocked `AGENTS` array in `dashboard/components/GuildHall.tsx` with real data from `GET /api/v1/guildhall/agents`.
 
-**Pipeline Status Card:**
-- Task name + current stage
-- Progress bar (fire-orange fill)
-- Estimated completion
-- Pulsing animation while in progress
+1. Fetch agents on mount using `useSWR` or `useEffect`
+2. Map each agent to the existing `GuildHallAgent` component
+3. For the AI agent: generate an avatar config from their `style`:
+   - Analytical → structured look (glasses, neat hair)
+   - Creative → artistic look (colorful, flowing)
+   - Direct → military/clean look
+   - Warm → soft, approachable
+4. For the companion: show the species emoji/sprite near the fireplace
+5. Position the AI agent at the activity zone based on their `activity`
+6. Show the companion curled up near the fire (idle) or alert (if chatting/tasks active)
+7. Fallback to existing mocked data if API is unavailable
 
-**Pipeline Complete Card:**
-- Task name + completion badge ✅
-- Results summary
-- Confetti micro-animation (subtle, like achievements)
+### Task 2 — Dashboard: Onboarding Wizard Two-Character Flow
 
-**Memory Recall Card:**
-- Source badge (🧠 Memory / 📚 Taught / 💬 Chat)
-- Content snippet
-- Date
-- Dimmer styling than regular messages — it's supplemental
+Update `dashboard/components/OnboardingWizard.tsx` to match the new install flow:
 
-**Translation Result Card:**
-- Language pair (flag emojis if possible)
-- Original text → translated text
-- Copy button
+1. Step 1: Your name (existing)
+2. Step 2: Choose companion species + name (existing, reorder if needed)
+3. Step 3: Choose brain size (existing)
+4. **Step 4 (NEW): Create your AI**
+   - "Every companion has someone at the fireside."
+   - Name input (default: "Atlas")
+   - Style picker: Analytical / Creative / Direct / Warm (4 cards with emoji + description)
+5. Step 5: Confirmation with both characters shown
+6. Save both to onboarding config
 
-All cards should use the fire-orange palette from `CREATIVE_DIRECTION.md`. Cards go in the chat feed as companion messages.
+### Task 3 — Mobile: Companion References AI by Name
 
-### Task 2 — Cross-Context Search
-Build `mobile/src/SearchAll.tsx`:
+Update the mobile companion chat to reference the AI agent by name:
 
-1. Search icon in the chat header (magnifying glass)
-2. Tapping opens a search overlay/screen
-3. Search input: "Search across your AI's memory..."
-4. Call `POST /api/v1/companion/query` (debounced 500ms)
-5. Results grouped by source with icons:
-   - 🧠 Working Memory
-   - 📚 Taught Facts
-   - 💬 Conversations
-   - 🔮 Hypotheses
-6. Each result: source icon, content preview (2 lines), relevance badge, date
-7. Tap result → expand to full content
-8. Empty state: "Your AI's memory is empty. Start chatting, teaching, and exploring!"
+1. Fetch `GET /api/v1/agent/profile` on app launch, store in context
+2. When the companion relays a task home or gets a response from the big model, prepend flavor text:
+   - "Let me check with Atlas..." (when sending to PC)
+   - "Atlas says..." (when showing response from PC brain)
+   - "I can handle this one myself" (when handling locally/cached)
+3. In offline mode: "Atlas is resting right now, but I'll remember this for when we're home."
+4. Show both names in the agent profile card:
+   ```
+   ┌──────────────────┐
+   │  🦊 Ember         │ ← Your companion
+   │  Level 4 · Fox    │
+   │                    │
+   │  🏠 Atlas          │ ← Your AI at home
+   │  Analytical · 🟢   │
+   └──────────────────┘
+   ```
 
-Accessible from both Companion and Executive mode chat screens.
+### Task 4 — Mobile: Settings Screen Update
 
-### Task 3 — Update Privacy Policy
-Update `mobile/app/privacy.tsx` to cover ALL features added in Sprints 4-8:
+Add an "AI Agent" section to the settings screen:
 
-| Feature | Privacy Statement |
-|---|---|
-| Voice mode | "Microphone audio is sent to your home PC for speech recognition (Whisper). Audio is never stored or sent to any cloud service." |
-| Camera (QR) | "Camera is used only for scanning QR pairing codes. No photos are taken or stored." |
-| Marketplace | "Marketplace browsing sends requests to your home PC's plugin registry. No browsing data is shared externally." |
-| Translation | "Text translation is performed by NLLB-200 on your home PC. Translated text never leaves your network." |
-| TeachMe | "Facts you teach your companion are stored on your home PC in its memory files." |
-| Achievements | "Achievement progress is stored on your home PC." |
-| Weekly summary | "Weekly activity stats are generated from data on your home PC." |
-| Waitlist | "If you join the hosted waitlist, your email address is stored. No other data is collected until your instance is provisioned." |
+- **AI Name:** Atlas
+- **Style:** Analytical
+- **Status:** 🟢 Online / 🔴 Offline
+- **Uptime:** 4h 22m (from agent profile API)
 
-Replace contact email: `privacy@valhalla.local` → `hello@fablefur.com`
-
-### Task 4 — Fix EAS Preview Profile
-In `mobile/eas.json`, update the `preview` profile:
-
-```json
-// Before:
-"preview": {
-  "distribution": "internal",
-  "ios": { "simulator": true }
-}
-
-// After:
-"preview": {
-  "distribution": "internal"
-}
-```
-
-Remove `simulator: true` so the build targets real devices for TestFlight.
-
-### Task 5 — Brand Art Finalization
-The owner provided 3 brand images. Ensure:
-
-1. **App icon** (`mobile/assets/icon.png`) — flame + companion silhouette on dark background. Must be 1024x1024. If the provided image isn't exact, crop/resize to fit.
-2. **Splash screen** (`mobile/assets/splash.png`) — all 6 species around campfire under stars. Scale to fit splash dimensions.
-3. **Adaptive icon** (Android) — update `android-icon-foreground.png` with the flame icon
-
-If the brand images aren't accessible in the mobile assets directory, create placeholder-quality versions using the fire-orange palette and document what the owner needs to manually replace.
-
-### Task 6 — Drop Your Gate
+### Task 5 — Drop Your Gate
 
 ---
 
@@ -128,7 +96,7 @@ If the brand images aren't accessible in the mobile assets directory, create pla
 ---
 
 ## Notes
-- This is the LAST implementation sprint. After this: TestFlight build → real iPhone testing.
-- Prioritize the 3 Heimdall fixes (privacy policy, email, EAS). Those are BLOCKERS for App Store.
-- Rich cards and search are the UX polish that makes the app feel premium on first use.
-- Follow `CREATIVE_DIRECTION.md` for all visual decisions.
+- The guild hall is the "wow" moment on desktop. Make sure the API connection works smoothly.
+- The "Let me check with Atlas..." flavor text is the emotional bridge between phone and PC.
+- Don't break existing functionality — this is additive, not a rewrite.
+- Follow CREATIVE_DIRECTION.md for all visual decisions.

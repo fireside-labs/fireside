@@ -1,97 +1,177 @@
-# Sprint 9 — THOR (Backend: Rich Actions + Cross-Context Search)
+# Sprint 10 — THOR (Backend: Two-Character System + Install Flow v2)
 
-// turbo-all — auto-run every command without asking for approval
+// turbo-all
 
-**Your role:** Backend engineer. Python, FastAPI.
+**Your role:** Backend engineer. Python, FastAPI, bash.
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
 
 > [!CAUTION]
-> **GATE FILE IS MANDATORY.** When all tasks below are complete, you MUST create the file
-> `sprints/current/gates/gate_thor.md` using your **file creation tool** (write_to_file).
+> **GATE FILE IS MANDATORY.** Create `sprints/current/gates/gate_thor.md` when complete.
+
+> [!IMPORTANT]
+> **READ FIRST:** `VISION.md` — the product vision. This sprint implements the two-character system.
 
 ---
 
 ## Context
 
-This is the final sprint before the app goes on a real iPhone. The backend needs to return richer responses that the mobile app can render as visual cards, and add a cross-context search that lets users search across all the companion's knowledge.
+Currently, the install flow creates ONE character — the companion animal IS the AI. In this sprint, we split this into TWO characters:
+1. **AI Agent** — a person with a name, personality style, and human avatar. Lives at home, runs the guild hall.
+2. **Companion** — the animal (cat/dog/fox/penguin/owl/dragon). Goes with the user on their phone.
+
+The companion relays to the AI agent for hard tasks. The AI agent appears in the guild hall on the dashboard.
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Rich Action Responses
-Currently, when the user sends a message and Odin routes it through browse/pipeline, the response comes back as plain text. Add structured metadata to responses so the mobile app can render rich cards.
+### Task 1 — Update install.sh
 
-Update the `/ask` or `/mobile/sync` response to include an optional `action` field:
+Add Step 4 between brain selection and confirmation. The new flow:
+
+```
+Step 1: "What should we call you?" → name
+Step 2: "Choose a companion" → species + name (EXISTING, keep as-is)
+Step 3: "How powerful should your AI be?" → brain size (EXISTING, keep as-is)
+
+# NEW STEP 4:
+Step 4: "Now, who's running the show at home?"
+
+  "Every companion has someone at the fireside.
+   This is the mind behind [companion_name] — your AI."
+
+  "Give your AI a name:"
+  → [user types name, default: "Atlas"]
+
+  "What's their style?"
+  [1] 🎯 Analytical  — data-driven, precise, sees the patterns
+  [2] 🎨 Creative    — imaginative, lateral thinker, sees the possibilities
+  [3] ⚡ Direct      — no-nonsense, efficient, gets to the point
+  [4] 🌿 Warm        — empathetic, supportive, reads the room
+
+Step 5: Confirmation card (updated):
+  ┌─────────────────────────────┐
+  │  Owner:      Jordan         │
+  │  AI:         Atlas (🎯)     │
+  │  Companion:  🦊 Ember       │
+  │  Brain:      Smart (7B)     │
+  │  Location:   ~/.fireside    │
+  └─────────────────────────────┘
+
+Step 6: "Atlas and Ember are getting ready..."
+  → (existing install + boot)
+```
+
+ASCII art for the AI at the end (after existing pet art):
+```
+  Atlas is at the fireside.    Ember is by their side.
+       🔥                          [pet art]
+```
+
+### Task 2 — Update Config Files
+
+Update `valhalla.yaml` generation to include agent section:
+
+```yaml
+agent:
+  name: "Atlas"
+  style: "analytical"    # analytical / creative / direct / warm
+
+companion:
+  species: fox
+  name: "Ember"
+  owner: "Jordan"
+```
+
+Update `companion_state.json` to include agent reference:
 
 ```json
 {
-  "response": "I found the quarterly report. Here's a summary...",
-  "action": {
-    "type": "browse_result",
-    "title": "Quarterly Report Analysis",
-    "url": "https://example.com/report",
-    "summary": "Revenue up 23%, customer acquisition cost down...",
-    "key_points": ["Revenue: $4.2M (+23%)", "CAC: $45 (-12%)", "Churn: 2.1%"],
-    "timestamp": "2026-03-15T15:00:00Z"
-  }
+  "species": "fox",
+  "name": "Ember",
+  "owner": "Jordan",
+  "agent": {
+    "name": "Atlas",
+    "style": "analytical"
+  },
+  ...existing fields...
 }
 ```
 
-Action types to support:
-- `browse_result` — URL summary with title, summary, key_points
-- `pipeline_status` — task progress with name, stage, percent, estimated_completion
-- `pipeline_complete` — finished multi-stage task with results
-- `memory_recall` — when the companion remembers something relevant (source, content, date)
-- `translation_result` — translation with source_lang, target_lang, original, translated
-
-If no special action is needed (regular chat), omit the `action` field entirely.
-
-### Task 2 — Cross-Context Search
-Create `POST /api/v1/companion/query`:
+Update `onboarding.json` to include agent:
 
 ```json
-// Request:
-{ "query": "marketing strategy" }
-
-// Response:
 {
-  "results": [
+  "onboarded": true,
+  "user_name": "Jordan",
+  "agent": {
+    "name": "Atlas",
+    "style": "analytical"
+  },
+  "companion": {
+    "species": "fox",
+    "name": "Ember"
+  },
+  ...existing...
+}
+```
+
+### Task 3 — Agent Profile API
+
+Create `GET /api/v1/agent/profile`:
+
+```json
+{
+  "name": "Atlas",
+  "style": "analytical",
+  "companion": {
+    "name": "Ember",
+    "species": "fox"
+  },
+  "owner": "Jordan",
+  "uptime": "4h 22m",
+  "plugins_active": 12,
+  "models_loaded": ["qwen-14b"],
+  "current_activity": "idle"
+}
+```
+
+Read from `companion_state.json` + `valhalla.yaml`. Include live data where available.
+
+### Task 4 — Guild Hall Real Data
+
+Update the guild hall API or data to return REAL agent state instead of the mocked `AGENTS` array in `GuildHall.tsx`. Create `GET /api/v1/guildhall/agents`:
+
+```json
+{
+  "agents": [
     {
-      "source": "working_memory",
-      "content": "On March 10, you mentioned wanting to focus on developer marketing...",
-      "relevance": 0.92,
-      "date": "2026-03-10"
+      "name": "Atlas",
+      "type": "ai",
+      "style": "analytical",
+      "activity": "idle",
+      "status": "online",
+      "taskLabel": null
     },
     {
-      "source": "taught_facts",
-      "content": "You taught me: 'Our target market is developers who self-host'",
-      "relevance": 0.85,
-      "date": "2026-03-08"
-    },
-    {
-      "source": "chat_history",
-      "content": "In conversation: 'I think we should focus on Reddit and HN for launch...'",
-      "relevance": 0.73,
-      "date": "2026-03-05"
+      "name": "Ember",
+      "type": "companion",
+      "species": "fox",
+      "activity": "chatting",
+      "status": "online",
+      "taskLabel": "Talking to Jordan"
     }
-  ],
-  "total": 3
+  ]
 }
 ```
 
-Search across:
-1. **Working memory** — the top-10 high-importance memories (`plugins/working-memory/`)
-2. **Taught facts** — everything from TeachMe (companion state)
-3. **Chat history** — search recent conversations
-4. **Hypotheses** — any active beliefs/hypotheses (`plugins/hypotheses/`)
+Activity should reflect actual system state where possible:
+- If a pipeline is running → `"building"` with task label
+- If a browse request is active → `"researching"`
+- If idle → `"idle"` (Valhalla: "Drinking mead")
+- If WebSocket has active connections → companion is `"chatting"`
 
-Use simple keyword matching for MVP. If the LLM is available, use it to rank relevance. Cap at 10 results.
-
-### Task 3 — Update Privacy Policy Contact
-Replace `privacy@valhalla.local` with the real email the owner provides. For now, use `hello@fablefur.com` as placeholder that actually works.
-
-### Task 4 — Drop Your Gate
+### Task 5 — Drop Your Gate
 
 ---
 

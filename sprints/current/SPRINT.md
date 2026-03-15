@@ -1,45 +1,39 @@
-# Sprint 9 — Final Polish: Actions + App Store Fixes + Brand Art
+# Sprint 10 — Two Characters: AI Person + Companion Animal
 
-**Goal:** The LAST sprint before real-device testing. Fix everything Heimdall flagged, add rich action execution through chat, finalize brand art, and prepare for TestFlight.
+**Goal:** Implement the two-character system from VISION.md. Users create an AI person (lives at home, runs the guild hall) AND a companion animal (goes with them on their phone). The install flow, config, dashboard, and mobile app all update to support both characters.
 
-**After this sprint:** Owner installs on iPhone and tests everything end-to-end.
+**Read first:** `VISION.md` — the product bible.
 
 ---
 
-## Sprint 9 Scope
+## Sprint 10 Scope
 
 ### Thor (Backend)
-- Rich task execution: when companion routes to browse/pipeline, return structured results the mobile app can render as cards
-- Cross-context search: `POST /api/v1/companion/query` — search across memories, conversations, taught facts
-- Fix privacy policy contact email (owner provides real email)
+- Update install.sh with Step 4 (create AI person — name, style, avatar)
+- Update config/state to store both AI agent and companion separately
+- API endpoint for AI agent profile (`GET /api/v1/agent/profile`)
+- Guild hall agent data wired to real config (not mocked)
 
 ### Freya (Frontend)
-- Rich task cards in chat: when a task is running (browse, pipeline), show progress cards instead of plain text
-- Cross-context search screen: "What do you know about X?"
-- Update privacy policy to cover voice, camera, marketplace, translation, achievements
-- Replace placeholder email with real email (owner will provide)
-- Fix EAS preview profile: remove `simulator: true`
-- Replace app icon + splash with final brand art (campfire images)
+- Dashboard: guild hall reads real agent config, shows AI person + companion together
+- Dashboard: onboarding wizard updated for two-character flow
+- Mobile: companion references the AI by name ("Let me check with Atlas...")
+- Mobile: agent profile card shows both characters
 
-### Heimdall — Final audit before TestFlight build
-- Verify all 3 pre-App Store items are fixed
-- Full regression: all 207+ tests pass
-- Final sign-off for `eas build`
+### Heimdall — Audit the two-character system
+- No credential leaks in new config
+- Agent profile endpoint security
 
-### Valkyrie — Final pre-build review
-- Everything looks right for a real device?
-- Brand art review: icon + splash look good?
-- App Store listing copy finalized?
+### Valkyrie — UX review
+- Does the two-character narrative make sense to a new user?
+- Is the install flow ordering right?
+- Does the guild hall feel alive with both characters?
 
 ---
 
 ## Definition of Done
-
-- [ ] Rich task cards render in chat for browse/pipeline results
-- [ ] Cross-context search works
-- [ ] Privacy policy updated for all Sprint 4-8 features
-- [ ] Real contact email in privacy policy
-- [ ] EAS preview profile fixed
-- [ ] Brand art (icon + splash) finalized
+- [ ] install.sh has 6 steps (name, companion, brain, AI persona, confirm, launch)
+- [ ] Config stores both `companion` and `agent` sections
+- [ ] Guild hall shows real agent data, not mocks
+- [ ] Companion on mobile references AI by name
 - [ ] All gates dropped
-- [ ] Owner runs `eas build --platform ios --profile preview`
