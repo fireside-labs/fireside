@@ -41,11 +41,17 @@ const NAV_SECTIONS: NavSection[] = [
 export function Sidebar() {
     const pathname = usePathname();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [aiName, setAiName] = useState("My AI");
 
-    // Close sidebar on nav
+    // Close sidebar on nav + load name
     useEffect(() => {
         setMobileOpen(false);
     }, [pathname]);
+
+    useEffect(() => {
+        const name = localStorage.getItem("fireside_user_name");
+        if (name) setAiName(name + "'s AI");
+    }, []);
 
     return (
         <>
@@ -79,7 +85,7 @@ export function Sidebar() {
                 <div className="px-6 py-4 border-b border-[var(--color-glass-border)]">
                     <div className="flex items-center gap-2">
                         <span className="text-sm text-[var(--color-rune-dim)]">Your AI:</span>
-                        <span className="text-sm font-medium text-white">odin</span>
+                        <span className="text-sm font-medium text-white">{aiName}</span>
                         <div className="status-online" />
                         <span className="text-xs text-[var(--color-neon)] ml-auto">Online</span>
                     </div>

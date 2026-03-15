@@ -1,28 +1,43 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import WeeklyCard from "@/components/WeeklyCard";
+import Link from "next/link";
+
+interface CompanionState {
+    species: string;
+    name: string;
+    owner: string;
+    happiness: number;
+    xp: number;
+    level: number;
+    streak: number;
+}
+
+const SPECIES_EMOJI: Record<string, string> = {
+    cat: "🐱", dog: "🐶", penguin: "🐧",
+    fox: "🦊", owl: "🦉", dragon: "🐉",
+};
 
 const SUGGESTED_PROMPTS = [
-    "Summarize my emails from this week",
-    "Help me write a thank-you letter",
-    "What files did I work on yesterday?",
-];
-
-const ACTIVITY = [
-    { icon: "✅", text: "Answered 12 questions" },
-    { icon: "📁", text: "Read 3 files" },
-    { icon: "🧠", text: "Learned 2 new things" },
+    "Take me for a walk",
+    "Remember: I like my coffee black",
+    "Translate 'good morning' to Japanese",
 ];
 
 export default function ChatHomePage() {
     const [message, setMessage] = useState("");
     const [userName, setUserName] = useState("");
+    const [companion, setCompanion] = useState<CompanionState | null>(null);
     const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
 
     useEffect(() => {
         const name = localStorage.getItem("fireside_user_name") || "";
         setUserName(name);
+        // Load companion state
+        try {
+            const stored = localStorage.getItem("fireside_companion");
+            if (stored) setCompanion(JSON.parse(stored));
+        } catch { /* no companion yet */ }
     }, []);
 
     const handleSend = async () => {
@@ -32,7 +47,7 @@ export default function ChatHomePage() {
         setMessage("");
 
         try {
-            const res = await fetch("http://127.0.0.1:8337/api/v1/chat", {
+            const res = await fetch("http://127.0.0.1:8765/api/v1/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: userMessage, stream: false }),
@@ -56,20 +71,48 @@ export default function ChatHomePage() {
         setMessage(prompt);
     };
 
+    const petEmoji = companion ? (SPECIES_EMOJI[companion.species] || "🐾") : "🔥";
+    const happinessLabel = companion
+        ? companion.happiness > 70 ? "Happy" : companion.happiness > 30 ? "Content" : "Needs attention"
+        : null;
+
     return (
         <div className="max-w-2xl mx-auto">
             {/* Greeting */}
-            <div className="text-center mb-8 pt-8">
+            <div className="text-center mb-6 pt-8">
                 <h1 className="text-3xl font-bold text-white mb-2">
                     Hi{userName ? ` ${userName}` : " there"} 👋
                 </h1>
                 <p className="text-[var(--color-rune-dim)]">Your AI is ready. What can I help you with?</p>
             </div>
 
-            {/* Weekly summary */}
-            <div className="mb-6">
-                <WeeklyCard />
-            </div>
+            {/* Companion Widget */}
+            {companion && (
+                <Link href="/companion">
+                    <div className="glass-card p-4 mb-6 flex items-center gap-4 hover:bg-[var(--color-glass-hover)] transition-all cursor-pointer" style={{ borderColor: "var(--color-neon)", borderWidth: 1 }}>
+                        <span className="text-3xl">{petEmoji}</span>
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-white font-semibold text-sm">{companion.name}</span>
+                                <span className="text-[10px] text-[var(--color-rune-dim)]">Lv. {companion.level}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1.5">
+                                <div className="flex-1 h-1.5 rounded-full bg-[var(--color-glass)]">
+                                    <div
+                                        className="h-full rounded-full transition-all"
+                                        style={{
+                                            width: `${companion.happiness}%`,
+                                            background: companion.happiness > 70 ? "var(--color-neon)" : companion.happiness > 30 ? "#f59e0b" : "#ef4444",
+                                        }}
+                                    />
+                                </div>
+                                <span className="text-[10px] text-[var(--color-rune-dim)]">{happinessLabel}</span>
+                            </div>
+                        </div>
+                        <span className="text-[var(--color-rune-dim)] text-xs">→</span>
+                    </div>
+                </Link>
+            )}
 
             {/* Chat messages */}
             {chatHistory.length > 0 && (
@@ -126,18 +169,34 @@ export default function ChatHomePage() {
                 </div>
             )}
 
-            {/* What your AI did today */}
-            <div className="glass-card p-5">
-                <h3 className="text-sm text-[var(--color-rune-dim)] font-semibold mb-4">What your AI did today</h3>
-                <div className="space-y-3">
-                    {ACTIVITY.map((item, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                            <span className="text-lg">{item.icon}</span>
-                            <span className="text-sm text-[var(--color-rune)]">{item.text}</span>
+            {/* Welcome card for fresh installs / status for returning users */}
+            {chatHistory.length === 0 && (
+                <div className="glass-card p-5">
+                    <h3 className="text-sm text-[var(--color-rune-dim)] font-semibold mb-4">
+                        {companion ? `${petEmoji} ${companion.name} is here` : "🔥 Welcome to Fireside"}
+                    </h3>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <span className="text-lg">🧠</span>
+                            <span className="text-sm text-[var(--color-rune)]">
+                                {companion ? "I remember everything we talk about" : "Your AI runs locally — nothing leaves this machine"}
+                            </span>
                         </div>
-                    ))}
+                        <div className="flex items-center gap-3">
+                            <span className="text-lg">🌙</span>
+                            <span className="text-sm text-[var(--color-rune)]">
+                                {companion ? "Tonight I'll dream about what I learned today" : "I learn while you sleep and get smarter every morning"}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-lg">💬</span>
+                            <span className="text-sm text-[var(--color-rune)]">
+                                {companion ? "Say hello! I'm ready to chat" : "Start a conversation — I'm listening"}
+                            </span>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }
