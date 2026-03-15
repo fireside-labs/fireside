@@ -9,6 +9,11 @@
 > **GATE FILE IS MANDATORY.** When all tasks below are complete, you MUST create the file
 > `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file).
 
+> [!IMPORTANT]
+> **READ FIRST:** `sprints/current/CREATIVE_DIRECTION.md` — this is your brand bible.
+> It contains app icon assignment, splash screen, color palette, and mode-specific tone guidance.
+> The 3 brand images you received are assigned there. Follow it exactly.
+
 ---
 
 ## Context
