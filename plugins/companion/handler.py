@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 log = logging.getLogger("valhalla.companion")
@@ -193,22 +193,33 @@ def register_routes(app, config: dict) -> None:
         result = analyze_message(req.text, req.hour, req.recipient, species)
         return result
 
-    # --- Sprint 1: Mobile endpoints ---
+    # --- Sprint 1+2: Mobile endpoints ---
+
+    # Rate limit tracking for /mobile/pair (Sprint 2, Task 3)
+    _pair_attempts: dict = {}  # ip → [timestamps]
+    _PAIR_RATE_LIMIT = 3  # max requests per minute
+    _stored_config = config  # Store config ref for auth checks
 
     @router.post("/api/v1/companion/mobile/sync")
     async def api_mobile_sync():
         """Single-call sync for mobile app launch.
 
         Returns: companion status, pending task results, personality, mood prefix.
-        The phone calls this once on launch to get everything it needs in one request.
+        Sprint 2: Also returns adoption info when no companion is adopted.
         """
         import time as _time
         from plugins.companion.sim import load_state, get_status, get_mood_prefix
-        from plugins.companion.queue import get_queue
 
         state = load_state()
         if not state:
-            raise HTTPException(404, "No companion adopted yet.")
+            # Sprint 2 Task 5: return adoption info instead of 404
+            return {
+                "ok": True,
+                "adopted": False,
+                "available_species": ["cat", "dog", "penguin", "fox", "owl", "dragon"],
+                "message": "No companion adopted yet. Choose a species to adopt!",
+                "synced_at": _time.time(),
+            }
 
         companion_status = get_status(state)
 
@@ -222,12 +233,14 @@ def register_routes(app, config: dict) -> None:
 
         # Completed tasks not yet acknowledged by the phone
         try:
+            from plugins.companion.queue import get_queue
             pending_tasks = get_queue(status="completed")
         except Exception:
             pending_tasks = []
 
         return {
             "ok": True,
+            "adopted": True,
             "companion": companion_status,
             "personality": personality,
             "mood_prefix": get_mood_prefix(state),
@@ -236,28 +249,51 @@ def register_routes(app, config: dict) -> None:
         }
 
     @router.post("/api/v1/companion/mobile/pair")
-    async def api_mobile_pair():
+    async def api_mobile_pair(request: "Request"):
         """Generate a pairing token for the mobile app.
 
-        Creates a 6-character alphanumeric code and stores it in
-        ~/.valhalla/mobile_token.json with a 365-day expiry.
-        Heimdall will harden the auth model in Sprint 2.
+        Sprint 2 hardened:
+        - Requires X-Valhalla-Auth header (dashboard.auth_key)
+        - Rate limited: 3 requests per minute per IP
+        - Token TTL: 15 minutes (was 365 days)
+        - Invalidates previous token on new generation
+        - File permissions set to owner-only (0600)
         """
         import secrets
         import string
         import json
+        import os
         import time as _time
         from pathlib import Path
         from datetime import datetime, timezone, timedelta
+
+        # Sprint 2 Task 2: Require auth header
+        auth_key = _stored_config.get("dashboard", {}).get("auth_key", "")
+        provided = request.headers.get("X-Valhalla-Auth", "")
+        if not auth_key or auth_key == "change-me-dashboard-key":
+            log.warning("[companion/pair] dashboard.auth_key is not configured!")
+        if not provided or provided != auth_key:
+            raise HTTPException(401, "Missing or invalid X-Valhalla-Auth header.")
+
+        # Sprint 2 Task 3: Rate limiting (3/min per IP)
+        client_ip = request.client.host if request.client else "unknown"
+        now = _time.time()
+        window = [t for t in _pair_attempts.get(client_ip, []) if now - t < 60]
+        if len(window) >= _PAIR_RATE_LIMIT:
+            raise HTTPException(429, "Too many pairing attempts. Try again in 1 minute.")
+        window.append(now)
+        _pair_attempts[client_ip] = window
 
         # Generate 6-char uppercase alphanumeric token (easy to type on phone)
         alphabet = string.ascii_uppercase + string.digits
         token = "".join(secrets.choice(alphabet) for _ in range(6))
 
-        expires_at = datetime.now(timezone.utc) + timedelta(days=365)
+        # Sprint 2 Task 3: Reduced TTL → 15 minutes
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
         expires_ts = expires_at.timestamp()
 
         # Persist to ~/.valhalla/mobile_token.json
+        # Sprint 2 Task 3: Invalidates previous token by overwriting
         token_dir = Path.home() / ".valhalla"
         token_dir.mkdir(parents=True, exist_ok=True)
         token_file = token_dir / "mobile_token.json"
@@ -270,8 +306,14 @@ def register_routes(app, config: dict) -> None:
             encoding="utf-8",
         )
 
+        # Sprint 2 Task 3: Set file permissions to owner-only (0600)
+        try:
+            os.chmod(str(token_file), 0o600)
+        except OSError:
+            pass  # Windows doesn't support POSIX permissions
+
         log.info("[companion/pair] Mobile pairing token generated (expires %s)",
-                 expires_at.strftime("%Y-%m-%d"))
+                 expires_at.strftime("%H:%M:%S"))
 
         return {
             "ok": True,
@@ -279,5 +321,136 @@ def register_routes(app, config: dict) -> None:
             "expires_at": expires_at.isoformat(),
         }
 
+    # --- Sprint 2: Chat history endpoints (Task 4) ---
+
+    @router.post("/api/v1/companion/chat/history")
+    async def api_save_chat(request: "Request"):
+        """Save a chat message to persistent history.
+
+        Body: { "role": "user"|"companion", "content": "...", "timestamp": 1234567890.0 }
+        Stores in ~/.valhalla/chat_history.json, capped at 500 messages (FIFO).
+        """
+        import json
+        import time as _time
+        from pathlib import Path
+
+        body = await request.json()
+        role = body.get("role", "")
+        content = body.get("content", "")
+        timestamp = body.get("timestamp", _time.time())
+
+        if role not in ("user", "companion"):
+            raise HTTPException(400, "role must be 'user' or 'companion'")
+        if not content or not isinstance(content, str):
+            raise HTTPException(400, "content must be a non-empty string")
+        if len(content) > 5000:
+            raise HTTPException(400, "content too long (max 5000 chars)")
+
+        history_dir = Path.home() / ".valhalla"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        history_file = history_dir / "chat_history.json"
+
+        messages = []
+        if history_file.exists():
+            try:
+                messages = json.loads(history_file.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, ValueError):
+                messages = []
+
+        messages.append({
+            "role": role,
+            "content": content,
+            "timestamp": timestamp,
+        })
+
+        # FIFO cap at 500
+        if len(messages) > 500:
+            messages = messages[-500:]
+
+        history_file.write_text(
+            json.dumps(messages, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        return {"ok": True, "total_messages": len(messages)}
+
+    @router.get("/api/v1/companion/chat/history")
+    async def api_get_chat():
+        """Get chat history (last 100 messages, sorted by timestamp)."""
+        import json
+        from pathlib import Path
+
+        history_file = Path.home() / ".valhalla" / "chat_history.json"
+        if not history_file.exists():
+            return {"ok": True, "messages": [], "total": 0}
+
+        try:
+            messages = json.loads(history_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            return {"ok": True, "messages": [], "total": 0}
+
+        # Sort by timestamp, return last 100
+        messages.sort(key=lambda m: m.get("timestamp", 0))
+        recent = messages[-100:]
+
+        return {"ok": True, "messages": recent, "total": len(messages)}
+
+    # --- Sprint 2: IP validation endpoint (Task 6) ---
+
+    @router.get("/api/v1/companion/mobile/validate-host")
+    async def api_validate_host(host: str = ""):
+        """Validate an IP:port or hostname:port string for mobile setup.
+
+        Returns whether the format is acceptable.
+        """
+        import re
+
+        if not host:
+            raise HTTPException(400, "host parameter is required")
+
+        host = host.strip()
+
+        # Accept: IP:port, IP without port, hostname:port, hostname
+        ip_port_re = re.compile(
+            r"^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d{1,5})?$"
+        )
+        hostname_re = re.compile(
+            r"^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$"
+        )
+        hostname_port_re = re.compile(
+            r"^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*:\d{1,5}$"
+        )
+
+        # Reject protocols
+        if host.startswith(("http://", "https://", "ftp://", "javascript:", "file://")):
+            return {
+                "ok": False,
+                "valid": False,
+                "error": "Don't include the protocol (http://). Just enter the IP or hostname.",
+            }
+
+        if ip_port_re.match(host):
+            # Validate IP octets
+            ip_part = host.split(":")[0]
+            octets = ip_part.split(".")
+            for octet in octets:
+                if int(octet) > 255:
+                    return {"ok": False, "valid": False, "error": f"Invalid IP octet: {octet}"}
+            # Validate port if present
+            if ":" in host:
+                port = int(host.split(":")[1])
+                if port < 1 or port > 65535:
+                    return {"ok": False, "valid": False, "error": f"Port must be 1-65535, got {port}"}
+            return {"ok": True, "valid": True, "host": host}
+
+        if hostname_port_re.match(host) or hostname_re.match(host):
+            return {"ok": True, "valid": True, "host": host}
+
+        return {
+            "ok": False,
+            "valid": False,
+            "error": "Invalid format. Expected: IP address (e.g., 100.117.255.38) or hostname (e.g., my-pc:8765)",
+        }
+
     app.include_router(router)
-    log.info("[companion] Plugin loaded (with translation + guardian + mobile).")
+    log.info("[companion] Plugin loaded (with translation + guardian + mobile + chat history).")

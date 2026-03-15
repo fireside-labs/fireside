@@ -98,6 +98,20 @@ export const companionAPI = {
 
     /** Get companion status. */
     companionStatus: () => apiFetch<{ ok: boolean; companion: Record<string, unknown> }>("/api/v1/companion/status"),
+
+    /** Adopt a new companion (Sprint 2). */
+    adopt: (name: string, species: string) =>
+        apiFetch<{ ok: boolean }>("/api/v1/companion/adopt", {
+            method: "POST",
+            body: JSON.stringify({ name, species }),
+        }),
+
+    /** Create a new task from mobile (Sprint 2). */
+    queueTask: (taskType: string, payload?: Record<string, unknown>) =>
+        apiFetch<{ ok: boolean; task: Record<string, unknown> }>("/api/v1/companion/queue", {
+            method: "POST",
+            body: JSON.stringify({ task_type: taskType, payload }),
+        }),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

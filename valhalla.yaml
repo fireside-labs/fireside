@@ -33,9 +33,11 @@ dashboard:
   auth_key: "change-me-dashboard-key"
   allow_localhost: true
   cors_origins:
+    # Sprint 2: Explicit allowlist (Heimdall HIGH fix)
     - "http://localhost:3000"
     - "http://localhost:3001"
-    - "*"  # Sprint 1: allow mobile app on any Tailscale IP. Heimdall tightens in Sprint 2.
+    - "http://localhost:8765"
+    - "http://127.0.0.1:8765"
 
 models:
   default: llama/Qwen3.5-35B-A3B-8bit

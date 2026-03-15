@@ -1,4 +1,4 @@
-# Sprint 2 — THOR (Backend: Security Hardening + APIs)
+# Sprint 3 — THOR (Backend: Push Notifications + Security Fixes)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -9,106 +9,113 @@
 > **GATE FILE IS MANDATORY.** When all tasks below are complete, you MUST create the file
 > `sprints/current/gates/gate_thor.md` using your **file creation tool** (write_to_file).
 > Do NOT use shell echo commands. The entire sprint pipeline stalls if you skip this.
-> See **Task 7** at the bottom for the exact content.
+> See **Task 6** at the bottom for the exact content.
 
 ---
 
 ## Context
 
-Sprint 1 shipped CORS wildcard, unauthenticated pairing, and weak token entropy. Heimdall flagged these. Valkyrie wants chat persistence and mobile adoption. **This sprint fixes all of it.**
+Sprint 2 fixed all HIGH findings. Heimdall has 2 MEDIUM carryovers. Valkyrie wants push notifications — the companion needs to reach out to the user proactively.
 
-Read the full audit: `sprints/archive/sprint_01/gates/audit_heimdall.md`
+Read previous audits at: `sprints/archive/sprint_02/gates/audit_heimdall.md`
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Fix CORS Wildcard (🔴 HIGH from Heimdall)
-**File:** `valhalla.yaml`
+### Task 1 — Push Notification Infrastructure
+Use **Expo Push Notifications** — this is the simplest path for React Native and avoids direct FCM/APNs setup.
 
-Replace the `"*"` in `cors_origins` with an explicit allowlist:
-```yaml
-cors_origins:
-  - "http://100.*:8765"   # Tailscale IPs
-  - "http://192.168.*:*"  # Local network
-  - "http://localhost:*"  # Development
+Create `plugins/companion/notifications.py`:
+```python
+import httpx
+
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+
+async def send_push(token: str, title: str, body: str, data: dict = None):
+    """Send a push notification via Expo's push service."""
+    message = {
+        "to": token,
+        "title": title,
+        "body": body,
+        "sound": "default",
+    }
+    if data:
+        message["data"] = data
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(EXPO_PUSH_URL, json=message)
+        return resp.json()
 ```
 
-Or implement it in code — restrict CORS middleware origins to Tailscale/local ranges only.
+Add endpoint: `POST /api/v1/companion/mobile/register-push` — stores the Expo push token in `~/.valhalla/push_token.json`.
 
-### Task 2 — Authenticate `/mobile/pair` (🟡 MEDIUM from Heimdall)
-**File:** `plugins/companion/handler.py`
+### Task 2 — Companion-Initiated Notification Triggers
+Add a background check (runs on the existing event loop or via a periodic task) that sends push notifications when:
 
-The `/mobile/pair` endpoint currently requires zero authentication. Fix:
-1. Require the `X-Valhalla-Auth` header with the value from `valhalla.yaml → dashboard.auth_key`
-2. Return 401 if the header is missing or wrong
-3. Alternatively: implement a "confirm on desktop" flow where pairing generates a pending request visible in the dashboard
+1. **Happiness drops below 30:** "Your companion misses you! 🥺 Come say hi."
+2. **Daily gift is ready:** "(Companion name) has a surprise for you! 🎁"
+3. **Task completed:** "Your task is done! (task_type) — check the results."
+4. **Companion leveled up:** "🎉 (Name) reached level (N)!"
 
-### Task 3 — Rate Limit + Token Hardening (🟡 MEDIUM from Heimdall)
-**File:** `plugins/companion/handler.py`
+Rate limit: max 1 notification per trigger type per hour (don't spam).
 
-1. Add rate limiting to `/mobile/pair`: max 3 requests per minute per IP
-2. Reduce pairing token TTL from 365 days → 15 minutes
-3. Invalidate any previous token when a new one is generated
-4. Set file permissions on `~/.valhalla/mobile_token.json` to owner-only (0600)
+Store last notification timestamps in `~/.valhalla/notification_state.json`.
 
-### Task 4 — Chat History Endpoint
-**File:** `plugins/companion/handler.py`
+### Task 3 — Fix hmac.compare_digest (🟡 MEDIUM from Heimdall)
+**File:** `plugins/companion/handler.py` line 275
 
-Add two endpoints for persistent chat history:
+Replace:
+```python
+if not provided or provided != auth_key
 ```
-POST /api/v1/companion/chat/history  — save a message { role, content, timestamp }
-GET  /api/v1/companion/chat/history  — get last 100 messages, sorted by timestamp
+With:
+```python
+import hmac
+if not provided or not hmac.compare_digest(provided, auth_key)
 ```
 
-Store in `~/.valhalla/chat_history.json`. Cap at 500 messages (FIFO).
-
-### Task 5 — Mobile Companion Adoption
+### Task 4 — Rate Limit Dict Cleanup (🟡 MEDIUM from Heimdall)
 **File:** `plugins/companion/handler.py`
 
-The current `/companion/adopt` endpoint works, but mobile users need it too. Ensure the existing `/api/v1/companion/adopt` endpoint is included in the `/mobile/sync` response when no companion exists, so the mobile app knows to show an adoption flow instead of a 404.
+The `_pair_attempts` dict grows unbounded. Add a cleanup that purges entries older than 2 minutes, triggered before each rate limit check. Same pattern as `_join_tokens` cleanup in `api/v1.py`.
 
-Update `/mobile/sync` to return `{ "adopted": false, "available_species": [...] }` when no companion exists.
+### Task 5 — Backend Input Validation (🟢 LOW from Heimdall)
+**File:** `plugins/companion/handler.py`
 
-### Task 6 — IP Format Validation (🟢 LOW from Heimdall)
-**File:** `plugins/companion/handler.py` or create a utility
+1. Add `max_length=20` validation on companion name in the adopt endpoint's Pydantic model
+2. Add `max_length=200` validation on task queue payload
+3. Return 422 with a clear error message for violations
 
-Add a validation function that checks IP:port format. Expose as `GET /api/v1/companion/mobile/validate-host?host=<input>` or validate server-side and return clear error messages.
-
-### Task 7 — Drop Your Gate
+### Task 6 — Drop Your Gate
 When all tasks are complete, create `sprints/current/gates/gate_thor.md` using your **file creation tool** (write_to_file):
 
 ```markdown
-# Thor Gate — Sprint 2 Backend Complete
-Sprint 2 tasks completed.
+# Thor Gate — Sprint 3 Backend Complete
+Sprint 3 tasks completed.
 
 ## Completed
-- [x] CORS wildcard replaced with explicit allowlist
-- [x] /mobile/pair requires auth header
-- [x] Rate limiting on pair endpoint (3/min)
-- [x] Token TTL reduced to 15 minutes
-- [x] Chat history endpoints (POST + GET)
-- [x] /mobile/sync handles no-companion state
-- [x] IP format validation
+- [x] Expo Push notification infrastructure
+- [x] Push token registration endpoint
+- [x] 4 notification triggers (happiness, gift, task, level-up)
+- [x] Notification rate limiting (1/hour per type)
+- [x] hmac.compare_digest for pair auth
+- [x] Rate limit dict cleanup
+- [x] Input validation (name length, task payload)
 ```
 
 ---
 
 ## Rework Loop (if Heimdall rejects)
 
-After you drop your gate, Heimdall audits your code. **In Sprint 2, Heimdall has a stricter threshold:**
-- 🔴 HIGH findings → automatic FAIL, your gate file gets deleted
+- 🔴 HIGH → automatic FAIL, gate deleted → fix and re-drop
 - 🟡 MEDIUM → PASS with notes
 - 🟢 LOW → informational
 
-If your gate file disappears:
-1. Read `sprints/current/gates/audit_heimdall.md`
-2. Fix every ❌ item
-3. Re-drop your gate file (same as Task 7)
+If your gate disappears, read `sprints/current/gates/audit_heimdall.md`, fix issues, re-drop.
 
 ---
 
 ## Notes
-- ALL Heimdall HIGH findings from Sprint 1 must be FIXED, not deferred.
-- The CORS fix is the #1 priority — it was the only HIGH finding.
-- Keep backward compatibility with the existing dashboard. Don't break the web frontend.
+- Expo Push Notifications are free and don't require Firebase setup. They work for both iOS and Android.
+- The notification background task should integrate with the existing companion `apply_decay` cycle if possible.
+- Don't break any Sprint 2 tests. All 42 tests (15 Sprint 1 + 27 Sprint 2) should still pass.

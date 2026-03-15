@@ -1,30 +1,41 @@
 /**
  * 🐾 Care Tab — Feed, walk, and monitor your companion.
  *
- * Animated happiness bar, XP progress, feed/walk buttons.
- * Works offline with optimistic updates.
+ * Sprint 2 additions:
+ * - Pull-to-refresh (Valkyrie #4)
+ * - Haptic feedback on feed/walk (Valkyrie #3)
+ * - Companion avatar images replace emoji (Valkyrie #2)
+ * - Mobile adoption flow if no companion exists (Valkyrie #6)
  */
 import { useState, useCallback } from "react";
 import {
     View,
     Text,
+    TextInput,
     TouchableOpacity,
     ScrollView,
     StyleSheet,
-    Animated,
+    RefreshControl,
+    Image,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
 import type { PetSpecies, WalkEvent } from "../../src/types";
 
+// Avatar images — Sprint 2 replacement for emoji
+const SPECIES_AVATARS: Record<PetSpecies, ReturnType<typeof require>> = {
+    cat: require("../../assets/companions/cat.png"),
+    dog: require("../../assets/companions/dog.png"),
+    penguin: require("../../assets/companions/penguin.png"),
+    fox: require("../../assets/companions/fox.png"),
+    owl: require("../../assets/companions/owl.png"),
+    dragon: require("../../assets/companions/dragon.png"),
+};
+
 const SPECIES_EMOJI: Record<PetSpecies, string> = {
-    cat: "🐱",
-    dog: "🐶",
-    penguin: "🐧",
-    fox: "🦊",
-    owl: "🦉",
-    dragon: "🐉",
+    cat: "🐱", dog: "🐶", penguin: "🐧", fox: "🦊", owl: "🦉", dragon: "🐉",
 };
 
 const TREAT_ITEMS = [
@@ -61,14 +72,28 @@ const OFFLINE_WALK_EVENTS: Record<PetSpecies, WalkEvent[]> = {
     ],
 };
 
+const ADOPTABLE_SPECIES: { species: PetSpecies; emoji: string; desc: string }[] = [
+    { species: "cat", emoji: "🐱", desc: "Curious & independent" },
+    { species: "dog", emoji: "🐶", desc: "Loyal & energetic" },
+    { species: "penguin", emoji: "🐧", desc: "Formal & precise" },
+    { species: "fox", emoji: "🦊", desc: "Clever & resourceful" },
+    { species: "owl", emoji: "🦉", desc: "Wise & thoughtful" },
+    { species: "dragon", emoji: "🐉", desc: "Fierce & majestic" },
+];
+
 export default function CareTab() {
-    const { isOnline, companionData, queueAction, updateCompanionLocal } = useConnection();
+    const { isOnline, companionData, queueAction, updateCompanionLocal, sync } = useConnection();
     const [walking, setWalking] = useState(false);
     const [feeding, setFeeding] = useState(false);
     const [walkResult, setWalkResult] = useState<WalkEvent | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+    // Adoption flow state
+    const [adopting, setAdopting] = useState(false);
+    const [adoptName, setAdoptName] = useState("");
+    const [adoptSpecies, setAdoptSpecies] = useState<PetSpecies>("cat");
 
     const companion = companionData?.companion;
-    const petName = companion?.name || "Companion";
+    const petName = companion?.name || "";
     const species = (companion?.species || "cat") as PetSpecies;
     const happiness = companion?.happiness ?? 50;
     const xp = companion?.xp ?? 0;
@@ -83,17 +108,25 @@ export default function CareTab() {
     const happinessEmoji =
         happiness > 70 ? "💚" : happiness > 30 ? "💛" : happiness > 0 ? "🧡" : "💔";
 
+    // Pull-to-refresh — Sprint 2
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await sync();
+        setRefreshing(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }, [sync]);
+
     const handleFeed = useCallback(
         async (food: string) => {
             if (feeding) return;
             setFeeding(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
             if (isOnline) {
                 try {
                     const res = await companionAPI.feed(food);
                     updateCompanionLocal(() => res.companion);
                 } catch {
-                    // Optimistic local update
                     updateCompanionLocal((prev) => ({
                         ...prev,
                         happiness: Math.min(100, prev.happiness + 8),
@@ -118,14 +151,15 @@ export default function CareTab() {
         if (walking) return;
         setWalking(true);
         setWalkResult(null);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         if (isOnline) {
             try {
                 const res = await companionAPI.walk();
                 updateCompanionLocal(() => res.companion);
                 setWalkResult(res.event);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } catch {
-                // Offline fallback
                 const events = OFFLINE_WALK_EVENTS[species];
                 const event = events[Math.floor(Math.random() * events.length)];
                 setWalkResult(event);
@@ -146,13 +180,120 @@ export default function CareTab() {
                 happiness: Math.min(100, prev.happiness + event.happinessBoost),
                 xp: prev.xp + event.xpGain,
             }));
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
 
         setTimeout(() => setWalking(false), 2000);
     }, [walking, isOnline, species, queueAction, updateCompanionLocal]);
 
+    // Adoption flow — Sprint 2
+    const handleAdopt = useCallback(async () => {
+        const name = adoptName.trim();
+        if (!name) return;
+        setAdopting(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        if (isOnline) {
+            try {
+                await companionAPI.adopt(name, adoptSpecies);
+                await sync();
+            } catch {
+                // Optimistic local adoption
+                updateCompanionLocal(() => ({
+                    name,
+                    species: adoptSpecies,
+                    happiness: 80,
+                    xp: 0,
+                    level: 1,
+                    streak: 0,
+                }));
+            }
+        } else {
+            updateCompanionLocal(() => ({
+                name,
+                species: adoptSpecies,
+                happiness: 80,
+                xp: 0,
+                level: 1,
+                streak: 0,
+            }));
+        }
+        setAdopting(false);
+    }, [adoptName, adoptSpecies, isOnline, sync, updateCompanionLocal]);
+
+    // No companion — show adoption flow
+    if (!petName) {
+        return (
+            <ScrollView style={styles.container} contentContainerStyle={styles.adoptContent}>
+                <Text style={styles.adoptTitle}>🐾 Adopt a Companion</Text>
+                <Text style={styles.adoptSubtitle}>
+                    Choose a species and give your companion a name!
+                </Text>
+
+                {/* Species picker */}
+                <View style={styles.speciesGrid}>
+                    {ADOPTABLE_SPECIES.map((s) => (
+                        <TouchableOpacity
+                            key={s.species}
+                            style={[
+                                styles.speciesCard,
+                                adoptSpecies === s.species && styles.speciesCardSelected,
+                            ]}
+                            onPress={() => {
+                                setAdoptSpecies(s.species);
+                                Haptics.selectionAsync();
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <Image
+                                source={SPECIES_AVATARS[s.species]}
+                                style={styles.speciesAvatar}
+                            />
+                            <Text style={styles.speciesName}>{s.species}</Text>
+                            <Text style={styles.speciesDesc}>{s.desc}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Name input */}
+                <TextInput
+                    style={styles.nameInput}
+                    value={adoptName}
+                    onChangeText={setAdoptName}
+                    placeholder="Name your companion..."
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="words"
+                    maxLength={20}
+                />
+
+                {/* Adopt button */}
+                <TouchableOpacity
+                    style={[styles.adoptBtn, (!adoptName.trim() || adopting) && styles.adoptBtnDisabled]}
+                    onPress={handleAdopt}
+                    disabled={!adoptName.trim() || adopting}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.adoptBtnText}>
+                        {adopting ? "Adopting..." : `Adopt ${adoptName.trim() || "companion"}`}
+                    </Text>
+                </TouchableOpacity>
+            </ScrollView>
+        );
+    }
+
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.content}
+            refreshControl={
+                <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={colors.neon}
+                    colors={[colors.neon]}
+                />
+            }
+        >
             {/* Header */}
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>{petName}'s Status</Text>
@@ -167,9 +308,9 @@ export default function CareTab() {
                 </View>
             </View>
 
-            {/* Avatar Card */}
+            {/* Avatar Card — Sprint 2: image instead of emoji */}
             <View style={styles.avatarCard}>
-                <Text style={styles.avatarEmoji}>{SPECIES_EMOJI[species]}</Text>
+                <Image source={SPECIES_AVATARS[species]} style={styles.avatarImage} />
                 <Text style={styles.avatarName}>{petName}</Text>
                 <Text style={styles.avatarSpecies}>{species}</Text>
             </View>
@@ -303,8 +444,10 @@ const styles = StyleSheet.create({
         marginBottom: spacing.lg,
         ...shadows.card,
     },
-    avatarEmoji: {
-        fontSize: 56,
+    avatarImage: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
         marginBottom: spacing.sm,
     },
     avatarName: {
@@ -430,5 +573,88 @@ const styles = StyleSheet.create({
         fontFamily: "Inter_400Regular",
         fontSize: fontSize.tiny,
         color: colors.textDim,
+    },
+    // Adoption flow styles
+    adoptContent: {
+        paddingHorizontal: spacing.lg,
+        paddingTop: 80,
+        paddingBottom: spacing.xxxl,
+    },
+    adoptTitle: {
+        fontFamily: "Inter_700Bold",
+        fontSize: fontSize.hero,
+        color: colors.textPrimary,
+        textAlign: "center",
+        marginBottom: spacing.sm,
+    },
+    adoptSubtitle: {
+        fontFamily: "Inter_400Regular",
+        fontSize: fontSize.md,
+        color: colors.textDim,
+        textAlign: "center",
+        marginBottom: spacing.xxl,
+    },
+    speciesGrid: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: spacing.sm,
+        marginBottom: spacing.xxl,
+    },
+    speciesCard: {
+        width: "31%",
+        backgroundColor: colors.bgCard,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        paddingVertical: spacing.md,
+        alignItems: "center",
+    },
+    speciesCardSelected: {
+        backgroundColor: colors.neonGlow,
+        borderColor: colors.neon,
+    },
+    speciesAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        marginBottom: spacing.xs,
+    },
+    speciesName: {
+        fontFamily: "Inter_500Medium",
+        fontSize: fontSize.xs,
+        color: colors.textPrimary,
+        textTransform: "capitalize",
+    },
+    speciesDesc: {
+        fontFamily: "Inter_400Regular",
+        fontSize: fontSize.tiny,
+        color: colors.textDim,
+        textAlign: "center",
+    },
+    nameInput: {
+        backgroundColor: colors.bgInput,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        borderRadius: borderRadius.md,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.lg,
+        fontFamily: "Inter_400Regular",
+        fontSize: fontSize.lg,
+        color: colors.textPrimary,
+        marginBottom: spacing.lg,
+    },
+    adoptBtn: {
+        backgroundColor: colors.neon,
+        borderRadius: borderRadius.md,
+        paddingVertical: spacing.lg,
+        alignItems: "center",
+    },
+    adoptBtnDisabled: {
+        opacity: 0.4,
+    },
+    adoptBtnText: {
+        fontFamily: "Inter_600SemiBold",
+        fontSize: fontSize.lg,
+        color: colors.bgPrimary,
     },
 });

@@ -1,8 +1,9 @@
 /**
  * 💬 Chat Tab — Talk to your companion.
  *
- * Text input, message bubbles, species-based personality.
- * Offline: shows species-appropriate fallback message.
+ * Sprint 2 additions:
+ * - Chat history persistence via AsyncStorage (Valkyrie #5)
+ * - Haptic feedback on send (Valkyrie #3)
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -14,12 +15,16 @@ import {
     StyleSheet,
     KeyboardAvoidingView,
     Platform,
-    Animated,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize } from "../../src/theme";
 import type { Message, PetSpecies } from "../../src/types";
+
+const CHAT_HISTORY_KEY = "valhalla_chat_history";
+const MAX_HISTORY = 100;
 
 const OFFLINE_RESPONSES: Record<PetSpecies, string[]> = {
     cat: [
@@ -59,28 +64,66 @@ function getOfflineResponse(species: PetSpecies): string {
     return responses[Math.floor(Math.random() * responses.length)];
 }
 
+/** Save chat history to AsyncStorage (capped at MAX_HISTORY msgs). */
+async function saveHistory(messages: Message[]) {
+    try {
+        const trimmed = messages.slice(-MAX_HISTORY);
+        await AsyncStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(trimmed));
+    } catch {
+        // silently fail
+    }
+}
+
+/** Load chat history from AsyncStorage. */
+async function loadHistory(): Promise<Message[]> {
+    try {
+        const raw = await AsyncStorage.getItem(CHAT_HISTORY_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch {
+        return [];
+    }
+}
+
 export default function ChatTab() {
     const { isOnline, companionData, queueAction } = useConnection();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [typing, setTyping] = useState(false);
+    const [historyLoaded, setHistoryLoaded] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
     const petName = companionData?.companion?.name || "Companion";
     const species = (companionData?.companion?.species || "cat") as PetSpecies;
     const mood = companionData?.companion?.happiness ?? 50;
 
-    // Initial greeting
+    // Load chat history from AsyncStorage on mount — Sprint 2
     useEffect(() => {
-        const prefix = companionData?.mood_prefix || "";
-        setMessages([
-            { role: "pet", content: `${prefix}Hey! I'm ${petName}. What's up?` },
-        ]);
-    }, [petName, companionData?.mood_prefix]);
+        (async () => {
+            const history = await loadHistory();
+            if (history.length > 0) {
+                setMessages(history);
+            } else {
+                const prefix = companionData?.mood_prefix || "";
+                setMessages([
+                    { role: "pet", content: `${prefix}Hey! I'm ${petName}. What's up?` },
+                ]);
+            }
+            setHistoryLoaded(true);
+        })();
+    }, []);
+
+    // Persist whenever messages change — Sprint 2
+    useEffect(() => {
+        if (historyLoaded && messages.length > 0) {
+            saveHistory(messages);
+        }
+    }, [messages, historyLoaded]);
 
     const handleSend = useCallback(async () => {
         const text = input.trim();
         if (!text || typing) return;
+
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
         setMessages((prev) => [...prev, { role: "user", content: text }]);
         setInput("");
@@ -91,12 +134,10 @@ export default function ChatTab() {
                 const res = await companionAPI.chat(text);
                 setMessages((prev) => [...prev, { role: "pet", content: res.reply }]);
             } catch {
-                // Fallback to offline response if API call fails
                 const reply = getOfflineResponse(species);
                 setMessages((prev) => [...prev, { role: "pet", content: reply }]);
             }
         } else {
-            // Offline: show species-appropriate response + queue for later
             queueAction({ type: "chat", payload: text, timestamp: Date.now() });
             await new Promise((r) => setTimeout(r, 800 + Math.random() * 700));
             const reply = getOfflineResponse(species);

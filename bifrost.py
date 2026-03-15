@@ -59,12 +59,18 @@ def create_app(config_path: str | None = None) -> FastAPI:
         version="2.0.0",
     )
 
-    # CORS — allow dashboard to connect
+    # CORS — allow dashboard + mobile app (Sprint 2: Heimdall-hardened)
     dash_cfg = config.get("dashboard", {})
-    cors_origins = dash_cfg.get("cors_origins", ["*"])
+    cors_origins = dash_cfg.get("cors_origins", [
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ])
+    # Dynamic matching for Tailscale (100.x.x.x) and local network IPs
+    # This covers mobile app connections from any Tailscale or LAN IP
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
+        allow_origin_regex=r"^https?://(100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

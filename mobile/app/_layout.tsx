@@ -16,6 +16,7 @@ import {
     Inter_700Bold,
 } from "@expo-google-fonts/inter";
 import { getHost } from "../src/api";
+import { hasOnboarded } from "./onboarding";
 import { colors } from "../src/theme";
 
 export default function RootLayout() {
@@ -28,12 +29,15 @@ export default function RootLayout() {
 
     const [isReady, setIsReady] = useState(false);
     const [needsSetup, setNeedsSetup] = useState(false);
+    const [needsOnboarding, setNeedsOnboarding] = useState(false);
     const router = useRouter();
     const segments = useSegments();
 
     useEffect(() => {
         (async () => {
+            const onboarded = await hasOnboarded();
             const host = await getHost();
+            setNeedsOnboarding(!onboarded);
             setNeedsSetup(!host);
             setIsReady(true);
         })();
@@ -43,12 +47,15 @@ export default function RootLayout() {
     useEffect(() => {
         if (!isReady || !fontsLoaded) return;
         const inSetup = segments[0] === "setup";
-        if (needsSetup && !inSetup) {
+        const inOnboarding = segments[0] === "onboarding";
+        if (needsOnboarding && !inOnboarding) {
+            router.replace("/onboarding");
+        } else if (!needsOnboarding && needsSetup && !inSetup) {
             router.replace("/setup");
-        } else if (!needsSetup && inSetup) {
+        } else if (!needsSetup && !needsOnboarding && (inSetup || inOnboarding)) {
             router.replace("/(tabs)/care");
         }
-    }, [isReady, fontsLoaded, needsSetup, segments, router]);
+    }, [isReady, fontsLoaded, needsSetup, needsOnboarding, segments, router]);
 
     if (!fontsLoaded || !isReady) {
         return (
