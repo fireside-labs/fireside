@@ -2,6 +2,10 @@
 
 Fireside is built on the shoulders of incredible open-source projects.
 
+## Conceptual Inspiration
+
+- **[OpenClaw](https://github.com/openclaw)** — The multi-node AI agent concept that inspired Fireside's mesh architecture. We started here, then rebuilt from scratch with a focus on consumer UX, overnight learning, and one-click setup.
+
 ## Inference Runtimes
 
 - **[oMLX](https://github.com/jundot/omlx)** — LLM inference server with continuous batching & SSD caching for Apple Silicon. Apache 2.0 License.
