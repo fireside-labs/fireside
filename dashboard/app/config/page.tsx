@@ -4,7 +4,6 @@ import { useState } from "react";
 import SettingsForm from "@/components/SettingsForm";
 import TelegramSetup from "@/components/TelegramSetup";
 import VoiceSettings from "@/components/VoiceSettings";
-import QRAuth from "@/components/QRAuth";
 import { useToast } from "@/components/Toast";
 
 export default function SettingsPage() {
@@ -47,7 +46,6 @@ mesh:
                     <SettingsForm onSave={handleSave} />
                     <VoiceSettings />
                     <TelegramSetup />
-                    <QRAuth />
                 </div>
             ) : (
                 <div>

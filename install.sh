@@ -235,18 +235,18 @@ echo ""
 sleep 0.5
 
 # ============================================================================
-# STEP 3: CHOOSE A COMPANION
+# STEP 3: CHOOSE YOUR AI'S PERSONALITY
 # ============================================================================
 
-echo -e "  ${BOLD}Choose your companion:${NC}"
-echo -e "  ${DIM}They'll keep you company and learn with you.${NC}"
+echo -e "  ${BOLD}Choose your AI's personality:${NC}"
+echo -e "  ${DIM}This shapes how your AI talks, thinks, and vibes with you.${NC}"
 echo ""
-echo -e "    ${AMBER}[1]${NC} 🐱  Cat       ${DIM}— finds sunny spots, knocks things over, pretends it was on purpose${NC}"
-echo -e "    ${AMBER}[2]${NC} 🐶  Dog       ${DIM}— found a stick. THE stick. Life complete. Best day ever!!${NC}"
-echo -e "    ${AMBER}[3]${NC} 🐧  Penguin   ${DIM}— waddles with purpose, adjusts bowtie, organizes rocks by size${NC}"
-echo -e "    ${AMBER}[4]${NC} 🦊  Fox       ${DIM}— investigates suspicious bushes, caches snacks, watches sunsets${NC}"
-echo -e "    ${AMBER}[5]${NC} 🦉  Owl       ${DIM}— counted every tree. 47. you're welcome. blinks slowly at squirrels${NC}"
-echo -e "    ${AMBER}[6]${NC} 🐉  Dragon    ${DIM}— breathes fire at dandelions, hoards shiny rocks. count: 847${NC}"
+echo -e "    ${AMBER}[1]${NC} 🐱  Cat       ${DIM}— chill, aloof, sarcastic. gives advice like it's doing you a favor${NC}"
+echo -e "    ${AMBER}[2]${NC} 🐶  Dog       ${DIM}— eager, enthusiastic, loyal. SO excited to help. BEST TASK EVER!!${NC}"
+echo -e "    ${AMBER}[3]${NC} 🐧  Penguin   ${DIM}— precise, formal, organized. adjusts bowtie before every answer${NC}"
+echo -e "    ${AMBER}[4]${NC} 🦊  Fox       ${DIM}— curious, clever, playful. investigates your question from every angle${NC}"
+echo -e "    ${AMBER}[5]${NC} 🦉  Owl       ${DIM}— wise, analytical, patient. counted 47 ways to solve your problem${NC}"
+echo -e "    ${AMBER}[6]${NC} 🐉  Dragon    ${DIM}— bold, dramatic, powerful. breathes fire at bad ideas${NC}"
 echo ""
 
 PET_CHOICE=$(ask_choice "Pick 1-6" 1 6 3)
@@ -298,7 +298,7 @@ case "$PET_CHOICE" in
 esac
 
 echo ""
-ok "Companion: $PET_EMOJI $PET_NAME the ${PET^}"
+ok "AI Personality: $PET_EMOJI $PET_NAME the ${PET^}"
 echo ""
 sleep 0.5
 
@@ -455,6 +455,22 @@ cat > "$HOME/.valhalla/companion_state.json" << EOF
   "born": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+
+# Write onboarding flag so dashboard skips its own wizard
+mkdir -p "$HOME/.fireside"
+cat > "$HOME/.fireside/onboarding.json" << ONBOARD
+{
+  "onboarded": true,
+  "user_name": "${USER_NAME}",
+  "personality": "friendly",
+  "brain": "${BRAIN}",
+  "companion": {
+    "species": "${PET}",
+    "name": "${PET_NAME}"
+  },
+  "installed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+ONBOARD
 
 ok "Configuration saved"
 echo ""

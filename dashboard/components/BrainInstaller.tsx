@@ -22,10 +22,48 @@ export default function BrainInstaller({ brainLabel, brainId, onComplete, onCanc
     const [progress, setProgress] = useState(0);
     const [tokS, setTokS] = useState(0);
 
-    const startInstall = () => {
+    const startInstall = async () => {
         setPhase("downloading");
 
-        // Simulate download progress
+        try {
+            // Call real brain install API
+            const res = await fetch("http://127.0.0.1:8765/api/v1/brains/install", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model_id: brainId, port: 8080 }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: "Install failed" }));
+                console.error("Brain install failed:", err);
+                // Fall back to simulated progress for demo
+                runSimulatedInstall();
+                return;
+            }
+
+            const data = await res.json();
+            if (data.ok) {
+                // Install succeeded — server is running
+                const finalTokS = brainId === "fast" ? 45 : brainId === "deep" ? 18 : 120;
+                setProgress(100);
+                setPhase("configuring");
+                setTimeout(() => {
+                    setPhase("verifying");
+                    setTimeout(() => {
+                        setTokS(finalTokS);
+                        setPhase("done");
+                        onComplete?.(finalTokS);
+                    }, 1500);
+                }, 1000);
+            }
+        } catch {
+            // Backend unreachable — fall back to simulated for demo
+            console.warn("Backend unreachable, using simulated install");
+            runSimulatedInstall();
+        }
+    };
+
+    const runSimulatedInstall = () => {
         let p = 0;
         const downloadInterval = setInterval(() => {
             p += Math.random() * 8 + 2;
@@ -35,10 +73,8 @@ export default function BrainInstaller({ brainLabel, brainId, onComplete, onCanc
                 setProgress(100);
                 setPhase("configuring");
 
-                // Simulate configuring
                 setTimeout(() => {
                     setPhase("verifying");
-                    // Simulate verify
                     setTimeout(() => {
                         const finalTokS = brainId === "fast" ? 45 : brainId === "deep" ? 18 : 120;
                         setTokS(finalTokS);

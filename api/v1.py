@@ -200,6 +200,30 @@ async def get_status():
     }
 
 
+@router.get("/system/onboarding")
+async def get_onboarding():
+    """Check if install.sh already completed onboarding.
+
+    Reads ~/.fireside/onboarding.json written by install.sh.
+    The dashboard checks this to skip its own wizard.
+    """
+    onboarding_file = Path.home() / ".fireside" / "onboarding.json"
+    if not onboarding_file.exists():
+        return {"onboarded": False}
+
+    try:
+        data = json.loads(onboarding_file.read_text(encoding="utf-8"))
+        return {
+            "onboarded": data.get("onboarded", False),
+            "user_name": data.get("user_name", ""),
+            "personality": data.get("personality", "friendly"),
+            "brain": data.get("brain", ""),
+            "companion": data.get("companion"),
+        }
+    except Exception:
+        return {"onboarded": False}
+
+
 # ---------------------------------------------------------------------------
 # Endpoints: Nodes
 # ---------------------------------------------------------------------------
