@@ -2,8 +2,9 @@
 # Installs Bifrost as a scheduled task that auto-starts on logon.
 # Run this once on each node (as admin for Set-ScheduledTask).
 
-$python  = "C:\Users\Jorda\AppData\Local\Programs\Python\Python312\python.exe"
-$script  = "C:\Users\Jorda\.openclaw\workspace\bot\bifrost.py"
+$python  = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $python) { $python = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" }
+$script  = "$env:USERPROFILE\.fireside\bifrost.py"
 $taskName = "Bifrost Bot"
 
 # Remove old task if present

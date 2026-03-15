@@ -15,7 +15,8 @@ $ErrorActionPreference = "Stop"
 $BIFROST_PORT     = 8765
 $GATEWAY_PORT     = 18789
 $LLAMA_PORT       = 11434
-$LLAMA_SERVER_CMD = "C:\llama-server\llama-server.cmd"
+$llamaCmd = Get-Command llama-server -ErrorAction SilentlyContinue
+$LLAMA_SERVER_CMD = if ($llamaCmd) { $llamaCmd.Source } else { "$env:USERPROFILE\.fireside\llama-server\llama-server.exe" }
 
 # Locate the bot directory relative to this script
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path

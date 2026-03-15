@@ -9,7 +9,7 @@ export function OnboardingGate() {
     const [showWizard, setShowWizard] = useState(false);
 
     useEffect(() => {
-        const onboarded = localStorage.getItem("valhalla_onboarded");
+        const onboarded = localStorage.getItem("fireside_onboarded");
         if (!onboarded) {
             setShowWizard(true);
         }

@@ -12,17 +12,43 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     const [step, setStep] = useState(0);
     const [userName, setUserName] = useState("");
     const [personality, setPersonality] = useState("friendly");
-    const [hardware, setHardware] = useState({ device: "MacBook Pro", gpu: "Apple M3 Max", vram: "40GB", ram: "64GB" });
-    const [recommended] = useState({ emoji: "⚡", name: "Smart & Fast", model: "Llama 3.1, 8B" });
+    const [hardware, setHardware] = useState({ device: "Detecting...", gpu: "Detecting...", vram: "—", ram: "—" });
+    const [recommended, setRecommended] = useState({ emoji: "⚡", name: "Smart & Fast", model: "Llama 3.1, 8B" });
 
     useEffect(() => {
-        // Detect hardware (mock)
-        if (typeof navigator !== "undefined") {
-            const plat = navigator.platform || "";
-            if (plat.includes("Mac")) setHardware(h => ({ ...h, device: "MacBook Pro" }));
-            const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
-            if (mem) setHardware(h => ({ ...h, ram: `${mem}GB` }));
-        }
+        // Detect hardware via backend API
+        (async () => {
+            try {
+                const res = await fetch("http://127.0.0.1:8765/api/v1/brains/available");
+                if (res.ok) {
+                    const data = await res.json();
+                    const vram = data.vram_gb || 0;
+                    const runtime = data.detected_runtime || "unknown";
+                    const deviceName = runtime === "omlx" ? "Apple Silicon Mac" : runtime === "llamacpp" ? "NVIDIA GPU System" : "Cloud Only";
+                    const gpuName = runtime === "omlx" ? `Apple Silicon (${vram}GB unified)` : runtime === "llamacpp" ? `NVIDIA GPU (${vram}GB VRAM)` : "No local GPU";
+                    setHardware({ device: deviceName, gpu: gpuName, vram: `${vram}GB`, ram: `${vram}GB` });
+                    // Auto-recommend based on VRAM
+                    if (vram >= 48) {
+                        setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B model" });
+                    } else if (vram >= 16) {
+                        setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B model" });
+                    } else {
+                        setRecommended({ emoji: "💨", name: "Compact", model: "3B model" });
+                    }
+                }
+            } catch {
+                // Fallback: detect from browser
+                const plat = navigator?.platform || "";
+                const isMac = plat.includes("Mac");
+                const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
+                setHardware({
+                    device: isMac ? "Mac" : "PC",
+                    gpu: isMac ? "Apple Silicon" : "Unknown",
+                    vram: mem ? `${mem}GB` : "Unknown",
+                    ram: mem ? `${mem}GB` : "Unknown",
+                });
+            }
+        })();
     }, []);
 
     // Escape key to close
@@ -35,9 +61,9 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     }, [step]);
 
     const finish = () => {
-        localStorage.setItem("valhalla_onboarded", "1");
-        if (userName) localStorage.setItem("valhalla_user_name", userName);
-        localStorage.setItem("valhalla_personality", personality);
+        localStorage.setItem("fireside_onboarded", "1");
+        if (userName) localStorage.setItem("fireside_user_name", userName);
+        localStorage.setItem("fireside_personality", personality);
         onComplete();
     };
 
