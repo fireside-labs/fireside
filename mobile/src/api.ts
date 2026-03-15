@@ -159,6 +159,40 @@ export const companionAPI = {
         apiFetch<{ proactive_warning: boolean; reason?: string }>(
             "/api/v1/companion/guardian/check-in"
         ),
+
+    /** Transcribe audio via Whisper (Sprint 6). */
+    voiceTranscribe: (formData: FormData) =>
+        apiFetch<{ text: string; language?: string; confidence?: number }>(
+            "/api/v1/voice/transcribe",
+            { method: "POST", body: formData, headers: {} }
+        ),
+
+    /** Speak text via Kokoro TTS (Sprint 6). */
+    voiceSpeak: (text: string, voice?: string) =>
+        apiFetch<{ audio_url: string; duration?: number }>(
+            "/api/v1/voice/speak",
+            { method: "POST", body: JSON.stringify({ text, voice }) }
+        ),
+
+    /** Search marketplace (Sprint 6). */
+    marketplaceSearch: (query: string, category?: string) =>
+        apiFetch<{ items: Array<Record<string, any>> }>(
+            `/api/v1/marketplace/search?q=${encodeURIComponent(query)}${category ? `&category=${category}` : ""}`
+        ),
+
+    /** Install marketplace item (Sprint 6). */
+    marketplaceInstall: (itemId: string) =>
+        apiFetch<{ ok: boolean }>(
+            "/api/v1/marketplace/install",
+            { method: "POST", body: JSON.stringify({ item_id: itemId }) }
+        ),
+
+    /** Summarize a URL via browse plugin (Sprint 6). */
+    browseSummarize: (url: string) =>
+        apiFetch<{ title?: string; summary?: string; keyPoints?: string[] }>(
+            "/api/v1/browse/summarize",
+            { method: "POST", body: JSON.stringify({ url }) }
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

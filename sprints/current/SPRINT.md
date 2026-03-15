@@ -1,52 +1,46 @@
-# Sprint 6 — Full Platform: Voice + Marketplace + OS Integration
+# Sprint 7 — Hardening + Achievements + TestFlight
 
-**Goal:** Bridge the gap from "companion app" to "platform surface." The mobile app has the companion features. Now it needs the platform features: voice (talk to your home AI), marketplace (commerce), and OS integration (share sheet, widget).
+**Goal:** Fix all Heimdall security findings, add the achievement reward loop, add weekly summary, and prepare a TestFlight build for real-device testing.
 
-**Architecture context:** Fireside is 4 surfaces — Desktop Dashboard, Mobile App, Telegram Bot, CLI. After 5 sprints, mobile handles the companion well but doesn't yet let users:
-- **Talk** to their home AI (voice — Whisper + Kokoro already built)
-- **Buy/browse** marketplace content from their phone (commerce layer)
-- **Use the AI outside the app** (share sheet, widget, Siri)
-- **See real-time updates** from the desktop (currently polling, not WebSocket)
+**This is the final build sprint.** After this, you test on a real phone.
+
+**Input:** `sprints/archive/sprint_06/gates/audit_heimdall.md` + `review_valkyrie.md`
 
 ---
 
-## Sprint 6 Scope
+## Sprint 7 Scope
 
-### Thor (Backend)
-- Voice streaming endpoint for mobile (Whisper STT + Kokoro TTS over HTTP)
-- Marketplace API: browse, search, preview agent personalities
-- WebSocket endpoint for real-time companion state sync
-- Fix morning briefing random placeholder stats (Heimdall LOW)
+### Thor (Backend) — Security Hardening
+- SSRF blocklist on `/browse/summarize` (MEDIUM from Heimdall Sprint 6)
+- WebSocket authentication + connection cap (MEDIUM from Heimdall Sprint 6)
+- Sanitize marketplace error messages (LOW from Heimdall Sprint 6)
+- Achievement tracking backend (trigger + store + query achievements)
 
-### Freya (Frontend)
-- **Voice mode** — hold-to-talk (walkie-talkie UX), companion speaks back
-- **Marketplace browsing** — browse/preview/install agent personalities from mobile
-- **iOS Share Sheet extension** — "Summarize this page" from Safari
-- **Home screen widget** — companion mood + quick stats (Expo widget)
-- WebSocket connection for real-time sync (replace polling)
+### Freya (Frontend) — Achievements + Weekly + TestFlight
+- Achievement system (badges, toast popups, progress tracking)
+- Weekly summary card (companion growth over the past week)
+- TestFlight build via EAS (`eas build --platform ios --profile preview`)
+- QR code pairing (replace manual IP entry for smoother onboarding)
 
-### Heimdall — Same strict rules
-- 🔴 HIGH → automatic FAIL
-- 🟡 MEDIUM → PASS with notes
-- 🟢 LOW → informational
-- Additional scope: review voice data pipeline for privacy (audio never leaves local network)
+### Heimdall — Verify all prior MEDIUMs are fixed
+- Sprint 6 SSRF: confirm blocklist blocks localhost, RFC1918, metadata
+- Sprint 6 WebSocket: confirm auth token required + connection cap
+- Full regression: all 160+ tests still pass
+- Voice pipeline privacy: re-verify audio never leaves local network
 
-### Valkyrie — Full platform surface review
+### Valkyrie — TestFlight readiness assessment
 - **MUST READ:** `FEATURE_INVENTORY.md`
-- Assess: does the mobile app feel like a platform surface or a standalone toy?
-- Voice UX: is walkie-talkie mode fluid?
-- Marketplace: does browsing create purchase intent?
-- OS integration: does the share sheet feel native?
-- What's still missing for App Store submission?
+- Is the app ready for real-device testing?
+- App Store metadata checklist (screenshots, description, keywords)
+- Final feature gap assessment
 
 ---
 
 ## Definition of Done
 
-- [ ] Voice works: hold button → speak → companion replies with audio
-- [ ] Marketplace: browse, search, preview personalities
-- [ ] Share sheet: share URL from Safari → get summary in app
-- [ ] Widget: companion mood visible on home screen
-- [ ] WebSocket real-time sync replaces polling
-- [ ] Morning briefing placeholder stats fixed
+- [ ] SSRF blocklist active on browse/summarize
+- [ ] WebSocket requires auth token + max 5 connections
+- [ ] Achievement system works (earn badges, see progress, toast popups)
+- [ ] Weekly summary card shows companion growth
+- [ ] EAS build configuration verified for TestFlight
 - [ ] All gates dropped

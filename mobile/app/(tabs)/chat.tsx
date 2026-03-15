@@ -4,6 +4,8 @@
  * Sprint 2: Chat history persistence, haptic feedback.
  * Sprint 3: Sound effects.
  * Sprint 4: Message guardian integration.
+ * Sprint 5: Proactive guardian.
+ * Sprint 6: Voice mode (hold-to-talk walkie-talkie).
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -24,6 +26,7 @@ import { colors, spacing, borderRadius, fontSize } from "../../src/theme";
 import { playSound } from "../../src/sounds";
 import GuardianModal from "../../src/GuardianModal";
 import ProactiveGuardian from "../../src/ProactiveGuardian";
+import VoiceMode from "../../src/VoiceMode";
 import type { Message, PetSpecies } from "../../src/types";
 
 const CHAT_HISTORY_KEY = "valhalla_chat_history";
@@ -275,6 +278,20 @@ export default function ChatTab() {
                     <Text style={styles.sendText}>{typing ? "⏳" : "Send"}</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Voice Mode — Sprint 6 */}
+            <VoiceMode
+                petName={petName}
+                species={species}
+                isOnline={isOnline}
+                onChatMessage={(userText, replyText) => {
+                    setMessages((prev) => [
+                        ...prev,
+                        { role: "user", content: `🎙️ ${userText}` },
+                        { role: "pet", content: replyText },
+                    ]);
+                }}
+            />
 
             {/* Guardian Modal — Sprint 4 */}
             <GuardianModal

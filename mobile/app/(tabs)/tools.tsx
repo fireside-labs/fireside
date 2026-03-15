@@ -1,8 +1,8 @@
 /**
- * 🔧 Tools Tab — Sprint 5 Task 1 (Tool Mode).
+ * 🔧 Tools Tab — Sprint 5 Task 1, Sprint 6 Task 3.
  *
  * Replaces Care+Bag+Quest in Tool mode.
- * Contains: Translation, TeachMe, Guardian settings, "What's Happening at Home" card.
+ * Contains: Platform card, URL summary, Translation, TeachMe.
  */
 import { useState, useCallback } from "react";
 import {
@@ -21,6 +21,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
+import UrlSummary from "../../src/UrlSummary";
 import type { PetSpecies } from "../../src/types";
 
 // ———— TeachMe (Sprint 5 Task 4) ————
@@ -173,6 +174,9 @@ export default function ToolsTab() {
                     </Text>
                 )}
             </View>
+
+            {/* ———— URL Summary (Sprint 6 Task 3) ———— */}
+            <UrlSummary petName={petName} isOnline={isOnline} />
 
             {/* ———— Translation (Sprint 5 Task 2) ———— */}
             <View style={styles.card}>

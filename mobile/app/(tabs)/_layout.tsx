@@ -82,6 +82,15 @@ export default function TabsLayout() {
                     href: isPetMode ? "/(tabs)/quest" : null,
                 }}
             />
+            <Tabs.Screen
+                name="marketplace"
+                options={{
+                    title: "Market",
+                    tabBarIcon: ({ focused }) => (
+                        <Text style={[styles.icon, focused && styles.iconActive]}>🛒</Text>
+                    ),
+                }}
+            />
         </Tabs>
     );
 }

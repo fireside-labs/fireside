@@ -1,4 +1,4 @@
-# Sprint 6 — FREYA (Frontend: Voice + Marketplace + OS Integration)
+# Sprint 7 — FREYA (Frontend: Achievements + Weekly + TestFlight)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -10,131 +10,130 @@
 > `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file).
 > Do NOT use shell echo commands.
 
-> [!IMPORTANT]
-> **Read `FEATURE_INVENTORY.md`** — the platform has voice, marketplace, web browsing already built.
-> Read Valkyrie's Sprint 5 review: `sprints/archive/sprint_05/gates/review_valkyrie.md`
-
 ---
 
 ## Context
 
-After 5 sprints, the mobile app is a companion viewer. Sprint 6 makes it a **platform surface** — a way to access the full power of your home AI. Voice is the demo-killer: "Talk to your home AI from your phone." Marketplace is the commerce layer. Share sheet integrates the AI into your daily phone usage.
+This is the final build sprint. After this, the app gets tested on a real device.
+
+Reference dashboard components:
+- `dashboard/components/AchievementBadge.tsx` (2.7KB)
+- `dashboard/components/AchievementToast.tsx` (2.4KB)
+- `dashboard/components/WeeklyCard.tsx` (3.2KB)
+- `dashboard/components/QRAuth.tsx` (4.8KB)
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Voice Mode (Walkie-Talkie)
-This is the highest-impact feature. "Talk to your home AI from anywhere."
+### Task 1 — Achievement System
+Build the achievement UI. Thor is adding a backend with 16 achievements.
+
+**Achievement Badge component** (`mobile/src/AchievementBadge.tsx`):
+- Circular badge with icon (emoji), name, and earned/locked state
+- Earned: full color, glow effect, earned date
+- Locked: greyed out, "?" icon, description of how to earn
+
+**Achievement Toast** (`mobile/src/AchievementToast.tsx`):
+- Slides in from top when a new achievement is earned
+- Shows icon + name + "Achievement Unlocked!"
+- Celebratory animation (confetti or sparkle)
+- Haptic feedback (`notificationAsync(Success)`)
+- Sound effect (reuse level_up.mp3)
+- Auto-dismisses after 3 seconds
+
+**Achievements screen:**
+- Grid of all 16 achievements
+- Earned count: "7 of 16 unlocked"
+- Progress bars for count-based achievements (e.g., "23/100 feeds")
+- Accessible from: Gear icon in Care tab (Pet mode) or profile section
+
+**Integration:**
+After every action (feed, walk, quest complete, teach, translate, voice), call `POST /api/v1/companion/achievements/check`. If it returns new achievements, show the toast.
+
+### Task 2 — Weekly Summary Card
+Build a weekly summary card. Reference `WeeklyCard.tsx` (3.2KB).
+
+- Shows at the top of Care/Tools tab on the first app open each week (Monday or Sunday)
+- Card shows: feeds, walks, quests, facts, messages, levels, achievements earned
+- Highlight reel: "Reached level 7!", "Earned Explorer badge"
+- Dismissible, stored in AsyncStorage
+- Shareable: "Share my week" button → generates a pretty image or text summary
+
+Call `GET /api/v1/companion/weekly-summary` on mount.
+
+### Task 3 — QR Code Pairing (Better Onboarding)
+Replace manual IP entry with QR code scanning. Reference `QRAuth.tsx` (4.8KB).
 
 ```bash
-cd mobile && npx expo install expo-av
+cd mobile && npx expo install expo-barcode-scanner
 ```
 
-Build a voice screen in both Pet and Tool mode. UX: **hold-to-talk walkie-talkie:**
+Flow:
+1. Desktop dashboard shows a QR code at `http://localhost:3000/pair` containing `{ "host": "100.x.x.x:8765", "token": "abc123" }`
+2. Mobile app scans the QR code
+3. Auto-fills the host IP AND the pairing token
+4. Calls `/mobile/pair` with the token
+5. Connected
 
-1. **Hold button** → start recording audio (use `expo-av` Audio.Recording)
-2. **Release button** → stop recording, send to `POST /api/v1/voice/transcribe`
-3. **Show transcribed text** in chat bubble
-4. **Send to companion chat** → get response
-5. **Play response** via `POST /api/v1/voice/speak` → play audio through speaker
-6. **Waveform animation** while companion is "speaking"
+Keep the manual IP entry as a fallback (some users may not have the dashboard open).
 
-UX details:
-- The button should be a large, prominent mic icon (60px+)
-- While recording: pulsing red ring animation, "Listening..." text
-- While processing: "Thinking..." with companion avatar animation
-- While speaking: waveform or speaker animation with companion avatar
-- Haptic feedback on press (medium impact) and release (light impact)
+Add QR scanner as an option on the setup screen: "Scan QR Code" button above the manual IP field.
 
-In Pet mode: voice button on Chat tab (alongside text input)
-In Tool mode: voice button on Chat tab (more prominent, maybe primary input)
+### Task 4 — Update WebSocket Connection with Auth
+Thor is adding token auth to the WebSocket. Update `useWebSocket.ts`:
 
-**Privacy note:** Audio goes to your home PC only. Never to a cloud. Show a small 🔒 icon to reinforce this.
+```typescript
+// Before:
+const ws = new WebSocket(`ws://${host}/api/v1/companion/ws`);
 
-### Task 2 — Marketplace Browsing
-Add marketplace browsing. In Pet mode: accessible from Bag tab or a new icon. In Tool mode: accessible from Tools tab.
-
-1. **Browse screen** — grid/list of available items (agent personalities, themes, voice packs)
-2. **Search bar** — search marketplace via `GET /api/v1/marketplace/search?q=`
-3. **Item detail** — tap item → detail screen with description, screenshots, price, ratings
-4. **Install button** — for free items, install directly. For paid, show price + "Buy" button
-5. **Category filters** — Agents, Themes, Voices, Plugins
-
-Each item card should show:
-- Icon/thumbnail
-- Name + creator
-- Star rating + install count
-- Price (or "Free")
-- Install/Installed badge
-
-### Task 3 — iOS Share Sheet Extension
-This lets users share a URL from Safari (or any app) and get a summary from their companion.
-
-```bash
-cd mobile && npx expo install expo-sharing expo-intent-launcher
+// After:
+const token = await AsyncStorage.getItem('pairingToken');
+const ws = new WebSocket(`ws://${host}/api/v1/companion/ws?token=${token}`);
 ```
 
-Note: Full native share extensions in Expo require a config plugin. Create a share-receiving screen:
+Handle 401 rejection gracefully (show "Pairing expired, re-pair your phone").
 
-1. Register the app to receive shared URLs (via `app.json` intent filters)
-2. When a URL is shared to the app → call `POST /api/v1/browse/summarize`
-3. Show the summary in a compact card: title, summary, key points
-4. Options: "Save to notes", "Share summary", "Ask companion about this"
+### Task 5 — TestFlight Prep
+Verify the EAS build configuration is complete:
 
-If native share sheet extension is too complex for Expo, alternative: add a "Paste URL" button in the Tools tab that accepts a URL and returns a summary. Simpler, still useful.
+1. Check `app.json` has all required fields:
+   - `name`, `slug`, `version`, `bundleIdentifier`, `package`
+   - `icon` (1024x1024), `splash` image
+   - `permissions` (microphone, notifications, camera for QR)
+2. Check `eas.json` has `preview` and `production` profiles
+3. Run `npx eas-cli@latest build:configure` if needed
+4. Document the exact command to trigger a build:
+   ```
+   npx eas-cli@latest build --platform ios --profile preview
+   ```
 
-### Task 4 — Home Screen Widget
-Show companion mood on the home screen without opening the app.
-
-```bash
-cd mobile && npx expo install react-native-widget-extension
-```
-
-Note: Expo widget support is experimental. If the widget library isn't stable enough, create a simulated widget screen or skip this task and document why.
-
-Widget should show:
-- Companion avatar (mood expression)
-- Happiness bar
-- Last activity ("Fed 2h ago", "Adventure available!")
-- Tap → opens app to Care tab
-
-### Task 5 — WebSocket Real-Time Sync
-Replace the pull-to-refresh polling with WebSocket for live updates:
-
-1. On app launch, connect to `WS /api/v1/companion/ws`
-2. Listen for events: `companion_state_update`, `task_completed`, `chat_message`
-3. Update local state immediately when events arrive
-4. Show a subtle live indicator (green dot) when WebSocket is connected
-5. Fall back to polling if WebSocket fails (keep existing pull-to-refresh as backup)
-6. Reconnect automatically on disconnect (exponential backoff)
+Do NOT actually run the build (it requires Apple credentials). Just verify config and document the command.
 
 ### Task 6 — Drop Your Gate
 Create `sprints/current/gates/gate_freya.md` using write_to_file:
 
 ```markdown
-# Freya Gate — Sprint 6 Frontend Complete
-Sprint 6 tasks completed.
+# Freya Gate — Sprint 7 Frontend Complete
+Sprint 7 tasks completed.
 
 ## Completed
-- [x] Voice mode (walkie-talkie, hold-to-talk)
-- [x] Marketplace browsing (browse, search, detail, install)
-- [x] Share sheet / URL summary (or paste-URL alternative)
-- [x] Home screen widget (or documented why skipped)
-- [x] WebSocket real-time sync
+- [x] Achievement system (16 badges, toast popups, progress tracking)
+- [x] Weekly summary card (dismissible, shareable)
+- [x] QR code pairing (+ manual IP fallback)
+- [x] WebSocket auth token integration
+- [x] TestFlight configuration verified
 ```
 
 ---
 
 ## Rework Loop
 - 🔴 HIGH → automatic FAIL, gate deleted → fix and re-drop
-- Read `sprints/current/gates/audit_heimdall.md` if gate is deleted
 
 ---
 
 ## Notes
-- **Voice is the #1 priority.** This is what makes demos jaw-dropping. "Watch, I'll talk to my home AI from my phone."
-- Audio data must NEVER leave the local network. Show the 🔒 privacy indicator.
-- If widget or native share sheet is too complex for Expo, document the limitation and build the simpler alternative. Don't block the sprint on platform limitations.
-- WebSocket is infrastructure — it makes everything feel instant. Worth the investment.
-- Build ON TOP of Sprint 5 code.
+- Achievements are the #1 engagement feature for Pet mode. Make the toast feel celebratory.
+- QR pairing replaces the weakest UX in the app (manual IP entry).
+- The TestFlight build is the end goal of this sprint. When Heimdall and Valkyrie pass, the owner runs `eas build` and tests on a real phone.
+- Build ON TOP of Sprint 6 code.
