@@ -1,10 +1,11 @@
 /**
  * Tab layout — Mode-aware bottom tab navigator.
  *
- * Pet Mode:  💬 Chat | 🐾 Care | 🎒 Bag | 📋 Tasks | ⚔️ Quest
- * Tool Mode: 💬 Chat | 🔧 Tools | 📋 Tasks
+ * Companion Mode: 💬 Chat | 🐾 Care | 🎒 Bag | 📋 Tasks | ⚔️ Quest
+ * Executive Mode: 💬 Chat | 🔧 Tools | 📋 Tasks
  *
  * Sprint 5: Mode toggle via ModeContext.
+ * Sprint 8: Renamed Pet→Companion, Tool→Executive (display only).
  */
 import { Tabs } from "expo-router";
 import { Text, StyleSheet } from "react-native";

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Valhalla Companion",
-    "slug": "valhalla-companion",
+    "name": "Fireside",
+    "slug": "fireside-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

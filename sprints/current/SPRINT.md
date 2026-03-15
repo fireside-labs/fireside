@@ -1,42 +1,45 @@
-# Sprint 8 — Ship It: Settings + Onboarding + TestFlight
+# Sprint 9 — Final Polish: Actions + App Store Fixes + Brand Art
 
-**Goal:** Get the app on a real phone. Stop building features. Ship.
+**Goal:** The LAST sprint before real-device testing. Fix everything Heimdall flagged, add rich action execution through chat, finalize brand art, and prepare for TestFlight.
 
-After 7 sprints (191 tests, 0 MEDIUMs, ~80% platform coverage), the app is TestFlight-ready. Sprint 8 adds the minimum missing pieces and submits.
+**After this sprint:** Owner installs on iPhone and tests everything end-to-end.
 
 ---
 
-## Sprint 8 Scope
+## Sprint 9 Scope
 
-### Thor (Backend) — Minimal
-- Hosted waitlist endpoint (`POST /api/v1/waitlist` — stores email, returns confirmation)
-- That's it. The backend is ready.
+### Thor (Backend)
+- Rich task execution: when companion routes to browse/pipeline, return structured results the mobile app can render as cards
+- Cross-context search: `POST /api/v1/companion/query` — search across memories, conversations, taught facts
+- Fix privacy policy contact email (owner provides real email)
 
-### Freya (Frontend) — Polish + Ship
-- Settings screen (mode switch, connection, voice, notifications, about)
-- Onboarding v2 (self-hosted QR path + hosted waitlist path)
-- Mode rename: Pet → Companion, Tool → Executive
-- Marketplace set to browse-only (hide "Buy" buttons — purchases happen on desktop)
-- TestFlight build verification
+### Freya (Frontend)
+- Rich task cards in chat: when a task is running (browse, pipeline), show progress cards instead of plain text
+- Cross-context search screen: "What do you know about X?"
+- Update privacy policy to cover voice, camera, marketplace, translation, achievements
+- Replace placeholder email with real email (owner will provide)
+- Fix EAS preview profile: remove `simulator: true`
+- Replace app icon + splash with final brand art (campfire images)
 
-### Heimdall — Final pre-submit audit
-- Verify no secrets in frontend code
-- Verify privacy policy is accurate
-- Verify permissions are justified (camera, mic, notifications)
-- TestFlight readiness sign-off
+### Heimdall — Final audit before TestFlight build
+- Verify all 3 pre-App Store items are fixed
+- Full regression: all 207+ tests pass
+- Final sign-off for `eas build`
 
-### Valkyrie — App Store readiness
-- App Store listing copy (name, subtitle, description, keywords)
-- Screenshot requirements
-- Final UX pass
+### Valkyrie — Final pre-build review
+- Everything looks right for a real device?
+- Brand art review: icon + splash look good?
+- App Store listing copy finalized?
 
 ---
 
 ## Definition of Done
 
-- [ ] Settings screen works
-- [ ] Onboarding has self-hosted + hosted waitlist paths
-- [ ] Modes renamed Companion / Executive
-- [ ] Marketplace is browse-only on mobile
+- [ ] Rich task cards render in chat for browse/pipeline results
+- [ ] Cross-context search works
+- [ ] Privacy policy updated for all Sprint 4-8 features
+- [ ] Real contact email in privacy policy
+- [ ] EAS preview profile fixed
+- [ ] Brand art (icon + splash) finalized
 - [ ] All gates dropped
 - [ ] Owner runs `eas build --platform ios --profile preview`

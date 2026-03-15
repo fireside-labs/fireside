@@ -213,6 +213,12 @@ export const companionAPI = {
             "/mobile/pair",
             { method: "POST", body: JSON.stringify({ token }) }
         ),
+    /** Join hosted waitlist (Sprint 8). */
+    waitlist: (email: string) =>
+        apiFetch<{ ok: boolean; message: string }>(
+            "/api/v1/waitlist",
+            { method: "POST", body: JSON.stringify({ email }) }
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

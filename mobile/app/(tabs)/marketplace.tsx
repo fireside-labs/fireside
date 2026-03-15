@@ -112,16 +112,27 @@ export default function Marketplace() {
 
                 <Text style={styles.detailDesc}>{selectedItem.description}</Text>
 
-                <TouchableOpacity
-                    style={[styles.installDetailBtn, selectedItem.installed && styles.installedBtn]}
-                    onPress={() => !selectedItem.installed && handleInstall(selectedItem)}
-                    disabled={selectedItem.installed}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[styles.installDetailText, selectedItem.installed && styles.installedText]}>
-                        {selectedItem.installed ? "✅ Installed" : selectedItem.price === 0 ? "Install" : `Buy $${selectedItem.price.toFixed(2)}`}
-                    </Text>
-                </TouchableOpacity>
+                {selectedItem.price === 0 ? (
+                    <TouchableOpacity
+                        style={[styles.installDetailBtn, selectedItem.installed && styles.installedBtn]}
+                        onPress={() => !selectedItem.installed && handleInstall(selectedItem)}
+                        disabled={selectedItem.installed}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.installDetailText, selectedItem.installed && styles.installedText]}>
+                            {selectedItem.installed ? "✅ Installed" : "Install — Free"}
+                        </Text>
+                    </TouchableOpacity>
+                ) : (
+                    <View style={styles.paidNote}>
+                        <Text style={styles.paidNoteText}>
+                            💻 Purchase on desktop dashboard
+                        </Text>
+                        <Text style={styles.paidNotePrice}>
+                            ${selectedItem.price.toFixed(2)}
+                        </Text>
+                    </View>
+                )}
             </ScrollView>
         );
     }
@@ -239,4 +250,8 @@ const styles = StyleSheet.create({
     installDetailText: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.sm, color: colors.bgPrimary },
     installedBtn: { backgroundColor: colors.bgCard, borderWidth: 1, borderColor: "#4ade80" },
     installedText: { color: "#4ade80" },
+    // Sprint 8: browse-only for paid items
+    paidNote: { backgroundColor: colors.bgInput, borderRadius: borderRadius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, alignItems: "center", borderWidth: 1, borderColor: colors.glassBorder },
+    paidNoteText: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textDim, marginBottom: spacing.xs },
+    paidNotePrice: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.ember },
 });

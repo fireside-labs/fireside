@@ -1,4 +1,4 @@
-# Sprint 8 — FREYA (Frontend: Settings + Onboarding v2 + Ship)
+# Sprint 9 — FREYA (Frontend: Rich Cards + Search + App Store Fixes)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -10,84 +10,115 @@
 > `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file).
 
 > [!IMPORTANT]
-> **READ FIRST:** `sprints/current/CREATIVE_DIRECTION.md` — this is your brand bible.
-> It contains app icon assignment, splash screen, color palette, and mode-specific tone guidance.
-> The 3 brand images you received are assigned there. Follow it exactly.
+> **READ:** `sprints/current/CREATIVE_DIRECTION.md` — continues from Sprint 8.
+> This is the LAST sprint before a real iPhone gets the app. Everything must be polished.
 
 ---
 
 ## Context
 
-This is the ship sprint. The app has everything it needs feature-wise. You're adding the last missing UX pieces and getting it ready for TestFlight.
+This sprint fixes Heimdall's 3 pre-App Store items, adds rich action cards to chat, and adds cross-context search. After this: TestFlight.
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Settings Screen
-Build `mobile/app/settings.tsx` — accessible from a gear icon in the tab bar or header:
+### Task 1 — Rich Action Cards in Chat
+When a chat response includes an `action` field, render a visual card instead of (or alongside) plain text:
 
-1. **Mode switch** — "Companion Mode" ↔ "Executive Mode" toggle
-2. **Connection** — Status indicator (green/red dot), host IP, "Re-pair" button
-3. **Companion** — Name, species, level (read-only display)
-4. **Voice** — Enable/disable voice mode toggle
-5. **Notifications** — Toggle categories (companion care, tasks, guardian)
-6. **Privacy** — "All data stays on your PC" with lock icon
-7. **About** — App version, build number, "Powered by Fireside"
+**Browse Result Card:**
+- Title + URL (truncated, tappable to open in browser)
+- Summary paragraph
+- Key points as bullet chips
+- Timestamp
+- Fire-orange left border accent
 
-Keep it clean. No nested menus. One scrollable screen.
+**Pipeline Status Card:**
+- Task name + current stage
+- Progress bar (fire-orange fill)
+- Estimated completion
+- Pulsing animation while in progress
 
-### Task 2 — Onboarding v2
-Rebuild the onboarding flow with TWO paths:
+**Pipeline Complete Card:**
+- Task name + completion badge ✅
+- Results summary
+- Confetti micro-animation (subtle, like achievements)
 
-**Screen 1 — Welcome**
-"Your private AI companion"
+**Memory Recall Card:**
+- Source badge (🧠 Memory / 📚 Taught / 💬 Chat)
+- Content snippet
+- Date
+- Dimmer styling than regular messages — it's supplemental
 
-**Screen 2 — Connect**
-- 🏠 **"I have Fireside on my PC"** → QR code scan (already built in Sprint 7) + manual IP fallback
-- ☁️ **"Set it up for me"** → email input → calls `POST /api/v1/waitlist` → shows "You're on the waitlist! We'll let you know when your private AI is ready." → stores `connectionMode: "waitlist"` in AsyncStorage
+**Translation Result Card:**
+- Language pair (flag emojis if possible)
+- Original text → translated text
+- Copy button
 
-**Screen 3 — Choose your mode** (only for self-hosted path — waitlist users skip this)
-- 🐾 **"Companion"** — "A friendly AI that grows with you"
-- 💼 **"Executive"** — "Your private AI assistant for tasks and research"
+All cards should use the fire-orange palette from `CREATIVE_DIRECTION.md`. Cards go in the chat feed as companion messages.
 
-**Screen 4 — Permissions**
-Mic, notifications, camera — one screen, clear "why we need this" text
+### Task 2 — Cross-Context Search
+Build `mobile/src/SearchAll.tsx`:
 
-**Screen 5 — Done**
-Mode-appropriate welcome message
+1. Search icon in the chat header (magnifying glass)
+2. Tapping opens a search overlay/screen
+3. Search input: "Search across your AI's memory..."
+4. Call `POST /api/v1/companion/query` (debounced 500ms)
+5. Results grouped by source with icons:
+   - 🧠 Working Memory
+   - 📚 Taught Facts
+   - 💬 Conversations
+   - 🔮 Hypotheses
+6. Each result: source icon, content preview (2 lines), relevance badge, date
+7. Tap result → expand to full content
+8. Empty state: "Your AI's memory is empty. Start chatting, teaching, and exploring!"
 
-For waitlist users: show a friendly "Your spot is saved" screen with the app in a limited demo mode or just end gracefully.
+Accessible from both Companion and Executive mode chat screens.
 
-### Task 3 — Mode Rename
-Update ALL UI-facing labels:
-- "Pet Mode" → **"Companion"**
-- "Tool Mode" → **"Executive"**
-- Internal `ModeContext` values stay `"pet"` / `"tool"` — only display labels change
-- Update the mode toggle component text
-- Update any tab labels that reference modes
+### Task 3 — Update Privacy Policy
+Update `mobile/app/privacy.tsx` to cover ALL features added in Sprints 4-8:
 
-### Task 4 — Marketplace Browse-Only
-On the marketplace tab, hide or disable the "Buy" / "Install" buttons for PAID items. Free items can still be installed. Show a note on paid items: "Purchase on desktop dashboard."
+| Feature | Privacy Statement |
+|---|---|
+| Voice mode | "Microphone audio is sent to your home PC for speech recognition (Whisper). Audio is never stored or sent to any cloud service." |
+| Camera (QR) | "Camera is used only for scanning QR pairing codes. No photos are taken or stored." |
+| Marketplace | "Marketplace browsing sends requests to your home PC's plugin registry. No browsing data is shared externally." |
+| Translation | "Text translation is performed by NLLB-200 on your home PC. Translated text never leaves your network." |
+| TeachMe | "Facts you teach your companion are stored on your home PC in its memory files." |
+| Achievements | "Achievement progress is stored on your home PC." |
+| Weekly summary | "Weekly activity stats are generated from data on your home PC." |
+| Waitlist | "If you join the hosted waitlist, your email address is stored. No other data is collected until your instance is provisioned." |
 
-This avoids the Apple IAP requirement for launch. Users browse on mobile, buy on desktop.
+Replace contact email: `privacy@valhalla.local` → `hello@fablefur.com`
 
-### Task 5 — TestFlight Pre-Flight Check
-Verify everything is ready:
+### Task 4 — Fix EAS Preview Profile
+In `mobile/eas.json`, update the `preview` profile:
 
-1. `app.json`:
-   - `name`: "Fireside" (or final app name)
-   - `slug`, `version` (1.0.0), `bundleIdentifier`
-   - `icon` (1024x1024) — use existing or placeholder
-   - `splash` image
-   - All permission strings (camera, mic, notifications) with user-friendly descriptions
-2. `eas.json`: preview and production profiles exist
-3. No hardcoded localhost URLs — all use the dynamic host from pairing
-4. No `console.log` spam in production build
-5. Document the build command: `npx eas-cli@latest build --platform ios --profile preview`
+```json
+// Before:
+"preview": {
+  "distribution": "internal",
+  "ios": { "simulator": true }
+}
+
+// After:
+"preview": {
+  "distribution": "internal"
+}
+```
+
+Remove `simulator: true` so the build targets real devices for TestFlight.
+
+### Task 5 — Brand Art Finalization
+The owner provided 3 brand images. Ensure:
+
+1. **App icon** (`mobile/assets/icon.png`) — flame + companion silhouette on dark background. Must be 1024x1024. If the provided image isn't exact, crop/resize to fit.
+2. **Splash screen** (`mobile/assets/splash.png`) — all 6 species around campfire under stars. Scale to fit splash dimensions.
+3. **Adaptive icon** (Android) — update `android-icon-foreground.png` with the flame icon
+
+If the brand images aren't accessible in the mobile assets directory, create placeholder-quality versions using the fire-orange palette and document what the owner needs to manually replace.
 
 ### Task 6 — Drop Your Gate
-Create `sprints/current/gates/gate_freya.md` using write_to_file.
 
 ---
 
@@ -97,7 +128,7 @@ Create `sprints/current/gates/gate_freya.md` using write_to_file.
 ---
 
 ## Notes
-- This is a POLISH sprint, not a feature sprint. Resist the urge to add features.
-- The goal is: owner runs `eas build` after this sprint and tests on a real iPhone.
-- Hosted waitlist is a demand test, not a product. Keep it simple.
-- Build ON TOP of Sprint 7 code.
+- This is the LAST implementation sprint. After this: TestFlight build → real iPhone testing.
+- Prioritize the 3 Heimdall fixes (privacy policy, email, EAS). Those are BLOCKERS for App Store.
+- Rich cards and search are the UX polish that makes the app feel premium on first use.
+- Follow `CREATIVE_DIRECTION.md` for all visual decisions.

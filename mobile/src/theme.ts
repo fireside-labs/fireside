@@ -1,39 +1,53 @@
 /**
- * Valhalla Design System — Mobile
+ * Fireside Design System — Mobile
  *
- * Dark premium aesthetic matching the dashboard.
- * Deep dark backgrounds, neon green accents, glassmorphism cards.
+ * Sprint 8: Updated from neon-green to fire-orange palette per CREATIVE_DIRECTION.md.
+ * Warm amber fire palette — campfire aesthetic.
+ *
+ * Brand tokens:
+ *   --fire-orange:    #E8712C  (primary accent, CTA buttons)
+ *   --ember-gold:     #F5A623  (highlights, progress, XP)
+ *   --warm-glow:      #FFF3E0  (subtle backgrounds)
+ *   --deep-charcoal:  #1A1A2E  (primary bg)
+ *   --midnight:       #0D0D1A  (deepest bg)
+ *   --ash-gray:       #8E8E93  (secondary text)
+ *   --snow:           #F5F5F7  (primary text)
  */
 
 export const colors = {
     // Backgrounds
-    bgPrimary: "#0a0a0f",
-    bgSecondary: "#111118",
+    bgPrimary: "#0D0D1A",      // --midnight (deepest)
+    bgSecondary: "#1A1A2E",    // --deep-charcoal
     bgCard: "rgba(255, 255, 255, 0.04)",
     bgCardHover: "rgba(255, 255, 255, 0.08)",
     bgInput: "rgba(255, 255, 255, 0.06)",
 
-    // Accent
-    neon: "#00ff88",
-    neonDim: "rgba(0, 255, 136, 0.6)",
-    neonGlow: "rgba(0, 255, 136, 0.08)",
-    neonBorder: "rgba(0, 255, 136, 0.15)",
+    // Fire accent (was neon-green #00ff88)
+    neon: "#E8712C",           // --fire-orange (primary accent)
+    neonDim: "rgba(232, 113, 44, 0.6)",
+    neonGlow: "rgba(232, 113, 44, 0.08)",
+    neonBorder: "rgba(232, 113, 44, 0.15)",
+
+    // Ember highlight
+    ember: "#F5A623",          // --ember-gold
+    emberGlow: "rgba(245, 166, 35, 0.08)",
+    warmGlow: "#FFF3E0",       // --warm-glow
 
     // Status bars
     happinessHigh: "#2ecc71",
-    happinessMid: "#f39c12",
+    happinessMid: "#F5A623",   // ember-gold instead of generic orange
     happinessLow: "#e74c3c",
 
-    // Text
-    textPrimary: "#ffffff",
-    textSecondary: "rgba(255, 255, 255, 0.7)",
-    textDim: "rgba(255, 255, 255, 0.4)",
-    textMuted: "rgba(255, 255, 255, 0.25)",
+    // Text (updated to brand snow)
+    textPrimary: "#F5F5F7",    // --snow
+    textSecondary: "rgba(245, 245, 247, 0.7)",
+    textDim: "rgba(245, 245, 247, 0.4)",
+    textMuted: "rgba(245, 245, 247, 0.25)",
 
     // States
-    warning: "#f39c12",
+    warning: "#F5A623",        // ember-gold
     danger: "#ff4466",
-    success: "#00ff88",
+    success: "#2ecc71",
     info: "#3b82f6",
 
     // Borders
@@ -41,13 +55,13 @@ export const colors = {
     cardBorder: "rgba(255, 255, 255, 0.06)",
 
     // Tab bar
-    tabInactive: "rgba(255, 255, 255, 0.3)",
-    tabActive: "#00ff88",
-    tabBg: "#0d0d14",
+    tabInactive: "rgba(245, 245, 247, 0.3)",
+    tabActive: "#E8712C",      // fire-orange
+    tabBg: "#0D0D1A",          // midnight
 
-    // Offline
+    // Connection status
     offlineDot: "rgba(255, 68, 102, 0.6)",
-    onlineDot: "#00ff88",
+    onlineDot: "#2ecc71",
 } as const;
 
 export const spacing = {
@@ -88,10 +102,17 @@ export const shadows = {
         elevation: 4,
     },
     glow: {
-        shadowColor: "#00ff88",
+        shadowColor: "#E8712C", // fire-orange glow
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 6,
+    },
+    ember: {
+        shadowColor: "#F5A623", // ember-gold glow
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 5,
     },
 } as const;

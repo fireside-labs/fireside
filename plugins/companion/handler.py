@@ -1474,6 +1474,61 @@ def register_routes(app, config: dict) -> None:
             "highlights": highlights[:5],
             "companion_name": state.get("name", "Companion"),
         }
+    # --- Sprint 8: Hosted waitlist ---
+
+    _waitlist_requests: list = []  # timestamps for rate limiting
+
+    @router.post("/api/v1/waitlist")
+    async def api_waitlist(request: Request):
+        """Sign up for hosted mode waitlist.
+
+        Body: { "email": "user@example.com" }
+        Validates email, deduplicates, rate-limited to 10/min.
+        """
+        import re
+        import time as _time
+
+        # Rate limit: 10 signups per minute
+        now = _time.time()
+        _waitlist_requests[:] = [t for t in _waitlist_requests if now - t < 60]
+        if len(_waitlist_requests) >= 10:
+            raise HTTPException(429, "Too many signups. Try again in a minute.")
+        _waitlist_requests.append(now)
+
+        body = await request.json()
+        email = body.get("email", "").strip().lower()
+
+        # Validate email format
+        if not email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            raise HTTPException(400, "Invalid email address.")
+
+        # Store in waitlist.json (append, deduplicate)
+        from pathlib import Path as _Path
+        waitlist_path = _Path.home() / ".valhalla" / "waitlist.json"
+        waitlist_path.parent.mkdir(parents=True, exist_ok=True)
+
+        existing = []
+        if waitlist_path.exists():
+            try:
+                existing = json.loads(waitlist_path.read_text(encoding="utf-8"))
+            except Exception:
+                existing = []
+
+        # Deduplicate
+        if any(e.get("email") == email for e in existing):
+            return {
+                "ok": True,
+                "message": "You're already on the waitlist! We'll email you when your private AI is ready.",
+            }
+
+        existing.append({"email": email, "signed_up": _time.time()})
+        waitlist_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+        return {
+            "ok": True,
+            "message": "You're on the waitlist! We'll email you when your private AI is ready.",
+        }
 
     app.include_router(router)
-    log.info("[companion] Plugin loaded (Sprint 7: security + achievements + weekly).")
+    log.info("[companion] Plugin loaded (Sprint 8: waitlist endpoint added).")
+
