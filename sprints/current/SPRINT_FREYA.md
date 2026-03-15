@@ -1,4 +1,4 @@
-# Sprint 8 — FREYA (Frontend: Executive Toolkit + Hosted Mode + Polish)
+# Sprint 8 — FREYA (Frontend: Orchestration UI + Settings + Onboarding v2)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -8,94 +8,117 @@
 > [!CAUTION]
 > **GATE FILE IS MANDATORY.** When all tasks below are complete, you MUST create the file
 > `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file).
-> Do NOT use shell echo commands.
 
 > [!IMPORTANT]
-> **READ FIRST:** `sprints/current/PROPOSAL_SPRINT8.md` — this sprint includes a major product expansion
-> (hosted mode + executive toolkit). Review agent feedback before building.
+> **Read `FEATURE_INVENTORY.md`** — the platform has 29 plugins and a full mesh of agents.
+> The mobile app's job is to make that mesh accessible, not to replicate what it does.
 
 ---
 
 ## Context
 
-Sprint 7 made the app TestFlight-ready. Sprint 8 makes it **market-ready**.
+The companion is an orchestrator, not an email client. Sprint 8 makes the full mesh accessible from your phone. The user says "research competitor pricing" and the companion routes it to the browse agent. They say "what did we talk about last week?" and the companion searches across all memories, conversations, and predictions.
 
-Two big additions:
-1. **Hosted mode** — users without a home PC can sign up and get a cloud-hosted AI
-2. **Executive toolkit** — email triage, calendar, document creation via voice
-
-The mobile app code barely changes for hosted mode — it's mostly a routing layer in `api.ts`.
+This sprint also adds the settings screen, a proper onboarding flow with hosted mode, and renames "Tool Mode" to "Executive Mode."
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Settings Screen
-Build `mobile/app/settings.tsx` (modal or screen, accessible from gear icon):
+### Task 1 — Smart Command Bar
+Replace or augment the chat input with an intelligent command bar:
 
-1. **Mode switch** — "Companion Mode" ↔ "Executive Mode" (renamed from Pet/Tool)
+When the user types a message that looks like a task/command (not just conversation), show a routing indicator:
+
+1. As user types, call `POST /api/v1/companion/route` (debounced, 500ms)
+2. If the router identifies a specific plugin, show a subtle chip above the input:
+   - 🌐 "Browse agent" for research requests
+   - 🧠 "Memory" for recall requests
+   - 📋 "Pipeline" for multi-step tasks
+   - 🐾 "Companion" for care/chat
+3. User can tap the chip to confirm routing, or just send normally (auto-routes)
+4. When a task is routed, show a task card in the chat feed:
+   - "🌐 Research queued: 'competitor pricing analysis'"
+   - Progress indicator if available
+   - Result appears as a rich card when complete
+
+The key UX principle: **the user just talks naturally, the companion figures out HOW to do it.**
+
+### Task 2 — Agent Activity Feed
+Build `mobile/src/AgentActivity.tsx` — shows what the mesh is doing right now.
+
+Show on the "What's Happening at Home" card (from Sprint 5) or as a new section:
+
+1. Call `GET /api/v1/mesh/status` on mount + via WebSocket updates
+2. Show each active agent with:
+   - Name + status (online/offline/busy)
+   - Current task (if any) with progress bar
+   - Last activity timestamp
+3. Show queued tasks with estimated completion
+4. Show loaded models (clickable → "What's this?" tooltip)
+
+This replaces the simple platform stats card with a **live mesh dashboard** on your phone.
+
+### Task 3 — Cross-Context Search
+Build `mobile/src/SearchAll.tsx` — "What do you know about X?"
+
+Accessible from a search icon in the chat header or Tools tab:
+
+1. Search input with placeholder: "Search across all your AI's memory..."
+2. Call `POST /api/v1/companion/query` with the search term
+3. Show results grouped by source:
+   - 🧠 Memories
+   - 💬 Conversations
+   - 📚 Taught facts
+   - 🔮 Predictions
+4. Each result shows: source icon, content snippet, relevance score, date
+5. Tap a result → expand to full context
+
+This is the "holy shit" feature for executives — "What do you know about Sarah's project?" and the AI searches its ENTIRE brain.
+
+### Task 4 — Settings Screen
+Build `mobile/app/settings.tsx` — accessible from a gear icon:
+
+1. **Mode switch** — "Companion Mode" ↔ "Executive Mode"
 2. **Connection** — Status indicator, host IP, re-pair button, connection mode (self-hosted/hosted)
-3. **Companion** — Name display, species (read-only)
-4. **Voice** — Enable/disable, voice picker (Aria, Nova, Kai, Luna, Zephyr)
-5. **Notifications** — Category toggles
-6. **Privacy** — Data location explainer ("All on your PC" vs "Hosted on Fireside")
-7. **About** — Version, build number
+3. **Companion** — Name display, species, level (read-only)
+4. **Voice** — Enable/disable voice mode
+5. **Notifications** — Category toggles (companion care, tasks, guardian, mesh activity)
+6. **Privacy** — Where data lives: "All on your PC" (self-hosted) or "Your private cloud instance" (hosted)
+7. **About** — Version, build number, "Powered by Fireside Mesh"
 
-### Task 2 — Hosted Mode Connection
-Update `api.ts` and onboarding to support hosted mode:
+Mode switch should also be accessible from the home screen (header toggle or long-press avatar).
 
-1. Add `connectionMode: "selfhosted" | "hosted"` to AsyncStorage
-2. Hosted base URL: `https://api.fireside.ai/v1`
-3. Auth: JWT token stored in AsyncStorage (from email signup or OAuth)
-4. `apiFetch` checks `connectionMode` and routes to the right base URL
-5. Graceful fallback: if hosted API returns 404 on executive endpoints, show "Coming soon"
+### Task 5 — Onboarding v2
+Rebuild the onboarding flow with two paths:
 
-### Task 3 — Onboarding v2
-Rebuild onboarding flow:
+**Screen 1 — Welcome**
+"Your private AI — powered by you."
 
-1. **Welcome** — "Your private AI assistant"
-2. **How do you want to connect?**
-   - "I have a home PC running Fireside" → QR scan / manual IP
-   - "Set up for me" → email signup → hosted mode (show "launching your AI...")
-3. **Choose your experience:**
-   - 🐾 "Companion Mode" — friendly AI that grows with you
-   - 💼 "Executive Mode" — AI chief of staff for email, calendar, docs
-4. **Name your AI**
-5. **Permissions** — mic, notifications, camera
-6. **Done** — mode-appropriate welcome ("Say 'Hey [name], what's on my calendar?'" for executive)
+**Screen 2 — How do you connect?**
+- 🏠 **"I have Fireside on my PC"** → QR code scan (from Sprint 7) or manual IP
+- ☁️ **"Set up for me"** → email signup → "Launching your private AI..." → waits for container (placeholder for now — show waitlist if not ready)
 
-### Task 4 — Executive Command Center
-Build `mobile/src/ExecutiveHub.tsx` — shown in Executive Mode's Tools tab:
+**Screen 3 — Choose your experience**
+- 🐾 **"Companion"** — "A friendly AI that grows with you. Adventures, gifts, and personality."
+- 💼 **"Executive"** — "Your private AI chief of staff. Tasks, research, and cross-context intelligence."
 
-**Email Card:**
-- `GET /api/v1/executive/inbox` → unread count, priority emails
-- Tap email → AI summary + suggested reply
-- "Approve & Send" / "Edit Reply" buttons
-- Empty state: "Connect your email in Dashboard Settings"
+**Screen 4 — Name your AI**
+"What should your AI go by?" (pre-filled with species-appropriate suggestions)
 
-**Calendar Card:**
-- `GET /api/v1/executive/calendar` → today's timeline
-- Next meeting highlighted with prep button
-- "Reschedule" → natural language input
-- Empty state: "Connect your calendar in Dashboard Settings"
+**Screen 5 — Permissions**
+Mic, notifications, camera (one screen, clear explanations)
 
-### Task 5 — Document Commands
-Build `mobile/src/DocumentCommands.tsx`:
+**Screen 6 — Done**
+Mode-appropriate welcome:
+- Companion: "Say hi to [name]! 🐾"
+- Executive: "Ask [name] anything. Try: 'What's happening at home?'"
 
-**Quick action buttons:**
-- 📊 "Create Spreadsheet" → prompt input → `POST /executive/document/create`
-- 📑 "Create Presentation" → prompt input → shows progress → "Ready on PC"
-- 📝 "Summarize Document" → paste/upload text → key points + action items
-- Recent documents list with status badges
-
-### Task 6 — Agent Profile Card
-Port from dashboard `AgentProfile.tsx`:
-
-- Mood avatar, level, XP bar, title
-- Stats: Intelligence, Loyalty, Memory, Speed
-- Personality traits
-- Achievement count, time together
-- Accessible from avatar tap or settings
+### Task 6 — Rename Mode Labels
+Update all UI references:
+- "Pet Mode" → "Companion Mode" (or just "Companion")
+- "Tool Mode" → "Executive Mode" (or just "Executive")
+- Internal `ModeContext` value stays `"pet"` / `"tool"` — only UI labels change
 
 ### Task 7 — Drop Your Gate
 Create `sprints/current/gates/gate_freya.md` using write_to_file.
@@ -108,7 +131,7 @@ Create `sprints/current/gates/gate_freya.md` using write_to_file.
 ---
 
 ## Notes
-- "Executive Mode" replaces "Tool Mode" in UI labels. The `ModeContext` value stays `tool` internally.
-- Hosted mode APIs may not exist yet — build UI with graceful "Coming soon" fallbacks everywhere.
-- Voice is the executive's primary input. Every feature should be reachable through conversation.
-- This sprint establishes the business model. The app becomes a product, not just a project.
+- The smart command bar is the #1 feature. It's what makes the phone feel like a remote control for a mesh of AI agents.
+- Cross-context search is the "holy shit" feature for executives.
+- Hosted onboarding can show a waitlist for now — actual container provisioning is Sprint 9+.
+- Build ON TOP of Sprint 7 code.

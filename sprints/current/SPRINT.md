@@ -1,54 +1,45 @@
-# Sprint 8 — Hosted Mode + Executive Toolkit
+# Sprint 8 — Orchestration + Hosted Mode Infrastructure
 
-**Goal:** Expand from a self-hosted-only product to a dual-mode platform (self-hosted + cloud hosted), add an executive toolkit (email, calendar, documents), and establish the revenue model.
+**Goal:** Make the companion the smartest orchestrator on your phone — it doesn't try to be Gmail or Outlook, it routes tasks to the right mesh agents and gives you cross-context intelligence nobody else has. Also lay the foundation for hosted mode (the business model).
 
-**Process change:** This sprint starts with a **proposal review phase**. Each agent reads `PROPOSAL_SPRINT8.md` and drops feedback before implementation begins.
-
----
-
-## Phase 1 — Proposal Review (ALL AGENTS)
-
-Each agent reads `PROPOSAL_SPRINT8.md` and drops their feedback:
-- `sprints/current/gates/feedback_thor.md` — technical feasibility
-- `sprints/current/gates/feedback_heimdall.md` — security architecture
-- `sprints/current/gates/feedback_valkyrie.md` — business viability + UX
-
-**Owner reviews all feedback before greenlighting implementation.**
+**Key insight:** Gemini is in Gmail. Copilot is in Outlook. We don't compete with that. We win because the companion cross-references EVERYTHING (browsing, memories, tasks, conversations) and runs PRIVATELY on your hardware.
 
 ---
 
-## Phase 2 — Implementation
+## Sprint 8 Scope
 
-### Thor (Backend)
-- Executive plugins: email (IMAP/SMTP), calendar (CalDAV), documents (pptx/xlsx)
-- Hosted mode API foundation (JWT auth, user routing)
-- Achievement backend (from Sprint 7)
+### Thor (Backend) — Orchestration Engine + Hosted Foundation
+- Smart task routing: companion analyzes user intent → routes to best agent/plugin
+- Cross-context queries: "What did we talk about last week related to [topic]?"
+- Agent status API: which agents are active, what they're working on
+- Hosted mode auth foundation (JWT signup/login via Supabase)
+- Hosted mode routing middleware
 
-### Freya (Frontend)
-- Settings screen, onboarding v2 (self-hosted vs hosted)
-- Executive command center (email card, calendar card, document commands)
-- Agent profile card
-- Mode rename: "Tool" → "Executive"
+### Freya (Frontend) — Orchestration UI + Settings + Onboarding v2
+- Smart command bar: natural language → routed to right agent
+- Agent activity feed: what your mesh agents are doing right now
+- Settings screen (mode switch, connection, voice, notifications)
+- Onboarding v2: self-hosted (QR) vs hosted (email signup)
+- Rename Tool Mode → Executive Mode in UI
 
-### Heimdall (Security)
-- Hosted mode threat model
-- Email credential encryption audit
-- JWT + container isolation review
+### Heimdall — Hosted mode security review
+- Auth flow (Supabase integration)
+- HTTPS/WSS requirement for hosted mode
+- Container isolation architecture
 
-### Valkyrie (Review)
-- Business viability assessment
-- Executive UX: cohesive or duct-taped?
-- Pricing validation
-- Conversion path mapping
+### Valkyrie — Orchestration UX + positioning review
+- Does the orchestration UI feel like magic or complexity?
+- Hosted onboarding: is it simple enough for a non-technical exec?
+- Positioning: "The only AI that knows you" vs "AI email assistant"
 
 ---
 
 ## Definition of Done
 
-- [ ] All 4 feedback files dropped (Phase 1)
-- [ ] Owner approves proposal
-- [ ] Executive email/calendar/documents endpoints
-- [ ] Hosted mode auth + routing foundation
-- [ ] Mobile onboarding v2 with hosted option
-- [ ] Executive Hub UI
+- [ ] Smart task routing works (user says intent → companion routes to agent)
+- [ ] Cross-context queries return relevant results from memory + conversations
+- [ ] Agent activity feed shows what mesh agents are doing
+- [ ] Settings screen with mode switch + connection info
+- [ ] Onboarding v2 with self-hosted + hosted paths
+- [ ] Hosted auth via Supabase (signup/login/JWT)
 - [ ] All gates dropped
