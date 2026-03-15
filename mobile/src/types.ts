@@ -40,9 +40,38 @@ export interface QueuedTask {
     result?: string;
 }
 
+/** Rich action data returned by the backend — Sprint 9. */
+export type ActionType = "browse_result" | "pipeline_status" | "pipeline_complete" | "memory_recall" | "translation_result";
+
+export interface ActionData {
+    type: ActionType;
+    title?: string;
+    url?: string;
+    summary?: string;
+    key_points?: string[];
+    timestamp?: string;
+    // Pipeline
+    name?: string;
+    stage?: string;
+    percent?: number;
+    estimated_completion?: string;
+    results?: string;
+    // Memory
+    source?: string;
+    content?: string;
+    date?: string;
+    relevance?: number;
+    // Translation
+    source_lang?: string;
+    target_lang?: string;
+    original?: string;
+    translated?: string;
+}
+
 export interface Message {
     role: "user" | "pet";
     content: string;
+    action?: ActionData;
 }
 
 export interface MobileSyncResponse {
@@ -100,6 +129,7 @@ export interface ChatResponse {
     ok: boolean;
     reply: string;
     mood_prefix?: string;
+    action?: ActionData;
 }
 
 export interface QueueResponse {

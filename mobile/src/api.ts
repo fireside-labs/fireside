@@ -219,6 +219,13 @@ export const companionAPI = {
             "/api/v1/waitlist",
             { method: "POST", body: JSON.stringify({ email }) }
         ),
+
+    /** Cross-context search (Sprint 9). */
+    query: (query: string) =>
+        apiFetch<{ results: Array<{ source: string; content: string; relevance: number; date?: string }>; total: number }>(
+            "/api/v1/companion/query",
+            { method: "POST", body: JSON.stringify({ query }) }
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

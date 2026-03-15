@@ -8,17 +8,14 @@
             "distribution": "internal"
         },
         "preview": {
-            "distribution": "internal",
-            "ios": {
-                "simulator": true
-            }
+            "distribution": "internal"
         },
         "production": {
             "ios": {
-                "bundleIdentifier": "com.valhalla.companion"
+                "bundleIdentifier": "com.fablefur.fireside"
             },
             "android": {
-                "package": "com.valhalla.companion"
+                "package": "com.fablefur.fireside"
             }
         }
     },

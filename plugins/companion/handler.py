@@ -1528,7 +1528,169 @@ def register_routes(app, config: dict) -> None:
             "ok": True,
             "message": "You're on the waitlist! We'll email you when your private AI is ready.",
         }
+    # --- Sprint 9 Task 1: Rich action response builder ---
+
+    def _build_action(action_type: str, **kwargs) -> dict:
+        """Build a structured action for rich mobile card rendering.
+
+        Action types:
+          - browse_result: URL summary with title, summary, key_points
+          - pipeline_status: task progress with name, stage, percent
+          - pipeline_complete: finished multi-stage task with results
+          - memory_recall: companion remembered something (source, content, date)
+          - translation_result: translation with languages + text
+        """
+        import time as _time
+        from datetime import datetime
+
+        action = {"type": action_type, "timestamp": datetime.utcnow().isoformat() + "Z"}
+
+        if action_type == "browse_result":
+            action.update({
+                "title": kwargs.get("title", ""),
+                "url": kwargs.get("url", ""),
+                "summary": kwargs.get("summary", ""),
+                "key_points": kwargs.get("key_points", []),
+            })
+        elif action_type == "pipeline_status":
+            action.update({
+                "name": kwargs.get("name", ""),
+                "stage": kwargs.get("stage", ""),
+                "percent": kwargs.get("percent", 0),
+                "estimated_completion": kwargs.get("estimated_completion"),
+            })
+        elif action_type == "pipeline_complete":
+            action.update({
+                "name": kwargs.get("name", ""),
+                "results": kwargs.get("results", {}),
+                "duration_s": kwargs.get("duration_s", 0),
+            })
+        elif action_type == "memory_recall":
+            action.update({
+                "source": kwargs.get("source", ""),
+                "content": kwargs.get("content", ""),
+                "date": kwargs.get("date", ""),
+            })
+        elif action_type == "translation_result":
+            action.update({
+                "source_lang": kwargs.get("source_lang", ""),
+                "target_lang": kwargs.get("target_lang", ""),
+                "original": kwargs.get("original", ""),
+                "translated": kwargs.get("translated", ""),
+            })
+
+        return action
+
+    # --- Sprint 9 Task 2: Cross-context search ---
+
+    @router.post("/api/v1/companion/query")
+    async def api_companion_query(request: Request):
+        """Search across all companion knowledge sources.
+
+        Body: { "query": "marketing strategy" }
+        Searches: working_memory, taught_facts, chat_history, hypotheses
+        Returns top 10 results ranked by relevance.
+        """
+        body = await request.json()
+        query = body.get("query", "").strip()
+        if not query or len(query) < 2:
+            raise HTTPException(400, "Query must be at least 2 characters.")
+
+        results = []
+        terms = query.lower().split()
+
+        # Source 1: Working memory
+        try:
+            from plugins.working_memory.handler import get_working_memory
+            wm = get_working_memory()
+            memories = wm.recall(query, top_k=5)
+            for m in memories:
+                content = m.get("content", "")
+                results.append({
+                    "source": "working_memory",
+                    "content": content[:500],
+                    "relevance": round(m.get("importance", 0.5), 2),
+                    "date": None,
+                })
+        except ImportError:
+            pass
+
+        # Source 2: Taught facts (from companion state)
+        try:
+            from plugins.companion.sim import load_state
+            state = load_state()
+            if state:
+                facts = state.get("taught_facts", [])
+                for fact in facts:
+                    fact_text = fact if isinstance(fact, str) else fact.get("text", "")
+                    fact_lower = fact_text.lower()
+                    if any(t in fact_lower for t in terms):
+                        date = fact.get("date") if isinstance(fact, dict) else None
+                        results.append({
+                            "source": "taught_facts",
+                            "content": f"You taught me: '{fact_text}'",
+                            "relevance": 0.85,
+                            "date": date,
+                        })
+        except ImportError:
+            pass
+
+        # Source 3: Chat history (recent messages in companion state)
+        try:
+            from plugins.companion.sim import load_state as _ls
+            state = _ls()
+            if state:
+                history = state.get("chat_history", [])
+                for msg in history[-50:]:  # last 50 messages
+                    text = msg if isinstance(msg, str) else msg.get("text", "")
+                    text_lower = text.lower()
+                    if any(t in text_lower for t in terms):
+                        date = msg.get("date") if isinstance(msg, dict) else None
+                        results.append({
+                            "source": "chat_history",
+                            "content": f"In conversation: '{text[:300]}'",
+                            "relevance": 0.70,
+                            "date": date,
+                        })
+        except ImportError:
+            pass
+
+        # Source 4: Hypotheses
+        try:
+            from plugins.hypotheses.handler import get_hypotheses
+            hypotheses = get_hypotheses(limit=10)
+            for h in hypotheses:
+                text = h.get("text", "") if isinstance(h, dict) else str(h)
+                text_lower = text.lower()
+                if any(t in text_lower for t in terms):
+                    results.append({
+                        "source": "hypotheses",
+                        "content": text[:500],
+                        "relevance": round(h.get("confidence", 0.6), 2) if isinstance(h, dict) else 0.6,
+                        "date": h.get("created") if isinstance(h, dict) else None,
+                    })
+        except ImportError:
+            pass
+
+        # Sort by relevance, cap at 10
+        results.sort(key=lambda r: r.get("relevance", 0), reverse=True)
+        results = results[:10]
+
+        return {
+            "ok": True,
+            "results": results,
+            "total": len(results),
+            "query": query,
+        }
+
+    # --- Sprint 9 Task 3: Privacy email ---
+    # The privacy@valhalla.local placeholder is in mobile/app/privacy.tsx (Freya's domain).
+    # Backend has no privacy email references. Noting hello@fablefur.com as canonical.
+
+    @router.get("/api/v1/privacy-contact")
+    async def api_privacy_contact():
+        """Return the privacy contact email for mobile app."""
+        return {"email": "hello@fablefur.com"}
 
     app.include_router(router)
-    log.info("[companion] Plugin loaded (Sprint 8: waitlist endpoint added).")
-
+    log.info("[companion] Plugin loaded (Sprint 9: rich actions + query + privacy).")

@@ -6,6 +6,7 @@
  * Sprint 4: Message guardian integration.
  * Sprint 5: Proactive guardian.
  * Sprint 6: Voice mode (hold-to-talk walkie-talkie).
+ * Sprint 9: Rich action cards.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -27,6 +28,8 @@ import { playSound } from "../../src/sounds";
 import GuardianModal from "../../src/GuardianModal";
 import ProactiveGuardian from "../../src/ProactiveGuardian";
 import VoiceMode from "../../src/VoiceMode";
+import ActionCard from "../../src/ActionCard";
+import SearchAll from "../../src/SearchAll";
 import type { Message, PetSpecies } from "../../src/types";
 
 const CHAT_HISTORY_KEY = "valhalla_chat_history";
@@ -130,6 +133,9 @@ export default function ChatTab() {
     const [guardianResult, setGuardianResult] = useState<{ safe: boolean; reason?: string; suggestedRewrite?: string; sentiment?: string }>({ safe: true });
     const [pendingMessage, setPendingMessage] = useState("");
 
+    // Search state — Sprint 9
+    const [searchVisible, setSearchVisible] = useState(false);
+
     const actualSend = useCallback(async (text: string) => {
         setMessages((prev) => [...prev, { role: "user", content: text }]);
         setInput("");
@@ -138,7 +144,9 @@ export default function ChatTab() {
         if (isOnline) {
             try {
                 const res = await companionAPI.chat(text);
-                setMessages((prev) => [...prev, { role: "pet", content: res.reply }]);
+                const petMsg: Message = { role: "pet", content: res.reply };
+                if (res.action) petMsg.action = res.action;
+                setMessages((prev) => [...prev, petMsg]);
             } catch {
                 const reply = getOfflineResponse(species);
                 setMessages((prev) => [...prev, { role: "pet", content: reply }]);
@@ -203,6 +211,7 @@ export default function ChatTab() {
                 <Text style={[styles.messageText, isUser && styles.userText]}>
                     {item.content}
                 </Text>
+                {!isUser && item.action && <ActionCard action={item.action} />}
             </View>
         );
     };
@@ -229,6 +238,9 @@ export default function ChatTab() {
                         </Text>
                     </View>
                 </View>
+                <TouchableOpacity onPress={() => setSearchVisible(true)} activeOpacity={0.7} style={{ padding: spacing.sm }}>
+                    <Text style={{ fontSize: 20 }}>🔍</Text>
+                </TouchableOpacity>
                 {mood < 30 && <Text style={styles.moodEmoji}>😢</Text>}
             </View>
 
@@ -304,6 +316,9 @@ export default function ChatTab() {
                 onUseRewrite={handleGuardianUseRewrite}
                 onCancel={handleGuardianCancel}
             />
+
+            {/* Cross-Context Search — Sprint 9 */}
+            <SearchAll visible={searchVisible} onClose={() => setSearchVisible(false)} />
         </KeyboardAvoidingView>
     );
 }
