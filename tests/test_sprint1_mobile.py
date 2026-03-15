@@ -48,12 +48,14 @@ def _load(relative_path: str):
 
 class TestCorsConfig(unittest.TestCase):
 
-    def test_cors_wildcard_present(self):
+    def test_cors_has_explicit_origins(self):
         import yaml
         data = yaml.safe_load((REPO_ROOT / "valhalla.yaml").read_text(encoding="utf-8"))
         origins = data.get("dashboard", {}).get("cors_origins", [])
-        self.assertIn("*", origins,
-                      f"valhalla.yaml cors_origins must include '*'. Got: {origins}")
+        self.assertTrue(len(origins) >= 2,
+                        f"valhalla.yaml cors_origins should have at least 2 origins. Got: {origins}")
+        self.assertTrue(any("localhost" in o for o in origins),
+                        "cors_origins must include localhost")
 
 
 # ---------------------------------------------------------------------------

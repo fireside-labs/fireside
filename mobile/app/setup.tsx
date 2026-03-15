@@ -125,10 +125,18 @@ export default function SetupScreen() {
                     )}
                 </TouchableOpacity>
 
-                {/* Tip */}
                 <Text style={styles.tip}>
                     Make sure your home PC is running Bifrost{"\n"}and you're on the same network.
                 </Text>
+
+                {/* Privacy Policy link — Sprint 3 */}
+                <TouchableOpacity
+                    onPress={() => router.push("/privacy")}
+                    style={styles.privacyLink}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.privacyText}>Privacy Policy</Text>
+                </TouchableOpacity>
             </View>
         </KeyboardAvoidingView>
     );
@@ -242,5 +250,15 @@ const styles = StyleSheet.create({
         color: colors.textMuted,
         textAlign: "center",
         lineHeight: 18,
+    },
+    privacyLink: {
+        marginTop: spacing.lg,
+        alignItems: "center",
+    },
+    privacyText: {
+        fontFamily: "Inter_400Regular",
+        fontSize: fontSize.xs,
+        color: colors.textDim,
+        textDecorationLine: "underline",
     },
 });

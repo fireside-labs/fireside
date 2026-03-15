@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize } from "../../src/theme";
+import { playSound } from "../../src/sounds";
 import type { Message, PetSpecies } from "../../src/types";
 
 const CHAT_HISTORY_KEY = "valhalla_chat_history";
@@ -124,6 +125,7 @@ export default function ChatTab() {
         if (!text || typing) return;
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        playSound("send");
 
         setMessages((prev) => [...prev, { role: "user", content: text }]);
         setInput("");

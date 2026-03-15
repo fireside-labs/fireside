@@ -11,6 +11,8 @@ Routes:
 """
 from __future__ import annotations
 
+import hmac
+import json
 import logging
 from typing import Optional
 
@@ -33,8 +35,14 @@ def _publish(topic: str, payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 class AdoptRequest(BaseModel):
-    name: str
+    name: str  # Sprint 3: max_length enforced below in endpoint
     species: str = "cat"
+
+    @classmethod
+    def validate_name(cls, v):
+        if len(v) > 20:
+            raise ValueError("Companion name must be 20 characters or fewer")
+        return v
 
 
 class FeedRequest(BaseModel):
@@ -42,7 +50,7 @@ class FeedRequest(BaseModel):
 
 
 class QueueTaskRequest(BaseModel):
-    task_type: str
+    task_type: str  # Sprint 3: max_length enforced below in endpoint
     payload: Optional[dict] = None
 
 
@@ -77,6 +85,11 @@ def register_routes(app, config: dict) -> None:
     @router.post("/api/v1/companion/adopt")
     async def api_adopt(req: AdoptRequest):
         """Adopt a new companion."""
+        # Sprint 3 Task 5: Input validation
+        if len(req.name) > 20:
+            raise HTTPException(422, "Companion name must be 20 characters or fewer.")
+        if not req.name.strip():
+            raise HTTPException(422, "Companion name cannot be empty.")
         from plugins.companion.sim import default_companion, save_state, load_state
         existing = load_state()
         if existing:
@@ -118,6 +131,11 @@ def register_routes(app, config: dict) -> None:
     @router.post("/api/v1/companion/queue")
     async def api_queue_task(req: QueueTaskRequest):
         """Add a task from the phone."""
+        # Sprint 3 Task 5: Input validation
+        if len(req.task_type) > 200:
+            raise HTTPException(422, "task_type must be 200 characters or fewer.")
+        if req.payload and len(json.dumps(req.payload)) > 10000:
+            raise HTTPException(422, "payload too large (max 10KB).")
         from plugins.companion.queue import add_task
         result = add_task(req.task_type, req.payload)
         if not result.get("ok"):
@@ -272,12 +290,18 @@ def register_routes(app, config: dict) -> None:
         provided = request.headers.get("X-Valhalla-Auth", "")
         if not auth_key or auth_key == "change-me-dashboard-key":
             log.warning("[companion/pair] dashboard.auth_key is not configured!")
-        if not provided or provided != auth_key:
+        # Sprint 3 Task 3: timing-safe comparison
+        if not provided or not hmac.compare_digest(provided, auth_key):
             raise HTTPException(401, "Missing or invalid X-Valhalla-Auth header.")
 
         # Sprint 2 Task 3: Rate limiting (3/min per IP)
+        # Sprint 3 Task 4: Cleanup stale entries (>2 min old)
         client_ip = request.client.host if request.client else "unknown"
         now = _time.time()
+        stale_ips = [ip for ip, times in _pair_attempts.items()
+                     if all(now - t > 120 for t in times)]
+        for ip in stale_ips:
+            del _pair_attempts[ip]
         window = [t for t in _pair_attempts.get(client_ip, []) if now - t < 60]
         if len(window) >= _PAIR_RATE_LIMIT:
             raise HTTPException(429, "Too many pairing attempts. Try again in 1 minute.")
@@ -451,6 +475,37 @@ def register_routes(app, config: dict) -> None:
             "valid": False,
             "error": "Invalid format. Expected: IP address (e.g., 100.117.255.38) or hostname (e.g., my-pc:8765)",
         }
+    # --- Sprint 3: Push notification endpoints ---
+
+    @router.post("/api/v1/companion/mobile/register-push")
+    async def api_register_push(request: Request):
+        """Register an Expo push token from the mobile app.
+
+        Body: { "token": "ExponentPushToken[...]" }
+        Stores in ~/.valhalla/push_token.json.
+        """
+        body = await request.json()
+        expo_token = body.get("token", "")
+        if not expo_token or not isinstance(expo_token, str):
+            raise HTTPException(400, "token must be a non-empty string")
+        if not expo_token.startswith("ExponentPushToken["):
+            raise HTTPException(400, "Invalid Expo push token format")
+
+        from plugins.companion.notifications import save_push_token
+        result = save_push_token(expo_token)
+        return result
+
+    @router.post("/api/v1/companion/mobile/check-notifications")
+    async def api_check_notifications():
+        """Manually trigger notification checks (also runs on decay cycle)."""
+        from plugins.companion.sim import load_state
+        state = load_state()
+        if not state:
+            return {"ok": True, "fired": []}
+
+        from plugins.companion.notifications import check_and_notify
+        fired = await check_and_notify(state)
+        return {"ok": True, "fired": fired}
 
     app.include_router(router)
-    log.info("[companion] Plugin loaded (with translation + guardian + mobile + chat history).")
+    log.info("[companion] Plugin loaded (with translation + guardian + mobile + chat + push).")

@@ -4,6 +4,10 @@
 
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
 
+> [!IMPORTANT]
+> **Read `FEATURE_INVENTORY.md` (repo root) to understand the FULL platform.**
+> The mobile app only surfaces a fraction of the existing features. Many backend APIs and dashboard components exist but are NOT yet in mobile.
+
 ---
 
 ## Your Identity

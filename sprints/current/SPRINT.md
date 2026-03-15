@@ -1,48 +1,45 @@
-# Sprint 3 — Mobile Companion: Push Notifications + App Store Readiness
+# Sprint 4 — Mobile Companion: Feature Parity + App Store Submission
 
-**Goal:** Add push notifications so the companion can reach out to the user, add animated avatar expressions, and prepare all App Store requirements (icon, splash, privacy policy).
+**Goal:** Port the highest-impact desktop features to mobile and submit to the App Store.
 
-**Input:** `sprints/archive/sprint_02/gates/audit_heimdall.md` + `review_valkyrie.md`
+**Input:**
+- `sprints/archive/sprint_03/gates/audit_heimdall.md` + `review_valkyrie.md`
+- `FEATURE_INVENTORY.md` — **READ THIS** to understand EVERYTHING the platform already has
 
-**Valkyrie assessment:** 2 more sprints to App Store submission. This is sprint 1 of 2.
+> [!IMPORTANT]
+> The desktop platform has features the mobile app doesn't surface yet.
+> This sprint brings the top 3 engagement drivers to mobile and prepares for App Store submission.
 
 ---
 
-## Sprint 3 Scope
+## Sprint 4 Scope
 
-### Thor (Backend)
-- Push notification infrastructure (Expo Push Notifications)
-- Companion-initiated notification triggers (happiness < 30, daily gift ready, task completed)
-- Fix hmac.compare_digest for pair auth (MEDIUM from Heimdall Sprint 2)
-- Rate limit dict cleanup (MEDIUM from Heimdall Sprint 2)
-- Backend input validation (companion name length, task payload size)
+### Thor (Backend) — No major backend work needed
+The APIs for adventures, daily gifts, guardian, and teach-me already exist. Thor's job is to ensure mobile compatibility and add any missing mobile-specific endpoints.
 
-### Freya (Frontend)
-- Push notification registration + handling
-- Animated avatar expressions (3 variants per species: happy/neutral/sad)
-- App icon + splash screen design
-- Sound effects on key actions (feed, walk, level up)
-- Privacy policy page (in-app static screen)
+### Freya (Frontend) — Port 3 killer features + App Store packaging
+- Adventures (8 encounter types — the RPG hook)
+- Daily Gifts (daily check-in mechanic — the Wordle cadence)
+- Message Guardian integration (the "stops you from drunk texting" feature)
+- App Store build configuration
 
 ### Heimdall — Same strict rules
 - 🔴 HIGH → automatic FAIL
 - 🟡 MEDIUM → PASS with notes
 - 🟢 LOW → informational
 
-### Valkyrie — App Store readiness assessment
-- Evaluate push notification UX
-- Rate avatar expression quality
-- Verify all App Store requirements are met
-- Final go/no-go for Sprint 4 submission
+### Valkyrie — MUST READ `FEATURE_INVENTORY.md`
+- Review with full platform knowledge
+- Assess mobile feature coverage vs desktop
+- Final App Store go/no-go decision
+- Prioritize remaining desktop→mobile feature gaps for future sprints
 
 ---
 
 ## Definition of Done
 
-- [ ] Push notifications work (companion → phone when happiness drops)
-- [ ] Avatar changes expression based on mood (happy/neutral/sad)
-- [ ] App icon and splash screen exist
-- [ ] Sound effects on feed/walk/level-up
-- [ ] Privacy policy accessible in-app
-- [ ] All Heimdall Sprint 2 MEDIUM findings fixed
-- [ ] All gates dropped (Thor → Freya → Heimdall → Valkyrie)
+- [ ] Adventures work on mobile (encounter → choices → rewards)
+- [ ] Daily gifts appear once per day with species personality
+- [ ] Message guardian warns before sending risky messages
+- [ ] App Store build configuration complete (EAS Build)
+- [ ] All gates dropped

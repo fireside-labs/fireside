@@ -112,6 +112,20 @@ export const companionAPI = {
             method: "POST",
             body: JSON.stringify({ task_type: taskType, payload }),
         }),
+
+    /** Register push notification token (Sprint 3). */
+    registerPush: (token: string) =>
+        apiFetch<{ ok: boolean }>("/api/v1/companion/mobile/register-push", {
+            method: "POST",
+            body: JSON.stringify({ token }),
+        }),
+
+    /** Unregister push notification token (Sprint 3). */
+    unregisterPush: (token: string) =>
+        apiFetch<{ ok: boolean }>("/api/v1/companion/mobile/unregister-push", {
+            method: "POST",
+            body: JSON.stringify({ token }),
+        }),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

@@ -22,17 +22,47 @@ import * as Haptics from "expo-haptics";
 import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
+import { playSound } from "../../src/sounds";
 import type { PetSpecies, WalkEvent } from "../../src/types";
 
-// Avatar images — Sprint 2 replacement for emoji
-const SPECIES_AVATARS: Record<PetSpecies, ReturnType<typeof require>> = {
-    cat: require("../../assets/companions/cat.png"),
-    dog: require("../../assets/companions/dog.png"),
-    penguin: require("../../assets/companions/penguin.png"),
-    fox: require("../../assets/companions/fox.png"),
-    owl: require("../../assets/companions/owl.png"),
-    dragon: require("../../assets/companions/dragon.png"),
+// Mood-reactive avatar images — Sprint 3 (3 expressions per species)
+type Mood = "happy" | "neutral" | "sad";
+
+const AVATAR_MAP: Record<string, ReturnType<typeof require>> = {
+    cat_happy: require("../../assets/companions/cat_happy.png"),
+    cat_neutral: require("../../assets/companions/cat_neutral.png"),
+    cat_sad: require("../../assets/companions/cat_sad.png"),
+    dog_happy: require("../../assets/companions/dog_happy.png"),
+    dog_neutral: require("../../assets/companions/dog_neutral.png"),
+    dog_sad: require("../../assets/companions/dog_sad.png"),
+    penguin_happy: require("../../assets/companions/penguin_happy.png"),
+    penguin_neutral: require("../../assets/companions/penguin_neutral.png"),
+    penguin_sad: require("../../assets/companions/penguin_sad.png"),
+    fox_happy: require("../../assets/companions/fox_happy.png"),
+    fox_neutral: require("../../assets/companions/fox_neutral.png"),
+    fox_sad: require("../../assets/companions/fox_sad.png"),
+    owl_happy: require("../../assets/companions/owl_happy.png"),
+    owl_neutral: require("../../assets/companions/owl_neutral.png"),
+    owl_sad: require("../../assets/companions/owl_sad.png"),
+    dragon_happy: require("../../assets/companions/dragon_happy.png"),
+    dragon_neutral: require("../../assets/companions/dragon_neutral.png"),
+    dragon_sad: require("../../assets/companions/dragon_sad.png"),
 };
+
+// Fallback map for adoption picker (uses neutral)
+const SPECIES_AVATARS: Record<PetSpecies, ReturnType<typeof require>> = {
+    cat: require("../../assets/companions/cat_neutral.png"),
+    dog: require("../../assets/companions/dog_neutral.png"),
+    penguin: require("../../assets/companions/penguin_neutral.png"),
+    fox: require("../../assets/companions/fox_neutral.png"),
+    owl: require("../../assets/companions/owl_neutral.png"),
+    dragon: require("../../assets/companions/dragon_neutral.png"),
+};
+
+function getAvatarSource(species: PetSpecies, happiness: number) {
+    const mood: Mood = happiness > 70 ? "happy" : happiness > 30 ? "neutral" : "sad";
+    return AVATAR_MAP[`${species}_${mood}`] || SPECIES_AVATARS[species];
+}
 
 const SPECIES_EMOJI: Record<PetSpecies, string> = {
     cat: "🐱", dog: "🐶", penguin: "🐧", fox: "🦊", owl: "🦉", dragon: "🐉",
@@ -121,6 +151,7 @@ export default function CareTab() {
             if (feeding) return;
             setFeeding(true);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            playSound("feed");
 
             if (isOnline) {
                 try {
@@ -152,6 +183,7 @@ export default function CareTab() {
         setWalking(true);
         setWalkResult(null);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        playSound("walk");
 
         if (isOnline) {
             try {
@@ -308,9 +340,9 @@ export default function CareTab() {
                 </View>
             </View>
 
-            {/* Avatar Card — Sprint 2: image instead of emoji */}
+            {/* Avatar Card — Sprint 3: mood-reactive expression */}
             <View style={styles.avatarCard}>
-                <Image source={SPECIES_AVATARS[species]} style={styles.avatarImage} />
+                <Image source={getAvatarSource(species, happiness)} style={styles.avatarImage} />
                 <Text style={styles.avatarName}>{petName}</Text>
                 <Text style={styles.avatarSpecies}>{species}</Text>
             </View>

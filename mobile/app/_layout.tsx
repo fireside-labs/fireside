@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
+import * as Notifications from "expo-notifications";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { getHost } from "../src/api";
 import { hasOnboarded } from "./onboarding";
+import { registerForPushNotifications, getNotificationRoute } from "../src/notifications";
 import { colors } from "../src/theme";
 
 export default function RootLayout() {
@@ -42,6 +44,22 @@ export default function RootLayout() {
             setIsReady(true);
         })();
     }, []);
+
+    // Register for push notifications after setup — Sprint 3
+    useEffect(() => {
+        if (!isReady || needsSetup || needsOnboarding) return;
+        registerForPushNotifications();
+    }, [isReady, needsSetup, needsOnboarding]);
+
+    // Handle notification tap — navigate to relevant tab — Sprint 3
+    useEffect(() => {
+        const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+            const data = response.notification.request.content.data || {};
+            const route = getNotificationRoute(data);
+            router.push(route as any);
+        });
+        return () => sub.remove();
+    }, [router]);
 
     // Redirect to setup if no host configured
     useEffect(() => {
