@@ -6,6 +6,12 @@ description: Run a full sprint cycle with gated agent handoffs (Thor → Freya �
 
 # Valhalla Sprint Pipeline
 
+> [!IMPORTANT]
+> **PROJECT: Valhalla Mesh** — NOT GantryOracle, NOT any other project.
+> **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
+> All paths in this workflow are relative to that root. If you are in any other directory, stop and `cd` to the above path first.
+> Sprint files live in `valhalla-mesh-github/sprints/` — NOT in GantryOracle or any other folder.
+
 This workflow runs a gated sprint cycle across 5 agents. You (Odin) are the orchestrator.
 
 ## Agent Roster
