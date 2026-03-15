@@ -756,33 +756,11 @@ Voice features in competing products (ChatGPT Advanced Voice, Claude Voice) requ
 
 ---
 
-## 15. Marketplace Economics — Zero-Marginal-Cost Platform
+## 15. Marketplace Architecture — Data-Only Distribution
 
-**Theoretical basis:** Jeremy Rifkin's *The Zero Marginal Cost Society* (2014) argues that certain platform economies achieve near-zero marginal cost per additional user. Valhalla achieves this structurally: the product runs on the user's hardware, the marketplace items are data files (SVG, JSON, audio), and no inference is hosted by the platform.
+**Theoretical basis:** The product runs on the user's hardware, and marketplace items are data files (JSON, SVG, audio). No inference is hosted by the platform.
 
-### 15.1 Revenue Model
-
-| Revenue Stream | Unit Economics | Platform Cost |
-|----------------|---------------|---------------|
-| Agent marketplace (30% commission) | $5-50 per agent | CDN delivery (~$0.001) |
-| Guild Hall themes | $2-5 per theme | SVG file (~4KB) |
-| Avatar packs | $1-3 per pack | SVG files (~12KB) |
-| Voice packs | $2-5 per pack | Audio files (~50KB) |
-| Personality presets | $3-5 per preset | JSON file (~2KB) |
-| Achievement badges | $2 per badge | SVG file (~1KB) |
-| Enterprise license | $500+/month | Support time |
-
-**Total platform infrastructure cost:** ~$20/month (CDN + Stripe fees).
-
-**Gross margin:** ~95%.
-
-### 15.2 Why This Matters
-
-OpenAI reportedly loses money on every ChatGPT Plus subscriber at $20/month because inference costs exceed subscription revenue. Anthropic's burn rate exceeds $1B/year. The fundamental problem: hosting inference for millions of users requires GPU fleets that scale linearly with usage.
-
-Valhalla inverts this: **the user is the compute.** The platform sells intelligence — personality, learning algorithms, marketplace content — not compute. Every new user adds revenue without adding GPU cost. This is the economic structure of a sustainable AI company.
-
-### 15.3 Agent Marketplace — Data-Only Packages
+### 15.1 Agent Marketplace — Data-Only Packages
 
 Marketplace agents are distributed as `.valhalla` packages — ZIP archives containing:
 - `agent.yaml` — personality configuration, skill definitions, behavioral anchors
