@@ -1,36 +1,52 @@
-# Sprint 1 — Mobile Companion App Foundation
+# Sprint 2 — Mobile Companion: Polish + Security Hardening
 
-**Goal:** Build the React Native (Expo) mobile app that connects to the existing Valhalla companion backend APIs.
+**Goal:** Fix Heimdall's HIGH security finding, address Valkyrie's 6 UX gaps, and make the app feel consumer-ready.
 
-**Philosophy:** The backend is 100% built. This sprint is a frontend job — a mobile UI that calls the 13 companion API endpoints already running at `http://<home-pc-ip>:8765`.
+**Input:** `sprints/archive/sprint_01/gates/audit_heimdall.md` + `review_valkyrie.md`
 
 ---
 
-## Sprint 1 Scope
+## Sprint 2 Scope
 
-### Thor (Backend)
-- Add missing mobile-friendly endpoints and CORS headers
-- Implement the sync reconciliation logic (offline → online merge)
-- Ensure companion API works over Tailscale IP from phone
+### Thor (Backend) — Security Hardening + Chat Persistence
+- Fix CORS wildcard (HIGH from Heimdall)
+- Add auth to /mobile/pair (MEDIUM from Heimdall)
+- Rate limit pairing + reduce token TTL (MEDIUM from Heimdall)
+- Add chat history endpoint (store/retrieve server-side)
+- Add mobile-first companion adoption endpoint
+- Push notification infrastructure (basic FCM/APNs setup)
 
-### Freya (Frontend)
-- Scaffold React Native (Expo) project
-- Build the companion home screen (Chat tab)
-- Build the Care tab (feed, walk, happiness bar)
-- Build the Bag tab (inventory grid)
-- Build the Tasks tab (queue view)
-- IP/pairing setup screen (enter home PC address)
-- Offline mode (cached state + "I need wifi" personality response)
+### Freya (Frontend) — UX Polish
+- Onboarding carousel (2-3 slides before setup screen)
+- Companion avatar art (replace emoji with sprites/images)
+- Chat history persistence (load from backend on mount)
+- Pull-to-refresh on Care + Tasks tabs
+- Haptic feedback on feed/walk/chat actions
+- Mobile companion adoption flow (if no companion exists)
+- Task creation button on Tasks tab
+
+### Heimdall — Stricter Audit Rules
+- 🔴 HIGH → automatic FAIL, delete upstream gates, force rework
+- 🟡 MEDIUM → PASS with notes for next sprint
+- 🟢 LOW → informational only
+
+### Valkyrie — Re-validate Sprint 1 findings
+- Confirm all 6 UX findings are addressed
+- Validate consumer resonance improvements
+- Assess readiness for App Store submission
 
 ---
 
 ## Definition of Done
 
-- [ ] Expo app runs on iOS simulator
-- [ ] App connects to local Valhalla backend via configurable IP
-- [ ] All 4 companion tabs functional (Chat / Care / Bag / Tasks)
-- [ ] Offline mode works gracefully (no crash, uses cached state)
+- [ ] All Heimdall HIGH findings from Sprint 1 are FIXED (not deferred)
+- [ ] Onboarding carousel exists for first-time users
+- [ ] Companion avatar is visual (not emoji-only)
+- [ ] Chat history persists across app restarts
+- [ ] Pull-to-refresh works on Care + Tasks tabs
+- [ ] Haptic feedback on primary actions
+- [ ] Mobile companion adoption flow works (no dashboard dependency)
 - [ ] Thor drops `sprints/current/gates/gate_thor.md`
 - [ ] Freya drops `sprints/current/gates/gate_freya.md`
-- [ ] Heimdall audits and drops `sprints/current/gates/gate_heimdall.md`
-- [ ] Valkyrie reviews and drops `sprints/current/gates/gate_valkyrie.md`
+- [ ] Heimdall audits with strict threshold and drops `gate_heimdall.md`
+- [ ] Valkyrie reviews and drops `gate_valkyrie.md`

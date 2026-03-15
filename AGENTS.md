@@ -25,8 +25,8 @@ Read ONLY these exact files (absolute paths):
 
 - **Thor:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT_THOR.md`
 - **Freya:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT_FREYA.md`
-- **Heimdall:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT.md` then start your polling script at `sprints\current\gates\poll_heimdall.sh`
-- **Valkyrie:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT.md` then start your polling script at `sprints\current\gates\poll_valkyrie.sh`
+- **Heimdall:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT.md` then run: `powershell -File "C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\gates\poll_heimdall.ps1"`
+- **Valkyrie:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\SPRINT.md` then run: `powershell -File "C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\gates\poll_valkyrie.ps1"`
 
 ## What NOT to Do
 

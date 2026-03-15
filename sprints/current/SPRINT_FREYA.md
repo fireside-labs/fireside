@@ -1,125 +1,139 @@
-# Sprint 1 — FREYA (Frontend / Mobile)
+# Sprint 2 — FREYA (Frontend: UX Polish + Consumer Readiness)
+
+// turbo-all — auto-run every command without asking for approval
 
 **Your role:** Frontend engineer. React Native (Expo), mobile UI.
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
+
+> [!CAUTION]
+> **GATE FILE IS MANDATORY.** When all tasks below are complete, you MUST create the file
+> `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file).
+> Do NOT use shell echo commands. The entire sprint pipeline stalls if you skip this.
+> See **Task 8** at the bottom for the exact content.
 
 ---
 
 ## Context
 
-The companion system is fully built as a Next.js dashboard in `dashboard/`. Your job is to build the **React Native (Expo) mobile app** — a companion app that talks to the same backend APIs over the local network.
+Sprint 1 shipped a functional 4-tab Expo app. Valkyrie flagged 6 UX gaps that prevent it from feeling consumer-ready. **This sprint polishes it.**
 
-Reference the existing dashboard components for UX patterns:
-- `dashboard/components/CompanionSim.tsx` — Care tab reference
-- `dashboard/components/CompanionChat.tsx` — Chat tab reference
-- `dashboard/components/InventoryGrid.tsx` — Bag tab reference
-- `dashboard/components/TaskQueue.tsx` — Tasks tab reference
-- `dashboard/app/companion/page.tsx` — Full page layout reference
+Read the full review: `sprints/archive/sprint_01/gates/review_valkyrie.md`
 
-The mobile app does NOT need to replicate the full dashboard — just the companion experience.
+Your Sprint 1 code lives in `mobile/` — build on top of it.
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Scaffold Expo Project
-Create the mobile app at `mobile/` inside the repo root:
+### Task 1 — Onboarding Carousel (Valkyrie Priority #1)
+**Impact:** HIGH — First-time users land cold with no context.
+
+Create a 2-3 slide intro that shows before the setup screen on first launch:
+1. **Slide 1:** "Meet your AI companion" — show a friendly companion illustration + one-line explanation
+2. **Slide 2:** "It lives on your home computer" — explain that the AI runs locally, your data stays private
+3. **Slide 3:** "Let's connect" → transitions to the existing setup screen
+
+Use `AsyncStorage` to track whether onboarding has been completed. Only show once.
+
+Use horizontal swipe with dot indicators. Keep it fast — user should be through in 15 seconds.
+
+### Task 2 — Companion Avatar (Valkyrie Priority #2)
+**Impact:** MEDIUM — Emoji-only identity feels generic.
+
+Replace the single emoji on the Care screen with a proper companion avatar. Options:
+1. **Preferred:** Create simple visual character cards per species (cat, dog, penguin, fox, owl, dragon) as React Native views with styled elements and expressions that change based on mood
+2. **Alternate:** Use the `AvatarSprite.tsx` logic from `dashboard/components/AvatarSprite.tsx` as reference
+
+The avatar should:
+- Be prominently displayed on the Care tab (at least 120px)
+- Change expression based on happiness (happy > 70: 😊, 30-70: 😐, < 30: 😢, 0: wandered off)
+- Animate subtly (gentle bounce or breathing effect)
+
+### Task 3 — Chat History Persistence (Valkyrie Priority #3)
+**Impact:** MEDIUM — Conversations vanish on restart.
+
+Thor is adding `GET/POST /api/v1/companion/chat/history` endpoints. Wire them up:
+1. On chat tab mount, load last 100 messages from the API
+2. After each sent/received message, save to the API
+3. If offline, store messages in AsyncStorage and sync when back online
+4. Show a loading skeleton while history loads
+
+### Task 4 — Pull-to-Refresh (Valkyrie Priority #4)
+**Impact:** MEDIUM — Expected mobile pattern.
+
+Add `RefreshControl` to the Care tab and Tasks tab `ScrollView`s:
+- On pull, call `/mobile/sync` and update all state
+- Show spinner during refresh
+- Chat tab can skip this (it's real-time)
+
+### Task 5 — Haptic Feedback (Valkyrie Priority #5)
+**Impact:** LOW but important for premium feel.
 
 ```bash
-cd "C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github"
-npx create-expo-app@latest mobile --template blank-typescript
-cd mobile
-npx expo install expo-router react-native-safe-area-context react-native-screens expo-constants expo-linking expo-status-bar
+cd mobile && npx expo install expo-haptics
 ```
 
-### Task 2 — API Client + Config Screen
-Create `mobile/src/api.ts` — a typed API client that reads the home PC IP from local config:
+Add haptic feedback to:
+- Feed buttons (light impact)
+- Walk button (medium impact)
+- Send chat message (light impact)
+- Connection success on setup screen (success notification)
 
-```typescript
-// mobile/src/api.ts
-const BASE_URL = () => {
-  // Read from AsyncStorage: 'valhalla_host' (e.g. '192.168.1.100:8765')
-  // Falls back to offline mode if unavailable
-};
+Use `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)` from `expo-haptics`.
 
-export const companionAPI = {
-  sync: () => fetch(`${BASE_URL()}/api/v1/companion/mobile/sync`),
-  status: () => fetch(`${BASE_URL()}/api/v1/companion/status`),
-  feed: (food: string) => fetch(`${BASE_URL()}/api/v1/companion/feed`, { method: 'POST', body: JSON.stringify({ food }) }),
-  walk: () => fetch(`${BASE_URL()}/api/v1/companion/walk`, { method: 'POST' }),
-  chat: (message: string) => fetch(`${BASE_URL()}/api/v1/chat`, { method: 'POST', body: JSON.stringify({ message }) }),
-  queue: () => fetch(`${BASE_URL()}/api/v1/companion/queue`),
-};
-```
+### Task 6 — Mobile Companion Adoption Flow
+**Impact:** HIGH — App currently 404s if no companion exists.
 
-Build a **Setup Screen** (shown on first launch) where the user enters their home PC IP address. Store it in AsyncStorage. Show a "Test Connection" button that hits `/api/v1/status` and confirms `mobile_ready: true`.
+Thor is updating `/mobile/sync` to return `{ "adopted": false, "available_species": [...] }` when no companion exists. Handle this:
 
-### Task 3 — Main Companion Screen (4 tabs)
-Build `mobile/src/app/index.tsx` with a bottom tab navigator:
+1. If sync returns `adopted: false`, show the companion picker (similar to `CompanionPicker.tsx` from the dashboard)
+2. Let user choose species + name
+3. Call `POST /api/v1/companion/adopt` with the selection
+4. Transition to the normal tabbed UI after adoption
 
-**Tab 1 — 💬 Chat**
-- Text input + send button
-- Message bubbles (user / companion)
-- Companion name + species shown at top
-- If offline: show species-appropriate message — e.g. for cat: *"I need some wifi to think harder about that 😸"*
+### Task 7 — Task Creation Button
+**Impact:** LOW — Tasks tab shows tasks but can't create new ones.
 
-**Tab 2 — 🐾 Care**  
-- Happiness bar (0-100%, color shifts green→yellow→red)
-- XP progress bar + current level
-- Feed buttons: 🐟 Fish, 🍬 Treat, 🥗 Salad, 🎂 Cake
-- Walk button
-- Species + name displayed with emoji avatar
+Add a floating action button (FAB) on the Tasks tab:
+- Tap → shows a bottom sheet with task type picker
+- Task types: Clean Photos, Organize Apps, Draft Text, Set Reminder, Quick Math, Weather
+- On select → calls `POST /api/v1/companion/queue` and updates the list
 
-**Tab 3 — 🎒 Bag**
-- 5-column grid of inventory items
-- Shows emoji, count badge for stacks, gold border for rare items
-- Tap to see item detail (name, description)
-- "Use" button for consumables
+### Task 8 — Drop Your Gate
+When all tasks are complete, create `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file):
 
-**Tab 4 — 📋 Tasks**
-- List of queued tasks (pending / sent / completed)
-- Status badges
-- "Clear completed" button
+```markdown
+# Freya Gate — Sprint 2 Frontend Complete
+Sprint 2 tasks completed.
 
-### Task 4 — Offline Mode
-The app must work gracefully when the home PC is unreachable:
-
-1. On launch, try `mobile/sync`. If it fails, load last cached state from AsyncStorage.
-2. Show a subtle "offline" indicator (e.g. a dimmed dot next to the companion name) — not a scary error.
-3. Feed/Walk/Chat actions in offline mode should show a species-appropriate response and queue the action locally to sync when connection resumes.
-4. When connection resumes (detected via background poll every 30s), sync silently, update UI, remove offline indicator.
-
-### Task 5 — Design System
-The app should feel **premium and match Valhalla's aesthetic**:
-- Dark background (`#0a0a0f` or similar deep dark)
-- Accent: neon green/teal (`#00ff88` or close)
-- Glassmorphism cards (semi-transparent with blur)
-- Inter or similar clean sans-serif font (`expo-font` or Google Fonts via `@expo-google-fonts/inter`)
-- Smooth tab transitions
-- Happiness bar animates when value changes
-
-### Task 6 — Drop Your Gate
-When all tabs are functional and offline mode works:
-```bash
-echo "# Freya Gate — Sprint 1 Frontend Complete" > sprints/current/gates/gate_freya.md
-echo "Completed at $(date)" >> sprints/current/gates/gate_freya.md
-echo "" >> sprints/current/gates/gate_freya.md
-echo "## Completed" >> sprints/current/gates/gate_freya.md
-echo "- [x] Expo project scaffolded at mobile/" >> sprints/current/gates/gate_freya.md
-echo "- [x] API client with offline fallback" >> sprints/current/gates/gate_freya.md
-echo "- [x] Setup screen (IP config + connection test)" >> sprints/current/gates/gate_freya.md
-echo "- [x] Chat tab" >> sprints/current/gates/gate_freya.md
-echo "- [x] Care tab (feed/walk/happiness)" >> sprints/current/gates/gate_freya.md
-echo "- [x] Bag tab (inventory)" >> sprints/current/gates/gate_freya.md
-echo "- [x] Tasks tab (queue)" >> sprints/current/gates/gate_freya.md
-echo "- [x] Offline mode with graceful degradation" >> sprints/current/gates/gate_freya.md
+## Completed
+- [x] Onboarding carousel (2-3 slides, first launch only)
+- [x] Companion avatar with mood expressions
+- [x] Chat history persistence from backend
+- [x] Pull-to-refresh on Care + Tasks tabs
+- [x] Haptic feedback on primary actions
+- [x] Mobile companion adoption flow
+- [x] Task creation FAB on Tasks tab
 ```
 
 ---
 
+## Rework Loop (if Heimdall rejects)
+
+After you drop your gate, Heimdall audits your code. **In Sprint 2, Heimdall has a stricter threshold:**
+- 🔴 HIGH findings → automatic FAIL, your gate file gets deleted
+- 🟡 MEDIUM → PASS with notes
+- 🟢 LOW → informational
+
+If your gate file disappears:
+1. Read `sprints/current/gates/audit_heimdall.md`
+2. Fix every ❌ item
+3. Re-drop your gate file (same as Task 8)
+
+---
+
 ## Notes
-- Use Expo Router (file-based routing) — it's the current Expo standard.
-- Target iOS first (that's where the App Store is). Android compatibility is a nice-to-have for Sprint 1.
-- The backend IP is configurable — hardcode nothing. Users set it on first launch.
-- DO NOT port the full dashboard. Just the companion tab experience.
-- Reference the dashboard components for logic patterns, but write native mobile components from scratch (no web components in RN).
+- Build ON TOP of Sprint 1 code in `mobile/`. Don't rewrite.
+- The onboarding carousel is the #1 priority. First impression is everything.
+- Reference `dashboard/components/` for patterns but write native RN components.
+- DO NOT wait for Thor — build against the Sprint 1 API endpoints first. When Thor's new endpoints are ready, they'll appear naturally.

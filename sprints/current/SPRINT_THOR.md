@@ -1,99 +1,114 @@
-# Sprint 1 — THOR (Backend)
+# Sprint 2 — THOR (Backend: Security Hardening + APIs)
 
-**Your role:** Backend engineer. Python, FastAPI, `api/v1.py`, plugins.
+// turbo-all — auto-run every command without asking for approval
+
+**Your role:** Backend engineer. Python, FastAPI, `api/v1.py`, `plugins/`.
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
+
+> [!CAUTION]
+> **GATE FILE IS MANDATORY.** When all tasks below are complete, you MUST create the file
+> `sprints/current/gates/gate_thor.md` using your **file creation tool** (write_to_file).
+> Do NOT use shell echo commands. The entire sprint pipeline stalls if you skip this.
+> See **Task 7** at the bottom for the exact content.
 
 ---
 
 ## Context
 
-The companion plugin (`plugins/companion/`) is fully built with 13 API endpoints. The mobile app needs to call these endpoints over a local network (Tailscale or direct IP). Your job is to make sure the backend is mobile-ready.
+Sprint 1 shipped CORS wildcard, unauthenticated pairing, and weak token entropy. Heimdall flagged these. Valkyrie wants chat persistence and mobile adoption. **This sprint fixes all of it.**
 
-Key files:
-- `api/v1.py` — main FastAPI router
-- `plugins/companion/handler.py` — all companion routes
-- `plugins/companion/relay.py` — relay server security
-- `plugins/companion/queue.py` — task queue (phone → home PC)
-- `plugins/companion/sim.py` — Tamagotchi engine
+Read the full audit: `sprints/archive/sprint_01/gates/audit_heimdall.md`
 
 ---
 
 ## Your Tasks
 
-### Task 1 — CORS Headers for Mobile
-The mobile app will call the backend from a different origin. Add permissive CORS headers for local network requests.
+### Task 1 — Fix CORS Wildcard (🔴 HIGH from Heimdall)
+**File:** `valhalla.yaml`
 
-In `api/v1.py` (or wherever the FastAPI app is instantiated), ensure:
-```python
-from fastapi.middleware.cors import CORSMiddleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Tighten this in Sprint 2 with Heimdall
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+Replace the `"*"` in `cors_origins` with an explicit allowlist:
+```yaml
+cors_origins:
+  - "http://100.*:8765"   # Tailscale IPs
+  - "http://192.168.*:*"  # Local network
+  - "http://localhost:*"  # Development
 ```
 
-Check if CORS is already configured — if so, verify it allows all origins for now.
+Or implement it in code — restrict CORS middleware origins to Tailscale/local ranges only.
 
-### Task 2 — Mobile Sync Endpoint
-Add `POST /api/v1/companion/mobile/sync` — a single endpoint the mobile app calls on launch to get everything it needs in one request:
+### Task 2 — Authenticate `/mobile/pair` (🟡 MEDIUM from Heimdall)
+**File:** `plugins/companion/handler.py`
 
-```python
-@router.post("/api/v1/companion/mobile/sync")
-async def mobile_sync():
-    """
-    Single-call sync for mobile app launch.
-    Returns: companion status, pending task results, personality, mood prefix.
-    """
+The `/mobile/pair` endpoint currently requires zero authentication. Fix:
+1. Require the `X-Valhalla-Auth` header with the value from `valhalla.yaml → dashboard.auth_key`
+2. Return 401 if the header is missing or wrong
+3. Alternatively: implement a "confirm on desktop" flow where pairing generates a pending request visible in the dashboard
+
+### Task 3 — Rate Limit + Token Hardening (🟡 MEDIUM from Heimdall)
+**File:** `plugins/companion/handler.py`
+
+1. Add rate limiting to `/mobile/pair`: max 3 requests per minute per IP
+2. Reduce pairing token TTL from 365 days → 15 minutes
+3. Invalidate any previous token when a new one is generated
+4. Set file permissions on `~/.valhalla/mobile_token.json` to owner-only (0600)
+
+### Task 4 — Chat History Endpoint
+**File:** `plugins/companion/handler.py`
+
+Add two endpoints for persistent chat history:
+```
+POST /api/v1/companion/chat/history  — save a message { role, content, timestamp }
+GET  /api/v1/companion/chat/history  — get last 100 messages, sorted by timestamp
 ```
 
-Response shape:
-```json
-{
-  "ok": true,
-  "companion": { ...full get_status() result... },
-  "personality": { ...from agent_profiles... },
-  "mood_prefix": "...",
-  "pending_tasks": [ ...completed tasks not yet seen by phone... ],
-  "synced_at": 1234567890.0
-}
-```
+Store in `~/.valhalla/chat_history.json`. Cap at 500 messages (FIFO).
 
-### Task 3 — Offline Token (Mobile Identity)
-Add `POST /api/v1/companion/mobile/pair` — generates a pairing token so the mobile app can authenticate future requests:
+### Task 5 — Mobile Companion Adoption
+**File:** `plugins/companion/handler.py`
 
-```python
-@router.post("/api/v1/companion/mobile/pair")
-async def mobile_pair():
-    """
-    Generate a simple 6-digit pairing code for the mobile app to authenticate.
-    Stores the token in ~/.valhalla/mobile_token.json with 365-day expiry.
-    Returns: { "ok": true, "token": "ABC123", "expires_at": ... }
-    """
-```
+The current `/companion/adopt` endpoint works, but mobile users need it too. Ensure the existing `/api/v1/companion/adopt` endpoint is included in the `/mobile/sync` response when no companion exists, so the mobile app knows to show an adoption flow instead of a 404.
 
-This doesn't need to be cryptographically complex yet — a random 6-digit alphanumeric code is fine. Heimdall will harden this in Sprint 2.
+Update `/mobile/sync` to return `{ "adopted": false, "available_species": [...] }` when no companion exists.
 
-### Task 4 — Health Check for Mobile
-Ensure `GET /api/v1/status` returns a `mobile_ready: true` field so the app can confirm it's talking to a Valhalla backend and not some random server.
+### Task 6 — IP Format Validation (🟢 LOW from Heimdall)
+**File:** `plugins/companion/handler.py` or create a utility
 
-### Task 5 — Drop Your Gate
-When all 4 tasks above are complete and tested:
-```bash
-echo "# Thor Gate — Sprint 1 Backend Complete" > sprints/current/gates/gate_thor.md
-echo "Completed at $(date)" >> sprints/current/gates/gate_thor.md
-echo "" >> sprints/current/gates/gate_thor.md
-echo "## Completed" >> sprints/current/gates/gate_thor.md
-echo "- [x] CORS headers configured" >> sprints/current/gates/gate_thor.md
-echo "- [x] /mobile/sync endpoint added" >> sprints/current/gates/gate_thor.md
-echo "- [x] /mobile/pair endpoint added" >> sprints/current/gates/gate_thor.md
-echo "- [x] /status returns mobile_ready: true" >> sprints/current/gates/gate_thor.md
+Add a validation function that checks IP:port format. Expose as `GET /api/v1/companion/mobile/validate-host?host=<input>` or validate server-side and return clear error messages.
+
+### Task 7 — Drop Your Gate
+When all tasks are complete, create `sprints/current/gates/gate_thor.md` using your **file creation tool** (write_to_file):
+
+```markdown
+# Thor Gate — Sprint 2 Backend Complete
+Sprint 2 tasks completed.
+
+## Completed
+- [x] CORS wildcard replaced with explicit allowlist
+- [x] /mobile/pair requires auth header
+- [x] Rate limiting on pair endpoint (3/min)
+- [x] Token TTL reduced to 15 minutes
+- [x] Chat history endpoints (POST + GET)
+- [x] /mobile/sync handles no-companion state
+- [x] IP format validation
 ```
 
 ---
 
+## Rework Loop (if Heimdall rejects)
+
+After you drop your gate, Heimdall audits your code. **In Sprint 2, Heimdall has a stricter threshold:**
+- 🔴 HIGH findings → automatic FAIL, your gate file gets deleted
+- 🟡 MEDIUM → PASS with notes
+- 🟢 LOW → informational
+
+If your gate file disappears:
+1. Read `sprints/current/gates/audit_heimdall.md`
+2. Fix every ❌ item
+3. Re-drop your gate file (same as Task 7)
+
+---
+
 ## Notes
-- Keep it simple. Heimdall will audit security in Phase 2 — don't over-engineer auth yet.
-- The CORS wildcard is intentional for Sprint 1. Heimdall will tighten it.
-- All new endpoints go in `plugins/companion/handler.py` using the existing router pattern.
+- ALL Heimdall HIGH findings from Sprint 1 must be FIXED, not deferred.
+- The CORS fix is the #1 priority — it was the only HIGH finding.
+- Keep backward compatibility with the existing dashboard. Don't break the web frontend.

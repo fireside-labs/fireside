@@ -41,8 +41,8 @@ sprints/
       gate_valkyrie.md     ← Valkyrie drops when review complete
       audit_heimdall.md    ← Heimdall's security audit report
       review_valkyrie.md   ← Valkyrie's UX/business review report
-      poll_heimdall.sh     ← Heimdall's polling script (watches for Thor+Freya gates)
-      poll_valkyrie.sh     ← Valkyrie's polling script (watches for Heimdall gate)
+      poll_heimdall.ps1    ← Heimdall's polling script (watches for Thor+Freya gates)
+      poll_valkyrie.ps1    ← Valkyrie's polling script (watches for Heimdall gate)
   archive/
     sprint_01/             ← Completed sprints get archived here
     sprint_02/
@@ -74,17 +74,29 @@ Thor and Freya work simultaneously on their tasks. Each agent:
 
 1. Reads their `SPRINT_THOR.md` or `SPRINT_FREYA.md` task file.
 2. Implements all tasks with `// turbo-all` auto-run enabled.
-3. When ALL tasks are complete, drops a gate file:
+3. When ALL tasks are complete, drops a gate file using their **file creation tool** (write_to_file):
 
-**Thor drops:**
-```bash
-echo "# Thor Gate — Build Complete" > sprints/current/gates/gate_thor.md && echo "Sprint tasks completed at $(date)" >> sprints/current/gates/gate_thor.md
+**Thor creates** `sprints/current/gates/gate_thor.md`:
+```markdown
+# Thor Gate — Build Complete
+Sprint tasks completed.
+
+## Completed
+- [x] (list completed tasks here)
 ```
 
-**Freya drops:**
-```bash
-echo "# Freya Gate — Build Complete" > sprints/current/gates/gate_freya.md && echo "Sprint tasks completed at $(date)" >> sprints/current/gates/gate_freya.md
+**Freya creates** `sprints/current/gates/gate_freya.md`:
+```markdown
+# Freya Gate — Build Complete
+Sprint tasks completed.
+
+## Completed
+- [x] (list completed tasks here)
 ```
+
+> [!IMPORTANT]
+> Agents MUST use their `write_to_file` tool to create gate files — NOT shell `echo` commands.
+> Shell commands fail silently on Windows and are the #1 cause of pipeline stalls.
 
 ---
 
@@ -92,28 +104,10 @@ echo "# Freya Gate — Build Complete" > sprints/current/gates/gate_freya.md && 
 
 At the START of the sprint, Heimdall creates and runs a polling script. This script checks every 60 seconds for both Thor and Freya gate files.
 
-1. Create and run the Heimdall polling script:
+1. Run the Heimdall polling script (already exists in the gates directory):
 
-```bash
-cat > sprints/current/gates/poll_heimdall.sh << 'POLL'
-#!/bin/bash
-# Heimdall Gate Poller — checks for Thor + Freya completion every 60s
-GATES_DIR="$(cd "$(dirname "$0")" && pwd)"
-echo "[Heimdall] 🛡️ Polling for Thor + Freya gates every 60s..."
-while true; do
-  if [ -f "$GATES_DIR/gate_thor.md" ] && [ -f "$GATES_DIR/gate_freya.md" ]; then
-    echo "[Heimdall] ✅ Both gates found! Thor and Freya have completed their work."
-    echo "[Heimdall] Beginning security audit..."
-    exit 0
-  fi
-  THOR="⬜"; FREYA="⬜"
-  [ -f "$GATES_DIR/gate_thor.md" ] && THOR="✅"
-  [ -f "$GATES_DIR/gate_freya.md" ] && FREYA="✅"
-  echo "[Heimdall] $(date +%H:%M:%S) — Thor: $THOR | Freya: $FREYA | Waiting..."
-  sleep 60
-done
-POLL
-bash sprints/current/gates/poll_heimdall.sh
+```powershell
+powershell -File "C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\gates\poll_heimdall.ps1"
 ```
 
 2. Once the poller exits (both gates found), Heimdall performs a full security audit. The audit checks:
@@ -128,16 +122,18 @@ bash sprints/current/gates/poll_heimdall.sh
 
 4. **If audit PASSES** (no ❌ critical issues):
 
-```bash
-echo "# Heimdall Gate — Audit Passed" > sprints/current/gates/gate_heimdall.md && echo "Security audit passed at $(date)" >> sprints/current/gates/gate_heimdall.md
+Create `sprints/current/gates/gate_heimdall.md` using your **file creation tool** (write_to_file):
+```markdown
+# Heimdall Gate — Audit Passed
+Security audit passed. See audit_heimdall.md for details.
 ```
 
 5. **If audit FAILS** (any ❌ critical issues):
    - Delete Thor and Freya gate files so they know to redo work:
 
-```bash
-rm -f sprints/current/gates/gate_thor.md sprints/current/gates/gate_freya.md
-echo "[Heimdall] ❌ Audit FAILED. Deleted Thor + Freya gates. See audit_heimdall.md for required fixes."
+```powershell
+Remove-Item -Force "sprints\current\gates\gate_thor.md", "sprints\current\gates\gate_freya.md" -ErrorAction SilentlyContinue
+Write-Host "[Heimdall] Audit FAILED. Deleted Thor + Freya gates. See audit_heimdall.md for required fixes."
 ```
 
    - Thor and Freya must read `audit_heimdall.md`, fix the issues, and re-drop their gate files.
@@ -149,24 +145,10 @@ echo "[Heimdall] ❌ Audit FAILED. Deleted Thor + Freya gates. See audit_heimdal
 
 At the START of the sprint, Valkyrie creates and runs a polling script that watches for Heimdall's gate.
 
-1. Create and run the Valkyrie polling script:
+1. Run the Valkyrie polling script (already exists in the gates directory):
 
-```bash
-cat > sprints/current/gates/poll_valkyrie.sh << 'POLL'
-#!/bin/bash
-# Valkyrie Gate Poller — checks for Heimdall's audit gate every 60s
-GATES_DIR="$(cd "$(dirname "$0")" && pwd)"
-echo "[Valkyrie] 👁️ Polling for Heimdall audit gate every 60s..."
-while true; do
-  if [ -f "$GATES_DIR/gate_heimdall.md" ]; then
-    echo "[Valkyrie] ✅ Heimdall audit passed! Beginning UX & business review..."
-    exit 0
-  fi
-  echo "[Valkyrie] $(date +%H:%M:%S) — Heimdall: ⬜ | Waiting..."
-  sleep 60
-done
-POLL
-bash sprints/current/gates/poll_valkyrie.sh
+```powershell
+powershell -File "C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\gates\poll_valkyrie.ps1"
 ```
 
 2. Once the poller exits, Valkyrie reviews:
@@ -180,8 +162,10 @@ bash sprints/current/gates/poll_valkyrie.sh
 
 4. Drop the completion gate:
 
-```bash
-echo "# Valkyrie Gate — Review Complete" > sprints/current/gates/gate_valkyrie.md && echo "UX review completed at $(date)" >> sprints/current/gates/gate_valkyrie.md
+Create `sprints/current/gates/gate_valkyrie.md` using your **file creation tool** (write_to_file):
+```markdown
+# Valkyrie Gate — Review Complete
+UX and business review completed. See review_valkyrie.md for findings.
 ```
 
 > [!IMPORTANT]
@@ -195,8 +179,8 @@ echo "# Valkyrie Gate — Review Complete" > sprints/current/gates/gate_valkyrie
 2. Any deficiencies or findings become tasks in the NEXT sprint.
 3. Archive the completed sprint:
 
-```bash
-SPRINT_NUM=$(head -1 sprints/current/SPRINT.md | grep -oE '[0-9]+') && mv sprints/current "sprints/archive/sprint_${SPRINT_NUM}" && mkdir -p sprints/current/gates
+```powershell
+$num = (Get-Content sprints/current/SPRINT.md -TotalCount 1) -replace '\D',''; Move-Item sprints/current "sprints/archive/sprint_$num"; New-Item -ItemType Directory -Force sprints/current/gates | Out-Null
 ```
 
 4. Begin Phase 0 for the next sprint, incorporating Valkyrie's findings.
@@ -207,6 +191,6 @@ SPRINT_NUM=$(head -1 sprints/current/SPRINT.md | grep -oE '[0-9]+') && mv sprint
 
 Run this at any time to see pipeline status:
 
-```bash
-echo "=== Valhalla Sprint Pipeline ===" && echo "" && GATES="sprints/current/gates" && for agent in thor freya heimdall valkyrie; do if [ -f "$GATES/gate_${agent}.md" ]; then echo "  ✅ ${agent}"; else echo "  ⬜ ${agent}"; fi; done
+```powershell
+powershell -File "C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github\sprints\current\gates\check_status.ps1"
 ```
