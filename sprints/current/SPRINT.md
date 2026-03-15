@@ -1,46 +1,54 @@
-# Sprint 7 — Hardening + Achievements + TestFlight
+# Sprint 8 — Hosted Mode + Executive Toolkit
 
-**Goal:** Fix all Heimdall security findings, add the achievement reward loop, add weekly summary, and prepare a TestFlight build for real-device testing.
+**Goal:** Expand from a self-hosted-only product to a dual-mode platform (self-hosted + cloud hosted), add an executive toolkit (email, calendar, documents), and establish the revenue model.
 
-**This is the final build sprint.** After this, you test on a real phone.
-
-**Input:** `sprints/archive/sprint_06/gates/audit_heimdall.md` + `review_valkyrie.md`
+**Process change:** This sprint starts with a **proposal review phase**. Each agent reads `PROPOSAL_SPRINT8.md` and drops feedback before implementation begins.
 
 ---
 
-## Sprint 7 Scope
+## Phase 1 — Proposal Review (ALL AGENTS)
 
-### Thor (Backend) — Security Hardening
-- SSRF blocklist on `/browse/summarize` (MEDIUM from Heimdall Sprint 6)
-- WebSocket authentication + connection cap (MEDIUM from Heimdall Sprint 6)
-- Sanitize marketplace error messages (LOW from Heimdall Sprint 6)
-- Achievement tracking backend (trigger + store + query achievements)
+Each agent reads `PROPOSAL_SPRINT8.md` and drops their feedback:
+- `sprints/current/gates/feedback_thor.md` — technical feasibility
+- `sprints/current/gates/feedback_heimdall.md` — security architecture
+- `sprints/current/gates/feedback_valkyrie.md` — business viability + UX
 
-### Freya (Frontend) — Achievements + Weekly + TestFlight
-- Achievement system (badges, toast popups, progress tracking)
-- Weekly summary card (companion growth over the past week)
-- TestFlight build via EAS (`eas build --platform ios --profile preview`)
-- QR code pairing (replace manual IP entry for smoother onboarding)
+**Owner reviews all feedback before greenlighting implementation.**
 
-### Heimdall — Verify all prior MEDIUMs are fixed
-- Sprint 6 SSRF: confirm blocklist blocks localhost, RFC1918, metadata
-- Sprint 6 WebSocket: confirm auth token required + connection cap
-- Full regression: all 160+ tests still pass
-- Voice pipeline privacy: re-verify audio never leaves local network
+---
 
-### Valkyrie — TestFlight readiness assessment
-- **MUST READ:** `FEATURE_INVENTORY.md`
-- Is the app ready for real-device testing?
-- App Store metadata checklist (screenshots, description, keywords)
-- Final feature gap assessment
+## Phase 2 — Implementation
+
+### Thor (Backend)
+- Executive plugins: email (IMAP/SMTP), calendar (CalDAV), documents (pptx/xlsx)
+- Hosted mode API foundation (JWT auth, user routing)
+- Achievement backend (from Sprint 7)
+
+### Freya (Frontend)
+- Settings screen, onboarding v2 (self-hosted vs hosted)
+- Executive command center (email card, calendar card, document commands)
+- Agent profile card
+- Mode rename: "Tool" → "Executive"
+
+### Heimdall (Security)
+- Hosted mode threat model
+- Email credential encryption audit
+- JWT + container isolation review
+
+### Valkyrie (Review)
+- Business viability assessment
+- Executive UX: cohesive or duct-taped?
+- Pricing validation
+- Conversion path mapping
 
 ---
 
 ## Definition of Done
 
-- [ ] SSRF blocklist active on browse/summarize
-- [ ] WebSocket requires auth token + max 5 connections
-- [ ] Achievement system works (earn badges, see progress, toast popups)
-- [ ] Weekly summary card shows companion growth
-- [ ] EAS build configuration verified for TestFlight
+- [ ] All 4 feedback files dropped (Phase 1)
+- [ ] Owner approves proposal
+- [ ] Executive email/calendar/documents endpoints
+- [ ] Hosted mode auth + routing foundation
+- [ ] Mobile onboarding v2 with hosted option
+- [ ] Executive Hub UI
 - [ ] All gates dropped

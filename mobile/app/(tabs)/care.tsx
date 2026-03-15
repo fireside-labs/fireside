@@ -24,6 +24,7 @@ import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/them
 import { playSound } from "../../src/sounds";
 import DailyGiftModal from "../../src/DailyGift";
 import MorningBriefing from "../../src/MorningBriefing";
+import WeeklySummary from "../../src/WeeklySummary";
 import { useMode } from "../../src/ModeContext";
 import type { PetSpecies, WalkEvent } from "../../src/types";
 
@@ -328,6 +329,9 @@ export default function CareTab() {
                 />
             }
         >
+            {/* Weekly Summary — Sprint 7 */}
+            <WeeklySummary petName={petName} />
+
             {/* Morning Briefing — Sprint 5 */}
             <MorningBriefing
                 petName={petName}

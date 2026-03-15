@@ -15,7 +15,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.valhalla.companion",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is used to scan QR codes for pairing with your home PC.",
+        "NSMicrophoneUsageDescription": "Microphone is used for voice mode to talk to your AI companion."
+      }
     },
     "android": {
       "package": "com.valhalla.companion",
@@ -26,7 +30,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,7 +42,19 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Camera is used to scan QR codes for pairing."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Microphone is used for voice mode."
+        }
+      ]
     ]
   }
 }

@@ -1075,7 +1075,8 @@ def register_routes(app, config: dict) -> None:
                 registry = [a for a in registry if a.get("category", "general") == category]
             return {"ok": True, "items": registry, "count": len(registry)}
         except Exception as e:
-            return {"ok": True, "items": [], "count": 0, "note": str(e)}
+            log.error("Marketplace browse error: %s", e)
+            return {"ok": True, "items": [], "count": 0, "note": "Marketplace service unavailable"}
 
     @router.get("/api/v1/marketplace/search")
     async def api_marketplace_search(q: str = ""):
@@ -1095,7 +1096,8 @@ def register_routes(app, config: dict) -> None:
             ]
             return {"ok": True, "items": results, "count": len(results), "query": q}
         except Exception as e:
-            return {"ok": True, "items": [], "count": 0, "query": q, "note": str(e)}
+            log.error("Marketplace search error: %s", e)
+            return {"ok": True, "items": [], "count": 0, "query": q, "note": "Marketplace service unavailable"}
 
     @router.get("/api/v1/marketplace/item/{item_id}")
     async def api_marketplace_item(item_id: str):
@@ -1150,7 +1152,8 @@ def register_routes(app, config: dict) -> None:
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(500, str(e))
+            log.error("Marketplace install error: %s", e)
+            raise HTTPException(500, "Marketplace service unavailable")
 
     # --- Sprint 6 Task 3: Web page summary ---
 
@@ -1169,6 +1172,10 @@ def register_routes(app, config: dict) -> None:
         # URL length limit
         if len(url) > 2000:
             raise HTTPException(400, "URL too long (max 2000 chars)")
+
+        # Sprint 7: SSRF blocklist check
+        if not _is_url_safe(url):
+            raise HTTPException(403, "URL points to a blocked internal address")
 
         try:
             from plugins.browse.parser import fetch_and_parse_sync
@@ -1193,15 +1200,70 @@ def register_routes(app, config: dict) -> None:
                 "url": url,
             }
         except Exception as e:
-            raise HTTPException(502, f"Failed to fetch/parse URL: {str(e)}")
+            log.error("Browse summarize error: %s", e)
+            raise HTTPException(502, "Failed to fetch or parse the URL")
+
+    # --- Sprint 7 Task 1: SSRF blocklist ---
+
+    def _is_url_safe(url: str) -> bool:
+        """Check URL against SSRF blocklist."""
+        import ipaddress
+        import urllib.parse
+
+        BLOCKED_NETWORKS = [
+            ipaddress.ip_network("127.0.0.0/8"),
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16"),
+            ipaddress.ip_network("169.254.0.0/16"),
+            ipaddress.ip_network("0.0.0.0/8"),
+        ]
+
+        parsed = urllib.parse.urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        if hostname in ("localhost", "0.0.0.0"):
+            return False
+        try:
+            addr = ipaddress.ip_address(hostname)
+            return not any(addr in net for net in BLOCKED_NETWORKS)
+        except ValueError:
+            # Domain name — allow (resolves externally)
+            return True
 
     # --- Sprint 6 Task 4: WebSocket for real-time companion sync ---
+    # Sprint 7 Task 2: Added auth token + 5 connection cap
 
     _ws_connections: list = []
+    _WS_MAX_CONNECTIONS = 5
+
+    def _verify_ws_token(token: str) -> bool:
+        """Verify WebSocket token against stored pairing token."""
+        import hmac
+        from pathlib import Path as _Path
+        token_path = _Path.home() / ".valhalla" / "mobile_token.json"
+        if not token_path.exists():
+            return False
+        try:
+            data = json.loads(token_path.read_text(encoding="utf-8"))
+            stored = data.get("token", "")
+            return hmac.compare_digest(stored, token)
+        except Exception:
+            return False
+
+    def _cleanup_dead_ws():
+        """Remove dead WebSocket connections."""
+        dead = [ws for ws in _ws_connections if hasattr(ws, 'client_state') and ws.client_state.name == 'DISCONNECTED']
+        for ws in dead:
+            _ws_connections.remove(ws)
 
     @router.websocket("/api/v1/companion/ws")
     async def ws_companion_sync(websocket):
         """WebSocket for real-time companion state updates.
+
+        Requires ?token= query param matching stored pairing token.
+        Max 5 concurrent connections.
 
         Events:
           - companion_state_update: happiness, XP, level changes
@@ -1210,17 +1272,27 @@ def register_routes(app, config: dict) -> None:
           - notification: push notification content
         """
         from fastapi import WebSocket
+
+        # Sprint 7: Auth check
+        token = websocket.query_params.get("token", "")
+        if not token or not _verify_ws_token(token):
+            await websocket.close(code=4001, reason="Unauthorized")
+            return
+
+        # Sprint 7: Cleanup dead connections + enforce cap
+        _cleanup_dead_ws()
+        if len(_ws_connections) >= _WS_MAX_CONNECTIONS:
+            await websocket.close(code=4029, reason="Too many connections")
+            return
+
         await websocket.accept()
         _ws_connections.append(websocket)
         try:
             while True:
-                # Keep alive — also listen for client messages
                 data = await websocket.receive_text()
-                # Echo pong for keepalive pings
                 if data == "ping":
                     await websocket.send_json({"type": "pong"})
                 elif data == "sync":
-                    # On-demand sync
                     import time as _time
                     from plugins.companion.sim import load_state, get_status, get_mood_prefix
                     state = load_state()
@@ -1312,5 +1384,96 @@ def register_routes(app, config: dict) -> None:
             "species": state.get("species", "cat"),
         }
 
+    # --- Sprint 7 Task 4: Achievement endpoints ---
+
+    @router.get("/api/v1/companion/achievements")
+    async def api_achievements():
+        """List all achievements with earned status."""
+        from plugins.companion.achievements import get_all_achievements
+        return {"ok": True, "achievements": get_all_achievements()}
+
+    @router.post("/api/v1/companion/achievements/check")
+    async def api_achievements_check():
+        """Check and award any newly earned achievements.
+
+        Called after actions (feed, walk, quest, teach, etc.).
+        Returns newly earned achievements for toast notifications.
+        """
+        from plugins.companion.sim import load_state
+        from plugins.companion.achievements import check_and_award
+
+        state = load_state()
+        if not state:
+            raise HTTPException(404, "No companion adopted yet.")
+
+        newly = check_and_award(state)
+        return {
+            "ok": True,
+            "newly_earned": newly,
+            "count": len(newly),
+        }
+
+    # --- Sprint 7 Task 5: Weekly summary ---
+
+    @router.get("/api/v1/companion/weekly-summary")
+    async def api_weekly_summary():
+        """Summary of the past 7 days."""
+        from datetime import datetime, timedelta
+        from plugins.companion.sim import load_state
+        from plugins.companion.achievements import load_earned
+
+        state = load_state()
+        if not state:
+            raise HTTPException(404, "No companion adopted yet.")
+
+        now = datetime.now()
+        week_ago = now - timedelta(days=7)
+        period = f"{week_ago.strftime('%b %d')} - {now.strftime('%b %d')}"
+
+        counters = state.get("counters", {})
+        level = state.get("level", 1)
+        earned = load_earned()
+
+        # Count achievements earned this week
+        import time as _time
+        week_ago_ts = _time.time() - (7 * 86400)
+        recent_achievements = [
+            aid for aid, info in earned.items()
+            if info.get("earned_at", 0) > week_ago_ts
+        ]
+
+        stats = {
+            "feeds": counters.get("feeds", 0),
+            "walks": counters.get("walks", 0),
+            "quests_completed": counters.get("quests", 0),
+            "facts_learned": counters.get("teaches", 0),
+            "messages_sent": counters.get("messages", 0),
+            "levels_gained": max(0, level - counters.get("level_at_week_start", level)),
+            "achievements_earned": len(recent_achievements),
+            "guardian_saves": counters.get("guardian_saves", 0),
+        }
+
+        # Generate highlights
+        highlights = []
+        if stats["levels_gained"] > 0:
+            highlights.append(f"Reached level {level}!")
+        if recent_achievements:
+            from plugins.companion.achievements import ACHIEVEMENTS
+            for aid in recent_achievements[:3]:
+                if aid in ACHIEVEMENTS:
+                    highlights.append(f"Earned '{ACHIEVEMENTS[aid]['name']}' achievement")
+        if stats["facts_learned"] > 0:
+            highlights.append(f"Your companion learned {stats['facts_learned']} new facts")
+        if stats["quests_completed"] > 0:
+            highlights.append(f"Completed {stats['quests_completed']} quests")
+
+        return {
+            "ok": True,
+            "period": period,
+            "stats": stats,
+            "highlights": highlights[:5],
+            "companion_name": state.get("name", "Companion"),
+        }
+
     app.include_router(router)
-    log.info("[companion] Plugin loaded (Sprint 6: voice + marketplace + browse + websocket + briefing).")
+    log.info("[companion] Plugin loaded (Sprint 7: security + achievements + weekly).")

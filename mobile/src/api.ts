@@ -193,6 +193,26 @@ export const companionAPI = {
             "/api/v1/browse/summarize",
             { method: "POST", body: JSON.stringify({ url }) }
         ),
+
+    /** Check for new achievements after an action (Sprint 7). */
+    achievementsCheck: () =>
+        apiFetch<{ new_achievements?: Array<{ id: string; name: string; description: string; emoji: string }>; all_achievements?: Array<Record<string, any>> }>(
+            "/api/v1/companion/achievements/check",
+            { method: "POST" }
+        ),
+
+    /** Get weekly summary (Sprint 7). */
+    weeklySummary: () =>
+        apiFetch<Record<string, any>>(
+            "/api/v1/companion/weekly-summary"
+        ),
+
+    /** Pair mobile app with backend via token (Sprint 7). */
+    pair: (token: string) =>
+        apiFetch<{ ok: boolean; paired: boolean }>(
+            "/mobile/pair",
+            { method: "POST", body: JSON.stringify({ token }) }
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

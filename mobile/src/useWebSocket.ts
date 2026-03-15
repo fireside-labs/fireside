@@ -1,27 +1,32 @@
 /**
- * 🔄 WebSocket hook — Sprint 6 Task 5.
+ * 🔄 WebSocket hook — Sprint 6 Task 5, Sprint 7 Task 4 (auth token).
  *
  * Real-time sync via WebSocket with exponential backoff reconnection.
  * Falls back to polling if WebSocket fails.
+ * Sprint 7: Sends pairing token for auth, handles 401 rejection.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getHost } from "./api";
 
 type WSEvent =
     | { type: "companion_state_update"; data: Record<string, any> }
     | { type: "task_completed"; data: { task_id: string; result: string } }
     | { type: "chat_message"; data: { role: string; content: string } }
+    | { type: "auth_rejected"; data: { reason: string } }
     | { type: "ping" };
 
 interface UseWebSocketReturn {
     connected: boolean;
     lastEvent: WSEvent | null;
+    authError: boolean;
     send: (data: Record<string, any>) => void;
 }
 
 export function useWebSocket(onEvent?: (event: WSEvent) => void): UseWebSocketReturn {
     const [connected, setConnected] = useState(false);
     const [lastEvent, setLastEvent] = useState<WSEvent | null>(null);
+    const [authError, setAuthError] = useState(false);
     const wsRef = useRef<WebSocket | null>(null);
     const retriesRef = useRef(0);
     const maxRetries = 10;
@@ -31,7 +36,9 @@ export function useWebSocket(onEvent?: (event: WSEvent) => void): UseWebSocketRe
             const host = await getHost();
             if (!host) return;
 
-            const wsUrl = `ws://${host}/api/v1/companion/ws`;
+            // Sprint 7: Add auth token to WS URL
+            const token = await AsyncStorage.getItem("pairingToken");
+            const wsUrl = `ws://${host}/api/v1/companion/ws${token ? `?token=${token}` : ""}`;
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;
 
@@ -80,5 +87,5 @@ export function useWebSocket(onEvent?: (event: WSEvent) => void): UseWebSocketRe
         }
     }, []);
 
-    return { connected, lastEvent, send };
+    return { connected, lastEvent, authError, send };
 }

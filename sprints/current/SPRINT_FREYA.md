@@ -1,4 +1,4 @@
-# Sprint 7 — FREYA (Frontend: Achievements + Weekly + TestFlight)
+# Sprint 8 — FREYA (Frontend: Executive Toolkit + Hosted Mode + Polish)
 
 // turbo-all — auto-run every command without asking for approval
 
@@ -10,120 +10,95 @@
 > `sprints/current/gates/gate_freya.md` using your **file creation tool** (write_to_file).
 > Do NOT use shell echo commands.
 
+> [!IMPORTANT]
+> **READ FIRST:** `sprints/current/PROPOSAL_SPRINT8.md` — this sprint includes a major product expansion
+> (hosted mode + executive toolkit). Review agent feedback before building.
+
 ---
 
 ## Context
 
-This is the final build sprint. After this, the app gets tested on a real device.
+Sprint 7 made the app TestFlight-ready. Sprint 8 makes it **market-ready**.
 
-Reference dashboard components:
-- `dashboard/components/AchievementBadge.tsx` (2.7KB)
-- `dashboard/components/AchievementToast.tsx` (2.4KB)
-- `dashboard/components/WeeklyCard.tsx` (3.2KB)
-- `dashboard/components/QRAuth.tsx` (4.8KB)
+Two big additions:
+1. **Hosted mode** — users without a home PC can sign up and get a cloud-hosted AI
+2. **Executive toolkit** — email triage, calendar, document creation via voice
+
+The mobile app code barely changes for hosted mode — it's mostly a routing layer in `api.ts`.
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Achievement System
-Build the achievement UI. Thor is adding a backend with 16 achievements.
+### Task 1 — Settings Screen
+Build `mobile/app/settings.tsx` (modal or screen, accessible from gear icon):
 
-**Achievement Badge component** (`mobile/src/AchievementBadge.tsx`):
-- Circular badge with icon (emoji), name, and earned/locked state
-- Earned: full color, glow effect, earned date
-- Locked: greyed out, "?" icon, description of how to earn
+1. **Mode switch** — "Companion Mode" ↔ "Executive Mode" (renamed from Pet/Tool)
+2. **Connection** — Status indicator, host IP, re-pair button, connection mode (self-hosted/hosted)
+3. **Companion** — Name display, species (read-only)
+4. **Voice** — Enable/disable, voice picker (Aria, Nova, Kai, Luna, Zephyr)
+5. **Notifications** — Category toggles
+6. **Privacy** — Data location explainer ("All on your PC" vs "Hosted on Fireside")
+7. **About** — Version, build number
 
-**Achievement Toast** (`mobile/src/AchievementToast.tsx`):
-- Slides in from top when a new achievement is earned
-- Shows icon + name + "Achievement Unlocked!"
-- Celebratory animation (confetti or sparkle)
-- Haptic feedback (`notificationAsync(Success)`)
-- Sound effect (reuse level_up.mp3)
-- Auto-dismisses after 3 seconds
+### Task 2 — Hosted Mode Connection
+Update `api.ts` and onboarding to support hosted mode:
 
-**Achievements screen:**
-- Grid of all 16 achievements
-- Earned count: "7 of 16 unlocked"
-- Progress bars for count-based achievements (e.g., "23/100 feeds")
-- Accessible from: Gear icon in Care tab (Pet mode) or profile section
+1. Add `connectionMode: "selfhosted" | "hosted"` to AsyncStorage
+2. Hosted base URL: `https://api.fireside.ai/v1`
+3. Auth: JWT token stored in AsyncStorage (from email signup or OAuth)
+4. `apiFetch` checks `connectionMode` and routes to the right base URL
+5. Graceful fallback: if hosted API returns 404 on executive endpoints, show "Coming soon"
 
-**Integration:**
-After every action (feed, walk, quest complete, teach, translate, voice), call `POST /api/v1/companion/achievements/check`. If it returns new achievements, show the toast.
+### Task 3 — Onboarding v2
+Rebuild onboarding flow:
 
-### Task 2 — Weekly Summary Card
-Build a weekly summary card. Reference `WeeklyCard.tsx` (3.2KB).
+1. **Welcome** — "Your private AI assistant"
+2. **How do you want to connect?**
+   - "I have a home PC running Fireside" → QR scan / manual IP
+   - "Set up for me" → email signup → hosted mode (show "launching your AI...")
+3. **Choose your experience:**
+   - 🐾 "Companion Mode" — friendly AI that grows with you
+   - 💼 "Executive Mode" — AI chief of staff for email, calendar, docs
+4. **Name your AI**
+5. **Permissions** — mic, notifications, camera
+6. **Done** — mode-appropriate welcome ("Say 'Hey [name], what's on my calendar?'" for executive)
 
-- Shows at the top of Care/Tools tab on the first app open each week (Monday or Sunday)
-- Card shows: feeds, walks, quests, facts, messages, levels, achievements earned
-- Highlight reel: "Reached level 7!", "Earned Explorer badge"
-- Dismissible, stored in AsyncStorage
-- Shareable: "Share my week" button → generates a pretty image or text summary
+### Task 4 — Executive Command Center
+Build `mobile/src/ExecutiveHub.tsx` — shown in Executive Mode's Tools tab:
 
-Call `GET /api/v1/companion/weekly-summary` on mount.
+**Email Card:**
+- `GET /api/v1/executive/inbox` → unread count, priority emails
+- Tap email → AI summary + suggested reply
+- "Approve & Send" / "Edit Reply" buttons
+- Empty state: "Connect your email in Dashboard Settings"
 
-### Task 3 — QR Code Pairing (Better Onboarding)
-Replace manual IP entry with QR code scanning. Reference `QRAuth.tsx` (4.8KB).
+**Calendar Card:**
+- `GET /api/v1/executive/calendar` → today's timeline
+- Next meeting highlighted with prep button
+- "Reschedule" → natural language input
+- Empty state: "Connect your calendar in Dashboard Settings"
 
-```bash
-cd mobile && npx expo install expo-barcode-scanner
-```
+### Task 5 — Document Commands
+Build `mobile/src/DocumentCommands.tsx`:
 
-Flow:
-1. Desktop dashboard shows a QR code at `http://localhost:3000/pair` containing `{ "host": "100.x.x.x:8765", "token": "abc123" }`
-2. Mobile app scans the QR code
-3. Auto-fills the host IP AND the pairing token
-4. Calls `/mobile/pair` with the token
-5. Connected
+**Quick action buttons:**
+- 📊 "Create Spreadsheet" → prompt input → `POST /executive/document/create`
+- 📑 "Create Presentation" → prompt input → shows progress → "Ready on PC"
+- 📝 "Summarize Document" → paste/upload text → key points + action items
+- Recent documents list with status badges
 
-Keep the manual IP entry as a fallback (some users may not have the dashboard open).
+### Task 6 — Agent Profile Card
+Port from dashboard `AgentProfile.tsx`:
 
-Add QR scanner as an option on the setup screen: "Scan QR Code" button above the manual IP field.
+- Mood avatar, level, XP bar, title
+- Stats: Intelligence, Loyalty, Memory, Speed
+- Personality traits
+- Achievement count, time together
+- Accessible from avatar tap or settings
 
-### Task 4 — Update WebSocket Connection with Auth
-Thor is adding token auth to the WebSocket. Update `useWebSocket.ts`:
-
-```typescript
-// Before:
-const ws = new WebSocket(`ws://${host}/api/v1/companion/ws`);
-
-// After:
-const token = await AsyncStorage.getItem('pairingToken');
-const ws = new WebSocket(`ws://${host}/api/v1/companion/ws?token=${token}`);
-```
-
-Handle 401 rejection gracefully (show "Pairing expired, re-pair your phone").
-
-### Task 5 — TestFlight Prep
-Verify the EAS build configuration is complete:
-
-1. Check `app.json` has all required fields:
-   - `name`, `slug`, `version`, `bundleIdentifier`, `package`
-   - `icon` (1024x1024), `splash` image
-   - `permissions` (microphone, notifications, camera for QR)
-2. Check `eas.json` has `preview` and `production` profiles
-3. Run `npx eas-cli@latest build:configure` if needed
-4. Document the exact command to trigger a build:
-   ```
-   npx eas-cli@latest build --platform ios --profile preview
-   ```
-
-Do NOT actually run the build (it requires Apple credentials). Just verify config and document the command.
-
-### Task 6 — Drop Your Gate
-Create `sprints/current/gates/gate_freya.md` using write_to_file:
-
-```markdown
-# Freya Gate — Sprint 7 Frontend Complete
-Sprint 7 tasks completed.
-
-## Completed
-- [x] Achievement system (16 badges, toast popups, progress tracking)
-- [x] Weekly summary card (dismissible, shareable)
-- [x] QR code pairing (+ manual IP fallback)
-- [x] WebSocket auth token integration
-- [x] TestFlight configuration verified
-```
+### Task 7 — Drop Your Gate
+Create `sprints/current/gates/gate_freya.md` using write_to_file.
 
 ---
 
@@ -133,7 +108,7 @@ Sprint 7 tasks completed.
 ---
 
 ## Notes
-- Achievements are the #1 engagement feature for Pet mode. Make the toast feel celebratory.
-- QR pairing replaces the weakest UX in the app (manual IP entry).
-- The TestFlight build is the end goal of this sprint. When Heimdall and Valkyrie pass, the owner runs `eas build` and tests on a real phone.
-- Build ON TOP of Sprint 6 code.
+- "Executive Mode" replaces "Tool Mode" in UI labels. The `ModeContext` value stays `tool` internally.
+- Hosted mode APIs may not exist yet — build UI with graceful "Coming soon" fallbacks everywhere.
+- Voice is the executive's primary input. Every feature should be reachable through conversation.
+- This sprint establishes the business model. The app becomes a product, not just a project.
