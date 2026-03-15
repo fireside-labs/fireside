@@ -5,16 +5,12 @@
 # Usage:
 #   curl -fsSL getfireside.ai/install | bash
 #
-# What this does:
-#   1. Check your system
-#   2. Ask your name
-#   3. Let you pick a brain size
-#   4. Let you choose a companion
-#   5. Download & install everything
-#   6. Start Fireside + open your browser
+# The friendliest AI installer you've ever used.
 # ============================================================================
 
 set -euo pipefail
+
+VERSION="1.0.0"
 
 # ─── Colors ───
 RED='\033[0;31m'
@@ -32,11 +28,26 @@ REPO_URL="https://github.com/JordanFableFur/valhalla-mesh.git"
 # ─── Helpers ───
 ok()    { echo -e "  ${GREEN}✔${NC} $1"; }
 info()  { echo -e "  ${DIM}$1${NC}"; }
-warn()  { echo -e "  ${AMBER}⚠${NC} $1"; }
+warn()  { echo -e "  ${AMBER}⚠${NC}  $1"; }
 fail()  { echo -e "\n  ${RED}✗ $1${NC}\n"; exit 1; }
 check_cmd() { command -v "$1" &> /dev/null; }
 
-# Simple progress bar
+# Animated spinner
+spinner() {
+    local pid=$1
+    local label="${2:-Working}"
+    local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        echo -ne "\r  ${AMBER}${frames[$i]}${NC}  ${DIM}${label}${NC}  "
+        i=$(( (i + 1) % 10 ))
+        sleep 0.1
+    done
+    wait "$pid" 2>/dev/null
+    echo -ne "\r  ${GREEN}✔${NC}  ${label}                    \n"
+}
+
+# Progress bar
 progress_bar() {
     local label="$1"
     local duration="${2:-3}"
@@ -47,6 +58,31 @@ progress_bar() {
         sleep "$(echo "scale=3; $duration / $width" | bc 2>/dev/null || echo "0.1")"
     done
     echo -e " ${GREEN}✔${NC}"
+}
+
+# Ask with validation
+ask_choice() {
+    local prompt="$1"
+    local min="$2"
+    local max="$3"
+    local default="$4"
+    local choice=""
+
+    while true; do
+        echo -ne "  ${AMBER}→${NC} "
+        read -r choice
+        # Default on empty
+        if [[ -z "$choice" ]]; then
+            choice="$default"
+            break
+        fi
+        # Validate numeric range
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge "$min" ]] && [[ "$choice" -le "$max" ]]; then
+            break
+        fi
+        echo -e "  ${DIM}Hmm, that's not an option. Pick a number from ${min}-${max}.${NC}"
+    done
+    echo "$choice"
 }
 
 # ─── Cleanup on exit ───
@@ -65,21 +101,24 @@ trap cleanup EXIT
 clear
 echo ""
 echo -e "${AMBER}"
-echo "         ╔═══════════════════════════════╗"
-echo "         ║                               ║"
-echo "         ║    🔥  Welcome to Fireside    ║"
-echo "         ║                               ║"
-echo "         ║   Your AI companion awaits.   ║"
-echo "         ║                               ║"
-echo "         ╚═══════════════════════════════╝"
+echo "         ╔═══════════════════════════════════╗"
+echo "         ║                                   ║"
+echo "         ║     🔥  Welcome to Fireside  🔥   ║"
+echo "         ║                                   ║"
+echo -e "         ║         ${DIM}v${VERSION}${AMBER}                        ║"
+echo "         ╚═══════════════════════════════════╝"
 echo -e "${NC}"
+echo -e "  ${DIM}The AI companion that learns while you sleep.${NC}"
+echo -e "  ${DIM}This will take about 2-3 minutes.${NC}"
+echo ""
 sleep 1
 
 # ============================================================================
-# SYSTEM CHECK (silent, fast)
+# SYSTEM CHECK
 # ============================================================================
 
-echo -e "  ${DIM}Checking your system...${NC}"
+echo -e "  ${BOLD}Checking your system...${NC}"
+echo ""
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
@@ -91,7 +130,7 @@ elif [[ "$OS" == "Linux" ]]; then
     os_name="Linux"
     hw_name="$ARCH"
 else
-    fail "Sorry, Fireside supports macOS and Linux. Windows users: try WSL2."
+    fail "Fireside supports macOS and Linux. Windows users: try WSL2."
 fi
 
 # RAM
@@ -106,13 +145,19 @@ fi
 
 # GPU
 GPU_NAME="CPU only"
+GPU_VRAM=0
 if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
-    GPU_NAME="Apple Silicon (${RAM_GB}GB shared)"
+    GPU_NAME="Apple Silicon (${RAM_GB}GB unified)"
+    GPU_VRAM=$RAM_GB
 elif check_cmd nvidia-smi; then
     GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+    GPU_VRAM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+    GPU_VRAM=$((GPU_VRAM / 1024))
 fi
 
-ok "$os_name ($hw_name) · ${RAM_GB}GB RAM · $GPU_NAME"
+ok "$os_name ($hw_name)"
+ok "${RAM_GB}GB RAM"
+ok "GPU: $GPU_NAME"
 echo ""
 sleep 0.5
 
@@ -121,6 +166,7 @@ sleep 0.5
 # ============================================================================
 
 echo -e "  ${BOLD}What should your companion call you?${NC}"
+echo -e "  ${DIM}(Just your first name is perfect)${NC}"
 echo ""
 echo -ne "  ${AMBER}→${NC} "
 read -r USER_NAME
@@ -128,9 +174,11 @@ read -r USER_NAME
 if [[ -z "$USER_NAME" ]]; then
     USER_NAME="friend"
 fi
+# Capitalize first letter
+USER_NAME="$(echo "${USER_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${USER_NAME:1}"
 
 echo ""
-echo -e "  ${DIM}Nice to meet you, ${NC}${BOLD}$USER_NAME${NC}${DIM}.${NC}"
+echo -e "  ${DIM}Nice to meet you, ${NC}${BOLD}${USER_NAME}${NC}${DIM}. ☀️${NC}"
 echo ""
 sleep 0.8
 
@@ -141,33 +189,49 @@ sleep 0.8
 echo -e "  ${BOLD}Pick a brain for your AI:${NC}"
 echo ""
 
-# Recommend based on RAM
-if [[ "$RAM_GB" -ge 32 ]]; then
+# Smart recommendation based on RAM
+if [[ "$RAM_GB" -ge 48 ]]; then
     REC="2"
-    REC_LABEL=" ← recommended"
 elif [[ "$RAM_GB" -ge 16 ]]; then
     REC="1"
-    REC_LABEL=" ← recommended"
 else
-    REC="1"
-    REC_LABEL=" ← recommended"
+    REC="3"
 fi
 
-echo -e "  ${AMBER}[1]${NC} Smart & Fast ${DIM}(7B model · ~4GB download)${NC}$( [[ "$REC" == "1" ]] && echo -e " ${GREEN}${REC_LABEL}${NC}" )"
-echo -e "  ${AMBER}[2]${NC} Deep Thinker ${DIM}(35B model · ~20GB download)${NC}$( [[ "$REC" == "2" ]] && echo -e " ${GREEN}${REC_LABEL}${NC}" )"
-echo -e "  ${AMBER}[3]${NC} Compact      ${DIM}(3B model · ~2GB download · lower quality)${NC}"
+echo -e "    ${AMBER}[1]${NC} Smart & Fast   ${DIM}7B model · ~4GB download${NC}$( [[ "$REC" == "1" ]] && echo -e "  ${GREEN}← recommended for you${NC}" )"
+echo -e "    ${AMBER}[2]${NC} Deep Thinker   ${DIM}35B model · ~20GB download${NC}$( [[ "$REC" == "2" ]] && echo -e "  ${GREEN}← recommended for you${NC}" )"
+echo -e "    ${AMBER}[3]${NC} Compact        ${DIM}3B model · ~2GB download${NC}$( [[ "$REC" == "3" ]] && echo -e "  ${GREEN}← recommended for you${NC}" )"
 echo ""
-echo -ne "  ${AMBER}→${NC} "
-read -r BRAIN_CHOICE
+
+BRAIN_CHOICE=$(ask_choice "Pick 1-3" 1 3 "$REC")
 
 case "$BRAIN_CHOICE" in
-    2) BRAIN="deep-thinker-35b"; BRAIN_LABEL="Deep Thinker (35B)" ;;
-    3) BRAIN="compact-3b";       BRAIN_LABEL="Compact (3B)" ;;
-    *) BRAIN="smart-fast-7b";    BRAIN_LABEL="Smart & Fast (7B)" ;;
+    2) BRAIN="deep-thinker-35b"; BRAIN_LABEL="Deep Thinker (35B)"; BRAIN_RAM=24 ;;
+    3) BRAIN="compact-3b";       BRAIN_LABEL="Compact (3B)";       BRAIN_RAM=4 ;;
+    *) BRAIN="smart-fast-7b";    BRAIN_LABEL="Smart & Fast (7B)";  BRAIN_RAM=8 ;;
 esac
 
+# RAM warning
+if [[ "$RAM_GB" -lt "$BRAIN_RAM" ]]; then
+    echo ""
+    warn "The $BRAIN_LABEL brain works best with ${BRAIN_RAM}GB+ RAM."
+    warn "You have ${RAM_GB}GB. It may run slowly."
+    echo ""
+    echo -e "  ${DIM}Switch to a smaller brain? (y/n)${NC}"
+    echo -ne "  ${AMBER}→${NC} "
+    read -r SWITCH
+    if [[ "$SWITCH" == "y" || "$SWITCH" == "Y" ]]; then
+        if [[ "$RAM_GB" -ge 8 ]]; then
+            BRAIN="smart-fast-7b"; BRAIN_LABEL="Smart & Fast (7B)"
+        else
+            BRAIN="compact-3b"; BRAIN_LABEL="Compact (3B)"
+        fi
+        ok "Switched to $BRAIN_LABEL"
+    fi
+fi
+
 echo ""
-ok "Brain selected: $BRAIN_LABEL"
+ok "Brain: $BRAIN_LABEL"
 echo ""
 sleep 0.5
 
@@ -176,33 +240,90 @@ sleep 0.5
 # ============================================================================
 
 echo -e "  ${BOLD}Choose your companion:${NC}"
+echo -e "  ${DIM}They'll keep you company and learn with you.${NC}"
 echo ""
-echo -e "    ${AMBER}[1]${NC} 🐱  Cat       ${DIM}— finds sunny spots, knocks things over${NC}"
-echo -e "    ${AMBER}[2]${NC} 🐶  Dog       ${DIM}— found a stick. THE stick. Best day ever!${NC}"
-echo -e "    ${AMBER}[3]${NC} 🐧  Penguin   ${DIM}— waddles with purpose, adjusts bowtie${NC}"
-echo -e "    ${AMBER}[4]${NC} 🦊  Fox       ${DIM}— investigates suspicious bushes${NC}"
-echo -e "    ${AMBER}[5]${NC} 🦉  Owl       ${DIM}— counted every tree. 47. you're welcome${NC}"
-echo -e "    ${AMBER}[6]${NC} 🐉  Dragon    ${DIM}— breathes fire at dandelions${NC}"
+echo -e "    ${AMBER}[1]${NC} 🐱  Cat       ${DIM}— finds sunny spots, knocks things over, pretends it was on purpose${NC}"
+echo -e "    ${AMBER}[2]${NC} 🐶  Dog       ${DIM}— found a stick. THE stick. Life complete. Best day ever!!${NC}"
+echo -e "    ${AMBER}[3]${NC} 🐧  Penguin   ${DIM}— waddles with purpose, adjusts bowtie, organizes rocks by size${NC}"
+echo -e "    ${AMBER}[4]${NC} 🦊  Fox       ${DIM}— investigates suspicious bushes, caches snacks, watches sunsets${NC}"
+echo -e "    ${AMBER}[5]${NC} 🦉  Owl       ${DIM}— counted every tree. 47. you're welcome. blinks slowly at squirrels${NC}"
+echo -e "    ${AMBER}[6]${NC} 🐉  Dragon    ${DIM}— breathes fire at dandelions, hoards shiny rocks. count: 847${NC}"
 echo ""
-echo -ne "  ${AMBER}→${NC} "
-read -r PET_CHOICE
+
+PET_CHOICE=$(ask_choice "Pick 1-6" 1 6 3)
 
 case "$PET_CHOICE" in
-    1) PET="cat";     PET_EMOJI="🐱"; PET_NAME="Whiskers" ;;
-    2) PET="dog";     PET_EMOJI="🐶"; PET_NAME="Buddy" ;;
-    4) PET="fox";     PET_EMOJI="🦊"; PET_NAME="Ember" ;;
-    5) PET="owl";     PET_EMOJI="🦉"; PET_NAME="Sage" ;;
-    6) PET="dragon";  PET_EMOJI="🐉"; PET_NAME="Cinder" ;;
-    *) PET="penguin"; PET_EMOJI="🐧"; PET_NAME="Sir Wadsworth" ;;
+    1) PET="cat";     PET_EMOJI="🐱"; PET_NAME="Whiskers"
+       PET_ART='
+        /\_/\
+       ( o.o )
+        > ^ <
+       /|   |\
+      (_|   |_)' ;;
+    2) PET="dog";     PET_EMOJI="🐶"; PET_NAME="Buddy"
+       PET_ART='
+        / \__
+       (    @\___
+        /         O
+       /   (_____/
+      /_____/   U' ;;
+    4) PET="fox";     PET_EMOJI="🦊"; PET_NAME="Ember"
+       PET_ART='
+        /\   /\
+       /  \_/  \
+      |  o   o  |
+       \  .___.  /
+        \______/' ;;
+    5) PET="owl";     PET_EMOJI="🦉"; PET_NAME="Sage"
+       PET_ART='
+        ,___,
+        (O,O)
+        /)  )
+       /""-""' ;;
+    6) PET="dragon";  PET_EMOJI="🐉"; PET_NAME="Cinder"
+       PET_ART='
+           __====-_  _-====___
+     _--^^^  //    \/    \\  ^^^--_
+         __  ||    ||    ||  __
+        ´  `^^^^  ^^  ^^^^´  `' ;;
+    *) PET="penguin"; PET_EMOJI="🐧"; PET_NAME="Sir Wadsworth"
+       PET_ART='
+           .___.
+          /     \
+         | O _ O |
+         /  \_/  \
+        / |     | \
+       /__|     |__\
+          |_____|
+           _/ \_' ;;
 esac
 
 echo ""
 ok "Companion: $PET_EMOJI $PET_NAME the ${PET^}"
 echo ""
-sleep 0.8
+sleep 0.5
 
 # ============================================================================
-# INSTALL DEPENDENCIES (quiet, with progress)
+# CONFIRMATION CARD
+# ============================================================================
+
+echo -e "  ${DIM}─────────────────────────────────────────────${NC}"
+echo ""
+echo -e "  ${BOLD}Here's what we'll set up:${NC}"
+echo ""
+echo -e "    ${DIM}Owner${NC}       ${BOLD}${USER_NAME}${NC}"
+echo -e "    ${DIM}Brain${NC}       ${BOLD}${BRAIN_LABEL}${NC}"
+echo -e "    ${DIM}Companion${NC}   ${BOLD}${PET_EMOJI} ${PET_NAME}${NC}"
+echo -e "    ${DIM}Location${NC}    ${BOLD}${FIRESIDE_DIR}${NC}"
+echo ""
+echo -e "  ${DIM}─────────────────────────────────────────────${NC}"
+echo ""
+echo -e "  ${DIM}Press Enter to start, or Ctrl+C to cancel.${NC}"
+read -r
+echo ""
+
+# ============================================================================
+# INSTALL DEPENDENCIES
 # ============================================================================
 
 echo -e "  ${BOLD}Setting things up...${NC}"
@@ -223,7 +344,7 @@ for py in python3.12 python3.11 python3.10 python3; do
 done
 
 if [[ -z "$PYTHON" ]]; then
-    info "Installing Python (one-time)..."
+    info "Installing Python (one-time setup)..."
     if [[ "$OS" == "Darwin" ]]; then
         if ! check_cmd brew; then
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" < /dev/null
@@ -245,7 +366,7 @@ if check_cmd node; then
 fi
 
 if [[ "$NODE_OK" == false ]]; then
-    info "Installing Node.js (one-time)..."
+    info "Installing Node.js (one-time setup)..."
     if [[ "$OS" == "Darwin" ]]; then
         brew install node@20 -q
     else
@@ -267,20 +388,24 @@ else
 fi
 ok "Source code ready"
 
-# ─── Pip + npm ───
-progress_bar "Installing backend packages..." 4
-$PYTHON -m pip install --upgrade pip -q 2>/dev/null
-$PYTHON -m pip install -r requirements.txt -q 2>/dev/null
+# ─── Backend packages ───
+(
+    $PYTHON -m pip install --upgrade pip -q 2>/dev/null
+    $PYTHON -m pip install -r requirements.txt -q 2>/dev/null
+) &
+spinner $! "Installing backend packages"
 
-progress_bar "Installing dashboard..." 5
-cd dashboard
-npm install --silent 2>/dev/null
-cd ..
+# ─── Dashboard packages ───
+(
+    cd dashboard
+    npm install --silent 2>/dev/null
+) &
+spinner $! "Installing dashboard"
 
 echo ""
 
 # ============================================================================
-# GENERATE CONFIG WITH USER'S CHOICES
+# GENERATE CONFIG + COMPANION STATE
 # ============================================================================
 
 cat > valhalla.yaml << EOF
@@ -315,10 +440,8 @@ pipeline:
   git_branching: false
 EOF
 
-# Create data directory
 mkdir -p "$HOME/.valhalla"
 
-# Save companion state with user's choice
 cat > "$HOME/.valhalla/companion_state.json" << EOF
 {
   "species": "${PET}",
@@ -328,6 +451,8 @@ cat > "$HOME/.valhalla/companion_state.json" << EOF
   "xp": 0,
   "level": 1,
   "streak": 0,
+  "brain": "${BRAIN}",
+  "version": "${VERSION}",
   "born": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
@@ -352,39 +477,44 @@ npm run dev &> /dev/null &
 DASH_PID=$!
 cd ..
 
-# Wait with a friendly animation
-echo -ne "  ${DIM}Warming up"
-for i in 1 2 3 4 5; do
-    sleep 1
-    echo -ne "."
-done
-echo -e "${NC}"
-echo ""
+# Animated waiting
+(sleep 5) &
+spinner $! "${PET_NAME} is stretching and yawning"
 
 # ============================================================================
 # 🔥 SUCCESS
 # ============================================================================
 
+echo ""
 echo -e "${AMBER}"
-echo "    ╔═══════════════════════════════════════════════╗"
-echo "    ║                                               ║"
-echo "    ║          🔥 Fireside is running! 🔥           ║"
-echo "    ║                                               ║"
-echo "    ╚═══════════════════════════════════════════════╝"
+echo "    ╔═══════════════════════════════════════════════════╗"
+echo "    ║                                                   ║"
+echo "    ║           🔥  Fireside is running!  🔥            ║"
+echo "    ║                                                   ║"
+echo "    ╚═══════════════════════════════════════════════════╝"
 echo -e "${NC}"
+
+# ASCII pet
+echo -e "${GREEN}${PET_ART}${NC}"
+echo ""
+echo -e "  ${BOLD}${PET_EMOJI} ${PET_NAME}${NC} ${DIM}is ready and waiting for you,${NC} ${BOLD}${USER_NAME}${NC}${DIM}.${NC}"
 echo ""
 echo -e "  ${BOLD}Dashboard${NC}   →  ${AMBER}http://localhost:3000${NC}"
 echo -e "  ${BOLD}Backend${NC}     →  ${DIM}http://localhost:8765${NC}"
 echo ""
-echo -e "  ${DIM}─────────────────────────────────────────────${NC}"
+echo -e "  ${DIM}─────────────────────────────────────────────────${NC}"
 echo ""
-echo -e "  ${PET_EMOJI}  ${BOLD}${PET_NAME}${NC} ${DIM}is ready and waiting for you,${NC} ${BOLD}${USER_NAME}${NC}${DIM}.${NC}"
-echo -e "     ${DIM}Open the link above and say hello!${NC}"
+echo -e "  ${BOLD}Things to try:${NC}"
 echo ""
-echo -e "  ${DIM}─────────────────────────────────────────────${NC}"
+echo -e "    ${AMBER}1.${NC}  Say ${ITALIC}\"Hello ${PET_NAME}!\"${NC}"
+echo -e "    ${AMBER}2.${NC}  Ask ${ITALIC}\"Take me for a walk\"${NC} ${DIM}(10% chance of adventure!)${NC}"
+echo -e "    ${AMBER}3.${NC}  Say ${ITALIC}\"Remember: I like my coffee black\"${NC}"
+echo -e "    ${AMBER}4.${NC}  Ask ${ITALIC}\"Translate 'good morning' to Japanese\"${NC}"
 echo ""
-echo -e "  ${ITALIC}${DIM}\"Day 1, it follows instructions."
-echo -e "   Day 90, it has instinct.\"${NC}"
+echo -e "  ${DIM}─────────────────────────────────────────────────${NC}"
+echo ""
+echo -e "  ${ITALIC}${DIM}\"Day 1, it follows instructions.${NC}"
+echo -e "  ${ITALIC}${DIM} Day 90, it has instinct.\"${NC}"
 echo ""
 
 # Open browser
@@ -394,6 +524,6 @@ else
     xdg-open "http://localhost:3000" 2>/dev/null || true
 fi
 
-echo -e "  ${DIM}Press Ctrl+C to stop Fireside.${NC}"
+echo -e "  ${DIM}Fireside v${VERSION} · Press Ctrl+C to stop${NC}"
 echo ""
 wait
