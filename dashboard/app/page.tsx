@@ -79,37 +79,42 @@ export default function ChatHomePage() {
     return (
         <div className="max-w-2xl mx-auto">
             {/* Greeting */}
-            <div className="text-center mb-6 pt-8">
-                <h1 className="text-3xl font-bold text-white mb-2">
-                    Hi{userName ? ` ${userName}` : " there"} 👋
+            <div className="text-center mb-10 pt-12 animate-enter">
+                <h1 className="text-4xl font-black text-white mb-3 tracking-tight">
+                    Hi{userName ? ` ${userName}` : " there"} <span className="text-[var(--color-neon)]">🔥</span>
                 </h1>
-                <p className="text-[var(--color-rune-dim)]">Your AI is ready. What can I help you with?</p>
+                <p className="text-sm text-[var(--color-rune-dim)] font-medium uppercase tracking-[0.2em]">System Ready • Logic Engaged</p>
             </div>
 
             {/* Companion Widget */}
             {companion && (
                 <Link href="/companion">
-                    <div className="glass-card p-4 mb-6 flex items-center gap-4 hover:bg-[var(--color-glass-hover)] transition-all cursor-pointer" style={{ borderColor: "var(--color-neon)", borderWidth: 1 }}>
-                        <span className="text-3xl">{petEmoji}</span>
+                    <div className="glass-card p-5 mb-8 flex items-center gap-5 hover:bg-[var(--color-glass-hover)] group cursor-pointer" style={{ borderLeft: "4px solid var(--color-neon)" }}>
+                        <div className="text-4xl group-hover:scale-110 transition-transform duration-300">
+                            {petEmoji}
+                        </div>
                         <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                                <span className="text-white font-semibold text-sm">{companion.name}</span>
-                                <span className="text-[10px] text-[var(--color-rune-dim)]">Lv. {companion.level}</span>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-white font-bold text-base tracking-tight">{companion.name}</span>
+                                    <span className="px-1.5 py-0.5 rounded bg-[var(--color-void-lighter)] text-[9px] text-[var(--color-rune-dim)] font-bold uppercase">LVL {companion.level}</span>
+                                </div>
+                                <span className="text-[10px] text-[var(--color-neon)] font-bold uppercase tracking-wider">Companion Status</span>
                             </div>
-                            <div className="flex items-center gap-2 mt-1.5">
-                                <div className="flex-1 h-1.5 rounded-full bg-[var(--color-glass)]">
+                            <div className="flex items-center gap-3 mt-3">
+                                <div className="flex-1 h-2 rounded-full bg-[var(--color-void-lighter)] p-0.5 border border-white/5">
                                     <div
-                                        className="h-full rounded-full transition-all"
+                                        className="h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_var(--glow)]"
                                         style={{
                                             width: `${companion.happiness}%`,
-                                            background: companion.happiness > 70 ? "var(--color-neon)" : companion.happiness > 30 ? "#f59e0b" : "#ef4444",
-                                        }}
+                                            backgroundColor: companion.happiness > 70 ? "var(--color-neon)" : companion.happiness > 30 ? "#f59e0b" : "#ef4444",
+                                            '--glow': companion.happiness > 70 ? "rgba(245,158,11,0.4)" : "rgba(239,68,68,0.2)",
+                                        } as any}
                                     />
                                 </div>
-                                <span className="text-[10px] text-[var(--color-rune-dim)]">{happinessLabel}</span>
+                                <span className="text-[11px] text-[var(--color-rune)] font-medium min-w-[60px] text-right">{happinessLabel}</span>
                             </div>
                         </div>
-                        <span className="text-[var(--color-rune-dim)] text-xs">→</span>
                     </div>
                 </Link>
             )}

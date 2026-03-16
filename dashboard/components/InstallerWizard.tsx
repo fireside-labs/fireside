@@ -34,6 +34,7 @@ interface InstallerConfig {
   agentStyle: string;
   brainSize: string;
   brainModel: string;
+  actualModel: string;
 }
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -83,6 +84,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
     agentStyle: "analytical",
     brainSize: "smart",
     brainModel: "7B",
+    actualModel: "llama-3.1-8b-q6",
   });
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
   const [sysChecks, setSysChecks] = useState<SysCheck[]>([]);
@@ -174,6 +176,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
             agent_style: config.agentStyle,
             companion_species: config.companionSpecies,
             companion_name: config.companionName,
+            brain: (sysInfo?.vram_gb || 0) >= 20 ? "deep" : "fast",
+            model: (sysInfo?.vram_gb || 0) >= 20 ? "qwen-2.5-35b-q4" : "llama-3.1-8b-q6",
           },
         });
       });
@@ -228,11 +232,56 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
             {sysInfo && (
               <div className="installer-recommended">
                 <span>Recommended brain: </span>
-                <strong>
-                  {(sysInfo.vram_gb || 0) >= 20
-                    ? "🧠 Deep Thinker (35B Params) — Requires 24GB+ VRAM"
-                    : "⚡ Smart & Fast (8B Params) — Requires 10GB+ VRAM"}
-                </strong>
+                <div className="mt-2">
+                  <strong className="block text-lg">
+                    {(sysInfo.vram_gb || 0) >= 20
+                      ? "🧠 Deep Thinker (35B Params)"
+                      : "⚡ Smart & Fast (8B Params)"}
+                  </strong>
+                  <p className="text-[10px] text-[var(--color-rune-dim)] mt-1">
+                    {(sysInfo.vram_gb || 0) >= 20
+                      ? "Requires 24GB+ VRAM for full speed"
+                      : "Optimized for your hardware"}
+                  </p>
+                </div>
+
+                {/* F1: Advanced Model Picker */}
+                <div className="mt-6 pt-4 border-t border-[rgba(245,158,11,0.1)] text-left">
+                  <button
+                    onClick={() => setConfig(c => ({ ...c, showAdvanced: !((c as any).showAdvanced) }))}
+                    className="text-[10px] uppercase tracking-widest text-[var(--color-rune-dim)] hover:text-[var(--color-neon)] transition-colors"
+                  >
+                    {(config as any).showAdvanced ? "▾ Hide Advanced" : "▸ Advanced: Pick Model"}
+                  </button>
+
+                  {(config as any).showAdvanced && (
+                    <div className="mt-3 space-y-2 animate-enter">
+                      <select
+                        className="installer-input text-xs py-2"
+                        value={config.actualModel}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const isDeep = val.includes("35b") || val.includes("14b");
+                          setConfig(c => ({
+                            ...c,
+                            actualModel: val,
+                            brainSize: isDeep ? "deep" : "smart"
+                          }));
+                        }}
+                      >
+                        <optgroup label="Fast (8B - 10GB+ VRAM)">
+                          <option value="llama-3.1-8b-q6">Llama 3.1 8B (Q6_K)</option>
+                          <option value="mistral-v0.3-7b">Mistral v0.3 7B</option>
+                          <option value="qwen-2.5-7b">Qwen 2.5 7B</option>
+                        </optgroup>
+                        <optgroup label="Deep (35B+ - 24GB+ VRAM)">
+                          <option value="qwen-2.5-35b-q4">Qwen 2.5 35B (Q4_K)</option>
+                          <option value="command-r-35b">Command R (v01)</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -411,6 +460,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 localStorage.setItem("fireside_vram", sysInfo?.vram_gb.toString() || "0");
                 const brainId = (sysInfo?.vram_gb || 0) >= 20 ? "deep" : "fast";
                 localStorage.setItem("fireside_brain", brainId);
+                localStorage.setItem("fireside_model", config.actualModel || (brainId === "deep" ? "qwen-2.5-35b-q4" : "llama-3.1-8b-q6"));
                 onComplete();
               }}
             >
@@ -430,9 +480,9 @@ const installerCSS = `
 
   .installer-root {
     position: fixed; inset: 0; z-index: 9999;
-    background: #0A0A0A;
-    font-family: 'Inter', -apple-system, sans-serif;
-    color: #F0DCC8;
+    background: var(--color-void);
+    font-family: var(--font-family-body);
+    color: var(--color-rune);
     display: flex; flex-direction: column;
     overflow: hidden;
   }
@@ -461,18 +511,18 @@ const installerCSS = `
   .installer-root .installer-content::before {
     content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 300px;
     background:
-      radial-gradient(2px 2px at 20% 90%, #F59E0B, transparent),
-      radial-gradient(2px 2px at 40% 85%, #D97706, transparent),
-      radial-gradient(2px 2px at 60% 92%, #F59E0B, transparent),
-      radial-gradient(2px 2px at 80% 88%, #D97706, transparent),
-      radial-gradient(3px 3px at 10% 95%, #F59E0B, transparent),
+      radial-gradient(2px 2px at 20% 90%, var(--color-neon), transparent),
+      radial-gradient(2px 2px at 40% 85%, var(--color-neon-dim), transparent),
+      radial-gradient(2px 2px at 60% 92%, var(--color-neon), transparent),
+      radial-gradient(2px 2px at 80% 88%, var(--color-neon-dim), transparent),
+      radial-gradient(3px 3px at 10% 95%, var(--color-neon), transparent),
       radial-gradient(3px 3px at 50% 80%, #92400E, transparent),
-      radial-gradient(2px 2px at 70% 93%, #F59E0B, transparent),
-      radial-gradient(2px 2px at 90% 87%, #D97706, transparent),
-      radial-gradient(1px 1px at 25% 75%, #F59E0B, transparent),
-      radial-gradient(1px 1px at 55% 70%, #D97706, transparent),
-      radial-gradient(1px 1px at 85% 78%, #F59E0B, transparent),
-      radial-gradient(1px 1px at 15% 82%, #D97706, transparent);
+      radial-gradient(2px 2px at 70% 93%, var(--color-neon), transparent),
+      radial-gradient(2px 2px at 90% 87%, var(--color-neon-dim), transparent),
+      radial-gradient(1px 1px at 25% 75%, var(--color-neon), transparent),
+      radial-gradient(1px 1px at 55% 70%, var(--color-neon-dim), transparent),
+      radial-gradient(1px 1px at 85% 78%, var(--color-neon), transparent),
+      radial-gradient(1px 1px at 15% 82%, var(--color-neon-dim), transparent);
     background-size: 100% 100%;
     animation: particleRise 4s ease-in-out infinite;
     pointer-events: none; opacity: 0.4;
@@ -487,9 +537,9 @@ const installerCSS = `
   .installer-progress { height: 2px; background: #111; position: relative; z-index: 10; }
   .installer-progress-fill {
     height: 100%; border-radius: 2px;
-    background: linear-gradient(90deg, #92400E, #D97706, #F59E0B);
+    background: linear-gradient(90deg, #92400E, var(--color-neon-dim), var(--color-neon));
     transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 0 12px rgba(245,158,11,0.5);
+    box-shadow: 0 0 12px var(--color-neon-glow-strong);
   }
 
   /* ── Cinematic transitions ── */
@@ -527,7 +577,7 @@ const installerCSS = `
   }
   .installer-brand {
     font-size: 56px; font-weight: 900; letter-spacing: 10px;
-    background: linear-gradient(135deg, #F59E0B 0%, #D97706 40%, #92400E 100%);
+    background: linear-gradient(135deg, var(--color-neon) 0%, var(--color-neon-dim) 40%, #92400E 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     margin-bottom: 12px;
     text-shadow: none;
@@ -556,8 +606,8 @@ const installerCSS = `
     backdrop-filter: blur(8px);
   }
   .installer-input:focus {
-    border-color: rgba(217,119,6,0.6);
-    box-shadow: 0 0 20px rgba(217,119,6,0.15), inset 0 0 20px rgba(217,119,6,0.05);
+    border-color: var(--color-neon-dim);
+    box-shadow: 0 0 20px var(--color-neon-glow), inset 0 0 20px rgba(217,119,6,0.05);
   }
   .installer-input::placeholder { color: #3A3028; }
 
@@ -579,7 +629,7 @@ const installerCSS = `
   }
   .installer-btn-primary:hover {
     transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 8px 32px rgba(245,158,11,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+    box-shadow: 0 8px 32px var(--color-neon-glow-strong), inset 0 1px 0 rgba(255,255,255,0.3);
   }
   .installer-btn-primary:hover::before { transform: translateX(100%); }
 
@@ -622,9 +672,9 @@ const installerCSS = `
     box-shadow: 0 12px 32px rgba(0,0,0,0.3);
   }
   .installer-species-card.selected {
-    border-color: #D97706;
-    background: rgba(217,119,6,0.1);
-    box-shadow: 0 0 30px rgba(217,119,6,0.2), inset 0 0 30px rgba(217,119,6,0.05);
+    border-color: var(--color-neon-dim);
+    background: var(--color-neon-glow);
+    box-shadow: 0 0 30px var(--color-neon-glow-strong), inset 0 0 30px rgba(217,119,6,0.05);
     transform: translateY(-4px) scale(1.02);
   }
   .installer-species-emoji { font-size: 40px; margin-bottom: 8px; transition: transform 0.3s; }

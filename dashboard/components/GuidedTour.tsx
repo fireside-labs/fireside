@@ -32,9 +32,9 @@ const TOUR_STEPS = [
 
 // Hrefs unlocked at each step (cumulative)
 const UNLOCKED_AT_STEP: string[][] = [
-    ["/"],                          // Step 0: only dashboard
-    ["/", "/brains"],               // Step 1: + brains
-    ["/", "/brains"],               // Step 2: chat is on / (dashboard)
+    ["/"],                          // Step 0: Dashboard (Start)
+    ["/", "/brains"],               // Step 1: Brains
+    ["/", "/brains", "/nodes", "/companion"], // Step 2: Chat + others
 ];
 
 const TourContext = createContext<TourContextType>({
@@ -89,8 +89,13 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
     const isLocked = useCallback((href: string) => {
         if (!tour.active) return false;
-        const step = Math.min(tour.currentStep, UNLOCKED_AT_STEP.length - 1);
-        const unlocked = UNLOCKED_AT_STEP[step];
+        const step = Math.min(tour.currentStep, TOUR_STEPS.length - 1);
+        const currentStepHref = TOUR_STEPS[step]?.href;
+
+        // Always allow the current step's target
+        if (href === currentStepHref) return false;
+
+        const unlocked = UNLOCKED_AT_STEP[step] || ["/"];
         return !unlocked.includes(href);
     }, [tour.active, tour.currentStep]);
 

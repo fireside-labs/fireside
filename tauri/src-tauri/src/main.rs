@@ -29,6 +29,7 @@ struct FiresideConfig {
     companion_species: String,
     companion_name: String,
     brain: String,
+    model: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -131,8 +132,20 @@ fn get_system_info() -> SystemInfo {
         }
         #[cfg(target_os = "macos")]
         {
-            // Apple Silicon: unified memory IS the GPU memory
-            Command::new("sysctl")
+            // Apple Silicon: detect chipset name + unified memory as VRAM
+            let gpu_name = Command::new("system_profiler")
+                .args(["SPDisplaysDataType"])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    let s = String::from_utf8_lossy(&o.stdout).to_string();
+                    s.lines()
+                        .find(|l| l.contains("Chipset Model:"))
+                        .map(|l| l.split(':').nth(1).unwrap_or("Unknown").trim().to_string())
+                })
+                .unwrap_or_else(|| "Apple Silicon".into());
+
+            let vram = Command::new("sysctl")
                 .args(["-n", "hw.memsize"])
                 .output()
                 .ok()
@@ -141,27 +154,48 @@ fn get_system_info() -> SystemInfo {
                     s.parse::<f64>().ok()
                 })
                 .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
-                .unwrap_or(0.0)
+                .unwrap_or(0.0);
+
+            (gpu_name, vram)
         }
         #[cfg(target_os = "linux")]
         {
-            // Try nvidia-smi for discrete GPU VRAM
-            Command::new("nvidia-smi")
-                .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+            // Try nvidia-smi for discrete GPU name + VRAM
+            let nvidia_data = Command::new("nvidia-smi")
+                .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
                 .output()
                 .ok()
                 .and_then(|o| {
-                    if o.status.success() {
-                        let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                        // nvidia-smi returns MiB
-                        s.lines().next()
-                            .and_then(|l| l.trim().parse::<f64>().ok())
-                            .map(|mb| (mb / 1024.0 * 10.0).round() / 10.0)
+                    if !o.status.success() { return None; }
+                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    let first_line = s.lines().next()?;
+                    let parts: Vec<&str> = first_line.split(',').collect();
+                    if parts.len() >= 2 {
+                        let name = parts[0].trim().to_string();
+                        let mb = parts[1].trim().parse::<f64>().ok()?;
+                        let gb = (mb / 1024.0 * 10.0).round() / 10.0;
+                        Some((name, gb))
                     } else {
                         None
                     }
-                })
-                .unwrap_or(0.0)
+                });
+
+            if let Some(data) = nvidia_data {
+                data
+            } else {
+                // Fallback: lspci for name, 0 for VRAM
+                let gpu_name = Command::new("lspci")
+                    .output()
+                    .ok()
+                    .and_then(|o| {
+                        let s = String::from_utf8_lossy(&o.stdout).to_string();
+                        s.lines()
+                            .find(|l| l.contains("VGA") || l.contains("3D"))
+                            .map(|l| l.to_string())
+                    })
+                    .unwrap_or_else(|| "Unknown".into());
+                (gpu_name, 0.0)
+            }
         }
     };
 
@@ -350,6 +384,9 @@ models:
   providers: {{}}
   aliases:
     default: local/{brain}
+  active:
+    brain: {brain}
+    model: {model}
 
 plugins:
   enabled:
@@ -378,6 +415,7 @@ pipeline:
 "#,
         user = config.user_name,
         brain = config.brain,
+        model = config.model,
         agent_name = config.agent_name,
         agent_style = config.agent_style,
         species = config.companion_species,

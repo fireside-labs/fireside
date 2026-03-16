@@ -124,7 +124,9 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         const vramStr = hardware.vram.replace("GB", "").replace("Unknown", "0");
         const vramNum = parseFloat(vramStr) || 0;
         localStorage.setItem("fireside_vram", vramNum.toString());
-        localStorage.setItem("fireside_brain", vramNum >= 20 ? "deep" : "fast");
+        const brainId = vramNum >= 20 ? "deep" : "fast";
+        localStorage.setItem("fireside_brain", brainId);
+        localStorage.setItem("fireside_model", brainId === "deep" ? "qwen-2.5-35b-q4" : "llama-3.1-8b-q6");
         onComplete();
     };
 

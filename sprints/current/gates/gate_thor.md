@@ -1,15 +1,23 @@
-# Thor Gate — Sprint 16 Complete (Polish & Ship)
-- [x] T1 — Store wired: 6 default plugins, purchase 404/409, purchases.json persistence
-- [x] T2 — Auto-start verified: setup() hook, spawn_backend, restart-on-crash, exit cleanup
-- [x] T3 — BrainPicker match: InstallerWizard writes `fireside_brain`, SettingsForm reads it
+# Thor Gate — Sprint 17 Complete ("Immersion")
+- [x] T1 — Model name -> brain mapping:
+    - [x] `fireside_model` saved in `InstallerWizard` / `OnboardingWizard`
+    - [x] `valhalla.yaml` persists `models.active` {brain, model}
+    - [x] `GET /api/v1/brains/active` returns correct mapping
+- [x] Sync & Maintain:
+    - [x] Verified auth_token validation in store API
+    - [x] Verified hardware detection refinements (absolute path, max VRAM agg)
+    - [x] Verified backend polling logic
+    - [x] Fixed Sprint 15 test regression
 
 ## Files Modified
 | File | Change |
 |------|--------|
-| `api/v1.py` | T1: expanded store defaults from 4 → 6 plugins (prompt-optimizer, cost-tracker) |
-| `dashboard/components/InstallerWizard.tsx` | T3: writes `fireside_brain` to localStorage on onboarding complete |
-| `dashboard/components/SettingsForm.tsx` | T3: reads `fireside_brain` from localStorage for BrainPicker init |
-| `tests/test_sprint16_polish.py` | NEW — 27 tests |
+| `api/v1.py` | Added `GET /api/v1/brains/active` |
+| `tauri/src-tauri/src/main.rs` | Updated `write_config` to persist brain/model |
+| `dashboard/components/InstallerWizard.tsx` | Persist `fireside_model` + include in Tauri call |
+| `dashboard/components/OnboardingWizard.tsx` | Persist `fireside_model` |
+| `tests/test_sprint17_immersion.py` | NEW — 10 tests |
+| `tests/test_sprint15_shipit.py` | Fix regression |
 
 ## Test Results
-**471 tests passing** (Sprints 1-16)
+**479 tests passing** across 17 sprints.

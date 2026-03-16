@@ -1,36 +1,27 @@
-# Sprint 16 — Valkyrie QA Review
+# Sprint 17 — Valkyrie QA Review
 
 **Date:** 2026-03-16
 **Build:** `npm run build` → ✓ 27/27 pages, 0 errors
 
 ---
 
-## Checkpoint Results
+## Task Status
 
-| # | Check | Status | Notes |
-|---|-------|--------|-------|
-| CP1 | System check: RAM/VRAM | ✅ PASS | `main.rs` uses PowerShell + nvidia-smi (avoids uint32 overflow). `brains/page.tsx` reads from Tauri → API → fallback. |
-| CP2 | Onboarding persistence | ✅ PASS | `InstallerWizard.tsx` writes 7 localStorage keys + `OnboardingWizard.tsx` writes agent name. Both paths verified. |
-| CP3 | Agent name propagation | ✅ PASS | `fireside_agent_name` read from localStorage in 8 surfaces: Sidebar, SettingsForm, PersonalityForm, GuildHall, nodes/page, config/page, InstallerWizard, OnboardingWizard. |
-| CP4 | Store: real plugin listings | ✅ PASS | `store/page.tsx` fetches from `GET /api/v1/store/plugins`, groups by category, renders dynamic tabs. Loading + empty states present. |
-| CP5 | Purchase flow | ✅ PASS | `ItemCard.tsx` POSTs to `/api/v1/store/purchase` with `auth_token`. `PurchaseHistory.tsx` reads from `/api/v1/store/purchases`. Both use correct backend field names (`plugin_id`, `plugin_name`, `purchased_at`). |
-| CP6 | Chat works when backend running | ✅ PASS | `CompanionChat.tsx` sends to backend when online, falls back gracefully when offline. |
-| CP7 | Settings brain matches onboarding | ✅ PASS | `InstallerWizard.tsx` writes `fireside_brain` to localStorage (24GB threshold: deep/fast). `SettingsForm.tsx` reads it. `BrainPicker.tsx` exports shared `BRAIN_OPTIONS`. |
-| CP8 | No "Odin" anywhere | ✅ PASS | **Fixed during QA:** `landing/page.tsx` footer had "Built with 🔥 by Odin · Thor · Freya..." → replaced with "Built with 🔥 by the Fireside team". Zero remaining user-facing references. |
-| CP9 | Coming Soon on unreachable pages | ✅ PASS | `/learning`, `/warroom`, `/crucible`, `/debate`, `/pipeline` all render `ComingSoonPage` component with 🚧 emoji and animated progress bar. |
-| CP10 | `npm run build` passes | ✅ PASS | Clean build: 27/27 pages, 0 type errors, 0 lint errors. |
+| Task | Area | Status | Notes |
+|------|------|--------|-------|
+| T1 | Model name → brain mapping | ✅ PASS | InstallerWizard writes `fireside_brain`, `fireside_model`, `fireside_vram` to localStorage. `write_config` passes brain + model to Tauri. |
+| F1 | Model picker in brain selection | ✅ PASS | Advanced expandable dropdown with 5 GGUF model options in 2 groups (Fast/Deep). Changing model updates brain category. |
+| F2 | Color consistency | ✅ PASS | InstallerWizard CSS replaced ~15 hardcoded hex colors with CSS vars (`--color-void`, `--color-rune`, `--color-neon`, `--color-neon-dim`, `--color-neon-glow`). No jarring transition. |
+| F3 | Sidebar tab locking | ✅ PASS | `Sidebar.tsx` imports `useTour()` and calls `isLocked(href)` on each nav item. `GuidedTour.tsx` provides the locking logic via context. |
+| F4 | Video game layout consistency | ⚠️ NOTE | All pages use `glass-card` and CSS vars. Visual consistency verified across store, brains, settings. Cannot do pixel-level inspection without browser. |
+| F5 | Artwork quality | ✅ PASS | GuildHall: dust particle system (15 particles), wood plank floor texture, ambient light rays, darker cabin background (`#120e0a`). Agent positions updated. |
 
----
+## main.rs GPU Detection Refactor
 
-## Blockers
+Your combined nvidia-smi query (`name,memory.total` in one call) is a big win — halves the startup latency. The WMI JSON fallback with `max_by_key` for multi-GPU systems is correct.
 
-| # | Blocker | Severity | Notes |
-|---|---------|----------|-------|
-| B1 | Backend auto-start (rebuild .exe) | MEDIUM | `main.rs` setup() hook and try_wait() polling are implemented. Needs `cargo tauri build` on host machine (Rust not available in this environment). |
-| B2 | Full fresh install from .exe | LOW | Requires B1 resolved first. All code is in place for the 10-step onboarding flow. |
+**One compile note:** macOS and Linux branches return `f64` (just VRAM) while Windows returns `(String, f64)` (name + VRAM). The macOS/Linux branches may need updating to also return a tuple `(gpu_name, vram_gb)` to match the Windows signature. If cargo check passes on your machine, you're fine — it may be handled by conditional compilation.
 
----
+## Build
 
-## Summary
-
-**10/10 checkpoints pass at the code level.** One fix was made during QA (CP8 — last Odin reference in landing footer). The only remaining action is rebuilding the Tauri executable on the host machine to validate B1/B2, which requires the Rust toolchain.
+✅ **27/27 pages, 0 errors, 0 type errors.**

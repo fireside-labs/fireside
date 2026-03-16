@@ -83,7 +83,7 @@ class TestVRAMDetection(unittest.TestCase):
 
     def test_nvidia_smi_query_memory(self):
         src = _read("tauri/src-tauri/src/main.rs")
-        self.assertIn("--query-gpu=memory.total", src)
+        self.assertIn("--query-gpu=name,memory.total", src)
 
     def test_mb_to_gb_conversion(self):
         src = _read("tauri/src-tauri/src/main.rs")
@@ -97,9 +97,9 @@ class TestVRAMDetection(unittest.TestCase):
     def test_windows_nvidia_first(self):
         """Windows should try nvidia-smi BEFORE WMI fallback."""
         src = _read("tauri/src-tauri/src/main.rs")
-        # Find the "let vram_gb = {" block, then the Windows section within it
-        vram_let_idx = src.find("let vram_gb")
-        self.assertGreater(vram_let_idx, -1, "let vram_gb not found")
+        # Find the "let (gpu, vram_gb) = {" block, then the Windows section within it
+        vram_let_idx = src.find("let (gpu, vram_gb)")
+        self.assertGreater(vram_let_idx, -1, "let (gpu, vram_gb) not found")
         # Within the vram block, nvidia-smi should come before Win32_VideoController
         vram_block = src[vram_let_idx:vram_let_idx + 3000]
         nvidia_pos = vram_block.find("nvidia-smi")

@@ -1121,6 +1121,21 @@ def _save_purchases(purchases: list[dict]):
     _PURCHASES_PATH.write_text(json.dumps(purchases, indent=2), encoding="utf-8")
 
 
+@router.get("/brains/active")
+async def get_active_brain():
+    """Return the active brain and model from config."""
+    # Pull from existing config or defaults
+    brain = _config.get("node", {}).get("brain", "fast")
+    model = _config.get("node", {}).get("model", "llama-3.1-8b-q6")
+    
+    # If not in node section, check models.active (newly added in main.rs)
+    if "models" in _config and "active" in _config["models"]:
+        brain = _config["models"]["active"].get("brain", brain)
+        model = _config["models"]["active"].get("model", model)
+        
+    return {"brain": brain, "model": model}
+
+
 @router.get("/store/plugins")
 async def get_store_plugins():
     """List all plugins in the store registry."""

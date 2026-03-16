@@ -17,11 +17,20 @@ const ACTIVITY_ZONES: Record<Activity, { x: number; y: number }> = {
     reviewing: { x: 60, y: 80 },   // reading area
     debating: { x: 50, y: 55 },   // center (face-to-face)
     running_task: { x: 40, y: 70 },   // workstation
-    idle: { x: 80, y: 85 },   // lounge
-    sleeping: { x: 85, y: 90 },   // far corner
+    idle: { x: 15, y: 85 },   // lounge corner
+    sleeping: { x: 88, y: 92 },   // far corner
     crucible: { x: 25, y: 55 },   // forge/cauldron
-    chatting: { x: 55, y: 75 },   // center stage
+    chatting: { x: 50, y: 75 },   // center stage
 };
+
+const DUST_PARTICLES = Array.from({ length: 15 }).map((_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    top: Math.random() * 100,
+    size: 2 + Math.random() * 2,
+    duration: 15 + Math.random() * 20,
+    delay: Math.random() * 10,
+}));
 
 const THEME_COLORS: Record<string, { bg: string; floor: string; accent: string }> = {
     valhalla: { bg: "#1a1520", floor: "#2a1f1a", accent: "#c0820a" },
@@ -174,27 +183,37 @@ export default function GuildHall({ theme }: GuildHallProps) {
             className="relative w-full rounded-xl overflow-hidden"
             style={{
                 aspectRatio: "16/9",
-                background: `linear-gradient(180deg, ${themeColors.bg} 0%, ${themeColors.floor} 50%, ${themeColors.floor} 100%)`,
+                background: `#120e0a`,
                 border: `1px solid ${themeColors.accent}33`,
-                boxShadow: `inset 0 -80px 100px -40px ${themeColors.accent}20, inset 0 0 120px rgba(0,0,0,0.8), 0 8px 32px rgba(0,0,0,0.4)`,
+                boxShadow: `0 8px 32px rgba(0,0,0,0.5)`,
             }}
         >
+            {/* Background Texture / Planks */}
+            <div className="absolute inset-x-0 top-0 h-[60%] bg-[#1a1510] border-b border-[#2a2520]" />
+            <div className="absolute inset-x-0 bottom-0 h-[40%] bg-[#251e18]" />
+            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.3) 1px, transparent 1px)', backgroundSize: '100% 12px' }} />
+
+            {/* Ambient Rays */}
+            <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/10 to-transparent mix-blend-overlay" />
             {/* Deep Vignette */}
             <div className="absolute inset-0 pointer-events-none z-0" style={{
                 background: "radial-gradient(circle at 50% 50%, transparent 20%, rgba(0,0,0,0.6) 100%)"
             }} />
 
-            {/* Ambient warm glow for all themes to give an atmospheric feel */}
-            <div
-                className="absolute pointer-events-none"
-                style={{
-                    left: "50%", top: "40%",
-                    width: "120%", height: "120%",
-                    transform: "translate(-50%, -50%)",
-                    background: `radial-gradient(circle, ${themeColors.accent}15 0%, transparent 60%)`,
-                    animation: "pulse 6s ease-in-out infinite alternate",
-                }}
-            />
+            {/* Ambient Dust */}
+            {DUST_PARTICLES.map(d => (
+                <div
+                    key={d.id}
+                    className="absolute rounded-full bg-white/20 blur-[1px] animate-[pulse_3s_ease-in-out_infinite]"
+                    style={{
+                        left: `${d.left}%`,
+                        top: `${d.top}%`,
+                        width: d.size,
+                        height: d.size,
+                        animationDelay: `${d.delay}s`,
+                    }}
+                />
+            ))}
 
             {/* Intense Fireplace/Light source glow */}
             <div
