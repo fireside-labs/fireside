@@ -1,5 +1,4 @@
 {
-    "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/nicegui/json/tauri-v2.json",
     "productName": "Fireside",
     "version": "1.0.0",
     "identifier": "ai.fireside.app",
@@ -10,7 +9,6 @@
         "devUrl": "http://localhost:3000"
     },
     "app": {
-        "title": "Fireside",
         "windows": [
             {
                 "title": "🔥 Fireside Setup",
