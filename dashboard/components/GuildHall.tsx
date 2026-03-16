@@ -40,92 +40,90 @@ const FIRE_EMBERS = Array.from({ length: 10 }).map((_, i) => ({
     duration: 2 + Math.random() * 2,
 }));
 
-const THEME_COLORS: Record<string, { bg: string; floor: string; accent: string; wallTile?: string; floorTile?: string }> = {
-    valhalla: { bg: "#1a1520", floor: "#2a1f1a", accent: "#c0820a", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
-    office: { bg: "#1a1a24", floor: "#2a2a35", accent: "#4488aa", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
-    space: { bg: "#0a0a1a", floor: "#151528", accent: "#4488ff", wallTile: "/sprites/tiles/hull_wall.png", floorTile: "/sprites/tiles/metal_floor.png" },
-    cozy: { bg: "#1f1a15", floor: "#2f2520", accent: "#cc8844", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
-    dungeon: { bg: "#12100e", floor: "#221e1a", accent: "#886622", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
-    "japanese-garden": { bg: "#1a1520", floor: "#1f1a25", accent: "#e88db4", wallTile: "/sprites/tiles/shoji_wall.png", floorTile: "/sprites/tiles/tatami.png" },
-    "space-station": { bg: "#0a0a1a", floor: "#151528", accent: "#4488ff", wallTile: "/sprites/tiles/hull_wall.png", floorTile: "/sprites/tiles/metal_floor.png" },
-    "anime-cafe": { bg: "#1a121f", floor: "#221828", accent: "#ff69b4", wallTile: "/sprites/tiles/cafe_wall.png", floorTile: "/sprites/tiles/cafe_floor.png" },
+const THEME_COLORS: Record<string, { bg: string; floor: string; accent: string }> = {
+    valhalla: { bg: "#1a1520", floor: "#2a1f1a", accent: "#c0820a" },
+    office: { bg: "#1a1a24", floor: "#2a2a35", accent: "#4488aa" },
+    space: { bg: "#0a0a1a", floor: "#151528", accent: "#4488ff" },
+    cozy: { bg: "#1f1a15", floor: "#2f2520", accent: "#cc8844" },
+    dungeon: { bg: "#12100e", floor: "#221e1a", accent: "#886622" },
+    "japanese-garden": { bg: "#1a1520", floor: "#1f1a25", accent: "#e88db4" },
+    "space-station": { bg: "#0a0a1a", floor: "#151528", accent: "#4488ff" },
+    "anime-cafe": { bg: "#1a121f", floor: "#221828", accent: "#ff69b4" },
 };
 
-// Environment sprites replace emoji furniture for premium feel
+// Environment elements — emoji only (sprites are placeholder for future store packs)
 interface EnvElement {
-    sprite?: string;  // PNG path (if available)
-    emoji: string;    // fallback emoji
+    emoji: string;
     label: string;
     x: number;
     y: number;
-    scale?: number;
-    layer: "bg" | "mid" | "fg";  // parallax layer
+    layer: "bg" | "mid" | "fg";
 }
 
 const THEME_ELEMENTS: Record<string, EnvElement[]> = {
     valhalla: [
-        { sprite: "/sprites/env_fireplace.png", emoji: "🔥", label: "Forge", x: 80, y: 70, scale: 1.8, layer: "mid" },
-        { sprite: "/sprites/packs/norse-hall/anvil.png", emoji: "⚒️", label: "Anvil", x: 30, y: 65, scale: 1.4, layer: "mid" },
-        { sprite: "/sprites/packs/norse-hall/war_table.png", emoji: "🗺️", label: "War Table", x: 50, y: 60, scale: 1.5, layer: "mid" },
-        { sprite: "/sprites/packs/norse-hall/mead_barrel.png", emoji: "🍺", label: "Mead Barrels", x: 88, y: 80, scale: 1.3, layer: "fg" },
-        { sprite: "/sprites/packs/norse-hall/fishing_hole.png", emoji: "🎣", label: "Fishing", x: 10, y: 82, scale: 1.3, layer: "fg" },
-        { sprite: "/sprites/packs/norse-hall/rune_stones.png", emoji: "🔮", label: "Rune Stones", x: 65, y: 48, scale: 1.4, layer: "bg" },
-        { sprite: "/sprites/env_bookshelf.png", emoji: "📚", label: "Scrolls", x: 45, y: 46, scale: 1.3, layer: "bg" },
+        { emoji: "🔥", label: "Forge", x: 80, y: 70, layer: "mid" },
+        { emoji: "⚒️", label: "Anvil", x: 30, y: 65, layer: "mid" },
+        { emoji: "🗺️", label: "War Table", x: 50, y: 60, layer: "mid" },
+        { emoji: "🍺", label: "Mead Barrels", x: 88, y: 80, layer: "fg" },
+        { emoji: "🎣", label: "Fishing", x: 10, y: 82, layer: "fg" },
+        { emoji: "🔮", label: "Rune Stones", x: 65, y: 48, layer: "bg" },
+        { emoji: "📚", label: "Scrolls", x: 45, y: 46, layer: "bg" },
     ],
     office: [
-        { sprite: "/sprites/packs/office/desk_computer_1.png", emoji: "💻", label: "Desk", x: 18, y: 72, scale: 3, layer: "mid" },
-        { sprite: "/sprites/packs/office/desk_computer_2.png", emoji: "💻", label: "Desk 2", x: 55, y: 72, scale: 3, layer: "mid" },
-        { sprite: "/sprites/packs/office/whiteboard.png", emoji: "📋", label: "Whiteboard", x: 35, y: 42, scale: 3, layer: "bg" },
-        { sprite: "/sprites/packs/office/bookshelf.png", emoji: "📚", label: "Bookshelf", x: 65, y: 42, scale: 3, layer: "bg" },
-        { sprite: "/sprites/packs/office/coffee_machine.png", emoji: "☕", label: "Coffee", x: 88, y: 78, scale: 2.5, layer: "fg" },
-        { sprite: "/sprites/packs/office/plant_1.png", emoji: "🌿", label: "Plant", x: 8, y: 65, scale: 3, layer: "fg" },
-        { sprite: "/sprites/packs/office/couch.png", emoji: "🛋️", label: "Lounge", x: 78, y: 55, scale: 3, layer: "mid" },
-        { sprite: "/sprites/packs/office/printer.png", emoji: "🖨️", label: "Printer", x: 45, y: 55, scale: 2.5, layer: "mid" },
-        { sprite: "/sprites/packs/office/cabinet.png", emoji: "🗄️", label: "Files", x: 92, y: 45, scale: 2.5, layer: "bg" },
-        { sprite: "/sprites/packs/office/frame_1.png", emoji: "🖼️", label: "Art", x: 15, y: 38, scale: 3, layer: "bg" },
+        { emoji: "💻", label: "Desk", x: 18, y: 72, layer: "mid" },
+        { emoji: "💻", label: "Desk 2", x: 55, y: 72, layer: "mid" },
+        { emoji: "📋", label: "Whiteboard", x: 35, y: 42, layer: "bg" },
+        { emoji: "📚", label: "Bookshelf", x: 65, y: 42, layer: "bg" },
+        { emoji: "☕", label: "Coffee", x: 88, y: 78, layer: "fg" },
+        { emoji: "🌿", label: "Plant", x: 8, y: 65, layer: "fg" },
+        { emoji: "🛋️", label: "Lounge", x: 78, y: 55, layer: "mid" },
+        { emoji: "🖨️", label: "Printer", x: 45, y: 55, layer: "mid" },
+        { emoji: "🗄️", label: "Files", x: 92, y: 45, layer: "bg" },
+        { emoji: "🖼️", label: "Art", x: 15, y: 38, layer: "bg" },
     ],
     space: [
-        { sprite: "/sprites/packs/space-station/command_console.png", emoji: "🖥️", label: "Console", x: 18, y: 72, scale: 1.5, layer: "mid" },
-        { sprite: "/sprites/packs/space-station/hologram.png", emoji: "🌀", label: "Hologram", x: 50, y: 55, scale: 1.4, layer: "mid" },
-        { sprite: "/sprites/packs/space-station/viewport.png", emoji: "🪟", label: "Viewport", x: 45, y: 35, scale: 1.8, layer: "bg" },
-        { sprite: "/sprites/packs/space-station/reactor.png", emoji: "⚡", label: "Reactor", x: 80, y: 65, scale: 1.6, layer: "mid" },
-        { sprite: "/sprites/packs/space-station/cryo_pod.png", emoji: "❄️", label: "Cryo Pod", x: 90, y: 80, scale: 1.3, layer: "fg" },
+        { emoji: "🖥️", label: "Console", x: 18, y: 72, layer: "mid" },
+        { emoji: "🌀", label: "Hologram", x: 50, y: 55, layer: "mid" },
+        { emoji: "🪟", label: "Viewport", x: 45, y: 35, layer: "bg" },
+        { emoji: "⚡", label: "Reactor", x: 80, y: 65, layer: "mid" },
+        { emoji: "❄️", label: "Cryo Pod", x: 90, y: 80, layer: "fg" },
     ],
     "space-station": [
-        { sprite: "/sprites/packs/space-station/command_console.png", emoji: "🖥️", label: "Command", x: 20, y: 72, scale: 1.6, layer: "mid" },
-        { sprite: "/sprites/packs/space-station/hologram.png", emoji: "🌀", label: "Hologram", x: 50, y: 55, scale: 1.5, layer: "mid" },
-        { sprite: "/sprites/packs/space-station/viewport.png", emoji: "🪟", label: "Viewport", x: 42, y: 32, scale: 2.0, layer: "bg" },
-        { sprite: "/sprites/packs/space-station/reactor.png", emoji: "⚡", label: "Reactor", x: 82, y: 65, scale: 1.7, layer: "mid" },
-        { sprite: "/sprites/packs/space-station/cryo_pod.png", emoji: "❄️", label: "Cryo Pod", x: 92, y: 82, scale: 1.4, layer: "fg" },
+        { emoji: "🖥️", label: "Command", x: 20, y: 72, layer: "mid" },
+        { emoji: "🌀", label: "Hologram", x: 50, y: 55, layer: "mid" },
+        { emoji: "🪟", label: "Viewport", x: 42, y: 32, layer: "bg" },
+        { emoji: "⚡", label: "Reactor", x: 82, y: 65, layer: "mid" },
+        { emoji: "❄️", label: "Cryo Pod", x: 92, y: 82, layer: "fg" },
     ],
     cozy: [
-        { sprite: "/sprites/env_fireplace.png", emoji: "🔥", label: "Fireplace", x: 78, y: 68, scale: 1.6, layer: "mid" },
-        { sprite: "/sprites/env_bookshelf.png", emoji: "📖", label: "Bookshelf", x: 55, y: 50, scale: 1.5, layer: "bg" },
-        { sprite: "/sprites/env_desk.png", emoji: "🍳", label: "Kitchen", x: 20, y: 70, scale: 1.4, layer: "mid" },
+        { emoji: "🔥", label: "Fireplace", x: 78, y: 68, layer: "mid" },
+        { emoji: "📖", label: "Bookshelf", x: 55, y: 50, layer: "bg" },
+        { emoji: "🍳", label: "Kitchen", x: 20, y: 70, layer: "mid" },
         { emoji: "🪴", label: "Plants", x: 90, y: 60, layer: "bg" },
         { emoji: "🛋️", label: "Couch", x: 42, y: 80, layer: "fg" },
     ],
     dungeon: [
-        { sprite: "/sprites/env_fireplace.png", emoji: "🔥", label: "Campfire", x: 80, y: 75, scale: 1.5, layer: "mid" },
-        { sprite: "/sprites/packs/norse-hall/anvil.png", emoji: "⚒️", label: "Anvil", x: 28, y: 55, scale: 1.3, layer: "mid" },
+        { emoji: "🔥", label: "Campfire", x: 80, y: 75, layer: "mid" },
+        { emoji: "⚒️", label: "Anvil", x: 28, y: 55, layer: "mid" },
         { emoji: "🗡️", label: "Armory", x: 10, y: 48, layer: "bg" },
-        { sprite: "/sprites/env_bookshelf.png", emoji: "📦", label: "Chests", x: 60, y: 55, scale: 1.3, layer: "bg" },
+        { emoji: "📦", label: "Chests", x: 60, y: 55, layer: "bg" },
         { emoji: "🧪", label: "Cauldron", x: 22, y: 55, layer: "mid" },
     ],
     "japanese-garden": [
-        { sprite: "/sprites/packs/japanese-garden/torii_gate.png", emoji: "⛩️", label: "Torii Gate", x: 50, y: 42, scale: 2.0, layer: "bg" },
-        { sprite: "/sprites/packs/japanese-garden/cherry_tree.png", emoji: "🌸", label: "Sakura", x: 78, y: 55, scale: 1.8, layer: "bg" },
-        { sprite: "/sprites/packs/japanese-garden/koi_pond.png", emoji: "🐟", label: "Koi Pond", x: 35, y: 78, scale: 1.6, layer: "mid" },
-        { sprite: "/sprites/packs/japanese-garden/stone_lantern.png", emoji: "🏮", label: "Lantern", x: 15, y: 65, scale: 1.3, layer: "mid" },
-        { sprite: "/sprites/packs/japanese-garden/bamboo.png", emoji: "🎋", label: "Bamboo", x: 92, y: 45, scale: 1.5, layer: "bg" },
-        { sprite: "/sprites/packs/japanese-garden/stone_lantern.png", emoji: "🏮", label: "Lantern", x: 65, y: 80, scale: 1.2, layer: "fg" },
+        { emoji: "⛩️", label: "Torii Gate", x: 50, y: 42, layer: "bg" },
+        { emoji: "🌸", label: "Sakura", x: 78, y: 55, layer: "bg" },
+        { emoji: "🐟", label: "Koi Pond", x: 35, y: 78, layer: "mid" },
+        { emoji: "🏮", label: "Lantern", x: 15, y: 65, layer: "mid" },
+        { emoji: "🎋", label: "Bamboo", x: 92, y: 45, layer: "bg" },
+        { emoji: "🏮", label: "Lantern 2", x: 65, y: 80, layer: "fg" },
     ],
     "anime-cafe": [
-        { sprite: "/sprites/packs/anime-cafe/cafe_counter.png", emoji: "☕", label: "Counter", x: 25, y: 68, scale: 1.6, layer: "mid" },
-        { sprite: "/sprites/packs/anime-cafe/neon_sign.png", emoji: "📺", label: "カフェ", x: 50, y: 30, scale: 1.8, layer: "bg" },
-        { sprite: "/sprites/packs/anime-cafe/booth_seat.png", emoji: "💺", label: "Booth", x: 75, y: 72, scale: 1.5, layer: "mid" },
-        { sprite: "/sprites/packs/anime-cafe/vending_machine.png", emoji: "🥤", label: "Vending", x: 92, y: 60, scale: 1.4, layer: "bg" },
-        { sprite: "/sprites/packs/anime-cafe/cafe_window.png", emoji: "🌃", label: "Window", x: 50, y: 38, scale: 1.6, layer: "bg" },
+        { emoji: "☕", label: "Counter", x: 25, y: 68, layer: "mid" },
+        { emoji: "📺", label: "カフェ", x: 50, y: 30, layer: "bg" },
+        { emoji: "💺", label: "Booth", x: 75, y: 72, layer: "mid" },
+        { emoji: "🥤", label: "Vending", x: 92, y: 60, layer: "bg" },
+        { emoji: "🌃", label: "Window", x: 50, y: 38, layer: "bg" },
     ],
 };
 
@@ -288,12 +286,8 @@ export default function GuildHall({ theme }: GuildHallProps) {
             {/* ── BACKGROUND LAYER (parallax: slow) ── */}
             <div className="absolute inset-0 transition-transform duration-300 ease-out" style={layerOffset("bg")}>
                 {/* Wall — tilemap texture */}
-                <div className="absolute inset-x-0 top-0 h-[55%] sprite" style={{
+                <div className="absolute inset-x-0 top-0 h-[55%]" style={{
                     backgroundColor: themeColors.bg,
-                    backgroundImage: themeColors.wallTile ? `url(${themeColors.wallTile})` : undefined,
-                    backgroundRepeat: 'repeat',
-                    backgroundSize: '64px 64px',
-                    imageRendering: 'pixelated' as any,
                 }} />
                 {/* Wall darkening overlay for depth */}
                 <div className="absolute inset-x-0 top-0 h-[55%] bg-gradient-to-b from-black/30 to-transparent pointer-events-none" />
@@ -306,16 +300,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
                         className="absolute transition-transform duration-300 hover:scale-105"
                         style={{ left: `${el.x}%`, top: `${el.y}%`, transform: "translate(-50%, -100%)" }}
                     >
-                        {el.sprite ? (
-                            <img
-                                src={el.sprite}
-                                alt={el.label}
-                                className="sprite"
-                                style={{ width: 64 * (el.scale || 1), height: 64 * (el.scale || 1), imageRendering: "pixelated", opacity: 0.7, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.5))" }}
-                            />
-                        ) : (
-                            <span className="text-3xl block" style={{ opacity: 0.55, filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))" }}>{el.emoji}</span>
-                        )}
+                        <span className="text-3xl block" style={{ opacity: 0.55, filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))" }}>{el.emoji}</span>
                         <span className="text-[7px] text-[var(--color-rune-dim)] opacity-40 block text-center mt-0.5">{el.label}</span>
                     </div>
                 ))}
@@ -324,12 +309,8 @@ export default function GuildHall({ theme }: GuildHallProps) {
             {/* ── MIDGROUND LAYER (parallax: none — characters + furniture) ── */}
             <div className="absolute inset-0">
                 {/* Floor — tilemap texture */}
-                <div className="absolute inset-x-0 bottom-0 h-[45%] sprite" style={{
+                <div className="absolute inset-x-0 bottom-0 h-[45%]" style={{
                     backgroundColor: themeColors.floor,
-                    backgroundImage: themeColors.floorTile ? `url(${themeColors.floorTile})` : undefined,
-                    backgroundRepeat: 'repeat',
-                    backgroundSize: '64px 64px',
-                    imageRendering: 'pixelated' as any,
                 }} />
                 {/* Floor depth gradient */}
                 <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
@@ -347,16 +328,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
                         className="absolute transition-transform duration-300 hover:scale-110 z-[5]"
                         style={{ left: `${el.x}%`, top: `${el.y}%`, transform: "translate(-50%, -100%)" }}
                     >
-                        {el.sprite ? (
-                            <img
-                                src={el.sprite}
-                                alt={el.label}
-                                className="sprite"
-                                style={{ width: 64 * (el.scale || 1), height: 64 * (el.scale || 1), imageRendering: "pixelated", filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.6))" }}
-                            />
-                        ) : (
-                            <span className="text-4xl block" style={{ opacity: 0.75, filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.4))" }}>{el.emoji}</span>
-                        )}
+                        <span className="text-4xl block" style={{ opacity: 0.75, filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.4))" }}>{el.emoji}</span>
                         <span className="text-[7px] text-[var(--color-rune-dim)] opacity-50 block text-center mt-0.5">{el.label}</span>
                     </div>
                 ))}

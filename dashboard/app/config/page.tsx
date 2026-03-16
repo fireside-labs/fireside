@@ -3,7 +3,6 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import SettingsForm from "@/components/SettingsForm";
-import TelegramSetup from "@/components/TelegramSetup";
 import VoiceSettings from "@/components/VoiceSettings";
 import { useToast } from "@/components/Toast";
 
@@ -61,7 +60,27 @@ export default function SettingsPage() {
                 <div className="space-y-6">
                     <SettingsForm onSave={handleSave} />
                     <VoiceSettings />
-                    <TelegramSetup />
+
+                    {/* Connect Your Phone */}
+                    <div className="glass-card p-6">
+                        <h2 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                            <span>📱</span> Connect Your Phone
+                        </h2>
+                        <p className="text-sm text-[var(--color-rune-dim)] mb-4">
+                            Take your AI companion on the go with the Fireside mobile app.
+                        </p>
+                        <div className="flex items-center gap-4 p-4 rounded-xl bg-[var(--color-void)] border border-[var(--color-glass-border)]">
+                            <div className="w-16 h-16 rounded-xl bg-[var(--color-neon-glow)] flex items-center justify-center text-3xl border border-[var(--color-neon)]/20">
+                                🔥
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm text-white font-medium">Fireside for Mobile</p>
+                                <p className="text-xs text-[var(--color-rune-dim)] mt-1">
+                                    Available on iOS &amp; Android via Expo Go. Your companion syncs automatically.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 

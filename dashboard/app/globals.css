@@ -14,16 +14,16 @@
   --color-void-lighter: #1a1a2e;
   --color-neon: #F59E0B;
   --color-neon-dim: #D97706;
-  --color-neon-glow: rgba(245, 158, 11, 0.15);
-  --color-neon-glow-strong: rgba(245, 158, 11, 0.3);
-  --color-rune: #a0a0b8;
-  --color-rune-dim: #8585a0;
+  --color-neon-glow: rgba(245, 158, 11, 0.18);
+  --color-neon-glow-strong: rgba(245, 158, 11, 0.35);
+  --color-rune: #c8beb4;
+  --color-rune-dim: #6a5d50;
   --color-danger: #ff4466;
   --color-warning: #ffaa22;
   --color-info: #44aaff;
-  --color-glass: rgba(255, 255, 255, 0.04);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glass-hover: rgba(255, 255, 255, 0.08);
+  --color-glass: rgba(255, 255, 255, 0.05);
+  --color-glass-border: rgba(255, 255, 255, 0.10);
+  --color-glass-hover: rgba(255, 255, 255, 0.10);
   --font-family-body: "Inter", system-ui, sans-serif;
   --font-family-heading: "Outfit", system-ui, sans-serif;
 }
