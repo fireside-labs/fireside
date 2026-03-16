@@ -7,7 +7,6 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::thread;
 
 // ---------------------------------------------------------------------------
 // Data structures
