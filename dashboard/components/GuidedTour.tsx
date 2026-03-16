@@ -125,8 +125,8 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Tour Overlay — fixed bar at the bottom during active tour.
- * Shows current step info + Next button + Skip Tour.
+ * Tour Overlay — C5: Premium, unmissable tour bar.
+ * Shows current step, progress dots, pulse animation on Next.
  */
 export function TourOverlay() {
     const { tour, advanceTour, skipTour } = useTour();
@@ -137,75 +137,124 @@ export function TourOverlay() {
     const step = TOUR_STEPS[tour.currentStep];
     if (!step) return null;
 
-    // Only show Next when user is on the correct page
     const isOnCorrectPage = pathname === step.href;
+    const isFirstStep = tour.currentStep === 0;
 
     return (
         <div
             style={{
                 position: "fixed",
-                bottom: 24,
+                bottom: 20,
                 left: "50%",
                 transform: "translateX(-50%)",
                 zIndex: 9000,
-                background: "rgba(15, 15, 15, 0.95)",
-                border: "1px solid rgba(245, 158, 11, 0.3)",
-                borderRadius: 14,
-                padding: "14px 28px",
+                background: "rgba(10, 10, 15, 0.97)",
+                border: "2px solid rgba(245, 158, 11, 0.4)",
+                borderRadius: 16,
+                padding: "18px 32px",
                 display: "flex",
                 alignItems: "center",
-                gap: 16,
-                backdropFilter: "blur(12px)",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-                maxWidth: 600,
+                gap: 20,
+                backdropFilter: "blur(16px)",
+                boxShadow: "0 12px 48px rgba(0,0,0,0.6), 0 0 30px rgba(245,158,11,0.1)",
+                maxWidth: 640,
+                width: "90vw",
             }}
         >
-            <span style={{ fontSize: 20 }}>{step.icon}</span>
-            <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: "#F59E0B", fontWeight: 600, marginBottom: 2 }}>
-                    Step {tour.currentStep + 1} of {TOUR_STEPS.length} — {step.label}
+            {/* Step icon */}
+            <div style={{
+                fontSize: 28,
+                background: "rgba(245,158,11,0.15)",
+                borderRadius: 12,
+                width: 48,
+                height: 48,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+            }}>
+                {step.icon}
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+                {isFirstStep && (
+                    <div style={{ fontSize: 11, color: "#F59E0B", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>
+                        Welcome to your AI! Let&apos;s show you around 👋
+                    </div>
+                )}
+                <div style={{ fontSize: 14, color: "#fff", fontWeight: 700, marginBottom: 3 }}>
+                    {step.label}
                 </div>
-                <div style={{ fontSize: 12, color: "#8585a0" }}>
+                <div style={{ fontSize: 12, color: "#8585a0", lineHeight: 1.4 }}>
                     {step.description}
                 </div>
+
+                {/* Progress dots */}
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                    {TOUR_STEPS.map((_, i) => (
+                        <div
+                            key={i}
+                            style={{
+                                width: i === tour.currentStep ? 20 : 8,
+                                height: 8,
+                                borderRadius: 4,
+                                background: i <= tour.currentStep ? "#F59E0B" : "rgba(255,255,255,0.15)",
+                                transition: "all 0.3s ease",
+                            }}
+                        />
+                    ))}
+                </div>
             </div>
-            {isOnCorrectPage ? (
-                <button
-                    onClick={advanceTour}
-                    style={{
-                        background: "#F59E0B",
-                        border: "none",
-                        color: "#0a0a0f",
+
+            {/* Action area */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+                {isOnCorrectPage ? (
+                    <button
+                        onClick={advanceTour}
+                        style={{
+                            background: "#F59E0B",
+                            border: "none",
+                            color: "#0a0a0f",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            padding: "10px 24px",
+                            borderRadius: 10,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            animation: "pulse 2s ease-in-out infinite",
+                            boxShadow: "0 0 20px rgba(245,158,11,0.4)",
+                        }}
+                    >
+                        {tour.currentStep < TOUR_STEPS.length - 1 ? "Next →" : "Done ✓"}
+                    </button>
+                ) : (
+                    <div style={{
                         fontSize: 13,
+                        color: "#F59E0B",
+                        whiteSpace: "nowrap",
                         fontWeight: 600,
-                        padding: "8px 20px",
+                        textAlign: "center",
+                    }}>
+                        👆 Go to {step.label}
+                    </div>
+                )}
+                <button
+                    onClick={skipTour}
+                    style={{
+                        background: "transparent",
+                        border: "1px solid rgba(245, 158, 11, 0.12)",
+                        color: "#55556a",
+                        fontSize: 11,
+                        padding: "5px 12px",
                         borderRadius: 8,
                         cursor: "pointer",
                         whiteSpace: "nowrap",
                     }}
                 >
-                    {tour.currentStep < TOUR_STEPS.length - 1 ? "Next →" : "Done ✓"}
+                    Skip Tour
                 </button>
-            ) : (
-                <span style={{ fontSize: 12, color: "#F59E0B", whiteSpace: "nowrap" }}>
-                    Navigate to {step.label} ↑
-                </span>
-            )}
-            <button
-                onClick={skipTour}
-                style={{
-                    background: "transparent",
-                    border: "1px solid rgba(245, 158, 11, 0.15)",
-                    color: "#6a6a80",
-                    fontSize: 11,
-                    padding: "6px 12px",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                }}
-            >
-                Skip
-            </button>
+            </div>
         </div>
     );
 }

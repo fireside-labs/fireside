@@ -1,19 +1,18 @@
-# Thor Gate — Sprint 18 Complete ("Pixel Perfect")
-- [x] T1 — Sprite asset serving:
-    - [x] `dashboard/public/sprites/` created with README
-    - [x] CSP verified: `img-src 'self' data: blob:` in tauri.conf.json + capabilities
-    - [x] Next.js serves `/public/` automatically — no config needed
-- [x] T2 — Status effect API:
-    - [x] `GET /api/v1/status/agent` returns state + metrics
-    - [x] States: idle, working, on_a_roll, error, learning
-    - [x] psutil-based: CPU%, memory%, LLM process detection, uptime
+# Thor Gate — Sprint 19 Complete ("Alive")
+- [x] T1 — Agent status API (confirmed from Sprint 18)
+- [x] T2 — Brain download:
+    - [x] `POST /api/v1/brains/install` — kicks off GGUF download via huggingface-hub
+    - [x] Already-installed detection (>100MB file check)
+    - [x] Fallback: redirect to Brains page if huggingface-hub unavailable
+    - [x] Background thread download (non-blocking)
+    - [x] `GET /api/v1/brains/download-status` — progress reporting
+    - [x] Model mapping: fast→llama-3.1-8b / deep→qwen-2.5-35b
 
-## Files Modified/Created
+## Files Modified
 | File | Change |
 |------|--------|
-| `api/v1.py` | Added `/status/agent` endpoint |
-| `dashboard/public/sprites/README.md` | NEW — sprite directory structure docs |
-| `tests/test_sprint18_pixelperfect.py` | NEW — 22 tests |
+| `api/v1.py` | Added `/brains/install`, `/brains/download-status`, `_BRAIN_MODELS` mapping |
+| `tests/test_sprint19_alive.py` | NEW — 17 tests |
 
 ## Test Results
-**501 tests passing** across 18 sprints.
+**518 tests passing** across 19 sprints.

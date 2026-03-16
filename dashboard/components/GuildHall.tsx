@@ -73,11 +73,16 @@ const THEME_ELEMENTS: Record<string, EnvElement[]> = {
         { sprite: "/sprites/env_bookshelf.png", emoji: "📚", label: "Scrolls", x: 45, y: 46, scale: 1.3, layer: "bg" },
     ],
     office: [
-        { sprite: "/sprites/env_desk.png", emoji: "💻", label: "Desk", x: 18, y: 70, scale: 1.5, layer: "mid" },
-        { emoji: "📋", label: "Whiteboard", x: 32, y: 45, layer: "bg" },
-        { sprite: "/sprites/env_bookshelf.png", emoji: "🗄️", label: "Files", x: 72, y: 55, scale: 1.4, layer: "bg" },
-        { emoji: "☕", label: "Coffee", x: 82, y: 80, layer: "fg" },
-        { emoji: "🪑", label: "Meeting", x: 50, y: 50, layer: "mid" },
+        { sprite: "/sprites/packs/office/desk_computer_1.png", emoji: "💻", label: "Desk", x: 18, y: 72, scale: 3, layer: "mid" },
+        { sprite: "/sprites/packs/office/desk_computer_2.png", emoji: "💻", label: "Desk 2", x: 55, y: 72, scale: 3, layer: "mid" },
+        { sprite: "/sprites/packs/office/whiteboard.png", emoji: "📋", label: "Whiteboard", x: 35, y: 42, scale: 3, layer: "bg" },
+        { sprite: "/sprites/packs/office/bookshelf.png", emoji: "📚", label: "Bookshelf", x: 65, y: 42, scale: 3, layer: "bg" },
+        { sprite: "/sprites/packs/office/coffee_machine.png", emoji: "☕", label: "Coffee", x: 88, y: 78, scale: 2.5, layer: "fg" },
+        { sprite: "/sprites/packs/office/plant_1.png", emoji: "🌿", label: "Plant", x: 8, y: 65, scale: 3, layer: "fg" },
+        { sprite: "/sprites/packs/office/couch.png", emoji: "🛋️", label: "Lounge", x: 78, y: 55, scale: 3, layer: "mid" },
+        { sprite: "/sprites/packs/office/printer.png", emoji: "🖨️", label: "Printer", x: 45, y: 55, scale: 2.5, layer: "mid" },
+        { sprite: "/sprites/packs/office/cabinet.png", emoji: "🗄️", label: "Files", x: 92, y: 45, scale: 2.5, layer: "bg" },
+        { sprite: "/sprites/packs/office/frame_1.png", emoji: "🖼️", label: "Art", x: 15, y: 38, scale: 3, layer: "bg" },
     ],
     space: [
         { sprite: "/sprites/packs/space-station/command_console.png", emoji: "🖥️", label: "Console", x: 18, y: 72, scale: 1.5, layer: "mid" },
@@ -239,6 +244,32 @@ export default function GuildHall({ theme }: GuildHallProps) {
                 // API unavailable — use fallback
             }
         })();
+    }, []);
+
+    // F1: Poll agent status every 5s for live status effects
+    useEffect(() => {
+        const poll = async () => {
+            try {
+                const res = await fetch("http://127.0.0.1:8765/api/v1/status/agent");
+                if (res.ok) {
+                    const data = await res.json();
+                    // Update agent activities from backend
+                    if (data.status) {
+                        setAgents(prev => prev.map(a => {
+                            if (a.type === "companion") return a;
+                            return {
+                                ...a,
+                                activity: (data.activity || a.activity) as Activity,
+                                status: (data.status === "error" ? "hurt" : a.status) as "online" | "offline",
+                                taskLabel: data.task_label || a.taskLabel,
+                            };
+                        }));
+                    }
+                }
+            } catch { /* backend offline — keep local state */ }
+        };
+        const interval = setInterval(poll, 5000);
+        return () => clearInterval(interval);
     }, []);
 
     return (

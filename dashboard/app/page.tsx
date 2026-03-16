@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import SpriteCharacter, { COMPANION_SHEETS } from "@/components/SpriteCharacter";
 
 interface CompanionState {
     species: string;
@@ -12,11 +13,6 @@ interface CompanionState {
     level: number;
     streak: number;
 }
-
-const SPECIES_EMOJI: Record<string, string> = {
-    cat: "🐱", dog: "🐶", penguin: "🐧",
-    fox: "🦊", owl: "🦉", dragon: "🐉",
-};
 
 const SUGGESTED_PROMPTS = [
     "Take me for a walk",
@@ -29,6 +25,7 @@ export default function ChatHomePage() {
     const [userName, setUserName] = useState("");
     const [companion, setCompanion] = useState<CompanionState | null>(null);
     const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
+    const [hasBrain, setHasBrain] = useState(true);
 
     useEffect(() => {
         const name = localStorage.getItem("fireside_user_name") || "";
@@ -38,6 +35,9 @@ export default function ChatHomePage() {
             const stored = localStorage.getItem("fireside_companion");
             if (stored) setCompanion(JSON.parse(stored));
         } catch { /* no companion yet */ }
+        // Check if brain is downloaded
+        const model = localStorage.getItem("fireside_model");
+        setHasBrain(!!model);
     }, []);
 
     const handleSend = async () => {
@@ -71,13 +71,28 @@ export default function ChatHomePage() {
         setMessage(prompt);
     };
 
-    const petEmoji = companion ? (SPECIES_EMOJI[companion.species] || "🐾") : "🔥";
     const happinessLabel = companion
         ? companion.happiness > 70 ? "Happy" : companion.happiness > 30 ? "Content" : "Needs attention"
         : null;
 
+    const companionSheet = companion ? (COMPANION_SHEETS[companion.species] || COMPANION_SHEETS.fox) : null;
+
     return (
         <div className="max-w-2xl mx-auto">
+            {/* T2: Brain download banner */}
+            {!hasBrain && (
+                <Link href="/brains">
+                    <div className="glass-card p-4 mb-6 flex items-center gap-4 cursor-pointer border-l-4 border-[var(--color-neon)] animate-pulse hover:bg-[var(--color-glass-hover)]">
+                        <span className="text-2xl">🧠</span>
+                        <div className="flex-1">
+                            <p className="text-sm text-white font-bold">Download your brain to get started</p>
+                            <p className="text-xs text-[var(--color-rune-dim)]">Your AI needs a model to think. Tap here to install one.</p>
+                        </div>
+                        <span className="text-[var(--color-neon)] text-sm font-bold">→</span>
+                    </div>
+                </Link>
+            )}
+
             {/* Greeting */}
             <div className="text-center mb-10 pt-12 animate-enter">
                 <h1 className="text-4xl font-black text-white mb-3 tracking-tight">
@@ -86,12 +101,12 @@ export default function ChatHomePage() {
                 <p className="text-sm text-[var(--color-rune-dim)] font-medium uppercase tracking-[0.2em]">System Ready • Logic Engaged</p>
             </div>
 
-            {/* Companion Widget */}
-            {companion && (
+            {/* Companion Widget — pixel art sprite */}
+            {companion && companionSheet && (
                 <Link href="/companion">
                     <div className="glass-card p-5 mb-8 flex items-center gap-5 hover:bg-[var(--color-glass-hover)] group cursor-pointer" style={{ borderLeft: "4px solid var(--color-neon)" }}>
-                        <div className="text-4xl group-hover:scale-110 transition-transform duration-300">
-                            {petEmoji}
+                        <div className="group-hover:scale-110 transition-transform duration-300">
+                            <SpriteCharacter sheet={companionSheet} action="idle" scale={2.5} />
                         </div>
                         <div className="flex-1">
                             <div className="flex items-center justify-between">
@@ -178,7 +193,7 @@ export default function ChatHomePage() {
             {chatHistory.length === 0 && (
                 <div className="glass-card p-5">
                     <h3 className="text-sm text-[var(--color-rune-dim)] font-semibold mb-4">
-                        {companion ? `${petEmoji} ${companion.name} is here` : "🔥 Welcome to Fireside"}
+                        {companion ? `🐾 ${companion.name} is here` : "🔥 Welcome to Fireside"}
                     </h3>
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">

@@ -1,13 +1,16 @@
 "use client";
 
 /**
- * 🎮 SpriteCharacter — Sprint 18 F1.
+ * 🎮 SpriteCharacter — Sprint 18+19 Fix.
  *
- * Renders a pixel-art sprite sheet with frame-by-frame animation.
- * Uses `image-rendering: pixelated` for crisp upscaling.
- * CSS `steps()` timing for authentic retro feel.
+ * Renders pixel-art character images with CSS animation.
+ * Uses `image-rendering: pixelated` + `<img>` for AI-generated PNGs.
+ * CSS breathing/bob animation for life-like idle feel.
+ *
+ * NOTE: The AI-generated PNGs are full illustrations, not proper
+ * sprite sheets. This component renders them as fixed-size images
+ * with CSS animations instead of sprite sheet frame-stepping.
  */
-import { useMemo } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -16,150 +19,105 @@ import { useMemo } from "react";
 export type SpriteAction = "idle" | "walk" | "work" | "sleep" | "chat" | "happy";
 
 export interface SpriteSheetConfig {
-    /** URL to the sprite sheet PNG (relative to /public) */
+    /** URL to the sprite PNG (relative to /public) */
     src: string;
-    /** Width of a single frame in the source sheet (px) */
+    /** Display size in pixels (the image will be forced to this size) */
     frameWidth: number;
-    /** Height of a single frame in the source sheet (px) */
+    /** Display height in pixels */
     frameHeight: number;
-    /** Map of action → { row, frames, speed } */
+    /** Map of action → { row, frames, speed } — kept for API compat */
     actions: Record<string, { row: number; frames: number; speed?: number }>;
 }
 
 export interface SpriteCharacterProps {
-    /** Sprite sheet configuration */
     sheet: SpriteSheetConfig;
-    /** Current action to animate */
     action?: SpriteAction;
-    /** Display scale multiplier (e.g. 3 = 3x base size) */
     scale?: number;
-    /** Flip horizontally (face left) */
     flipX?: boolean;
-    /** Additional CSS class */
     className?: string;
-    /** Click handler */
     onClick?: () => void;
 }
 
 // ---------------------------------------------------------------------------
-// Pre-built sprite sheet configs
+// Pre-built sprite configs (display sizing only — no sheet math needed)
 // ---------------------------------------------------------------------------
 
-/** Agent sprite sheets — 48×48 base, 6 actions × 4 frames */
+/** Agent sprites — rendered at 48×48 base, scaled up */
 export const AGENT_SHEETS: Record<string, SpriteSheetConfig> = {
     analytical: {
         src: "/sprites/agent_analytical.png",
         frameWidth: 48, frameHeight: 48,
-        actions: {
-            idle: { row: 0, frames: 4, speed: 1.2 },
-            walk: { row: 1, frames: 4, speed: 0.6 },
-            work: { row: 2, frames: 4, speed: 0.8 },
-            sleep: { row: 3, frames: 2, speed: 2.0 },
-            chat: { row: 4, frames: 4, speed: 0.8 },
-            happy: { row: 5, frames: 2, speed: 0.6 },
-        },
+        actions: { idle: { row: 0, frames: 1, speed: 1.2 }, walk: { row: 0, frames: 1, speed: 0.6 }, work: { row: 0, frames: 1, speed: 0.8 }, sleep: { row: 0, frames: 1, speed: 2.0 }, chat: { row: 0, frames: 1, speed: 0.8 }, happy: { row: 0, frames: 1, speed: 0.6 } },
     },
     creative: {
         src: "/sprites/agent_creative.png",
         frameWidth: 48, frameHeight: 48,
-        actions: {
-            idle: { row: 0, frames: 4, speed: 1.2 },
-            walk: { row: 1, frames: 4, speed: 0.6 },
-            work: { row: 2, frames: 4, speed: 0.8 },
-            sleep: { row: 3, frames: 2, speed: 2.0 },
-            chat: { row: 4, frames: 4, speed: 0.8 },
-            happy: { row: 5, frames: 2, speed: 0.6 },
-        },
+        actions: { idle: { row: 0, frames: 1, speed: 1.2 }, walk: { row: 0, frames: 1, speed: 0.6 }, work: { row: 0, frames: 1, speed: 0.8 }, sleep: { row: 0, frames: 1, speed: 2.0 }, chat: { row: 0, frames: 1, speed: 0.8 }, happy: { row: 0, frames: 1, speed: 0.6 } },
     },
     direct: {
         src: "/sprites/agent_direct.png",
         frameWidth: 48, frameHeight: 48,
-        actions: {
-            idle: { row: 0, frames: 4, speed: 1.2 },
-            walk: { row: 1, frames: 4, speed: 0.6 },
-            work: { row: 2, frames: 4, speed: 0.8 },
-            sleep: { row: 3, frames: 2, speed: 2.0 },
-            chat: { row: 4, frames: 4, speed: 0.8 },
-            happy: { row: 5, frames: 2, speed: 0.6 },
-        },
+        actions: { idle: { row: 0, frames: 1, speed: 1.2 }, walk: { row: 0, frames: 1, speed: 0.6 }, work: { row: 0, frames: 1, speed: 0.8 }, sleep: { row: 0, frames: 1, speed: 2.0 }, chat: { row: 0, frames: 1, speed: 0.8 }, happy: { row: 0, frames: 1, speed: 0.6 } },
     },
     warm: {
         src: "/sprites/agent_warm.png",
         frameWidth: 48, frameHeight: 48,
-        actions: {
-            idle: { row: 0, frames: 4, speed: 1.2 },
-            walk: { row: 1, frames: 4, speed: 0.6 },
-            work: { row: 2, frames: 4, speed: 0.8 },
-            sleep: { row: 3, frames: 2, speed: 2.0 },
-            chat: { row: 4, frames: 4, speed: 0.8 },
-            happy: { row: 5, frames: 2, speed: 0.6 },
-        },
+        actions: { idle: { row: 0, frames: 1, speed: 1.2 }, walk: { row: 0, frames: 1, speed: 0.6 }, work: { row: 0, frames: 1, speed: 0.8 }, sleep: { row: 0, frames: 1, speed: 2.0 }, chat: { row: 0, frames: 1, speed: 0.8 }, happy: { row: 0, frames: 1, speed: 0.6 } },
     },
 };
 
-/** Companion sprite sheets — 32×32 base, 4 actions */
+/** Companion sprites — rendered at 32×32 base */
 export const COMPANION_SHEETS: Record<string, SpriteSheetConfig> = {
-    cat: {
-        src: "/sprites/companion_cat.png",
-        frameWidth: 32, frameHeight: 32,
-        actions: {
-            idle: { row: 0, frames: 2, speed: 1.5 },
-            walk: { row: 1, frames: 4, speed: 0.5 },
-            sleep: { row: 2, frames: 2, speed: 2.5 },
-            happy: { row: 3, frames: 2, speed: 0.6 },
-        },
-    },
-    dog: {
-        src: "/sprites/companion_dog.png",
-        frameWidth: 32, frameHeight: 32,
-        actions: {
-            idle: { row: 0, frames: 2, speed: 1.5 },
-            walk: { row: 1, frames: 4, speed: 0.5 },
-            sleep: { row: 2, frames: 2, speed: 2.5 },
-            happy: { row: 3, frames: 2, speed: 0.6 },
-        },
-    },
-    penguin: {
-        src: "/sprites/companion_penguin.png",
-        frameWidth: 32, frameHeight: 32,
-        actions: {
-            idle: { row: 0, frames: 2, speed: 1.5 },
-            walk: { row: 1, frames: 4, speed: 0.7 },
-            sleep: { row: 2, frames: 2, speed: 2.5 },
-            happy: { row: 3, frames: 2, speed: 0.6 },
-        },
-    },
-    fox: {
-        src: "/sprites/companion_fox.png",
-        frameWidth: 32, frameHeight: 32,
-        actions: {
-            idle: { row: 0, frames: 2, speed: 1.5 },
-            walk: { row: 1, frames: 4, speed: 0.5 },
-            sleep: { row: 2, frames: 2, speed: 2.5 },
-            happy: { row: 3, frames: 2, speed: 0.6 },
-        },
-    },
-    owl: {
-        src: "/sprites/companion_owl.png",
-        frameWidth: 32, frameHeight: 32,
-        actions: {
-            idle: { row: 0, frames: 2, speed: 1.8 },
-            walk: { row: 1, frames: 4, speed: 0.7 },
-            sleep: { row: 2, frames: 2, speed: 2.5 },
-            happy: { row: 3, frames: 2, speed: 0.6 },
-        },
-    },
-    dragon: {
-        src: "/sprites/companion_dragon.png",
-        frameWidth: 32, frameHeight: 32,
-        actions: {
-            idle: { row: 0, frames: 2, speed: 1.5 },
-            walk: { row: 1, frames: 4, speed: 0.6 },
-            sleep: { row: 2, frames: 2, speed: 2.5 },
-            happy: { row: 3, frames: 2, speed: 0.6 },
-        },
-    },
+    cat: { src: "/sprites/companion_cat.png", frameWidth: 32, frameHeight: 32, actions: { idle: { row: 0, frames: 1, speed: 1.5 }, walk: { row: 0, frames: 1, speed: 0.5 }, sleep: { row: 0, frames: 1, speed: 2.5 }, happy: { row: 0, frames: 1, speed: 0.6 } } },
+    dog: { src: "/sprites/companion_dog.png", frameWidth: 32, frameHeight: 32, actions: { idle: { row: 0, frames: 1, speed: 1.5 }, walk: { row: 0, frames: 1, speed: 0.5 }, sleep: { row: 0, frames: 1, speed: 2.5 }, happy: { row: 0, frames: 1, speed: 0.6 } } },
+    penguin: { src: "/sprites/companion_penguin.png", frameWidth: 32, frameHeight: 32, actions: { idle: { row: 0, frames: 1, speed: 1.5 }, walk: { row: 0, frames: 1, speed: 0.7 }, sleep: { row: 0, frames: 1, speed: 2.5 }, happy: { row: 0, frames: 1, speed: 0.6 } } },
+    fox: { src: "/sprites/companion_fox.png", frameWidth: 32, frameHeight: 32, actions: { idle: { row: 0, frames: 1, speed: 1.5 }, walk: { row: 0, frames: 1, speed: 0.5 }, sleep: { row: 0, frames: 1, speed: 2.5 }, happy: { row: 0, frames: 1, speed: 0.6 } } },
+    owl: { src: "/sprites/companion_owl.png", frameWidth: 32, frameHeight: 32, actions: { idle: { row: 0, frames: 1, speed: 1.8 }, walk: { row: 0, frames: 1, speed: 0.7 }, sleep: { row: 0, frames: 1, speed: 2.5 }, happy: { row: 0, frames: 1, speed: 0.6 } } },
+    dragon: { src: "/sprites/companion_dragon.png", frameWidth: 32, frameHeight: 32, actions: { idle: { row: 0, frames: 1, speed: 1.5 }, walk: { row: 0, frames: 1, speed: 0.6 }, sleep: { row: 0, frames: 1, speed: 2.5 }, happy: { row: 0, frames: 1, speed: 0.6 } } },
 };
+
+// ---------------------------------------------------------------------------
+// CSS animation per action
+// ---------------------------------------------------------------------------
+
+const ACTION_ANIMATION: Record<SpriteAction, string> = {
+    idle: "spriteBreath 2.5s ease-in-out infinite",
+    walk: "spriteBob 0.6s ease-in-out infinite",
+    work: "spriteWork 1.2s ease-in-out infinite",
+    sleep: "spriteSleep 3s ease-in-out infinite",
+    chat: "spriteChat 1s ease-in-out infinite",
+    happy: "spriteHappy 0.5s ease-in-out infinite",
+};
+
+const KEYFRAMES = `
+@keyframes spriteBreath {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
+@keyframes spriteBob {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    25% { transform: translateY(-3px) translateX(2px); }
+    75% { transform: translateY(-1px) translateX(-2px); }
+}
+@keyframes spriteWork {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-2deg) translateY(-1px); }
+    75% { transform: rotate(2deg) translateY(-1px); }
+}
+@keyframes spriteSleep {
+    0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
+    50% { transform: translateY(1px) scale(0.98); opacity: 0.5; }
+}
+@keyframes spriteChat {
+    0%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-3px); }
+    60% { transform: translateY(-1px); }
+}
+@keyframes spriteHappy {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-4px) scale(1.05); }
+}
+`;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -168,56 +126,42 @@ export const COMPANION_SHEETS: Record<string, SpriteSheetConfig> = {
 export default function SpriteCharacter({
     sheet,
     action = "idle",
-    scale = 3,
+    scale = 2,
     flipX = false,
     className = "",
     onClick,
 }: SpriteCharacterProps) {
-    const actionConfig = sheet.actions[action] || sheet.actions.idle;
-    const { row, frames, speed = 1.0 } = actionConfig;
-
     const displayWidth = sheet.frameWidth * scale;
     const displayHeight = sheet.frameHeight * scale;
-    const sheetWidth = sheet.frameWidth * frames * scale;
-
-    // Generate unique animation name based on sheet + action
-    const animName = useMemo(() => {
-        const id = `sprite_${sheet.src.replace(/[^a-z0-9]/gi, '_')}_${action}`;
-        return id;
-    }, [sheet.src, action]);
-
-    // Build CSS keyframes for this specific animation
-    const totalSheetWidth = sheet.frameWidth * frames;
-    const keyframesCSS = `
-        @keyframes ${animName} {
-            to { background-position: -${totalSheetWidth * scale}px ${-row * sheet.frameHeight * scale}px; }
-        }
-    `;
+    const anim = ACTION_ANIMATION[action] || ACTION_ANIMATION.idle;
 
     return (
         <div
-            className={`sprite ${className}`}
+            className={`sprite-character ${className}`}
             onClick={onClick}
             style={{
                 width: displayWidth,
                 height: displayHeight,
                 position: "relative",
                 cursor: onClick ? "pointer" : undefined,
-                transform: flipX ? "scaleX(-1)" : undefined,
             }}
         >
-            <style>{keyframesCSS}</style>
-            <div
-                data-sprite
+            <style>{KEYFRAMES}</style>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={sheet.src}
+                alt="character"
+                draggable={false}
                 style={{
                     width: displayWidth,
                     height: displayHeight,
-                    backgroundImage: `url(${sheet.src})`,
-                    backgroundSize: `${sheetWidth}px auto`,
-                    backgroundPosition: `0px ${-row * sheet.frameHeight * scale}px`,
-                    backgroundRepeat: "no-repeat",
+                    objectFit: "contain",
                     imageRendering: "pixelated",
-                    animation: `${animName} ${speed}s steps(${frames}) infinite`,
+                    transform: flipX ? "scaleX(-1)" : undefined,
+                    animation: anim,
+                    filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.6))",
+                    // Blend out checkered backgrounds on dark scenes
+                    mixBlendMode: "lighten",
                 }}
             />
         </div>
@@ -225,37 +169,25 @@ export default function SpriteCharacter({
 }
 
 /**
- * Fallback: renders an emoji placeholder when sprite PNG isn't available yet.
- * This allows us to progressively replace placeholders with real sprites.
+ * Fallback: renders sprite if available, emoji if not.
  */
 export function SpriteOrEmoji({
     sheet,
     fallbackEmoji,
     action = "idle",
-    scale = 3,
+    scale = 2,
     flipX = false,
     className = "",
 }: SpriteCharacterProps & { fallbackEmoji: string }) {
-    // Check if sprite PNG exists by attempting to render it
-    // In production, we'd do an actual existence check; for now, 
-    // we render the sprite and show emoji as CSS fallback
     return (
         <div className={`relative ${className}`} style={{ width: sheet.frameWidth * scale, height: sheet.frameHeight * scale }}>
-            {/* Emoji fallback layer */}
-            <div
-                className="absolute inset-0 flex items-center justify-center"
-                style={{ fontSize: sheet.frameWidth * scale * 0.6, zIndex: 0 }}
-            >
+            {/* Emoji fallback */}
+            <div className="absolute inset-0 flex items-center justify-center" style={{ fontSize: sheet.frameWidth * scale * 0.6, zIndex: 0 }}>
                 {fallbackEmoji}
             </div>
-            {/* Sprite layer (will cover emoji when PNG loads) */}
+            {/* Sprite layer */}
             <div className="absolute inset-0 z-10">
-                <SpriteCharacter
-                    sheet={sheet}
-                    action={action}
-                    scale={scale}
-                    flipX={flipX}
-                />
+                <SpriteCharacter sheet={sheet} action={action} scale={scale} flipX={flipX} />
             </div>
         </div>
     );

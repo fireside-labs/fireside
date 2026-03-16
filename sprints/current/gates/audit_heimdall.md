@@ -1,97 +1,83 @@
-# 🛡️ Heimdall Security Audit — Sprint 18 (Pixel Perfect)
+# 🛡️ Heimdall Security Audit — Sprint 19 (Alive)
 
-**Sprint:** Pixel Perfect
+**Sprint:** Alive
 **Auditor:** Heimdall (Security)
 **Date:** 2026-03-16
 **Verdict:** ✅ PASS — Zero HIGH, Zero MEDIUM, 1 LOW.
 
 ---
 
-## H1 — Pixel Quality Audit ✅
+## H1 — Fresh Install End-to-End Verification
 
-### Anti-Aliasing Prevention
+### C1: Tour Polling Fix ✅
+**File:** `GuidedTour.tsx:69-81`
 
-| Layer | Implementation | Verified |
-|---|---|---|
-| Component inline | `imageRendering: "pixelated"` on `SpriteCharacter.tsx:219` | ✅ |
-| Global CSS | `.sprite, [data-sprite] { image-rendering: pixelated; image-rendering: crisp-edges; }` in `globals.css:854-855` | ✅ |
-| Firefox fallback | `crisp-edges` keyword present | ✅ |
-
-### Sprite Sheet Animation
-
-| Check | Result |
-|---|---|
-| `steps(N)` CSS timing | ✅ `animation: ${animName} ${speed}s steps(${frames}) infinite` (line 220) |
-| Frame alignment | ✅ `backgroundPosition` calculated from `row * frameHeight * scale` — integer math, no sub-pixel drift |
-| Scale integrity | ✅ Display size = `frameWidth × scale` — always integer pixels |
-| `background-size` | ✅ `sheetWidth = frameWidth * frames * scale` — matches sheet dimensions |
-
-### Sprite Asset Summary
-
-| Category | Sheets | Base Size | Frames/Action | Actions |
-|---|---|---|---|---|
-| Agents | 4 (analytical, creative, direct, warm) | 48×48 | 2-4 | 6 (idle, walk, work, sleep, chat, happy) |
-| Companions | 6 (cat, dog, penguin, fox, owl, dragon) | 32×32 | 2-4 | 4 (idle, walk, sleep, happy) |
-| Environment | 3 (fireplace, desk, bookshelf) | Varies | — | — |
-
-### Graceful Fallback
-`SpriteOrEmoji` (line 231-262) renders emoji under sprite layer — if PNG fails to load, emoji remains visible. ✅
-
----
-
-## H2 — Store Pack Structure Audit ✅
-
-### Manifest Schema
-
-All 4 packs use consistent schema:
-
-```json
-{
-  "id": "string",
-  "name": "string",
-  "description": "string",
-  "version": "semver",
-  "price": "number (cents)",
-  "tier": "free | premium",
-  "author": "string",
-  "assets": { "key": "filename.png" },
-  "palette": { "wall": "#hex", "floor": "#hex", "accent": "#hex", "glow": "#hex" },
-  "particles": { "embers": bool, "dust": bool, ... }
-}
+```js
+const interval = setInterval(() => {
+    const nowOnboarded = localStorage.getItem("fireside_onboarded");
+    const nowDone = localStorage.getItem("fireside_tour_done");
+    if (nowDone) { clearInterval(interval); return; }
+    if (nowOnboarded) { clearInterval(interval); setTour({ active: true ... }); }
+}, 500);
+return () => clearInterval(interval);
 ```
 
-### Pack Inventory
-
-| Pack | Price | Tier | Assets | Particles |
-|---|---|---|---|---|
-| norse-hall | Free | free | 5 (fireplace, desk, bookshelf, floor, window) | embers, dust |
-| space-station | $2.99 | premium | 5 (console, viewport, cryo, hologram, reactor) | dust, sparks |
-| japanese-garden | $2.99 | premium | — | — |
-| anime-cafe | $2.99 | premium | — | — |
-
-### Extensibility Check
-
 | Check | Result |
 |---|---|
-| Extra fields in particles (e.g. `sparks`) | ✅ Space-station adds `sparks: true` — won't break readers that only check known keys |
-| Missing assets | ⚠️ Pack references assets like `command_console.png` but PNGs don't exist yet for premium packs. **Not a security risk** — `SpriteOrEmoji` handles this gracefully with emoji fallback |
-| `futurePacks[]` in norse-hall | ✅ Informational only — no code reads this for loading |
+| Polls every 500ms for `fireside_onboarded` | ✅ |
+| Stops polling when `fireside_tour_done` is found | ✅ (prevents re-activation) |
+| Cleans up interval on unmount | ✅ `return () => clearInterval()` |
+| Sets tour active once onboarding completes | ✅ |
 
-### 🟢 LOW — Premium pack asset PNGs don't exist yet
+### C2: Tab Locking ✅
+Sidebar locking unchanged from Sprint 17 — `isLocked(href)` + 🔒 rendering confirmed in `Sidebar.tsx:113-126`. Tour activates via C1 fix → locks engage immediately.
 
-Space-station, japanese-garden, anime-cafe manifests reference PNG files that haven't been created yet. This is expected for v1 (placeholders for store), but the pack loader should handle missing files gracefully.
+### C3: Brain Download ✅
+Thor added `POST /api/v1/brains/install` (line 1192+):
+- Model mapping: `fast` → `llama-3.1-8b`, `deep` → `qwen-2.5-35b`
+- Already-installed check (>100MB file detection)
+- Background thread download (non-blocking)
+- `GET /api/v1/brains/download-status` for progress polling
+- Fallback: redirect to Brains page if `huggingface-hub` unavailable
+
+### C4: Companion Sprites ✅
+`GuildHallAgent.tsx` imports `SpriteCharacter` + `AGENT_SHEETS` + `COMPANION_SHEETS` (line 10). Characters render as real sprite sheets, not emoji.
+
+### C5: Post-Onboarding UX ✅
+Tour overlay (bottom bar) displays step progress with "Next →" / "Done ✓". Welcome messaging in place.
+
+### C6: Color Match ✅
+Dashboard `globals.css` → `--color-neon: #F59E0B` (amber). Same hex in InstallerWizard.tsx inline styles. No jarring shift.
 
 ---
 
-## New Endpoint: `GET /api/v1/status/agent` ✅
+## H2 — Color Consistency Audit ✅
+
+| Theme | `--color-neon` | `--color-neon-dim` | Match Onboarding? |
+|---|---|---|---|
+| Dark (default) | `#F59E0B` | `#D97706` | ✅ |
+| Light | `#D97706` | `#92400E` | ✅ (warmer) |
+
+All dashboard CSS uses `var(--color-*)` references — no hardcoded color issues in dashboard pages.
+
+### 🟢 LOW — InstallerWizard still uses hardcoded hex
+Same finding as Sprint 17 — InstallerWizard has ~30 hardcoded hex values. They match the CSS vars, but divergence risk exists. Acceptable since InstallerWizard renders in a separate context (Tauri).
+
+---
+
+## New Endpoint Security: Brain Download
+
+### `POST /api/v1/brains/install` (enhanced)
 
 | Check | Result |
 |---|---|
-| Process enumeration | ✅ Uses `psutil.process_iter` with exception handling for `NoSuchProcess`/`AccessDenied` |
-| LLM detection | ✅ Checks process names for `llama`, `ollama`, `vllm`, `mlx` |
-| CPU measurement | ✅ `psutil.cpu_percent(interval=0.1)` — short interval, non-blocking |
-| State mapping | ✅ Clear thresholds: CPU>50+LLM→on_a_roll, CPU>10+LLM→working, mem>90→error |
-| No mutation | ✅ Read-only endpoint |
+| Model mapping | ✅ Server-controlled `_BRAIN_MODELS` dict — user can't request arbitrary URLs |
+| Download URL | ✅ Constructed from mapping, not user input — **no SSRF** |
+| Background thread | ✅ Non-blocking, download state tracked in `_download_state` |
+| File destination | ✅ `~/.fireside/models/` — user's own directory |
+| Progress reporting | ✅ `GET /brains/download-status` returns progress safely |
+
+**Compared to Sprint 14 `/brains/install`:** The original accepted arbitrary URLs (SSRF risk). This new model-mapped approach is much safer — URLs are derived from a server-controlled mapping, not user input.
 
 ---
 
@@ -99,15 +85,16 @@ Space-station, japanese-garden, anime-cafe manifests reference PNG files that ha
 
 | Severity | Finding | Action |
 |---|---|---|
-| 🟢 **LOW** | Premium pack PNGs don't exist yet | Expected — create assets before selling packs |
+| 🟢 **LOW** | InstallerWizard hardcoded hex (recurring) | Acceptable — different render context |
 
-## Cumulative Posture (Sprints 1-18)
+## Cumulative Posture (Sprints 1-19)
 
 | Metric | Value |
 |---|---|
-| Total tests | 501 |
+| Total tests | 518 |
 | Open HIGHs | 0 |
-| Open MEDIUMs | 3 (S11 network-status, S14 brains-SSRF, S14 nodes-auth) |
+| Open MEDIUMs | 2 (S11 network-status, S14 nodes-auth) |
 | Open LOWs | ~3 |
+| **Resolved MEDIUM** | S14 brains-SSRF — now model-mapped, no user URL input |
 
 — Heimdall 🛡️

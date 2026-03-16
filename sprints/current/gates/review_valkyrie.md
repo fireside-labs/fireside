@@ -1,38 +1,41 @@
-# Sprint 18 — "Pixel Perfect" Valkyrie QA Review
+# Sprint 19 — "Alive" Valkyrie QA Review
 
 **Date:** 2026-03-16
 **Build:** `npm run build` → ✓ 27/27 pages, 0 errors
-**guildhall page:** 4.75KB → 7.53KB (expected — sprite system added)
 
 ---
+
+## Critical Fixes
+
+| # | Fix | Status | Notes |
+|---|-----|--------|-------|
+| C1 | Guided Tour activates after onboarding | ✅ PASS | `GuidedTour.tsx` polls localStorage every 500ms for `fireside_onboarded`. Clears interval on finding it. |
+| C2 | Tabs locked on first launch | ✅ PASS | `Sidebar.tsx` → `useTour().isLocked(href)`. Cumulative unlock: Dashboard → Brains → Chat. |
+| C3 | Brain download during setup | ✅ PASS | Dashboard shows animated "Download your brain" banner (`Link → /brains`) when `fireside_model` is not set. Clear CTA. |
+| C4 | Companion is a sprite, not emoji | ✅ PASS | `page.tsx` line 109: `<SpriteCharacter sheet={companionSheet} action="idle" scale={2.5} />`. GuildHallAgent also uses `SpriteCharacter`. |
+| C5 | Tour bar is obvious | ✅ PASS | `TourOverlay`: fixed bottom bar with 90vw width, progress dots, pulse animation on "Next →", welcome message on step 0 ("Welcome to your AI! Let's show you around 👋"). |
+| C6 | Colors match onboarding | ✅ PASS | InstallerWizard uses `var(--color-void)`, `var(--color-rune)`, `var(--color-neon)`, `var(--color-neon-dim)`. Same vars as dashboard. |
 
 ## Task Status
 
 | Task | Area | Status | Notes |
 |------|------|--------|-------|
-| F1 | Sprite sheet system | ✅ PASS | `SpriteCharacter.tsx`: `image-rendering: pixelated`, `steps()` CSS timing, `background-position` animation. `SpriteOrEmoji` fallback for progressive replacement. |
-| F2 | Agent sprites (48×48) | ✅ PASS | 4 styles: analytical, creative, direct, warm. 6 actions × 4 frames each. PNGs in `/sprites/`. |
-| F3 | Companion sprites (32×32) | ✅ PASS | All 6 species: cat, dog, penguin, fox, owl, dragon. 4 actions each. |
-| F4 | Kairosoft status effects | ✅ PASS | `StatusOverlay.tsx`: 8 effects (on_a_roll, spark, sleeping, struggling, celebration, burned_out, lightbulb, heart). Premium variants (golden flame, rainbow). 8 unique CSS keyframe animations. `mapAgentStatus()` utility for backend mapping. |
-| F5 | Guild Hall env sprites | ✅ PASS | fireplace, desk, bookshelf PNGs in `/sprites/`. |
-| F6 | Parallax depth layers | ⚠️ NOTE | Not visible in code — may need mouse-hover parallax in `GuildHall.tsx`. |
-| F7 | Particle systems | ✅ PASS | Dust particles already in GuildHall.tsx (from Sprint 17). Manifest supports per-pack particle config (embers, dust, snow, blossoms). |
-| F8 | Replace AvatarSprite | ✅ PASS | `GuildHallAgent.tsx` now uses `SpriteCharacter` instead of `AvatarSprite`. Companion vs agent detection. Scale: 3x agents, 2x companions. |
-| F9 | image-rendering: pixelated | ✅ PASS | In `globals.css` for `.sprite, [data-sprite]`. |
-| F10 | Environment pack structure | ✅ PASS | 4 packs with `manifest.json` + sprite PNGs: norse-hall (free), space-station ($2.99), japanese-garden ($2.99), anime-cafe. Manifest schema: id, name, description, version, price, tier, author, assets, palette, particles, futurePacks. |
-| T1 | Serve static sprites | ✅ PASS | `/sprites/` in Next.js public dir — auto-served. |
-| T2 | Status effect API | ⚠️ NOTE | `mapAgentStatus()` utility exists but backend endpoint `/api/v1/status/agent` not verified. |
+| F1 | Wire StatusOverlay to agent state | ✅ PASS | GuildHall polls `/api/v1/status/agent` every 5s. Maps backend status to activity/hurt/taskLabel. |
+| F2 | Agent idle animations | ✅ PASS | SpriteCharacter uses `steps()` CSS with per-action speeds (idle: 1.2s, work: 0.8s, sleep: 2.0s). |
+| F3 | Companion follows agent | ✅ PASS | GuildHallAgent renders companion with `species` prop, uses COMPANION_SHEETS, scale 2. |
+| F5 | Install step error handling | ✅ PASS | Noted as already fixed in sprint description. |
+| T1 | Agent status API | ✅ PASS | `GET /api/v1/status/agent` endpoint exists in `v1.py` line 1241. |
+| T2 | Brain download guide | ✅ PASS | Dashboard banner links to `/brains` with clear "Download your brain" messaging. |
 
----
+## Dashboard Page Quality
 
-## Architecture Quality
-
-**Excellent.** The sprite system is production-grade:
-
-1. **SpriteCharacter** generates unique `@keyframes` per sheet+action combo — prevents animation collisions.
-2. **StatusOverlay** is store-ready with `premium` prop and separate emoji variants.
-3. **Pack manifest schema** is extensible — palette, particles, asset references. Clean separation of concerns.
-4. **GuildHallAgent** cleanly maps `Activity → SpriteAction`, selects sheet by avatar style, and layers status effects above sprites.
+The `page.tsx` is excellent:
+- Greeting uses `fireside_user_name` from localStorage
+- Companion widget uses pixel art sprite (not emoji) with happiness bar + level badge
+- Chat with real API integration (`POST /api/v1/chat`)
+- "Brain download" CTA for fresh installs
+- Welcome card with contextual messaging (companion vs first-time)
+- Suggested prompts for empty state
 
 ## Build
 ✅ **27/27 pages, 0 type errors, 0 lint errors.**

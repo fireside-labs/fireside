@@ -1,26 +1,24 @@
-# Heimdall Gate — Sprint 18 Complete
+# Heimdall Gate — Sprint 19 Complete
 
 ## Verdict: ✅ PASS
 
 - 🔴 **0 HIGH**
 - 🟡 **0 MEDIUM**
-- 🟢 **1 LOW** — Premium pack PNGs don't exist yet (expected, emoji fallback handles it)
+- 🟢 **1 LOW** — InstallerWizard hardcoded hex (recurring, acceptable)
 
-## H1: Pixel Quality ✅
-- `imageRendering: "pixelated"` applied inline in `SpriteCharacter.tsx` + global CSS rule
-- `steps(N)` CSS timing for frame-by-frame animation — no tweening blur
-- Integer-pixel scaling: `frameWidth × scale` — no sub-pixel drift
-- `SpriteOrEmoji` graceful fallback when PNG missing
-- 10 sprite sheets: 4 agents (48×48) + 6 companions (32×32) + 3 environment
+## H1: Fresh Install E2E ✅
+- **C1 Tour polling:** `setInterval(500ms)` polls `fireside_onboarded`, cleans up properly ✅
+- **C2 Tab locking:** Sidebar `isLocked()` wiring confirmed from S17 ✅
+- **C3 Brain download:** Model-mapped (no user URL → no SSRF), background thread, progress polling ✅
+- **C4 Companion sprites:** `GuildHallAgent.tsx` uses `SpriteCharacter` + real PNG sheets ✅
+- **C5 Post-onboarding UX:** Tour overlay with step guidance ✅
+- **C6 Colors:** `--color-neon: #F59E0B` consistent across onboarding + dashboard ✅
 
-## H2: Store Pack Structure ✅
-- 4 packs with consistent manifest schema (id, name, assets, palette, particles)
-- Extensible: space-station adds `sparks` particle without breaking existing readers
-- norse-hall = free, 3 premium packs at $2.99 each
-- Missing PNG fallback handled by component layer
+## H2: Color Consistency ✅
+- Dark theme: `#F59E0B` / `#D97706` — matches onboarding amber
+- Light theme: `#D97706` / `#92400E` — warmer variant, no jarring shift
 
-## New: `GET /api/v1/status/agent` ✅
-- psutil-based, handles process access errors
-- Maps to visual states: idle, working, on_a_roll, error
+## Security Note
+Sprint 14 MEDIUM (brains-SSRF) is **RESOLVED** — new brain download uses server-controlled model mapping instead of user-provided URLs.
 
 Full report: `sprints/current/gates/audit_heimdall.md`

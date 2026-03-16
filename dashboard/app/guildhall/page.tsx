@@ -5,7 +5,7 @@ import GuildHall from "@/components/GuildHall";
 import ThemePicker from "@/components/ThemePicker";
 
 export default function GuildHallPage() {
-    const [theme, setTheme] = useState("valhalla");
+    const [theme, setTheme] = useState("office");
 
     return (
         <div className="max-w-6xl mx-auto">

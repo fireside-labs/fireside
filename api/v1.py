@@ -1120,6 +1120,123 @@ def _save_purchases(purchases: list[dict]):
     _PURCHASES_PATH.parent.mkdir(parents=True, exist_ok=True)
     _PURCHASES_PATH.write_text(json.dumps(purchases, indent=2), encoding="utf-8")
 
+# ---------------------------------------------------------------------------
+# Brain download / install
+# ---------------------------------------------------------------------------
+
+# Model ID → download info mapping
+_BRAIN_MODELS = {
+    "fast": {
+        "name": "Smart & Fast (8B)",
+        "model": "llama-3.1-8b-q6",
+        "filename": "Meta-Llama-3.1-8B-Instruct-Q6_K.gguf",
+        "size_gb": 4.6,
+        "repo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+    },
+    "deep": {
+        "name": "Deep Thinker (35B)",
+        "model": "qwen-2.5-35b-q4",
+        "filename": "Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
+        "size_gb": 24.1,
+        "repo": "bartowski/Qwen2.5-Coder-32B-Instruct-GGUF",
+    },
+}
+
+# In-memory download state (per-session)
+_download_state: dict = {"status": "idle", "brain_id": None, "progress": 0, "error": None}
+
+
+@router.post("/brains/install")
+async def install_brain(request: Request):
+    """Kick off brain model download, or return redirect to Brains page.
+
+    Accepts: { model_id: "fast" | "deep", port?: 8080 }
+    Returns: { ok, action, message } where action is "downloading" or "redirect"
+    """
+    body = await request.json()
+    model_id = body.get("model_id", "fast")
+    brain = _BRAIN_MODELS.get(model_id)
+
+    if not brain:
+        raise HTTPException(status_code=400, detail=f"Unknown brain: {model_id}")
+
+    models_dir = _base_dir / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    target = models_dir / brain["filename"]
+
+    # If already downloaded, report done
+    if target.exists() and target.stat().st_size > 100_000_000:
+        _download_state.update(status="done", brain_id=model_id, progress=100)
+        return {"ok": True, "action": "already_installed", "message": f"{brain['name']} is already downloaded."}
+
+    # Start download in background
+    try:
+        import threading
+
+        def _download_model():
+            try:
+                _download_state.update(status="downloading", brain_id=model_id, progress=0, error=None)
+
+                # Method 1: Try huggingface-hub if available (best progress tracking)
+                try:
+                    from huggingface_hub import hf_hub_download
+                    hf_hub_download(
+                        repo_id=brain["repo"],
+                        filename=brain["filename"],
+                        local_dir=str(models_dir),
+                        local_dir_use_symlinks=False,
+                    )
+                    _download_state.update(status="done", progress=100)
+                    return
+                except ImportError:
+                    pass
+
+                # Method 2: Direct HTTP download (no deps needed — stdlib only)
+                import urllib.request
+                url = f"https://huggingface.co/{brain['repo']}/resolve/main/{brain['filename']}"
+                log.info("[brains] Downloading %s from %s", brain["filename"], url)
+
+                req = urllib.request.Request(url, headers={"User-Agent": "Fireside/1.0"})
+                with urllib.request.urlopen(req) as resp:
+                    total = int(resp.headers.get("Content-Length", 0))
+                    downloaded = 0
+                    chunk_size = 1024 * 1024  # 1MB chunks
+
+                    with open(str(target), "wb") as f:
+                        while True:
+                            chunk = resp.read(chunk_size)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total > 0:
+                                _download_state["progress"] = int(downloaded / total * 100)
+
+                _download_state.update(status="done", progress=100)
+
+            except Exception as e:
+                log.error("[brains] Download failed: %s", e)
+                _download_state.update(status="error", error=str(e))
+
+        t = threading.Thread(target=_download_model, daemon=True)
+        t.start()
+
+        return {
+            "ok": True,
+            "action": "downloading",
+            "message": f"Downloading {brain['name']} ({brain['size_gb']} GB)...",
+            "brain": brain,
+        }
+    except Exception as e:
+        log.error("[brains] Could not start download thread: %s", e)
+        raise HTTPException(status_code=500, detail=f"Download failed: {e}")
+
+
+@router.get("/brains/download-status")
+async def get_brain_download_status():
+    """Return current brain download status for post-onboarding flow."""
+    return _download_state
+
 
 @router.get("/status/agent")
 async def get_agent_status():
