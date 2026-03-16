@@ -132,8 +132,8 @@ The feature set can be replicated. The *feeling* can't. A fox that remembers you
 | 9 | ✅ Final Polish | Rich action cards, cross-context search, App Store fixes |
 | **10** | **Two Characters** | Install flow v2 (AI person + companion), guild hall integration |
 | **11** | **The Anywhere Bridge** | Connection Choice (Local/Tailscale/Cloud), embedded `tsnet` node |
-| **12** | **On-Device Brain** | Small LLM on phone, offline chat/browse/guardian/translate |
-| **13** | **Native Integration** | iOS Calendar, Contacts, Messages via Siri Shortcuts |
+| **12** | **Ember Goes Native** | iOS OS integration (Calendar, Health, Contacts, Siri, widgets, proactive alerts) |
+| **13** | **On-Device Brain** | Small LLM on phone (1.5B), offline chat, smart routing to Atlas |
 | **14** | **Hosted Mode** | RunPod containers, Supabase auth, subscription billing |
 | **15** | **Marketplace v2** | Creator toolkit, IAP on mobile, $10K creator fund |
 
