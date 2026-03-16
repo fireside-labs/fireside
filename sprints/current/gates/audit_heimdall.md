@@ -1,135 +1,155 @@
-# 🛡️ Heimdall Security Audit — Sprint 14 (Last Mile Wiring)
+# 🛡️ Heimdall Security Audit — Sprint 15 (Ship It)
 
-**Sprint:** Last Mile Wiring
+**Sprint:** Ship It
 **Auditor:** Heimdall (Security) — **STRICT RULES**
-**Date:** 2026-03-15
-**Verdict:** ✅ PASS with notes — Zero HIGH, **2 MEDIUM**, 1 LOW.
+**Date:** 2026-03-16
+**Verdict:** ✅ PASS with notes — Zero HIGH, 1 MEDIUM, 2 LOW.
 
 > 🔴 HIGH = auto-FAIL | 🟡 MEDIUM = PASS with notes | 🟢 LOW = informational
 
 ---
 
-## Files Reviewed
+## H1 — Full End-to-End Config Flow Audit
 
-### Thor — Backend (4 new endpoints)
-| File | Lines | Endpoint |
+### Config Write Paths (Sources of Truth)
+
+| Source | Writes To | Files |
 |---|---|---|
-| `api/v1.py` | 737-821 | `POST /api/v1/chat` — LLM proxy via SSE |
-| `api/v1.py` | 828-884 | `POST /api/v1/brains/install` — GGUF download via SSE |
-| `api/v1.py` | 891-940 | `GET /api/v1/guildhall/agents` — real agents from config |
-| `api/v1.py` | 947-1001 | `POST /api/v1/nodes` — device registration |
-| `tauri/src-tauri/src/main.rs` | VRAM block | Mac unified memory fix |
-| `tests/test_sprint14_lastmile.py` | NEW | 42 tests |
+| **InstallerWizard** (Tauri) | `~/.fireside/valhalla.yaml` + `~/.valhalla/companion_state.json` + `~/.fireside/onboarding.json` via Rust `write_config()` | `main.rs:285-396` |
+| **InstallerWizard** (localStorage) | `fireside_onboarded`, `fireside_user_name`, `fireside_agent_name`, `fireside_agent_style`, `fireside_companion_species`, `fireside_companion_name` | `InstallerWizard.tsx:399-408` |
+| **OnboardingWizard** (browser) | Same localStorage keys | `OnboardingWizard.tsx:85-91` |
+| **OnboardingGate** (API sync) | `fireside_onboarded`, `fireside_user_name`, `fireside_personality`, `fireside_companion` (JSON!) | `OnboardingGate.tsx:47-50` |
 
-### Freya — Frontend
-| File | Change |
-|---|---|
-| `CompanionChat.tsx` | [MOD] → real `POST /api/v1/chat` with canned fallback |
-| `BrainInstaller.tsx` | [MOD] → SSE stream |
-| `globals.css` | [MOD] neon green → fire amber |
-| `nodes/page.tsx` | [MOD] Norse names removed, Add Node wired |
-| `SystemStatus.tsx` | [MOD] → polls `/api/v1/status` |
-| `OfflineBanner.tsx` | [NEW] — offline detection banner |
-| `GuidedTour.tsx` | [NEW] — 3-step onboarding tour |
-| `api.ts` | [MOD] port 8766 → 8765, mock tracking |
+### ⚠️ Finding: Inconsistent Companion Storage Format
 
----
+| Writer | Key | Format |
+|---|---|---|
+| `InstallerWizard.tsx` | `fireside_companion_species` + `fireside_companion_name` | **2 separate keys** |
+| `OnboardingWizard.tsx` | `fireside_companion_species` + `fireside_companion_name` | **2 separate keys** |
+| `OnboardingGate.tsx` | `fireside_companion` | **1 JSON key** `{name, species}` |
 
-## Security Analysis
+**Impact:** Readers that look for `fireside_companion` (GuildHall, AgentSidebarList, page.tsx, companion/page.tsx) will get `null` if the user went through InstallerWizard. Readers that look for `fireside_companion_name` (currently none exist) won't find data from OnboardingGate.
 
-### ✅ `POST /api/v1/chat` — LLM Chat Proxy
+### Field Trace: `userName`
 
-| Check | Result |
-|---|---|
-| Proxy target | ✅ Hardcoded `http://127.0.0.1:8080/completion` — localhost only, **no SSRF** |
-| Input length | ⚠️ No explicit max length on `req.message` (Pydantic `str` is unbounded) |
-| Context limiting | ✅ `req.context[-10:]` — capped at last 10 messages |
-| Response cap | ✅ `n_predict: 512` tokens |
-| System prompt | ✅ Server-controlled from `companion_state.json`, not user-modifiable |
-| SSE streaming | ✅ Proper `text/event-stream` + `Cache-Control: no-cache` |
-| Error handling | ✅ Graceful fallback message when llama.cpp is unreachable |
-| Stop tokens | ✅ `["User:", "System:"]` — prevents prompt continuation |
+| Step | File | How |
+|---|---|---|
+| ✅ Write | `InstallerWizard.tsx:404` | `localStorage.setItem("fireside_user_name")` |
+| ✅ Write | `OnboardingWizard.tsx:85` | Same |
+| ✅ Read | `Sidebar.tsx:58` | Shows in sidebar greeting |
+| ✅ Read | `page.tsx:34` | Shows on dashboard |
+| ❌ NOT Read | `MorningBriefing.tsx:52` | **Still hardcodes "Odin!"** |
+| ❌ NOT Read | `SettingsForm.tsx:20` | **Fallback to "Odin" (should read localStorage)** |
 
-### 🟡 MEDIUM — `POST /api/v1/brains/install` — No URL Allowlist (SSRF)
+### Field Trace: `agentName`
 
-**File:** `api/v1.py` lines 848-878
-**Code:** `urllib.request.urlopen(req.url, timeout=300)`
+| Step | File | How |
+|---|---|---|
+| ✅ Write | `InstallerWizard.tsx:405` | `localStorage.setItem("fireside_agent_name")` |
+| ✅ Read | `GuildHall.tsx:99` | Shows in guild hall |
+| ✅ Read | `Sidebar.tsx:54` | Shows in sidebar |
+| ✅ Read | `SettingsForm.tsx:20` | Shows in settings (reads localStorage) |
+| ✅ Read | `PersonalityForm.tsx:33` | Shows in personality editor |
+| ✅ Read | `nodes/page.tsx:47` | Shows as node name |
+| ✅ Read | `config/page.tsx:18` | Shows in config |
 
-**Issue:** The endpoint accepts an arbitrary `url` field and fetches it server-side with no domain restriction. An attacker on the local network could use this to:
-- Fetch internal services (SSRF): `http://169.254.169.254/latest/meta-data/` (cloud metadata)
-- Scan internal ports: `http://127.0.0.1:6379/` (Redis)
-- Exfiltrate data to external servers
+### Field Trace: `companionName`
 
-**Mitigating factors:**
-- Self-hosted, localhost-only API (not exposed to internet)
-- CORS restricts browser-initiated requests to LAN/Tailnet
-- User themselves would be the one calling this endpoint
+| Step | File | How |
+|---|---|---|
+| ✅ Write (Tauri) | `InstallerWizard.tsx:408` | `fireside_companion_name` (separate key) |
+| ⚠️ Write (Browser) | `OnboardingGate.tsx:50` | `fireside_companion` (JSON) — **different format!** |
+| ⚠️ Read | `GuildHall.tsx:110` | Reads `fireside_companion` JSON — **won't find Tauri install data** |
+| ⚠️ Read | `AgentSidebarList.tsx:39` | Reads `fireside_companion` JSON — **same issue** |
+| ✅ Read | `companion/page.tsx:15` | Reads `fireside_companion` JSON |
 
-**Required fix:**
-```python
-ALLOWED_DOMAINS = {"huggingface.co", "hf.co", "ollama.com", "github.com"}
-from urllib.parse import urlparse
-parsed = urlparse(req.url)
-if parsed.hostname not in ALLOWED_DOMAINS:
-    raise HTTPException(400, f"Downloads only allowed from: {', '.join(ALLOWED_DOMAINS)}")
-```
+### Field Trace: `brainSize`
 
-**Positive notes:**
-- ✅ Filename sanitized: `req.model_id.replace("/", "_").replace("\\", "_")`
-- ✅ Partial file cleanup on error: `dest.unlink()`
-- ✅ `.gguf` extension enforced
+| Step | File | How |
+|---|---|---|
+| ✅ Write | `main.rs:439` | `brain` field in onboarding.json |
+| ✅ Read | `GET /config/onboarding:1188` | Reads from onboarding.json |
+| ❌ NOT Read | Dashboard | **No component calls `/config/onboarding` yet** |
 
-### 🟡 MEDIUM — `POST /api/v1/nodes` — No Authentication
+### Config Flow Summary
 
-**File:** `api/v1.py` lines 956-1001
-
-**Issue:** The node registration endpoint accepts unauthenticated requests. Anyone on the local network (or Tailnet) can register a node with arbitrary IP/port, potentially:
-- Injecting a malicious node into the mesh config
-- Persisting to `valhalla.yaml` (line 992)
-- Overwriting legitimate node config
-
-**Mitigating factors:**
-- 409 conflict detection (can't overwrite existing node names)
-- Self-hosted, LAN/Tailnet-restricted access
-- The existing `mesh_announce` endpoint (line 336) uses token auth — this new one should too
-
-**Required fix:** Gate behind `mesh.auth_token` validation (same as `mesh_announce`).
-
-### ✅ `GET /api/v1/guildhall/agents` — Safe
-
-| Check | Result |
-|---|---|
-| Data source | ✅ Reads from in-memory `_config` — no external calls |
-| Sensitive data | ✅ Returns only names, style, activity status |
-| Import safety | ✅ `try/except` guards on plugin imports |
-
-### ✅ Frontend Changes — All Safe
-
-| Check | Result |
-|---|---|
-| `CompanionChat.tsx` | ✅ Calls localhost:8765 only, graceful canned fallback |
-| `OfflineBanner.tsx` | ✅ Polls localhost:8765 with 3s timeout, `AbortSignal.timeout` |
-| `OfflineBanner` detects mock data | ✅ `wasLastCallMock()` from api.ts |
-| PET_RESPONSES still present | ✅ Used as offline fallback — correct |
-| React rendering | ✅ All user input rendered via JSX — XSS-safe |
-| Port unified | ✅ `127.0.0.1:8765` everywhere |
-
-### 🟢 LOW — Chat input has no max length
-
-**File:** `api/v1.py` line 738 — `message: str` with no `max_length`
-
-A very long message could consume excessive memory. Add `message: str = Field(max_length=4096)`.
+| Field | Write OK | Read OK | Issues |
+|---|---|---|---|
+| `userName` | ✅ | ⚠️ | MorningBriefing still says "Odin!" |
+| `agentName` | ✅ | ✅ | 8 files read correctly |
+| `companionName` | ⚠️ | ⚠️ | **Inconsistent format** (2 keys vs JSON) |
+| `brainSize` | ✅ | ❌ | API exists, nobody calls it |
+| `agentStyle` | ✅ | ✅ | Written and read consistently |
 
 ---
 
-## H2 — Norse Names Audit (Completed Earlier)
+## H2 — Store Security Review
 
-**16 user-facing files** identified with hardcoded Norse names. See previous audit report section. Key items:
-- `api.ts` — ~800 lines of mock data (largest offender)
-- `MorningBriefing.tsx` — "Good morning, Odin!"
-- `nodes/page.tsx` — FRIENDLY_NAMES now fixed ✅
-- `landing/page.tsx` — footer credits (acceptable — internal team attribution)
-- `agents/[name]/` — still has hardcoded agents
+### Endpoints Reviewed
+
+| Endpoint | Lines | Security |
+|---|---|---|
+| `GET /store/plugins` | 1102-1113 | ✅ Read-only, returns registry |
+| `POST /store/purchase` | 1120-1142 | 🟡 See MEDIUM |
+| `GET /store/purchases` | 1145-1148 | ✅ Read-only |
+
+### Store Registry
+
+The registry is a **hardcoded inline list** in `_load_store_registry()` (lines 1010-1082) with 6 default plugins. If no JSON file exists, it writes defaults to `~/.fireside/store/registry.json`. All plugins are free or $4.99.
+
+### 🟡 MEDIUM — Store Purchase Has No Authentication
+
+**File:** `api/v1.py:1120-1142`
+
+**Issue:** `POST /store/purchase` accepts any `plugin_id` with no auth. On a Tailnet/local network, any device could:
+- Purchase all plugins on behalf of the user
+- Fill up the `purchases.json` file
+
+**Mitigating factors:**
+- Self-hosted, LAN/Tailnet-only access
+- No real payment happening (just recording to JSON)
+- 409 prevents duplicate purchases
+- No plugin code is actually downloaded or executed via this endpoint
+
+**Required for hosted mode:** Gate with auth token.
+
+### ✅ No Arbitrary Code Execution
+
+The store `POST /store/purchase` endpoint **does not install, download, or execute any plugin code**. It only:
+1. Looks up plugin_id in registry
+2. Records a purchase record to `purchases.json`
+3. Returns the purchase confirmation
+
+Actual plugin installation uses the separate `POST /plugins/install` endpoint (from Sprint 1) which enables already-present local plugins. **No remote code execution path exists.**
+
+### 🟢 LOW — Store Registry is Inline, Not External JSON
+
+The default registry is hardcoded in Python (lines 1010-1082). This means:
+- Adding plugins requires code changes
+- A future external registry URL would need SSRF protection
+
+Not an issue for v1 but should be noted for marketplace v2.
+
+---
+
+## Sprint 15 Specific Changes
+
+### ✅ Backend Auto-Start (main.rs `setup()` hook)
+
+| Check | Result |
+|---|---|
+| Spawns bifrost.py as child process | ✅ |
+| Restart on crash (max 3) | ✅ Bounded — no infinite restart loop |
+| Kills on app exit (`RunEvent::Exit`) | ✅ Proper cleanup |
+| `get_backend_status` command | ✅ Status check only |
+
+### ✅ `GET /config/onboarding` — Safe
+
+| Check | Result |
+|---|---|
+| Reads from config + onboarding.json | ✅ |
+| Returns only user-chosen values | ✅ No secrets |
+| Defaults for missing values | ✅ |
 
 ---
 
@@ -137,21 +157,20 @@ A very long message could consume excessive memory. Add `message: str = Field(ma
 
 | Severity | Finding | File | Action |
 |---|---|---|---|
-| 🟡 **MEDIUM** | Download URL has no domain allowlist (SSRF) | `api/v1.py:850` | Add `ALLOWED_DOMAINS` check |
-| 🟡 **MEDIUM** | Node registration has no auth | `api/v1.py:956` | Gate with `mesh.auth_token` |
-| 🟢 **LOW** | Chat message has no max length | `api/v1.py:738` | Add `Field(max_length=4096)` |
+| 🟡 **MEDIUM** | Store purchase has no auth | `api/v1.py:1120` | Gate with auth for hosted mode |
+| 🟢 **LOW** | Companion localStorage format inconsistent | `InstallerWizard.tsx` vs `OnboardingGate.tsx` | Standardize to JSON format |
+| 🟢 **LOW** | `MorningBriefing.tsx` still says "Odin!" | Line 52 | Read from `fireside_user_name` localStorage |
+| 🟢 **LOW** | `/config/onboarding` exists but dashboard never calls it | N/A | Wire dashboard to use API instead of scattered localStorage |
 
 ---
 
-## Test Results
-- **410 tests passing** (Sprints 1-14)
+## Cumulative Posture (Sprints 1-15)
 
-## Cumulative Posture (Sprints 1-14)
 | Metric | Value |
 |---|---|
+| Total tests | 444 |
 | Open HIGHs | 0 |
-| Open MEDIUMs | 3 (S11 network-status, S14 brains-SSRF, S14 nodes-auth) |
-| Open LOWs | 3 |
-| Tests | 410 |
+| Open MEDIUMs | 4 (S11 network-status, S14 brains-SSRF, S14 nodes-auth, S15 store-purchase-auth) |
+| Open LOWs | ~5 |
 
 — Heimdall 🛡️

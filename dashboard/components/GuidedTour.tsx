@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * 🗺️ Guided Tour — Sprint 14 F10.
+ * 🗺️ Guided Tour — Sprint 15 F1.
  *
  * Locks sidebar tabs until user visits each section in order.
- * Steps: Companion → Chat → Brains → Unlock all.
- * "Skip Tour" for power users.
+ * Steps: Dashboard → Brains → Chat → Done (unlock all).
+ * "Next" button advances. "Skip Tour" for power users.
  */
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext, useCallback } from "react";
+import { usePathname } from "next/navigation";
 
 interface TourState {
     active: boolean;
@@ -17,12 +18,24 @@ interface TourState {
 
 interface TourContextType {
     tour: TourState;
-    advanceTour: (section: string) => void;
+    advanceTour: () => void;
     skipTour: () => void;
-    isLocked: (section: string) => boolean;
+    isLocked: (href: string) => boolean;
 }
 
-const TOUR_STEPS = ["companion", "chat", "brains"];
+// Tour steps mapped to sidebar hrefs
+const TOUR_STEPS = [
+    { href: "/", label: "Dashboard", icon: "🏠", description: "This is your home — see your AI's status at a glance." },
+    { href: "/brains", label: "Brains", icon: "🧠", description: "Choose and manage AI models that power your companion." },
+    { href: "/", label: "Chat", icon: "💬", description: "Talk to your AI — it learns from every conversation." },
+];
+
+// Hrefs unlocked at each step (cumulative)
+const UNLOCKED_AT_STEP: string[][] = [
+    ["/"],                          // Step 0: only dashboard
+    ["/", "/brains"],               // Step 1: + brains
+    ["/", "/brains"],               // Step 2: chat is on / (dashboard)
+];
 
 const TourContext = createContext<TourContextType>({
     tour: { active: false, currentStep: 0, completedSteps: [] },
@@ -45,38 +58,41 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const done = localStorage.getItem("fireside_tour_done");
         if (!done) {
-            setTour({ active: true, currentStep: 0, completedSteps: [] });
+            const onboarded = localStorage.getItem("fireside_onboarded");
+            if (onboarded) {
+                setTour({ active: true, currentStep: 0, completedSteps: [] });
+            }
         }
     }, []);
 
-    const advanceTour = (section: string) => {
-        if (!tour.active) return;
-        const stepIndex = TOUR_STEPS.indexOf(section);
-        if (stepIndex === -1 || stepIndex !== tour.currentStep) return;
+    const advanceTour = useCallback(() => {
+        setTour((prev) => {
+            if (!prev.active) return prev;
+            const step = TOUR_STEPS[prev.currentStep];
+            if (!step) return prev;
 
-        const newCompleted = [...tour.completedSteps, section];
-        const nextStep = tour.currentStep + 1;
+            const newCompleted = [...prev.completedSteps, step.href];
+            const nextStep = prev.currentStep + 1;
 
-        if (nextStep >= TOUR_STEPS.length) {
-            // Tour complete
-            localStorage.setItem("fireside_tour_done", "1");
-            setTour({ active: false, currentStep: nextStep, completedSteps: newCompleted });
-        } else {
-            setTour({ active: true, currentStep: nextStep, completedSteps: newCompleted });
-        }
-    };
+            if (nextStep >= TOUR_STEPS.length) {
+                localStorage.setItem("fireside_tour_done", "1");
+                return { active: false, currentStep: nextStep, completedSteps: newCompleted };
+            }
+            return { active: true, currentStep: nextStep, completedSteps: newCompleted };
+        });
+    }, []);
 
-    const skipTour = () => {
+    const skipTour = useCallback(() => {
         localStorage.setItem("fireside_tour_done", "1");
-        setTour({ active: false, currentStep: TOUR_STEPS.length, completedSteps: TOUR_STEPS });
-    };
+        setTour({ active: false, currentStep: TOUR_STEPS.length, completedSteps: TOUR_STEPS.map(s => s.href) });
+    }, []);
 
-    const isLocked = (section: string) => {
+    const isLocked = useCallback((href: string) => {
         if (!tour.active) return false;
-        const stepIndex = TOUR_STEPS.indexOf(section);
-        if (stepIndex === -1) return tour.currentStep < TOUR_STEPS.length;
-        return stepIndex > tour.currentStep;
-    };
+        const step = Math.min(tour.currentStep, UNLOCKED_AT_STEP.length - 1);
+        const unlocked = UNLOCKED_AT_STEP[step];
+        return !unlocked.includes(href);
+    }, [tour.active, tour.currentStep]);
 
     return (
         <TourContext.Provider value={{ tour, advanceTour, skipTour, isLocked }}>
@@ -86,20 +102,20 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Tour Overlay — shows at the bottom of screen during active tour.
- * Displays current step and "Skip Tour" button.
+ * Tour Overlay — fixed bar at the bottom during active tour.
+ * Shows current step info + Next button + Skip Tour.
  */
 export function TourOverlay() {
-    const { tour, skipTour } = useTour();
+    const { tour, advanceTour, skipTour } = useTour();
+    const pathname = usePathname();
 
     if (!tour.active) return null;
 
     const step = TOUR_STEPS[tour.currentStep];
-    const stepLabels: Record<string, string> = {
-        companion: "👋 First, visit your Companion",
-        chat: "💬 Now try the Chat",
-        brains: "🧠 Check out your Brains",
-    };
+    if (!step) return null;
+
+    // Only show Next when user is on the correct page
+    const isOnCorrectPage = pathname === step.href;
 
     return (
         <div
@@ -112,34 +128,60 @@ export function TourOverlay() {
                 background: "rgba(15, 15, 15, 0.95)",
                 border: "1px solid rgba(245, 158, 11, 0.3)",
                 borderRadius: 14,
-                padding: "12px 24px",
+                padding: "14px 28px",
                 display: "flex",
                 alignItems: "center",
                 gap: 16,
                 backdropFilter: "blur(12px)",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+                maxWidth: 600,
             }}
         >
-            <span style={{ fontSize: 14, color: "#F59E0B", fontWeight: 600 }}>
-                Step {tour.currentStep + 1}/{TOUR_STEPS.length}
-            </span>
-            <span style={{ fontSize: 14, color: "#A08264" }}>
-                {stepLabels[step] || "Explore this section"}
-            </span>
+            <span style={{ fontSize: 20 }}>{step.icon}</span>
+            <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, color: "#F59E0B", fontWeight: 600, marginBottom: 2 }}>
+                    Step {tour.currentStep + 1} of {TOUR_STEPS.length} — {step.label}
+                </div>
+                <div style={{ fontSize: 12, color: "#8585a0" }}>
+                    {step.description}
+                </div>
+            </div>
+            {isOnCorrectPage ? (
+                <button
+                    onClick={advanceTour}
+                    style={{
+                        background: "#F59E0B",
+                        border: "none",
+                        color: "#0a0a0f",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        padding: "8px 20px",
+                        borderRadius: 8,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                    }}
+                >
+                    {tour.currentStep < TOUR_STEPS.length - 1 ? "Next →" : "Done ✓"}
+                </button>
+            ) : (
+                <span style={{ fontSize: 12, color: "#F59E0B", whiteSpace: "nowrap" }}>
+                    Navigate to {step.label} ↑
+                </span>
+            )}
             <button
                 onClick={skipTour}
                 style={{
                     background: "transparent",
-                    border: "1px solid rgba(245, 158, 11, 0.2)",
-                    color: "#8585a0",
-                    fontSize: 12,
-                    padding: "6px 14px",
+                    border: "1px solid rgba(245, 158, 11, 0.15)",
+                    color: "#6a6a80",
+                    fontSize: 11,
+                    padding: "6px 12px",
                     borderRadius: 8,
                     cursor: "pointer",
-                    marginLeft: 8,
+                    whiteSpace: "nowrap",
                 }}
             >
-                Skip Tour
+                Skip
             </button>
         </div>
     );

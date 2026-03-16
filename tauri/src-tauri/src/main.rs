@@ -491,10 +491,69 @@ async fn start_fireside(fireside_dir: String) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// T1 — Backend auto-start + lifecycle management
+// ---------------------------------------------------------------------------
+
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::process::Child;
+
+struct BackendState {
+    child: Option<Child>,
+    restart_count: u32,
+    running: bool,
+}
+
+/// Check if the backend is reachable.
+#[tauri::command]
+fn get_backend_status() -> serde_json::Value {
+    let result = std::net::TcpStream::connect_timeout(
+        &"127.0.0.1:8765".parse().unwrap(),
+        std::time::Duration::from_millis(500),
+    );
+    serde_json::json!({
+        "running": result.is_ok(),
+        "port": 8765,
+    })
+}
+
+fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
+    let python_cmd = if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    };
+
+    match Command::new(python_cmd)
+        .args(["bifrost.py"])
+        .current_dir(fireside_dir)
+        .spawn()
+    {
+        Ok(child) => {
+            println!("[fireside] Backend started (PID: {:?})", child.id());
+            Some(child)
+        }
+        Err(e) => {
+            eprintln!("[fireside] Failed to start backend: {}", e);
+            None
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 fn main() {
+    let backend_state = Arc::new(Mutex::new(BackendState {
+        child: None,
+        restart_count: 0,
+        running: false,
+    }));
+
+    let state_for_setup = backend_state.clone();
+    let state_for_exit = backend_state.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -507,7 +566,94 @@ fn main() {
             install_deps,
             write_config,
             start_fireside,
+            get_backend_status,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Fireside");
+        .setup(move |_app| {
+            // Auto-start backend if ~/.fireside exists
+            let home = dirs::home_dir().unwrap_or_default();
+            let fireside_dir = home.join(".fireside");
+
+            if fireside_dir.join("bifrost.py").exists()
+                || fireside_dir.join("valhalla.yaml").exists()
+            {
+                // Find the repo directory (could be ~/.fireside or the dev directory)
+                let repo_dir = if fireside_dir.join("bifrost.py").exists() {
+                    fireside_dir.clone()
+                } else {
+                    // Dev mode: look relative to the executable
+                    std::env::current_dir().unwrap_or(fireside_dir.clone())
+                };
+
+                let state = state_for_setup.clone();
+                let dir = repo_dir.clone();
+
+                thread::spawn(move || {
+                    // Give the window a moment to render
+                    thread::sleep(std::time::Duration::from_millis(2000));
+
+                    let max_restarts = 3;
+
+                    loop {
+                        let child = spawn_backend(&dir);
+                        if let Some(mut child) = child {
+                            {
+                                let mut s = state.lock().unwrap();
+                                s.running = true;
+                            }
+
+                            // Wait for process to exit
+                            match child.wait() {
+                                Ok(status) => {
+                                    println!("[fireside] Backend exited: {}", status);
+                                }
+                                Err(e) => {
+                                    eprintln!("[fireside] Backend wait error: {}", e);
+                                }
+                            }
+
+                            let mut s = state.lock().unwrap();
+                            s.running = false;
+                            s.restart_count += 1;
+
+                            if s.restart_count > max_restarts {
+                                eprintln!(
+                                    "[fireside] Backend crashed {} times, giving up",
+                                    s.restart_count
+                                );
+                                break;
+                            }
+
+                            println!(
+                                "[fireside] Restarting backend (attempt {}/{})",
+                                s.restart_count, max_restarts
+                            );
+                            drop(s);
+
+                            // Brief delay before restart
+                            thread::sleep(std::time::Duration::from_secs(2));
+                        } else {
+                            eprintln!("[fireside] Could not spawn backend, aborting");
+                            break;
+                        }
+                    }
+                });
+            }
+
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building Fireside")
+        .run(move |_app_handle, event| {
+            // Kill backend on app exit
+            if let tauri::RunEvent::Exit = event {
+                println!("[fireside] App exiting, cleaning up backend...");
+                if let Ok(mut s) = state_for_exit.lock() {
+                    if let Some(ref mut child) = s.child {
+                        let _ = child.kill();
+                        println!("[fireside] Backend process killed");
+                    }
+                    s.running = false;
+                }
+            }
+        });
 }

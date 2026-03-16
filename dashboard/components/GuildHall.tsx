@@ -81,14 +81,47 @@ const SPECIES_EMOJI: Record<string, string> = {
     cat: "🐱", dog: "🐶", penguin: "🐧", fox: "🦊", owl: "🦉", dragon: "🐉",
 };
 
-// Fallback mock agents when API is unavailable
-const FALLBACK_AGENTS = [
-    {
-        name: "Atlas",
-        avatar: { style: "pixel" as const, ...STYLE_AVATARS.analytical },
-        activity: "idle" as Activity, status: "online" as const, taskLabel: null as string | null, type: "ai" as const,
-    },
-];
+interface GuildAgent {
+    name: string;
+    avatar: { style: "pixel"; hairStyle: number; hairColor: string; skinTone: string; outfit: "warrior" | "artist" | "guardian" | "crown" | "cat" | "dog" | "penguin" | "fox" | "owl" | "dragon" | "developer" | "scholar"; accessory: "none" | "glasses" };
+    activity: Activity;
+    status: "online" | "offline";
+    taskLabel: string | null;
+    type: "ai" | "companion";
+}
+
+// Build agents dynamically from localStorage
+function getLocalAgents(): GuildAgent[] {
+    if (typeof window === "undefined") return [];
+    const agents: GuildAgent[] = [];
+
+    // AI agent from onboarding
+    const agentName = localStorage.getItem("fireside_agent_name") || "Atlas";
+    const agentStyle = localStorage.getItem("fireside_agent_style") || "analytical";
+    const avatarConfig = STYLE_AVATARS[agentStyle] || STYLE_AVATARS.analytical;
+    agents.push({
+        name: agentName,
+        avatar: { style: "pixel" as const, ...avatarConfig },
+        activity: "idle" as Activity, status: "online" as const, taskLabel: null, type: "ai" as const,
+    });
+
+    // Companion from onboarding
+    try {
+        const companionRaw = localStorage.getItem("fireside_companion");
+        if (companionRaw) {
+            const companion = JSON.parse(companionRaw);
+            if (companion.name && companion.species) {
+                agents.push({
+                    name: companion.name,
+                    avatar: { style: "pixel" as const, hairStyle: 0, hairColor: "#333", skinTone: "#fad7a0", outfit: companion.species as "warrior", accessory: "none" as const },
+                    activity: "idle" as Activity, status: "online" as const, taskLabel: null, type: "ai" as const,
+                });
+            }
+        }
+    } catch { /* ignore */ }
+
+    return agents;
+}
 
 interface GuildHallAgentData {
     name: string;
@@ -102,12 +135,14 @@ interface GuildHallAgentData {
 
 export default function GuildHall({ theme }: GuildHallProps) {
     const router = useRouter();
-    const themeColors = THEME_COLORS[theme] || THEME_COLORS.valhalla;
-    const elements = THEME_ELEMENTS[theme] || THEME_ELEMENTS.valhalla;
-    const [agents, setAgents] = useState(FALLBACK_AGENTS);
+    const themeColors = THEME_COLORS[theme] || THEME_COLORS.cozy;
+    const elements = THEME_ELEMENTS[theme] || THEME_ELEMENTS.cozy;
+    const [agents, setAgents] = useState<GuildAgent[]>([]);
 
-    // Sprint 10: Fetch real agent data
+    // Sprint 15: Load agents from localStorage, then try API
     useEffect(() => {
+        const local = getLocalAgents();
+        if (local.length > 0) setAgents(local);
         (async () => {
             try {
                 const res = await fetch("http://127.0.0.1:8765/api/v1/guildhall/agents");
@@ -164,7 +199,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
             ))}
 
             {/* Agents — Sprint 10: AI agent at activity zone, companion near fire */}
-            {agents.map((agent, idx) => {
+            {agents.map((agent: GuildAgent, idx: number) => {
                 // Companion sits near the fire, AI agent goes to activity zone
                 const isCompanion = (agent as any).type === "companion";
                 const zone = isCompanion

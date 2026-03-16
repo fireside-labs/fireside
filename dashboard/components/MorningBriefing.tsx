@@ -46,14 +46,10 @@ export default function MorningBriefing({ petName, species, onDismiss }: Morning
     const hour = new Date().getHours();
     const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-    // Get user name from localStorage
+    // Get user name from localStorage (set by InstallerWizard or OnboardingWizard)
     const userName = (() => {
         try {
-            const onboarding = localStorage.getItem("fireside_onboarding");
-            if (onboarding) {
-                const data = JSON.parse(onboarding);
-                return data.user_name || data.name || "friend";
-            }
+            return localStorage.getItem("fireside_user_name") || "friend";
         } catch { /* ignore */ }
         return "friend";
     })();

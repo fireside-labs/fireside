@@ -1018,6 +1018,182 @@ async def register_node(req: NodeRegisterRequest):
 
 
 # ---------------------------------------------------------------------------
+# Endpoints: Store — Plugin Registry + Purchases  (Sprint 15 — T3)
+# ---------------------------------------------------------------------------
+
+_STORE_REGISTRY_PATH = Path.home() / ".fireside" / "store_registry.json"
+_PURCHASES_PATH = Path.home() / ".fireside" / "purchases.json"
+
+
+def _load_store_registry() -> list[dict]:
+    """Load plugin registry from local JSON. Seed with defaults if missing."""
+    if _STORE_REGISTRY_PATH.exists():
+        try:
+            return json.loads(_STORE_REGISTRY_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    # Seed default registry
+    defaults = [
+        {
+            "id": "daily-brief",
+            "name": "Daily Brief",
+            "version": "1.2.0",
+            "description": "Generate a daily summary of activity and insights",
+            "author": "fireside",
+            "category": "productivity",
+            "price": 0,
+            "downloads": 342,
+            "icon": "📋",
+        },
+        {
+            "id": "git-watcher",
+            "name": "Git Watcher",
+            "version": "0.9.1",
+            "description": "Monitor git repos for changes and auto-trigger analysis",
+            "author": "community",
+            "category": "integration",
+            "price": 0,
+            "downloads": 187,
+            "icon": "🔍",
+        },
+        {
+            "id": "backup-sync",
+            "name": "Backup Sync",
+            "version": "1.0.2",
+            "description": "Automated backup of soul files, config, and memory",
+            "author": "fireside",
+            "category": "ops",
+            "price": 0,
+            "downloads": 156,
+            "icon": "💾",
+        },
+        {
+            "id": "voice-interface",
+            "name": "Voice Interface",
+            "version": "0.5.0",
+            "description": "Voice input/output for hands-free interaction",
+            "author": "community",
+            "category": "interface",
+            "price": 4.99,
+            "downloads": 41,
+            "icon": "🎙️",
+        },
+    ]
+    _STORE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _STORE_REGISTRY_PATH.write_text(json.dumps(defaults, indent=2), encoding="utf-8")
+    return defaults
+
+
+def _load_purchases() -> list[dict]:
+    if _PURCHASES_PATH.exists():
+        try:
+            return json.loads(_PURCHASES_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+
+def _save_purchases(purchases: list[dict]):
+    _PURCHASES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _PURCHASES_PATH.write_text(json.dumps(purchases, indent=2), encoding="utf-8")
+
+
+@router.get("/store/plugins")
+async def get_store_plugins():
+    """List all plugins in the store registry."""
+    registry = _load_store_registry()
+    purchases = _load_purchases()
+    purchased_ids = {p["plugin_id"] for p in purchases}
+
+    # Mark purchased plugins
+    for plugin in registry:
+        plugin["purchased"] = plugin["id"] in purchased_ids
+
+    return {"plugins": registry}
+
+
+class PurchaseRequest(BaseModel):
+    plugin_id: str
+
+
+@router.post("/store/purchase")
+async def store_purchase(req: PurchaseRequest):
+    """Purchase and install a plugin from the store."""
+    registry = _load_store_registry()
+    plugin = next((p for p in registry if p["id"] == req.plugin_id), None)
+    if not plugin:
+        raise HTTPException(404, f"Plugin '{req.plugin_id}' not found in store")
+
+    purchases = _load_purchases()
+    if any(p["plugin_id"] == req.plugin_id for p in purchases):
+        raise HTTPException(409, f"Plugin '{req.plugin_id}' already purchased")
+
+    purchase = {
+        "plugin_id": req.plugin_id,
+        "plugin_name": plugin["name"],
+        "price": plugin.get("price", 0),
+        "purchased_at": datetime.now(timezone.utc).isoformat(),
+    }
+    purchases.append(purchase)
+    _save_purchases(purchases)
+
+    log.info("[store] Plugin purchased: %s", req.plugin_id)
+    return {"status": "purchased", "purchase": purchase}
+
+
+@router.get("/store/purchases")
+async def get_store_purchases():
+    """List user's purchase history."""
+    return {"purchases": _load_purchases()}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints: Config Onboarding  (Sprint 15 — T4)
+# ---------------------------------------------------------------------------
+
+@router.get("/config/onboarding")
+async def get_config_onboarding():
+    """Return all onboarding choices from config files.
+
+    Dashboard reads from this instead of scattered localStorage keys.
+    """
+    result = {
+        "user_name": "",
+        "agent_name": "Atlas",
+        "agent_style": "Analytical",
+        "companion_name": "Ember",
+        "companion_species": "fox",
+        "brain": "Smart & Fast (7B)",
+        "onboarded": False,
+    }
+
+    # Read from valhalla.yaml (primary source)
+    agent_cfg = _config.get("agent", {})
+    companion_cfg = _config.get("companion", {})
+    if agent_cfg:
+        result["agent_name"] = agent_cfg.get("name", result["agent_name"])
+        result["agent_style"] = agent_cfg.get("style", result["agent_style"])
+    if companion_cfg:
+        result["companion_name"] = companion_cfg.get("name", result["companion_name"])
+        result["companion_species"] = companion_cfg.get("species", result["companion_species"])
+        result["user_name"] = companion_cfg.get("owner", "")
+
+    # Read onboarding.json for brain/completion status
+    onboarding_path = Path.home() / ".fireside" / "onboarding.json"
+    try:
+        if onboarding_path.exists():
+            ob = json.loads(onboarding_path.read_text(encoding="utf-8"))
+            result["onboarded"] = ob.get("onboarded", False)
+            result["brain"] = ob.get("brain", result["brain"])
+            result["user_name"] = ob.get("user_name", result["user_name"])
+    except Exception:
+        pass
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
 

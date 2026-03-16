@@ -1,36 +1,20 @@
-# Valkyrie Gate — Sprint 14 Fixes Applied
-Completed at: 2026-03-15T22:58:00-07:00
+# Valkyrie Gate — Sprint 15 QA Complete
+Completed at: 2026-03-16T00:15:00-07:00
 
-## Fixes Applied by Valkyrie
+## Status: 🟡 MOSTLY CLEAN — 2 blockers remain
 
-### F3 — Fire Theme ✅
-Cleared all `#00ff88` neon green → `#F59E0B` fire amber:
-- `PredictionChart.tsx` — 5 instances (gradient stops, stroke, dot, activeDot)
-- `EventStream.tsx` — 1 instance (model-switch topic color + bg)
-- `DebateTranscript.tsx` — 1 instance (persona color)
-- `globals.css` — was already fire amber ✅
+9 checkpoints tested:
+1. ✅ System specs — PowerShell detection working
+2. ✅ Onboarding — 6 localStorage keys set correctly
+3. ✅ Agent name flows — propagates to 8 surfaces
+4. ✅ Guided Tour — Next/Skip work, tabs locked
+5. ⚠️ Brain picker — needs F2 (Freya)
+6. ❌ Store — no backend (T3 + F4)
+7. ✅ Chat — backend when online, fallback when offline
+8. ✅ No Norse names — clean
+9. ✅ No mock data on reachable pages — empty arrays show "no data"
 
-### F4 — Remove Hardcoded Norse Names ✅
-- `nodes/page.tsx` — removed `FRIENDLY_NAMES: { odin, thor, freya, heimdall }` → dynamic `getFriendlyName(node)` using `node.friendly_name` from API
+Blockers: T1 (backend auto-start) + T3 (store backend)
+Owner's api.ts cleanup (removed 500+ lines of Norse mock data) verified ✅
 
-### H2 (partial) — Norse Names ✅
-- `DebateTranscript.tsx` — `"💬 Thor"` → `"💬 Builder"`
-
-### T6 — API Port ✅
-- Already fixed: `api.ts` line 4 reads `localhost:8765`
-
-## Verification
-- `grep -r "#00ff88" dashboard/` → 0 results ✅
-- `grep -r "FRIENDLY_NAMES" dashboard/` → 0 results ✅
-
-## Still Needs Other Agents
-- T1 (Thor): Mac unified memory detection
-- T2 (Thor): `POST /api/v1/chat` endpoint
-- T3 (Thor): `POST /api/v1/brains/install` endpoint
-- T4 (Thor): `GET /api/v1/guildhall/agents` real data
-- F1 (Freya): Wire CompanionChat to real backend
-- F2 (Freya): Wire BrainInstaller to real download
-- F8 (Freya): Replace 5 MOCK_ arrays
-- F9 (Freya): Offline mode indicator
-- H1 (Heimdall): Security review of new endpoints
-- H2 (Heimdall): Full Norse name grep
+Full report: `sprints/current/gates/review_valkyrie.md`

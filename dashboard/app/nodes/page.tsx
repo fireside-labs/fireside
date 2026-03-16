@@ -43,6 +43,11 @@ export default function ConnectedDevicesPage() {
 
     useEffect(() => {
         getNodes().then((data) => {
+            // F3: Override first node name with agent name from onboarding
+            const agentName = localStorage.getItem("fireside_agent_name");
+            if (agentName && data.length > 0 && data[0].name === "fireside") {
+                data[0].friendly_name = agentName;
+            }
             setNodes(data);
             setLoading(false);
         });

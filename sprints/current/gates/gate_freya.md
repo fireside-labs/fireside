@@ -1,30 +1,27 @@
-# Freya Gate — Sprint 14 Frontend Complete
-Sprint 14 tasks completed at 2026-03-15T22:42:00-07:00
+# Freya Gate — Sprint 15 Ship It
+Completed at 2026-03-16T00:12:00-07:00
 
 ## Completed
-- [x] F1: CompanionChat → POST /api/v1/chat (canned fallback)
-- [x] F2: BrainInstaller → SSE stream (simulated fallback)
-- [x] F3: Fire theme (neon green → fire amber across all CSS)
-- [x] F4: Removed Norse FRIENDLY_NAMES
-- [x] F5: Add Node → mesh join-token dialog
-- [x] F6: Save buttons already wired via api.ts (putSoul, updateConfig)
-- [x] F7: SystemStatus polls GET /api/v1/status every 5s
-- [x] F8: Mock fallback labeled via OfflineBanner
-- [x] F9: OfflineBanner component (polls backend, checks wasLastCallMock)
-- [x] F10: GuidedTour + TourOverlay (3-step onboarding with skip)
+- [x] F1: GuidedTour rewritten — Next button, sidebar tab lock (🔒), steps: Dashboard → Brains → Chat → Done
+- [x] F2: Brains page reads `fireside_brain` from localStorage, pre-selects onboarding choice
+- [x] F3: Nodes page shows `fireside_agent_name` from onboarding instead of generic "Fireside"
+- [x] F4: Store page tries `GET /api/v1/store/plugins`, falls back to hardcoded items
+- [x] F5: 5 mock pages → Coming Soon (learning, warroom, crucible, debate, pipeline)
+- [x] F6: GuildHall reads agent name/style + companion from localStorage, default theme → cozy
+- [x] F7: Companion page already reads name from `fireside_companion` localStorage
 
 ## Files Changed/Created
 | File | Change |
 |---|---|
-| `dashboard/components/CompanionChat.tsx` | [MOD] → real POST /api/v1/chat |
-| `dashboard/components/BrainInstaller.tsx` | [MOD] → SSE stream |
-| `dashboard/app/globals.css` | [MOD] neon green → fire amber |
-| `dashboard/app/nodes/page.tsx` | [MOD] Norse names removed, Add Node wired |
-| `dashboard/components/SystemStatus.tsx` | [MOD] → polls /api/v1/status |
-| `dashboard/lib/api.ts` | [MOD] friendly_name, mock tracking |
-| `dashboard/components/OfflineBanner.tsx` | [NEW] |
-| `dashboard/components/GuidedTour.tsx` | [NEW] |
-| `dashboard/app/layout.tsx` | [MOD] + OfflineBanner + TourProvider |
-
-## Build Status
-- Mobile TypeScript: ✅ 0 errors
+| `dashboard/components/GuidedTour.tsx` | [REWRITE] Next button, pathname-aware, href-based lock |
+| `dashboard/components/Sidebar.tsx` | [MOD] useTour, locked tabs → 🔒, agent name from localStorage |
+| `dashboard/app/brains/page.tsx` | [MOD] reads fireside_brain from localStorage |
+| `dashboard/app/nodes/page.tsx` | [MOD] overrides "fireside" node with agent name |
+| `dashboard/app/store/page.tsx` | [MOD] tries real API, dynamic tab counts |
+| `dashboard/components/ComingSoon.tsx` | [NEW] reusable Coming Soon card |
+| `dashboard/app/learning/page.tsx` | [REWRITE] → Coming Soon |
+| `dashboard/app/warroom/page.tsx` | [REWRITE] → Coming Soon |
+| `dashboard/app/crucible/page.tsx` | [REWRITE] → Coming Soon |
+| `dashboard/app/debate/page.tsx` | [REWRITE] → Coming Soon |
+| `dashboard/app/pipeline/page.tsx` | [REWRITE] → Coming Soon |
+| `dashboard/components/GuildHall.tsx` | [MOD] reads agent/companion from localStorage, cozy default |

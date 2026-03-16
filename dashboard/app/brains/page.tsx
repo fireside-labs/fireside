@@ -44,8 +44,8 @@ const BRAINS: BrainMeta[] = [
 ];
 
 export default function BrainsPage() {
-    const [installed, setInstalled] = useState<string[]>(["fast"]);
-    const [activeBrain, setActiveBrain] = useState("fast");
+    const [installed, setInstalled] = useState<string[]>([]);
+    const [activeBrain, setActiveBrain] = useState("");
     const [installing, setInstalling] = useState<string | null>(null);
     const [showCloudSetup, setShowCloudSetup] = useState(false);
     const [apiKey, setApiKey] = useState("");
@@ -55,6 +55,10 @@ export default function BrainsPage() {
     const { toast } = useToast();
 
     useEffect(() => {
+        // F2: Read brain choice from onboarding
+        const onboardingBrain = localStorage.getItem("fireside_brain") || "fast";
+        setInstalled([onboardingBrain]);
+        setActiveBrain(onboardingBrain);
         detectHardware();
     }, []);
 

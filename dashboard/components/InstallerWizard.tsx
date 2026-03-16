@@ -406,6 +406,11 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 localStorage.setItem("fireside_agent_style", config.agentStyle);
                 localStorage.setItem("fireside_companion_species", config.companionSpecies);
                 localStorage.setItem("fireside_companion_name", config.companionName || "Ember");
+                // Also write JSON format for components that read fireside_companion
+                localStorage.setItem("fireside_companion", JSON.stringify({
+                  name: config.companionName || "Ember",
+                  species: config.companionSpecies,
+                }));
                 onComplete();
               }}
             >

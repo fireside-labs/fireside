@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import StoreTabs from "@/components/StoreTabs";
 import ItemCard from "@/components/ItemCard";
 import PurchaseHistory from "@/components/PurchaseHistory";
+
+type StoreItem = { id: string; name: string; creator: string; description: string; emoji: string; price: number; rating: number; reviews: number; featured?: boolean };
+
 
 const STORE_ITEMS: Record<string, { id: string; name: string; creator: string; description: string; emoji: string; price: number; rating: number; reviews: number; featured?: boolean }[]> = {
     agents: [
@@ -41,8 +44,22 @@ const TAB_COUNTS: Record<string, number> = {
 export default function StorePage() {
     const [tab, setTab] = useState("agents");
     const [showPurchases, setShowPurchases] = useState(false);
+    const [storeItems, setStoreItems] = useState<Record<string, StoreItem[]>>(STORE_ITEMS);
 
-    const items = STORE_ITEMS[tab] || [];
+    // F4: Try loading from real backend, fall back to hardcoded
+    useEffect(() => {
+        fetch("http://127.0.0.1:8765/api/v1/store/plugins")
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data && typeof data === "object") {
+                    setStoreItems(prev => ({ ...prev, ...data }));
+                }
+            })
+            .catch(() => { /* fallback to hardcoded */ });
+    }, []);
+
+    const items = storeItems[tab] || [];
+    const tabCounts = Object.fromEntries(Object.entries(storeItems).map(([k, v]) => [k, v.length]));
 
     return (
         <div className="max-w-4xl mx-auto">
@@ -74,7 +91,7 @@ export default function StorePage() {
             ) : (
                 <>
                     {/* Tabs */}
-                    <StoreTabs selected={tab} onSelect={setTab} counts={TAB_COUNTS} />
+                    <StoreTabs selected={tab} onSelect={setTab} counts={tabCounts} />
 
                     {/* Items Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
