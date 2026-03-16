@@ -1,0 +1,30 @@
+{
+  "id": "anime-cafe",
+  "name": "Anime Café",
+  "description": "A cozy lo-fi anime café with neon signs, booth seats, and rainy city views.",
+  "version": "1.0.0",
+  "price": 299,
+  "tier": "premium",
+  "author": "Fireside",
+  "assets": {
+    "cafe_counter": "cafe_counter.png",
+    "neon_sign": "neon_sign.png",
+    "booth_seat": "booth_seat.png",
+    "vending_machine": "vending_machine.png",
+    "cafe_window": "cafe_window.png"
+  },
+  "palette": {
+    "wall": "#1a121f",
+    "floor": "#221828",
+    "accent": "#ff69b4",
+    "glow": "#ff99cc"
+  },
+  "particles": {
+    "embers": false,
+    "dust": false,
+    "snow": false,
+    "blossoms": false,
+    "rain": true,
+    "neonFlicker": true
+  }
+}

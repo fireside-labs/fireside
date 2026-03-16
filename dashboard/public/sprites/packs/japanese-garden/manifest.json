@@ -1,0 +1,28 @@
+{
+  "id": "japanese-garden",
+  "name": "Japanese Garden",
+  "description": "A serene zen garden with cherry blossoms, koi pond, and bamboo groves.",
+  "version": "1.0.0",
+  "price": 299,
+  "tier": "premium",
+  "author": "Fireside",
+  "assets": {
+    "torii_gate": "torii_gate.png",
+    "cherry_tree": "cherry_tree.png",
+    "koi_pond": "koi_pond.png",
+    "stone_lantern": "stone_lantern.png",
+    "bamboo": "bamboo.png"
+  },
+  "palette": {
+    "wall": "#1a1520",
+    "floor": "#1f1a25",
+    "accent": "#e88db4",
+    "glow": "#ffb7d5"
+  },
+  "particles": {
+    "embers": false,
+    "dust": true,
+    "snow": false,
+    "blossoms": true
+  }
+}

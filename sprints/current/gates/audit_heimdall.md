@@ -1,94 +1,97 @@
-# 🛡️ Heimdall Security Audit — Sprint 17 (Immersion)
+# 🛡️ Heimdall Security Audit — Sprint 18 (Pixel Perfect)
 
-**Sprint:** Immersion
+**Sprint:** Pixel Perfect
 **Auditor:** Heimdall (Security)
 **Date:** 2026-03-16
 **Verdict:** ✅ PASS — Zero HIGH, Zero MEDIUM, 1 LOW.
 
 ---
 
-## H1 — Tab Locking Verification ✅
+## H1 — Pixel Quality Audit ✅
 
-### How It Works
+### Anti-Aliasing Prevention
 
-```
-GuidedTour.tsx    →  Sidebar.tsx
-TourProvider         useTour().isLocked(href)
-  ├─ tour.active       ├─ locked → 🔒 div (opacity-40, cursor-not-allowed)
-  ├─ currentStep       └─ unlocked → <Link>
-  └─ isLocked(href)
-```
+| Layer | Implementation | Verified |
+|---|---|---|
+| Component inline | `imageRendering: "pixelated"` on `SpriteCharacter.tsx:219` | ✅ |
+| Global CSS | `.sprite, [data-sprite] { image-rendering: pixelated; image-rendering: crisp-edges; }` in `globals.css:854-855` | ✅ |
+| Firefox fallback | `crisp-edges` keyword present | ✅ |
 
-### Step-by-Step Trace
-
-| Step | Current Step | Unlocked Hrefs | All Others |
-|---|---|---|---|
-| Fresh install, `fireside_onboarded` set | 0 (Dashboard) | `/` | 🔒 Locked |
-| Click "Next →" | 1 (Brains) | `/`, `/brains` | 🔒 Locked |
-| Click "Next →" | 2 (Chat) | `/`, `/brains`, `/nodes`, `/companion` | 🔒 Locked |
-| Click "Done ✓" | Tour ends | ALL unlocked | — |
-| "Skip" at any point | Tour ends | ALL unlocked | — |
-| After tour done + reload | `fireside_tour_done` in localStorage | ALL unlocked | — |
-
-### Verified Behaviors
+### Sprite Sheet Animation
 
 | Check | Result |
 |---|---|
-| `isLocked()` returns false when `tour.active === false` | ✅ Line 91 |
-| `advanceTour()` sets `fireside_tour_done` in localStorage on final step | ✅ Line 78 |
-| `skipTour()` sets `fireside_tour_done` and unlocks all | ✅ Lines 86-87 |
-| Sidebar renders `<div>` (not `<Link>`) for locked items | ✅ Lines 115-126 |
-| Locked items show 🔒 icon, opacity-40, cursor-not-allowed | ✅ Line 119-122 |
-| Tour only activates if `fireside_onboarded` is set | ✅ Lines 61-62 |
-| Tour overlay shows "Next →" only when on correct page | ✅ Line 154 |
+| `steps(N)` CSS timing | ✅ `animation: ${animName} ${speed}s steps(${frames}) infinite` (line 220) |
+| Frame alignment | ✅ `backgroundPosition` calculated from `row * frameHeight * scale` — integer math, no sub-pixel drift |
+| Scale integrity | ✅ Display size = `frameWidth × scale` — always integer pixels |
+| `background-size` | ✅ `sheetWidth = frameWidth * frames * scale` — matches sheet dimensions |
 
-**Result: PASS** — Tab locking works end-to-end as designed.
+### Sprite Asset Summary
 
----
+| Category | Sheets | Base Size | Frames/Action | Actions |
+|---|---|---|---|---|
+| Agents | 4 (analytical, creative, direct, warm) | 48×48 | 2-4 | 6 (idle, walk, work, sleep, chat, happy) |
+| Companions | 6 (cat, dog, penguin, fox, owl, dragon) | 32×32 | 2-4 | 4 (idle, walk, sleep, happy) |
+| Environment | 3 (fireplace, desk, bookshelf) | Varies | — | — |
 
-## H2 — Color Audit ✅
-
-### Palette Comparison
-
-| Property | Dashboard (`globals.css`) | Onboarding (`InstallerWizard.tsx`) | Match? |
-|---|---|---|---|
-| Primary accent | `--color-neon: #F59E0B` | `#F59E0B` (buttons, highlights) | ✅ |
-| Accent dim | `--color-neon-dim: #D97706` | `#D97706` (gradients, borders) | ✅ |
-| Accent deep | `#92400E` (light mode) | `#92400E` (particle effects) | ✅ |
-| Text primary | `#F0DCC8` (via CSS vars) | `#F0DCC8` (inline) | ✅ |
-| Text dim | CSS var `--color-rune-dim` | `#7A6A5A` | ✅ |
-| Background | CSS var `--color-void` | `rgba(10,10,10,0.97)` | ✅ |
-| Success green | `#22C55E` (status-online) | `#22C55E` (install steps) | ✅ |
-| Error red | N/A | `#EF4444` (install fail) | ✅ |
-
-### CSS Var Usage
-
-| Area | Uses CSS Vars? |
-|---|---|
-| `globals.css` (dashboard) | ✅ All styles reference `var(--color-*)` |
-| `Sidebar.tsx` | ✅ All inline colors use vars |
-| `InstallerWizard.tsx` | ⚠️ Hardcoded hex — but matches dashboard amber palette |
-| `GuidedTour.tsx` (overlay) | ⚠️ Hardcoded `#F59E0B` — matches vars |
-
-**Result: PASS** — No jarring transitions between onboarding and dashboard. Same amber palette throughout.
-
-### 🟢 LOW — InstallerWizard uses hardcoded hex instead of CSS vars
-
-`InstallerWizard.tsx` has ~30 hardcoded hex values instead of referencing `var(--color-*)`. This works because the hex values match the CSS var definitions, but divergence risk exists if theme vars are changed later.
-
-**Mitigating factors:** InstallerWizard is a self-contained <style> block that runs *before* the dashboard CSS loads (Tauri vs Next.js rendering). Using CSS vars from globals.css may not be available at that stage.
+### Graceful Fallback
+`SpriteOrEmoji` (line 231-262) renders emoji under sprite layer — if PNG fails to load, emoji remains visible. ✅
 
 ---
 
-## New Endpoint Reviewed
+## H2 — Store Pack Structure Audit ✅
 
-### `GET /api/v1/brains/active` (Thor T1) ✅
+### Manifest Schema
+
+All 4 packs use consistent schema:
+
+```json
+{
+  "id": "string",
+  "name": "string",
+  "description": "string",
+  "version": "semver",
+  "price": "number (cents)",
+  "tier": "free | premium",
+  "author": "string",
+  "assets": { "key": "filename.png" },
+  "palette": { "wall": "#hex", "floor": "#hex", "accent": "#hex", "glow": "#hex" },
+  "particles": { "embers": bool, "dust": bool, ... }
+}
+```
+
+### Pack Inventory
+
+| Pack | Price | Tier | Assets | Particles |
+|---|---|---|---|---|
+| norse-hall | Free | free | 5 (fireplace, desk, bookshelf, floor, window) | embers, dust |
+| space-station | $2.99 | premium | 5 (console, viewport, cryo, hologram, reactor) | dust, sparks |
+| japanese-garden | $2.99 | premium | — | — |
+| anime-cafe | $2.99 | premium | — | — |
+
+### Extensibility Check
 
 | Check | Result |
 |---|---|
-| Data source | Reads from `_config` + `onboarding.json` — no external calls |
-| Sensitive data | ✅ Returns only brain choice + model name |
-| Auth required | N/A — read-only config, no mutation |
+| Extra fields in particles (e.g. `sparks`) | ✅ Space-station adds `sparks: true` — won't break readers that only check known keys |
+| Missing assets | ⚠️ Pack references assets like `command_console.png` but PNGs don't exist yet for premium packs. **Not a security risk** — `SpriteOrEmoji` handles this gracefully with emoji fallback |
+| `futurePacks[]` in norse-hall | ✅ Informational only — no code reads this for loading |
+
+### 🟢 LOW — Premium pack asset PNGs don't exist yet
+
+Space-station, japanese-garden, anime-cafe manifests reference PNG files that haven't been created yet. This is expected for v1 (placeholders for store), but the pack loader should handle missing files gracefully.
+
+---
+
+## New Endpoint: `GET /api/v1/status/agent` ✅
+
+| Check | Result |
+|---|---|
+| Process enumeration | ✅ Uses `psutil.process_iter` with exception handling for `NoSuchProcess`/`AccessDenied` |
+| LLM detection | ✅ Checks process names for `llama`, `ollama`, `vllm`, `mlx` |
+| CPU measurement | ✅ `psutil.cpu_percent(interval=0.1)` — short interval, non-blocking |
+| State mapping | ✅ Clear thresholds: CPU>50+LLM→on_a_roll, CPU>10+LLM→working, mem>90→error |
+| No mutation | ✅ Read-only endpoint |
 
 ---
 
@@ -96,13 +99,13 @@ TourProvider         useTour().isLocked(href)
 
 | Severity | Finding | Action |
 |---|---|---|
-| 🟢 **LOW** | InstallerWizard hardcodes hex colors matching CSS vars | Note for future theme refactor |
+| 🟢 **LOW** | Premium pack PNGs don't exist yet | Expected — create assets before selling packs |
 
-## Cumulative Posture (Sprints 1-17)
+## Cumulative Posture (Sprints 1-18)
 
 | Metric | Value |
 |---|---|
-| Total tests | 479 |
+| Total tests | 501 |
 | Open HIGHs | 0 |
 | Open MEDIUMs | 3 (S11 network-status, S14 brains-SSRF, S14 nodes-auth) |
 | Open LOWs | ~3 |

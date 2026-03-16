@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import GuildHallAgent from "@/components/GuildHallAgent";
 import type { Activity } from "@/components/GuildHallAgent";
 import { useRouter } from "next/navigation";
@@ -23,58 +23,104 @@ const ACTIVITY_ZONES: Record<Activity, { x: number; y: number }> = {
     chatting: { x: 50, y: 75 },   // center stage
 };
 
-const DUST_PARTICLES = Array.from({ length: 15 }).map((_, i) => ({
+const DUST_PARTICLES = Array.from({ length: 20 }).map((_, i) => ({
     id: i,
     left: Math.random() * 100,
-    top: Math.random() * 100,
-    size: 2 + Math.random() * 2,
-    duration: 15 + Math.random() * 20,
+    top: 10 + Math.random() * 50,
+    size: 1 + Math.random() * 2,
+    duration: 12 + Math.random() * 18,
     delay: Math.random() * 10,
 }));
 
-const THEME_COLORS: Record<string, { bg: string; floor: string; accent: string }> = {
-    valhalla: { bg: "#1a1520", floor: "#2a1f1a", accent: "#c0820a" },
-    office: { bg: "#1a1a24", floor: "#2a2a35", accent: "#4488aa" },
-    space: { bg: "#0a0a1a", floor: "#151528", accent: "#6644cc" },
-    cozy: { bg: "#1f1a15", floor: "#2f2520", accent: "#cc8844" },
-    dungeon: { bg: "#12100e", floor: "#221e1a", accent: "#886622" },
+const FIRE_EMBERS = Array.from({ length: 10 }).map((_, i) => ({
+    id: i,
+    left: 74 + Math.random() * 12,
+    delay: Math.random() * 3,
+    size: 2 + Math.random() * 3,
+    duration: 2 + Math.random() * 2,
+}));
+
+const THEME_COLORS: Record<string, { bg: string; floor: string; accent: string; wallTile?: string; floorTile?: string }> = {
+    valhalla: { bg: "#1a1520", floor: "#2a1f1a", accent: "#c0820a", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
+    office: { bg: "#1a1a24", floor: "#2a2a35", accent: "#4488aa", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
+    space: { bg: "#0a0a1a", floor: "#151528", accent: "#4488ff", wallTile: "/sprites/tiles/hull_wall.png", floorTile: "/sprites/tiles/metal_floor.png" },
+    cozy: { bg: "#1f1a15", floor: "#2f2520", accent: "#cc8844", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
+    dungeon: { bg: "#12100e", floor: "#221e1a", accent: "#886622", wallTile: "/sprites/tiles/stone_wall.png", floorTile: "/sprites/tiles/wood_floor.png" },
+    "japanese-garden": { bg: "#1a1520", floor: "#1f1a25", accent: "#e88db4", wallTile: "/sprites/tiles/shoji_wall.png", floorTile: "/sprites/tiles/tatami.png" },
+    "space-station": { bg: "#0a0a1a", floor: "#151528", accent: "#4488ff", wallTile: "/sprites/tiles/hull_wall.png", floorTile: "/sprites/tiles/metal_floor.png" },
+    "anime-cafe": { bg: "#1a121f", floor: "#221828", accent: "#ff69b4", wallTile: "/sprites/tiles/cafe_wall.png", floorTile: "/sprites/tiles/cafe_floor.png" },
 };
 
-const THEME_ELEMENTS: Record<string, { emoji: string; label: string; x: number; y: number }[]> = {
+// Environment sprites replace emoji furniture for premium feel
+interface EnvElement {
+    sprite?: string;  // PNG path (if available)
+    emoji: string;    // fallback emoji
+    label: string;
+    x: number;
+    y: number;
+    scale?: number;
+    layer: "bg" | "mid" | "fg";  // parallax layer
+}
+
+const THEME_ELEMENTS: Record<string, EnvElement[]> = {
     valhalla: [
-        { emoji: "🔥", label: "Forge", x: 28, y: 50 },
-        { emoji: "📜", label: "Scroll Table", x: 18, y: 70 },
-        { emoji: "📚", label: "Rune Library", x: 72, y: 60 },
-        { emoji: "🍺", label: "Mead Hall", x: 82, y: 80 },
-        { emoji: "⚔️", label: "Weapon Rack", x: 10, y: 55 },
+        { sprite: "/sprites/env_fireplace.png", emoji: "🔥", label: "Forge", x: 80, y: 70, scale: 1.8, layer: "mid" },
+        { sprite: "/sprites/packs/norse-hall/anvil.png", emoji: "⚒️", label: "Anvil", x: 30, y: 65, scale: 1.4, layer: "mid" },
+        { sprite: "/sprites/packs/norse-hall/war_table.png", emoji: "🗺️", label: "War Table", x: 50, y: 60, scale: 1.5, layer: "mid" },
+        { sprite: "/sprites/packs/norse-hall/mead_barrel.png", emoji: "🍺", label: "Mead Barrels", x: 88, y: 80, scale: 1.3, layer: "fg" },
+        { sprite: "/sprites/packs/norse-hall/fishing_hole.png", emoji: "🎣", label: "Fishing", x: 10, y: 82, scale: 1.3, layer: "fg" },
+        { sprite: "/sprites/packs/norse-hall/rune_stones.png", emoji: "🔮", label: "Rune Stones", x: 65, y: 48, scale: 1.4, layer: "bg" },
+        { sprite: "/sprites/env_bookshelf.png", emoji: "📚", label: "Scrolls", x: 45, y: 46, scale: 1.3, layer: "bg" },
     ],
     office: [
-        { emoji: "💻", label: "Desk", x: 18, y: 70 },
-        { emoji: "📋", label: "Whiteboard", x: 32, y: 50 },
-        { emoji: "🗄️", label: "Files", x: 72, y: 60 },
-        { emoji: "☕", label: "Coffee", x: 82, y: 80 },
-        { emoji: "🪑", label: "Meeting", x: 50, y: 50 },
+        { sprite: "/sprites/env_desk.png", emoji: "💻", label: "Desk", x: 18, y: 70, scale: 1.5, layer: "mid" },
+        { emoji: "📋", label: "Whiteboard", x: 32, y: 45, layer: "bg" },
+        { sprite: "/sprites/env_bookshelf.png", emoji: "🗄️", label: "Files", x: 72, y: 55, scale: 1.4, layer: "bg" },
+        { emoji: "☕", label: "Coffee", x: 82, y: 80, layer: "fg" },
+        { emoji: "🪑", label: "Meeting", x: 50, y: 50, layer: "mid" },
     ],
     space: [
-        { emoji: "🖥️", label: "Console", x: 18, y: 70 },
-        { emoji: "🔧", label: "Workshop", x: 32, y: 50 },
-        { emoji: "🌀", label: "Hologram", x: 72, y: 60 },
-        { emoji: "🛸", label: "Viewport", x: 50, y: 40 },
-        { emoji: "💺", label: "Bridge", x: 82, y: 80 },
+        { sprite: "/sprites/packs/space-station/command_console.png", emoji: "🖥️", label: "Console", x: 18, y: 72, scale: 1.5, layer: "mid" },
+        { sprite: "/sprites/packs/space-station/hologram.png", emoji: "🌀", label: "Hologram", x: 50, y: 55, scale: 1.4, layer: "mid" },
+        { sprite: "/sprites/packs/space-station/viewport.png", emoji: "🪟", label: "Viewport", x: 45, y: 35, scale: 1.8, layer: "bg" },
+        { sprite: "/sprites/packs/space-station/reactor.png", emoji: "⚡", label: "Reactor", x: 80, y: 65, scale: 1.6, layer: "mid" },
+        { sprite: "/sprites/packs/space-station/cryo_pod.png", emoji: "❄️", label: "Cryo Pod", x: 90, y: 80, scale: 1.3, layer: "fg" },
+    ],
+    "space-station": [
+        { sprite: "/sprites/packs/space-station/command_console.png", emoji: "🖥️", label: "Command", x: 20, y: 72, scale: 1.6, layer: "mid" },
+        { sprite: "/sprites/packs/space-station/hologram.png", emoji: "🌀", label: "Hologram", x: 50, y: 55, scale: 1.5, layer: "mid" },
+        { sprite: "/sprites/packs/space-station/viewport.png", emoji: "🪟", label: "Viewport", x: 42, y: 32, scale: 2.0, layer: "bg" },
+        { sprite: "/sprites/packs/space-station/reactor.png", emoji: "⚡", label: "Reactor", x: 82, y: 65, scale: 1.7, layer: "mid" },
+        { sprite: "/sprites/packs/space-station/cryo_pod.png", emoji: "❄️", label: "Cryo Pod", x: 92, y: 82, scale: 1.4, layer: "fg" },
     ],
     cozy: [
-        { emoji: "🛋️", label: "Couch", x: 55, y: 75 },
-        { emoji: "📖", label: "Bookshelf", x: 72, y: 60 },
-        { emoji: "🍳", label: "Kitchen", x: 25, y: 55 },
-        { emoji: "🪴", label: "Plants", x: 85, y: 65 },
-        { emoji: "🐱", label: "Cat", x: 65, y: 88 },
+        { sprite: "/sprites/env_fireplace.png", emoji: "🔥", label: "Fireplace", x: 78, y: 68, scale: 1.6, layer: "mid" },
+        { sprite: "/sprites/env_bookshelf.png", emoji: "📖", label: "Bookshelf", x: 55, y: 50, scale: 1.5, layer: "bg" },
+        { sprite: "/sprites/env_desk.png", emoji: "🍳", label: "Kitchen", x: 20, y: 70, scale: 1.4, layer: "mid" },
+        { emoji: "🪴", label: "Plants", x: 90, y: 60, layer: "bg" },
+        { emoji: "🛋️", label: "Couch", x: 42, y: 80, layer: "fg" },
     ],
     dungeon: [
-        { emoji: "⚒️", label: "Anvil", x: 28, y: 50 },
-        { emoji: "🗡️", label: "Armory", x: 10, y: 55 },
-        { emoji: "📦", label: "Chests", x: 72, y: 60 },
-        { emoji: "🔥", label: "Campfire", x: 82, y: 85 },
-        { emoji: "🧪", label: "Cauldron", x: 22, y: 50 },
+        { sprite: "/sprites/env_fireplace.png", emoji: "🔥", label: "Campfire", x: 80, y: 75, scale: 1.5, layer: "mid" },
+        { sprite: "/sprites/packs/norse-hall/anvil.png", emoji: "⚒️", label: "Anvil", x: 28, y: 55, scale: 1.3, layer: "mid" },
+        { emoji: "🗡️", label: "Armory", x: 10, y: 48, layer: "bg" },
+        { sprite: "/sprites/env_bookshelf.png", emoji: "📦", label: "Chests", x: 60, y: 55, scale: 1.3, layer: "bg" },
+        { emoji: "🧪", label: "Cauldron", x: 22, y: 55, layer: "mid" },
+    ],
+    "japanese-garden": [
+        { sprite: "/sprites/packs/japanese-garden/torii_gate.png", emoji: "⛩️", label: "Torii Gate", x: 50, y: 42, scale: 2.0, layer: "bg" },
+        { sprite: "/sprites/packs/japanese-garden/cherry_tree.png", emoji: "🌸", label: "Sakura", x: 78, y: 55, scale: 1.8, layer: "bg" },
+        { sprite: "/sprites/packs/japanese-garden/koi_pond.png", emoji: "🐟", label: "Koi Pond", x: 35, y: 78, scale: 1.6, layer: "mid" },
+        { sprite: "/sprites/packs/japanese-garden/stone_lantern.png", emoji: "🏮", label: "Lantern", x: 15, y: 65, scale: 1.3, layer: "mid" },
+        { sprite: "/sprites/packs/japanese-garden/bamboo.png", emoji: "🎋", label: "Bamboo", x: 92, y: 45, scale: 1.5, layer: "bg" },
+        { sprite: "/sprites/packs/japanese-garden/stone_lantern.png", emoji: "🏮", label: "Lantern", x: 65, y: 80, scale: 1.2, layer: "fg" },
+    ],
+    "anime-cafe": [
+        { sprite: "/sprites/packs/anime-cafe/cafe_counter.png", emoji: "☕", label: "Counter", x: 25, y: 68, scale: 1.6, layer: "mid" },
+        { sprite: "/sprites/packs/anime-cafe/neon_sign.png", emoji: "📺", label: "カフェ", x: 50, y: 30, scale: 1.8, layer: "bg" },
+        { sprite: "/sprites/packs/anime-cafe/booth_seat.png", emoji: "💺", label: "Booth", x: 75, y: 72, scale: 1.5, layer: "mid" },
+        { sprite: "/sprites/packs/anime-cafe/vending_machine.png", emoji: "🥤", label: "Vending", x: 92, y: 60, scale: 1.4, layer: "bg" },
+        { sprite: "/sprites/packs/anime-cafe/cafe_window.png", emoji: "🌃", label: "Window", x: 50, y: 38, scale: 1.6, layer: "bg" },
     ],
 };
 
@@ -147,6 +193,23 @@ export default function GuildHall({ theme }: GuildHallProps) {
     const themeColors = THEME_COLORS[theme] || THEME_COLORS.cozy;
     const elements = THEME_ELEMENTS[theme] || THEME_ELEMENTS.cozy;
     const [agents, setAgents] = useState<GuildAgent[]>([]);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [parallax, setParallax] = useState({ x: 0, y: 0 });
+
+    // F6: Parallax depth on mouse hover
+    const handleMouseMove = useCallback((e: React.MouseEvent) => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const cx = (e.clientX - rect.left) / rect.width - 0.5;  // -0.5 to 0.5
+        const cy = (e.clientY - rect.top) / rect.height - 0.5;
+        setParallax({ x: cx * 8, y: cy * 4 });  // max 4px/2px shift
+    }, []);
+
+    const layerOffset = (layer: string) => {
+        if (layer === "bg") return { transform: `translate(${parallax.x * 0.5}px, ${parallax.y * 0.5}px)` };
+        if (layer === "fg") return { transform: `translate(${parallax.x * -1}px, ${parallax.y * -0.5}px)` };
+        return {};  // mid = static
+    };
 
     // Sprint 15: Load agents from localStorage, then try API
     useEffect(() => {
@@ -164,7 +227,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
                             name: a.name,
                             type: a.type,
                             species: a.species,
-                            avatar: { style: "pixel" as const, ...avatarConfig },
+                            avatar: { style: styleKey, ...avatarConfig },
                             activity: (a.activity || "idle") as Activity,
                             status: (a.status || "online") as "online" | "busy" | "offline",
                             taskLabel: a.taskLabel || null,
@@ -180,7 +243,10 @@ export default function GuildHall({ theme }: GuildHallProps) {
 
     return (
         <div
+            ref={containerRef}
             className="relative w-full rounded-xl overflow-hidden"
+            onMouseMove={handleMouseMove}
+            onMouseLeave={() => setParallax({ x: 0, y: 0 })}
             style={{
                 aspectRatio: "16/9",
                 background: `#120e0a`,
@@ -188,129 +254,190 @@ export default function GuildHall({ theme }: GuildHallProps) {
                 boxShadow: `0 8px 32px rgba(0,0,0,0.5)`,
             }}
         >
-            {/* Background Texture / Planks */}
-            <div className="absolute inset-x-0 top-0 h-[60%] bg-[#1a1510] border-b border-[#2a2520]" />
-            <div className="absolute inset-x-0 bottom-0 h-[40%] bg-[#251e18]" />
-            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.3) 1px, transparent 1px)', backgroundSize: '100% 12px' }} />
+            {/* ── BACKGROUND LAYER (parallax: slow) ── */}
+            <div className="absolute inset-0 transition-transform duration-300 ease-out" style={layerOffset("bg")}>
+                {/* Wall — tilemap texture */}
+                <div className="absolute inset-x-0 top-0 h-[55%] sprite" style={{
+                    backgroundColor: themeColors.bg,
+                    backgroundImage: themeColors.wallTile ? `url(${themeColors.wallTile})` : undefined,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: '64px 64px',
+                    imageRendering: 'pixelated' as any,
+                }} />
+                {/* Wall darkening overlay for depth */}
+                <div className="absolute inset-x-0 top-0 h-[55%] bg-gradient-to-b from-black/30 to-transparent pointer-events-none" />
+                {/* Back wall line */}
+                <div className="absolute inset-x-0" style={{ top: "35%", height: "2px", background: `linear-gradient(90deg, transparent, ${themeColors.accent}15, transparent)` }} />
+                {/* Background elements */}
+                {elements.filter(e => e.layer === "bg").map((el) => (
+                    <div
+                        key={el.label}
+                        className="absolute transition-transform duration-300 hover:scale-105"
+                        style={{ left: `${el.x}%`, top: `${el.y}%`, transform: "translate(-50%, -100%)" }}
+                    >
+                        {el.sprite ? (
+                            <img
+                                src={el.sprite}
+                                alt={el.label}
+                                className="sprite"
+                                style={{ width: 64 * (el.scale || 1), height: 64 * (el.scale || 1), imageRendering: "pixelated", opacity: 0.7, filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.5))" }}
+                            />
+                        ) : (
+                            <span className="text-3xl block" style={{ opacity: 0.55, filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))" }}>{el.emoji}</span>
+                        )}
+                        <span className="text-[7px] text-[var(--color-rune-dim)] opacity-40 block text-center mt-0.5">{el.label}</span>
+                    </div>
+                ))}
+            </div>
 
-            {/* Ambient Rays */}
-            <div className="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/10 to-transparent mix-blend-overlay" />
-            {/* Deep Vignette */}
-            <div className="absolute inset-0 pointer-events-none z-0" style={{
-                background: "radial-gradient(circle at 50% 50%, transparent 20%, rgba(0,0,0,0.6) 100%)"
-            }} />
-
-            {/* Ambient Dust */}
-            {DUST_PARTICLES.map(d => (
-                <div
-                    key={d.id}
-                    className="absolute rounded-full bg-white/20 blur-[1px] animate-[pulse_3s_ease-in-out_infinite]"
-                    style={{
-                        left: `${d.left}%`,
-                        top: `${d.top}%`,
-                        width: d.size,
-                        height: d.size,
-                        animationDelay: `${d.delay}s`,
-                    }}
-                />
-            ))}
-
-            {/* Intense Fireplace/Light source glow */}
-            <div
-                className="absolute pointer-events-none"
-                style={{
-                    left: "78%", top: "55%",
-                    width: 300, height: 300,
-                    transform: "translate(-50%, -50%)",
-                    background: `radial-gradient(circle, ${themeColors.accent}33 0%, ${themeColors.accent}10 40%, transparent 70%)`,
-                    animation: "pulse 3s ease-in-out infinite",
-                    mixBlendMode: "screen"
-                }}
-            />
-
-            {/* Floor surface with subtle depth line */}
-            <div
-                className="absolute inset-x-0"
-                style={{
-                    top: "50%", height: 3,
+            {/* ── MIDGROUND LAYER (parallax: none — characters + furniture) ── */}
+            <div className="absolute inset-0">
+                {/* Floor — tilemap texture */}
+                <div className="absolute inset-x-0 bottom-0 h-[45%] sprite" style={{
+                    backgroundColor: themeColors.floor,
+                    backgroundImage: themeColors.floorTile ? `url(${themeColors.floorTile})` : undefined,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: '64px 64px',
+                    imageRendering: 'pixelated' as any,
+                }} />
+                {/* Floor depth gradient */}
+                <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                {/* Floor/wall boundary */}
+                <div className="absolute inset-x-0" style={{
+                    top: "55%", height: 3,
                     background: `linear-gradient(90deg, transparent 5%, ${themeColors.accent}25 20%, ${themeColors.accent}40 50%, ${themeColors.accent}25 80%, transparent 95%)`,
                     boxShadow: `0 2px 10px ${themeColors.accent}20`
-                }}
-            />
+                }} />
 
-            {/* Back Wall line */}
-            <div
-                className="absolute inset-x-0"
-                style={{ top: "35%", height: "2px", background: `linear-gradient(90deg, transparent, ${themeColors.accent}15, transparent)` }}
-            />
-
-            {/* Theme elements (furniture/objects) — larger and more visible */}
-            {elements.map((el) => (
-                <div
-                    key={el.label}
-                    className="absolute transition-transform hover:scale-110"
-                    style={{ left: `${el.x}%`, top: `${el.y}%`, transform: "translate(-50%, -50%)" }}
-                >
-                    <div className="text-center">
-                        <span className="text-3xl block" style={{ opacity: 0.65, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }}>{el.emoji}</span>
-                        <span className="text-[8px] text-[var(--color-rune-dim)] opacity-50">{el.label}</span>
-                    </div>
-                </div>
-            ))}
-
-            {/* Agents — Sprint 10: AI agent at activity zone, companion near fire */}
-            {agents.map((agent: GuildAgent, idx: number) => {
-                // Companion sits near the fire, AI agent goes to activity zone
-                const isCompanion = (agent as any).type === "companion";
-                const zone = isCompanion
-                    ? { x: 75, y: 88 }  // curled up near fire
-                    : ACTIVITY_ZONES[(agent.activity as Activity)] || ACTIVITY_ZONES.idle;
-                const offset = idx * 3;
-
-                return (
-                    <div key={agent.name}>
-                        {/* Companion species emoji overlay */}
-                        {isCompanion && (
-                            <div
-                                className="absolute text-center"
-                                style={{
-                                    left: `${zone.x}%`,
-                                    top: `${zone.y}%`,
-                                    transform: "translate(-50%, -50%)",
-                                    zIndex: 10,
-                                }}
-                            >
-                                <span className="text-3xl block animate-pulse">
-                                    {SPECIES_EMOJI[(agent as any).species] || "🐱"}
-                                </span>
-                                <span className="text-[9px] text-[var(--color-neon)] font-medium block mt-0.5">
-                                    {agent.name}
-                                </span>
-                            </div>
-                        )}
-
-                        {/* AI agent as GuildHallAgent component */}
-                        {!isCompanion && (
-                            <GuildHallAgent
-                                name={agent.name}
-                                avatar={agent.avatar}
-                                activity={agent.activity}
-                                status={agent.status}
-                                taskLabel={agent.taskLabel ?? undefined}
-                                position={{ x: zone.x + offset, y: zone.y }}
-                                theme={theme}
-                                onClick={() => { }}
-                                onDoubleClick={() => router.push(`/agents/${agent.name}`)}
+                {/* Mid-layer elements (furniture with sprites) */}
+                {elements.filter(e => e.layer === "mid").map((el) => (
+                    <div
+                        key={el.label}
+                        className="absolute transition-transform duration-300 hover:scale-110 z-[5]"
+                        style={{ left: `${el.x}%`, top: `${el.y}%`, transform: "translate(-50%, -100%)" }}
+                    >
+                        {el.sprite ? (
+                            <img
+                                src={el.sprite}
+                                alt={el.label}
+                                className="sprite"
+                                style={{ width: 64 * (el.scale || 1), height: 64 * (el.scale || 1), imageRendering: "pixelated", filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.6))" }}
                             />
+                        ) : (
+                            <span className="text-4xl block" style={{ opacity: 0.75, filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.4))" }}>{el.emoji}</span>
                         )}
+                        <span className="text-[7px] text-[var(--color-rune-dim)] opacity-50 block text-center mt-0.5">{el.label}</span>
                     </div>
-                );
-            })}
+                ))}
+
+                {/* Agents — ALL rendered through GuildHallAgent with pixel sprites */}
+                {agents.map((agent: GuildAgent, idx: number) => {
+                    const isCompanion = (agent as any).type === "companion";
+                    const zone = isCompanion
+                        ? { x: 72, y: 85 }
+                        : ACTIVITY_ZONES[(agent.activity as Activity)] || ACTIVITY_ZONES.idle;
+                    const offset = idx * 3;
+
+                    return (
+                        <GuildHallAgent
+                            key={agent.name}
+                            name={agent.name}
+                            avatar={{ style: isCompanion ? undefined : (localStorage.getItem("fireside_agent_style") || "analytical"), ...(({ style: _s, ...rest }) => rest)(agent.avatar as any) }}
+                            activity={agent.activity}
+                            status={agent.status}
+                            taskLabel={agent.taskLabel ?? undefined}
+                            position={{ x: zone.x + (isCompanion ? 0 : offset), y: zone.y }}
+                            theme={theme}
+                            species={isCompanion ? ((agent as any).species || localStorage.getItem("fireside_companion_species") || "fox") : undefined}
+                            onClick={() => { }}
+                            onDoubleClick={() => !isCompanion ? router.push(`/agents/${agent.name}`) : undefined}
+                        />
+                    );
+                })}
+            </div>
+
+            {/* ── FOREGROUND LAYER (parallax: fast — particles + effects) ── */}
+            <div className="absolute inset-0 pointer-events-none z-10 transition-transform duration-300 ease-out" style={layerOffset("fg")}>
+                {/* Foreground elements */}
+                {elements.filter(e => e.layer === "fg").map((el) => (
+                    <div
+                        key={el.label}
+                        className="absolute"
+                        style={{ left: `${el.x}%`, top: `${el.y}%`, transform: "translate(-50%, -100%)" }}
+                    >
+                        <span className="text-4xl block" style={{ opacity: 0.8, filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.5))" }}>{el.emoji}</span>
+                    </div>
+                ))}
+
+                {/* F7: Fire embers rising */}
+                {FIRE_EMBERS.map(e => (
+                    <div
+                        key={e.id}
+                        className="absolute rounded-full"
+                        style={{
+                            left: `${e.left}%`,
+                            bottom: "15%",
+                            width: e.size,
+                            height: e.size,
+                            background: "#f59e0b",
+                            boxShadow: "0 0 4px #f59e0b, 0 0 8px rgba(245,158,11,0.5)",
+                            animation: `emberRise ${e.duration}s ease-out infinite`,
+                            animationDelay: `${e.delay}s`,
+                        }}
+                    />
+                ))}
+
+                {/* Dust motes in light rays */}
+                {DUST_PARTICLES.map(d => (
+                    <div
+                        key={d.id}
+                        className="absolute rounded-full bg-white/15 blur-[0.5px]"
+                        style={{
+                            left: `${d.left}%`,
+                            top: `${d.top}%`,
+                            width: d.size,
+                            height: d.size,
+                            animation: `dustFloat ${d.duration}s ease-in-out infinite`,
+                            animationDelay: `${d.delay}s`,
+                        }}
+                    />
+                ))}
+            </div>
+
+            {/* Fire glow */}
+            <div className="absolute pointer-events-none z-[3]" style={{
+                left: "80%", top: "60%",
+                width: 250, height: 250,
+                transform: "translate(-50%, -50%)",
+                background: `radial-gradient(circle, ${themeColors.accent}40 0%, ${themeColors.accent}15 30%, transparent 65%)`,
+                animation: "pulse 3s ease-in-out infinite",
+                mixBlendMode: "screen"
+            }} />
+
+            {/* Deep vignette */}
+            <div className="absolute inset-0 pointer-events-none z-20" style={{
+                background: "radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0,0,0,0.7) 100%)"
+            }} />
 
             {/* Theme watermark */}
-            <div className="absolute bottom-2 right-3 text-[10px] text-[var(--color-rune-dim)] opacity-30 uppercase tracking-widest">
+            <div className="absolute bottom-2 right-3 text-[10px] text-[var(--color-rune-dim)] opacity-25 uppercase tracking-[0.3em] z-30">
                 {theme}
             </div>
+
+            {/* Ember + Dust keyframes */}
+            <style>{`
+                @keyframes emberRise {
+                    0% { transform: translateY(0) scale(1); opacity: 0.9; }
+                    50% { transform: translateY(-80px) translateX(${Math.random() > 0.5 ? '' : '-'}8px) scale(0.6); opacity: 0.6; }
+                    100% { transform: translateY(-160px) scale(0.2); opacity: 0; }
+                }
+                @keyframes dustFloat {
+                    0%, 100% { transform: translate(0, 0); opacity: 0.2; }
+                    25% { transform: translate(5px, -3px); opacity: 0.4; }
+                    50% { transform: translate(-3px, 2px); opacity: 0.15; }
+                    75% { transform: translate(2px, -5px); opacity: 0.35; }
+                }
+            `}</style>
         </div>
     );
 }

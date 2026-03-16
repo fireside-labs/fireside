@@ -1121,6 +1121,60 @@ def _save_purchases(purchases: list[dict]):
     _PURCHASES_PATH.write_text(json.dumps(purchases, indent=2), encoding="utf-8")
 
 
+@router.get("/status/agent")
+async def get_agent_status():
+    """Return current agent state for Guild Hall status effects.
+
+    Maps backend state to visual status effects:
+      - on_a_roll: actively processing, low latency
+      - working: processing a request
+      - learning: model loading / fine-tuning
+      - idle: no active tasks
+      - error: crash recovery or high error rate
+      - celebrating: task just completed successfully
+    """
+    import psutil
+
+    # Determine status from system state
+    status = "idle"
+    cpu_percent = psutil.cpu_percent(interval=0.1)
+    memory = psutil.virtual_memory()
+
+    # Check if the LLM process is running (llama-server or similar)
+    llm_running = False
+    llm_cpu = 0.0
+    for proc in psutil.process_iter(["name", "cpu_percent"]):
+        try:
+            name = (proc.info.get("name") or "").lower()
+            if any(k in name for k in ["llama", "ollama", "vllm", "mlx"]):
+                llm_running = True
+                llm_cpu = proc.info.get("cpu_percent", 0) or 0
+                break
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    if llm_running and llm_cpu > 50:
+        status = "on_a_roll"
+    elif llm_running and llm_cpu > 10:
+        status = "working"
+    elif cpu_percent > 80:
+        status = "working"
+    elif memory.percent > 90:
+        status = "error"
+
+    return {
+        "status": status,
+        "cpu_percent": round(cpu_percent, 1),
+        "memory_percent": round(memory.percent, 1),
+        "llm_running": llm_running,
+        "uptime_seconds": int(time.time() - _start_time),
+    }
+
+
+# Track server start time for uptime
+_start_time = time.time()
+
+
 @router.get("/brains/active")
 async def get_active_brain():
     """Return the active brain and model from config."""

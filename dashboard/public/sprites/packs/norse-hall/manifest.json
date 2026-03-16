@@ -1,0 +1,34 @@
+{
+  "id": "norse-hall",
+  "name": "Norse Hall",
+  "description": "The default Fireside environment. A warm mead hall with roaring fireplace, rune library, and scroll tables.",
+  "version": "1.0.0",
+  "price": 0,
+  "tier": "free",
+  "author": "Fireside",
+  "assets": {
+    "fireplace": "env_fireplace.png",
+    "desk": "env_desk.png",
+    "bookshelf": "env_bookshelf.png",
+    "floor": "floor_tiles.png",
+    "window": "window.png"
+  },
+  "palette": {
+    "wall": "#1a1510",
+    "floor": "#251e18",
+    "accent": "#c0820a",
+    "glow": "#f59e0b"
+  },
+  "particles": {
+    "embers": true,
+    "dust": true,
+    "snow": false,
+    "blossoms": false
+  },
+  "futurePacks": [
+    { "id": "space-station", "name": "🚀 Space Station", "price": 299 },
+    { "id": "japanese-garden", "name": "🌸 Japanese Garden", "price": 299 },
+    { "id": "pirate-ship", "name": "🏴‍☠️ Pirate Ship", "price": 299 },
+    { "id": "alchemist-lab", "name": "🧪 Alchemist Lab", "price": 299 }
+  ]
+}

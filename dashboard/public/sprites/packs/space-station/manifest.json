@@ -1,0 +1,29 @@
+{
+  "id": "space-station",
+  "name": "Space Station",
+  "description": "A futuristic orbital command center with holographic displays and cryo pods.",
+  "version": "1.0.0",
+  "price": 299,
+  "tier": "premium",
+  "author": "Fireside",
+  "assets": {
+    "command_console": "command_console.png",
+    "viewport": "viewport.png",
+    "cryo_pod": "cryo_pod.png",
+    "hologram": "hologram.png",
+    "reactor": "reactor.png"
+  },
+  "palette": {
+    "wall": "#0a0a1a",
+    "floor": "#151528",
+    "accent": "#4488ff",
+    "glow": "#66bbff"
+  },
+  "particles": {
+    "embers": false,
+    "dust": true,
+    "snow": false,
+    "blossoms": false,
+    "sparks": true
+  }
+}
