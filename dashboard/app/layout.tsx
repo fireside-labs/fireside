@@ -33,11 +33,12 @@ export default function RootLayout({
             <body className="bg-[var(--color-void)] text-[var(--color-rune)] antialiased">
                 <ThemeProvider>
                     <ToastProvider>
-                        <OnboardingGate />
-                        <div className="flex min-h-screen">
-                            <Sidebar />
-                            <main className="main-content flex-1 ml-64 p-8">{children}</main>
-                        </div>
+                        <OnboardingGate>
+                            <div className="flex min-h-screen">
+                                <Sidebar />
+                                <main className="main-content flex-1 ml-64 p-8">{children}</main>
+                            </div>
+                        </OnboardingGate>
                     </ToastProvider>
                 </ThemeProvider>
             </body>
