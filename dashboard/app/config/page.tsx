@@ -1,39 +1,34 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import SettingsForm from "@/components/SettingsForm";
 import TelegramSetup from "@/components/TelegramSetup";
 import VoiceSettings from "@/components/VoiceSettings";
 import { useToast } from "@/components/Toast";
 
+// Lazy-load Advanced sub-sections so they don't bloat initial Settings load
+const NodesPage = dynamic(() => import("@/app/nodes/page"), { ssr: false });
+
+type SettingsTab = "general" | "advanced";
+
+const TABS: { id: SettingsTab; label: string; icon: string }[] = [
+    { id: "general", label: "General", icon: "⚙" },
+    { id: "advanced", label: "Advanced", icon: "🔧" },
+];
+
 export default function SettingsPage() {
     const { toast } = useToast();
-    const [showRaw, setShowRaw] = useState(false);
+    const [tab, setTab] = useState<SettingsTab>("general");
 
     const handleSave = (values: { name: string; role: string; brain: string; addons: string[] }) => {
         console.log("Settings saved:", values);
         toast("Settings saved! Changes apply immediately.", "success");
     };
 
-    const agentName = typeof window !== "undefined" ? localStorage.getItem("fireside_agent_name") || "atlas" : "atlas";
-
-    // Mock raw config for Advanced view
-    const rawYaml = `# Fireside Configuration
-name: ${agentName.toLowerCase()}
-role: orchestrator
-model: llama-3.1-8b
-plugins:
-  - model_switch
-  - watchdog
-  - memory
-  - hydra
-mesh:
-  discovery: mdns
-  port: 8444
-  tls: true`;
-
     return (
         <div className="max-w-xl mx-auto">
+            {/* Header */}
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                     <span>⚙</span> Settings
@@ -43,28 +38,62 @@ mesh:
                 </p>
             </div>
 
-            {!showRaw ? (
+            {/* Tab Strip */}
+            <div className="flex gap-1 mb-6 p-1 rounded-xl bg-[var(--color-void)] border border-[var(--color-glass-border)]">
+                {TABS.map((t) => (
+                    <button
+                        key={t.id}
+                        onClick={() => setTab(t.id)}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            tab === t.id
+                                ? "bg-[var(--color-neon)] text-black shadow-md"
+                                : "text-[var(--color-rune-dim)] hover:text-white hover:bg-white/5"
+                        }`}
+                    >
+                        <span>{t.icon}</span>
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab Content */}
+            {tab === "general" && (
                 <div className="space-y-6">
                     <SettingsForm onSave={handleSave} />
                     <VoiceSettings />
                     <TelegramSetup />
                 </div>
-            ) : (
-                <div>
-                    <div className="glass-card p-5 mb-4">
-                        <h3 className="text-white font-semibold mb-3">Raw Configuration (valhalla.yaml)</h3>
-                        <textarea
-                            defaultValue={rawYaml}
-                            rows={16}
-                            className="w-full px-4 py-3 rounded-lg bg-[var(--color-void)] border border-[var(--color-glass-border)] text-[var(--color-rune)] text-sm font-mono outline-none focus:border-[var(--color-neon)] transition-colors resize-none"
-                        />
+            )}
+
+            {tab === "advanced" && (
+                <div className="space-y-8">
+                    {/* Connected Devices */}
+                    <div>
+                        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                            <span>📱</span> Connected Devices
+                        </h2>
+                        <NodesPage />
                     </div>
-                    <button
-                        onClick={() => setShowRaw(false)}
-                        className="text-sm text-[var(--color-neon)] hover:underline"
-                    >
-                        ← Back to simple view
-                    </button>
+
+                    {/* Task Builder */}
+                    <div className="glass-card p-6">
+                        <h2 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                            <span>📋</span> Task Builder
+                        </h2>
+                        <p className="text-sm text-[var(--color-rune-dim)]">
+                            Multi-step task pipeline coming in a future update.
+                        </p>
+                    </div>
+
+                    {/* Learning Stats */}
+                    <div className="glass-card p-6">
+                        <h2 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                            <span>📊</span> How It&apos;s Learning
+                        </h2>
+                        <p className="text-sm text-[var(--color-rune-dim)]">
+                            Learning analytics and wisdom viewer coming in a future update.
+                        </p>
+                    </div>
                 </div>
             )}
         </div>

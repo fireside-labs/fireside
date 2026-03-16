@@ -101,38 +101,35 @@ export default function ChatHomePage() {
                 <p className="text-sm text-[var(--color-rune-dim)] font-medium uppercase tracking-[0.2em]">System Ready • Logic Engaged</p>
             </div>
 
-            {/* Companion Widget — pixel art sprite */}
+            {/* Companion Widget — links to Guild Hall */}
             {companion && companionSheet && (
-                <Link href="/companion">
-                    <div className="glass-card p-5 mb-8 flex items-center gap-5 hover:bg-[var(--color-glass-hover)] group cursor-pointer" style={{ borderLeft: "4px solid var(--color-neon)" }}>
+                <Link href="/guildhall">
+                    <div className="glass-card p-5 mb-6 flex items-center gap-5 hover:bg-[var(--color-glass-hover)] group cursor-pointer" style={{ borderLeft: "4px solid var(--color-neon)" }}>
                         <div className="group-hover:scale-110 transition-transform duration-300">
                             <SpriteCharacter sheet={companionSheet} action="idle" scale={2.5} />
                         </div>
                         <div className="flex-1">
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-white font-bold text-base tracking-tight">{companion.name}</span>
-                                    <span className="px-1.5 py-0.5 rounded bg-[var(--color-void-lighter)] text-[9px] text-[var(--color-rune-dim)] font-bold uppercase">LVL {companion.level}</span>
-                                </div>
-                                <span className="text-[10px] text-[var(--color-neon)] font-bold uppercase tracking-wider">Companion Status</span>
+                                <span className="text-white font-bold text-base tracking-tight">{companion.name}</span>
+                                <span className="text-[10px] text-[var(--color-neon)] font-bold uppercase tracking-wider">Visit Guild Hall →</span>
                             </div>
-                            <div className="flex items-center gap-3 mt-3">
-                                <div className="flex-1 h-2 rounded-full bg-[var(--color-void-lighter)] p-0.5 border border-white/5">
-                                    <div
-                                        className="h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_var(--glow)]"
-                                        style={{
-                                            width: `${companion.happiness}%`,
-                                            backgroundColor: companion.happiness > 70 ? "var(--color-neon)" : companion.happiness > 30 ? "#f59e0b" : "#ef4444",
-                                            '--glow': companion.happiness > 70 ? "rgba(245,158,11,0.4)" : "rgba(239,68,68,0.2)",
-                                        } as any}
-                                    />
-                                </div>
-                                <span className="text-[11px] text-[var(--color-rune)] font-medium min-w-[60px] text-right">{happinessLabel}</span>
-                            </div>
+                            <p className="text-xs text-[var(--color-rune-dim)] mt-1">Your companion is waiting in the Guild Hall</p>
                         </div>
                     </div>
                 </Link>
             )}
+
+            {/* How It's Learning widget */}
+            <Link href="/config?tab=advanced">
+                <div className="glass-card p-4 mb-6 flex items-center gap-4 hover:bg-[var(--color-glass-hover)] cursor-pointer">
+                    <span className="text-2xl">📊</span>
+                    <div className="flex-1">
+                        <p className="text-sm text-white font-semibold">How It&apos;s Learning</p>
+                        <p className="text-xs text-[var(--color-rune-dim)]">Your AI is evolving. Tap to see learning stats.</p>
+                    </div>
+                    <span className="text-[var(--color-rune-dim)] text-sm">→</span>
+                </div>
+            </Link>
 
             {/* Chat messages */}
             {chatHistory.length > 0 && (

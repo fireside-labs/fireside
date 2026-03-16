@@ -174,7 +174,7 @@ function getLocalAgents(): GuildAgent[] {
                 agents.push({
                     name: companion.name,
                     avatar: { style: "pixel" as const, hairStyle: 0, hairColor: "#333", skinTone: "#fad7a0", outfit: companion.species as "warrior", accessory: "none" as const },
-                    activity: "idle" as Activity, status: "online" as const, taskLabel: null, type: "ai" as const,
+                    activity: "idle" as Activity, status: "online" as const, taskLabel: null, type: "companion" as const,
                 });
             }
         }
