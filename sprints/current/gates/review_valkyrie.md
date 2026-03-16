@@ -1,36 +1,42 @@
-# Sprint 20 — "Less is More" Valkyrie QA Review
+# Sprint 21 — "Finish the Install" Valkyrie QA Review
 
 **Date:** 2026-03-16
 **Build:** `npm run build` → ✓ 27/27 pages, 0 errors
 
 ---
 
-## Task Status
+## Bug Fixes
+
+| Bug | Status | Notes |
+|-----|--------|-------|
+| B1: Companion image broken | ✅ PASS | `SpriteOrEmoji` fallback component exists in `SpriteCharacter.tsx`. Dashboard uses `SPECIES_EMOJI` constant as fallback alongside `SpriteCharacter`. |
+| B2: Chat active with no brain | ✅ PASS | `handleSend` guards with `if (!hasBrain) return`. Prominent "Download a brain to start chatting" banner replaces chat. |
+| B3: Tour says "Go to Brains" but locked | ✅ PASS | `UNLOCKED_AT_STEP[1]` now includes `/brains` and `/soul`. Tour step 2 unlocks everything. No more deadlock. |
+
+## New Installer Steps
+
+| Step | Status | Notes |
+|------|--------|-------|
+| Step 6: Brain Download | ✅ PASS | Shows model name + size. Amber progress bar with glow. "Download Later (power users)" skip button. Animated brain emoji. |
+| Step 7: Connection Test | ✅ PASS | 3 states: testing (pulse animation), success ("Atlas is ready!"), fail ("Continue Anyway →"). Clean failure path to dashboard. |
+| Step 8: Success | ✅ PASS | Updated from old step 6. Writes all localStorage keys. Shows "Things to try" prompts. |
+
+## Freya Tasks
 
 | Task | Status | Notes |
 |------|--------|-------|
-| F1: Sidebar → 6 tabs | ✅ PASS | **Your AI:** Chat, Personality. **World:** Guild Hall. **System:** Brains, Store, Settings. Down from 10. Clean groups. |
-| F2: Settings Advanced sub-tabs | ✅ PASS | General + Advanced tabs with neon active indicator. Advanced: Connected Devices (lazy-loaded NodesPage), Task Builder ("coming soon"), Learning Stats ("coming soon"). |
-| F3: Companion → Guild Hall | ✅ PASS | Companion removed from sidebar. User's GuildHall.tsx fix (`type: "companion"`) ensures companion renders as mascot sprite, not as an agent. |
-| F4: Dashboard learning widget | ⚠️ NOTE | Not visible on `page.tsx` — dashboard currently shows companion widget, chat input, and welcome card. Learning widget could be a future addition. |
-| H1: Removed routes don't 404 | ✅ PASS | `/nodes`, `/pipeline`, `/learning` still have page.tsx files (Coming Soon). `/companion` still has page.tsx. No dead links. |
-| H2: Power user access | ✅ PASS | Connected Devices accessible via Settings > Advanced. Task Builder and Learning Stats have placeholder cards ready for future wiring. |
+| F1: Brain download in installer | ✅ PASS | Full step with progress bar, download/skip options |
+| F2: Connection test step | ✅ PASS | 3-state flow with graceful failure |
+| F3: Disable chat when no brain | ✅ PASS | Big banner → /brains. No chat input shown when !hasBrain |
+| F4: Fix companion image | ✅ PASS | SpriteOrEmoji as progressive fallback |
+| F5: Tour unlocks tabs | ✅ PASS | UNLOCKED_AT_STEP includes target hrefs for each step |
+| F6: Dashboard quality | ✅ PASS | Amber glow backdrop, glass cards, consistent typography |
 
-## Sidebar Architecture
-
-The sidebar is now **3 clean groups**:
+## Installer Flow (now 9 steps)
 ```
-Your AI    → Chat, Personality
-World      → Guild Hall
-System     → Brains, Store, Settings
+0. Welcome → 1. System Check → 2. Companion → 3. Name AI → 4. Confirm
+→ 5. Installing → 6. Brain Download → 7. Connection Test → 8. Success
 ```
-Plus "Your Team" section with `AgentSidebarList` at the bottom. Tour locking still functions on all 6 items.
-
-## Settings Page
-
-- **General tab:** SettingsForm + VoiceSettings + TelegramSetup
-- **Advanced tab:** NodesPage (lazy-loaded via `dynamic()` — smart), Task Builder placeholder, Learning Stats placeholder
-- Tab strip uses neon-on-black active state — consistent with app theme
 
 ## Build
 ✅ **27/27 pages, 0 type errors, 0 lint errors.**

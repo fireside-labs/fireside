@@ -37,7 +37,7 @@ interface InstallerConfig {
   actualModel: string;
 }
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 const SPECIES = [
   { id: "cat", emoji: "🐱", label: "Cat" },
@@ -69,6 +69,8 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
   if (cmd === "get_system_info") return { os: "Windows 11", arch: "x86_64", ram_gb: 32, gpu: "NVIDIA RTX 4090", vram_gb: 24 } as T;
   if (cmd === "check_python") return "3.12.2" as T;
   if (cmd === "check_node") return "20.11.0" as T;
+  if (cmd === "download_brain") return { success: true } as T;
+  if (cmd === "test_connection") return { success: true, message: "Atlas is ready to chat!" } as T;
   return {} as T;
 }
 
@@ -90,6 +92,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   const [sysChecks, setSysChecks] = useState<SysCheck[]>([]);
   const [installSteps, setInstallSteps] = useState<InstallStep[]>([]);
   const [animClass, setAnimClass] = useState("installer-enter");
+  const [brainProgress, setBrainProgress] = useState(0);
+  const [brainDownloading, setBrainDownloading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<"pending" | "testing" | "success" | "fail">("pending");
 
   const goTo = useCallback((s: Step) => {
     setAnimClass("installer-exit");
@@ -205,12 +210,59 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 
       setTimeout(() => goTo(6), 800);
     })();
-  }, [step, config, goTo]);
+  }, [step, config, goTo, sysInfo]);
+
+  // ── Step 6: Brain Download ──
+  useEffect(() => {
+    if (step !== 6 || brainDownloading) return;
+    // Don't auto-start — user chooses to download or skip
+  }, [step, brainDownloading]);
+
+  const startBrainDownload = useCallback(async () => {
+    setBrainDownloading(true);
+    setBrainProgress(0);
+    const model = config.actualModel || "llama-3.1-8b-q6";
+    try {
+      // Simulate progress for development (Tauri will send real progress events)
+      const progressInterval = setInterval(() => {
+        setBrainProgress(prev => {
+          if (prev >= 95) { clearInterval(progressInterval); return prev; }
+          return prev + Math.random() * 3 + 1;
+        });
+      }, 300);
+
+      await tauriInvoke("download_brain", { model, dest: "~/.fireside/models/" });
+      clearInterval(progressInterval);
+      setBrainProgress(100);
+      localStorage.setItem("fireside_model", model);
+      setTimeout(() => goTo(7), 600);
+    } catch {
+      setBrainDownloading(false);
+      setBrainProgress(0);
+    }
+  }, [config.actualModel, goTo]);
+
+  // ── Step 7: Connection Test ──
+  useEffect(() => {
+    if (step !== 7) return;
+    setConnectionStatus("testing");
+    (async () => {
+      try {
+        await tauriInvoke("test_connection");
+        setConnectionStatus("success");
+        setTimeout(() => goTo(8), 1500);
+      } catch {
+        setConnectionStatus("fail");
+      }
+    })();
+  }, [step, goTo]);
 
   const speciesEmoji = SPECIES.find((s) => s.id === config.companionSpecies)?.emoji || "🦊";
+  const brainLabel = (sysInfo?.vram_gb || 0) >= 20 ? "Deep Thinker (35B)" : "Smart & Fast (8B)";
+  const brainSize = (sysInfo?.vram_gb || 0) >= 20 ? "~20 GB" : "~4.6 GB";
 
   // ── Shared progress bar ──
-  const progress = ((step / 6) * 100);
+  const progress = ((step / 8) * 100);
 
   return (
     <div className="installer-root">
@@ -444,8 +496,78 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
           </div>
         )}
 
-        {/* Step 6: Success */}
+        {/* Step 6: Brain Download */}
         {step === 6 && (
+          <div className="installer-center">
+            <span style={{ fontSize: 48, display: 'block', marginBottom: 16, animation: 'float 3s ease-in-out infinite' }}>🧠</span>
+            <h2 className="installer-title">Download your AI brain</h2>
+            <p className="installer-subtitle" style={{ marginBottom: 24 }}>
+              {brainLabel} — {brainSize}
+            </p>
+
+            {!brainDownloading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+                <button className="installer-btn-primary" onClick={startBrainDownload}>
+                  Download Brain →
+                </button>
+                <button
+                  className="installer-btn-secondary"
+                  onClick={() => goTo(8)}
+                  style={{ opacity: 0.6, fontSize: 13 }}
+                >
+                  Download Later (power users)
+                </button>
+              </div>
+            ) : (
+              <div style={{ width: '100%', maxWidth: 400 }}>
+                <div style={{ width: '100%', height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginBottom: 12 }}>
+                  <div style={{
+                    width: `${Math.min(brainProgress, 100)}%`,
+                    height: '100%',
+                    borderRadius: 4,
+                    background: 'linear-gradient(90deg, #F59E0B, #D97706)',
+                    boxShadow: '0 0 12px rgba(245,158,11,0.5)',
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                <p style={{ textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+                  {brainProgress < 100 ? `Downloading... ${Math.round(brainProgress)}%` : '✔ Download complete!'}
+                </p>
+              </div>
+            )}
+
+            <div className="installer-install-companion" style={{ marginTop: 32 }}>
+              {speciesEmoji}
+            </div>
+          </div>
+        )}
+
+        {/* Step 7: Connection Test */}
+        {step === 7 && (
+          <div className="installer-center">
+            <span style={{ fontSize: 48, display: 'block', marginBottom: 16, animation: connectionStatus === 'testing' ? 'pulse 1.5s ease-in-out infinite' : 'none' }}>
+              {connectionStatus === 'success' ? '✅' : connectionStatus === 'fail' ? '❌' : '⚡'}
+            </span>
+            <h2 className="installer-title">
+              {connectionStatus === 'testing' && 'Starting your AI...'}
+              {connectionStatus === 'success' && `${config.agentName || 'Atlas'} is ready!`}
+              {connectionStatus === 'fail' && 'Connection failed'}
+            </h2>
+            <p className="installer-subtitle">
+              {connectionStatus === 'testing' && 'Testing connection to your AI brain...'}
+              {connectionStatus === 'success' && `${config.companionName || 'Ember'} is by their side. Let\'s go!`}
+              {connectionStatus === 'fail' && 'Don\'t worry — you can configure this in Settings.'}
+            </p>
+            {connectionStatus === 'fail' && (
+              <button className="installer-btn-primary" style={{ marginTop: 16 }} onClick={() => goTo(8)}>
+                Continue Anyway →
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Step 8: Success */}
+        {step === 8 && (
           <div className="installer-center">
             <div className="installer-success-fire">🔥</div>
             <h2 className="installer-success-title">Fireside is live.</h2>
@@ -472,12 +594,10 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 localStorage.setItem("fireside_agent_style", config.agentStyle);
                 localStorage.setItem("fireside_companion_species", config.companionSpecies);
                 localStorage.setItem("fireside_companion_name", config.companionName || "Ember");
-                // Also write JSON format for components that read fireside_companion
                 localStorage.setItem("fireside_companion", JSON.stringify({
                   name: config.companionName || "Ember",
                   species: config.companionSpecies,
                 }));
-                // Write VRAM + brain choice so BrainPicker + Settings match onboarding
                 localStorage.setItem("fireside_vram", sysInfo?.vram_gb.toString() || "0");
                 const brainId = (sysInfo?.vram_gb || 0) >= 20 ? "deep" : "fast";
                 localStorage.setItem("fireside_brain", brainId);

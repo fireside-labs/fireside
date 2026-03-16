@@ -563,6 +563,102 @@ fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
 }
 
 // ---------------------------------------------------------------------------
+// Sprint 21 — Brain download + connection test
+// ---------------------------------------------------------------------------
+
+/// Download a brain model GGUF from HuggingFace CDN.
+/// Returns progress updates; frontend polls or waits for completion.
+#[tauri::command]
+async fn download_brain(model: String, dest: String) -> Result<String, String> {
+    let models = std::collections::HashMap::from([
+        ("llama-3.1-8b-q6".to_string(), (
+            "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+            "Meta-Llama-3.1-8B-Instruct-Q6_K.gguf",
+        )),
+        ("qwen-2.5-35b-q4".to_string(), (
+            "bartowski/Qwen2.5-Coder-32B-Instruct-GGUF",
+            "Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
+        )),
+    ]);
+
+    let (repo, filename) = models.get(&model)
+        .ok_or_else(|| format!("Unknown model: {}", model))?;
+
+    let dest_dir = PathBuf::from(&dest);
+    fs::create_dir_all(&dest_dir).map_err(|e| format!("Cannot create dir: {}", e))?;
+    let target = dest_dir.join(filename);
+
+    // Already downloaded?
+    if target.exists() {
+        let size = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+        if size > 100_000_000 {
+            return Ok(format!("already_installed:{}", filename));
+        }
+    }
+
+    // Download via curl/wget (available on all platforms)
+    let url = format!("https://huggingface.co/{}/resolve/main/{}", repo, filename);
+
+    let status = if cfg!(target_os = "windows") {
+        Command::new("powershell")
+            .args(["-NoProfile", "-Command", &format!(
+                "Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing",
+                url, target.display()
+            )])
+            .status()
+    } else {
+        Command::new("curl")
+            .args(["-L", "-o", &target.to_string_lossy(), &url])
+            .status()
+    };
+
+    match status {
+        Ok(s) if s.success() => Ok(format!("downloaded:{}", filename)),
+        Ok(s) => Err(format!("Download exited with code {:?}", s.code())),
+        Err(e) => Err(format!("Download failed: {}", e)),
+    }
+}
+
+/// Test that the backend is reachable and can respond to a health check.
+#[tauri::command]
+async fn test_connection() -> Result<String, String> {
+    // Give backend a moment to start
+    let max_attempts = 10;
+    for attempt in 1..=max_attempts {
+        match std::net::TcpStream::connect("127.0.0.1:8765") {
+            Ok(_) => {
+                // TCP connected — now try HTTP health check
+                let output = if cfg!(target_os = "windows") {
+                    Command::new("powershell")
+                        .args(["-NoProfile", "-Command",
+                            "(Invoke-WebRequest -Uri 'http://127.0.0.1:8765/api/v1/status/agent' -UseBasicParsing).Content"])
+                        .output()
+                } else {
+                    Command::new("curl")
+                        .args(["-s", "http://127.0.0.1:8765/api/v1/status/agent"])
+                        .output()
+                };
+
+                match output {
+                    Ok(o) if o.status.success() => {
+                        let body = String::from_utf8_lossy(&o.stdout).to_string();
+                        return Ok(format!("connected:{}", body.trim()));
+                    }
+                    _ => {} // TCP up but HTTP not ready, retry
+                }
+            }
+            Err(_) => {} // Not listening yet
+        }
+
+        if attempt < max_attempts {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    }
+
+    Err("Backend did not respond after 10 seconds".into())
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -589,6 +685,8 @@ fn main() {
             write_config,
             start_fireside,
             get_backend_status,
+            download_brain,
+            test_connection,
         ])
         .setup(move |_app| {
             // Auto-start backend if ~/.fireside exists

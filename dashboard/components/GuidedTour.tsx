@@ -32,9 +32,9 @@ const TOUR_STEPS = [
 
 // Hrefs unlocked at each step (cumulative)
 const UNLOCKED_AT_STEP: string[][] = [
-    ["/"],                          // Step 0: Dashboard (Start)
-    ["/", "/brains"],               // Step 1: Brains
-    ["/", "/brains", "/nodes", "/companion"], // Step 2: Chat + others
+    ["/"],                                                      // Step 0: Chat only
+    ["/", "/brains", "/soul"],                                  // Step 1: + Brains, Personality
+    ["/", "/brains", "/soul", "/guildhall", "/store", "/config"], // Step 2: Everything
 ];
 
 const TourContext = createContext<TourContextType>({
