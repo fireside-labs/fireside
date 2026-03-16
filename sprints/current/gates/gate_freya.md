@@ -1,23 +1,18 @@
-# Freya Gate — Sprint 10 Frontend Complete
-Sprint 10 tasks completed at 2026-03-15T16:30:00-07:00
+# Freya Gate — Sprint 11 Frontend Complete
+Sprint 11 tasks completed at 2026-03-15T16:57:00-07:00
 
 ## Completed
-- [x] Guild hall reads from live API (GET /api/v1/guildhall/agents, fallback to mock)
-- [x] Onboarding wizard 6-step flow (name → companion → brain → create AI → confirmation)
-- [x] Mobile companion says "Let me check with [agent name]..." when relaying
-- [x] Settings shows AI Agent section (name, style, status, uptime)
-- [x] AgentContext + agentProfile API method
+- [x] Mobile connection flow (Local Only vs Anywhere Bridge in onboarding)
+- [x] Mobile WebSocket routing (tailscale_ip + connection pref, auto-port)
+- [x] Mobile VPN guidance (3-step Tailscale instructions)
+- [x] Dashboard network settings (NetworkSettings.tsx)
 
 ## Files Changed/Created
 | File | Change |
 |---|---|
-| `dashboard/components/GuildHall.tsx` | [MOD] Live API fetch, companion near fire, AI agent by activity |
-| `dashboard/components/OnboardingWizard.tsx` | [MOD] 6-step flow with Step 4 (AI agent name + style) |
-| `mobile/src/AgentContext.tsx` | [NEW] Agent profile context + useAgent hook |
-| `mobile/src/api.ts` | [MOD] Added agentProfile() method |
-| `mobile/app/(tabs)/chat.tsx` | [MOD] Relay flavor text + agent name in offline messages |
-| `mobile/app/settings.tsx` | [MOD] AI Agent section with name, style, status, uptime |
+| `mobile/src/api.ts` | [MOD] 6 bridge functions + networkStatus API + updated baseUrl |
+| `mobile/app/onboarding.tsx` | [MOD] Added 'bridge' + 'vpn_guide' steps |
+| `dashboard/components/NetworkSettings.tsx` | [NEW] Network/Bridge settings panel |
 
 ## Build Status
 - Mobile TypeScript: ✅ 0 errors
-- Dashboard: ✅ (lint errors are VS Code scope issue, not build errors)

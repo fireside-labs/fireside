@@ -2,6 +2,8 @@
  * Valhalla Companion API client.
  *
  * Reads the home PC IP from AsyncStorage ('valhalla_host').
+ * Sprint 11: Supports Anywhere Bridge (Tailscale) — routes
+ * through tailscale_ip when connection preference is 'bridge'.
  * Falls back to offline mode when the backend is unreachable.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -15,6 +17,8 @@ import type {
 } from "./types";
 
 const STORAGE_KEY = "valhalla_host";
+const BRIDGE_IP_KEY = "valhalla_tailscale_ip";
+const CONN_PREF_KEY = "valhalla_conn_pref"; // 'local' | 'bridge'
 const TIMEOUT_MS = 8000;
 
 /** Retrieve the stored host address (e.g. '192.168.1.100:8765'). */
@@ -27,11 +31,48 @@ export async function setHost(host: string): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEY, host.replace(/\/+$/, ""));
 }
 
+/** Store the Tailscale VPN IP (Sprint 11). */
+export async function setTailscaleIP(ip: string): Promise<void> {
+    await AsyncStorage.setItem(BRIDGE_IP_KEY, ip);
+}
+
+/** Retrieve the stored Tailscale IP. */
+export async function getTailscaleIP(): Promise<string | null> {
+    return AsyncStorage.getItem(BRIDGE_IP_KEY);
+}
+
+/** Set connection preference: 'local' or 'bridge'. */
+export async function setConnectionPref(pref: "local" | "bridge"): Promise<void> {
+    await AsyncStorage.setItem(CONN_PREF_KEY, pref);
+}
+
+/** Get connection preference. */
+export async function getConnectionPref(): Promise<"local" | "bridge"> {
+    const p = await AsyncStorage.getItem(CONN_PREF_KEY);
+    return (p === "bridge") ? "bridge" : "local";
+}
+
+/**
+ * Get the active host to use for API calls.
+ * If preference is 'bridge' and a tailscale_ip exists, use it.
+ * Otherwise fall back to local host.
+ */
+export async function getActiveHost(): Promise<string | null> {
+    const pref = await getConnectionPref();
+    if (pref === "bridge") {
+        const tsIP = await getTailscaleIP();
+        if (tsIP) return tsIP;
+    }
+    return getHost();
+}
+
 /** Build the full URL for a given path. */
 async function baseUrl(): Promise<string> {
-    const host = await getHost();
+    const host = await getActiveHost();
     if (!host) throw new Error("No host configured");
-    const h = host.startsWith("http") ? host : `http://${host}`;
+    // Ensure port is included
+    const hostWithPort = host.includes(":") ? host : `${host}:8765`;
+    const h = hostWithPort.startsWith("http") ? hostWithPort : `http://${hostWithPort}`;
     return h.replace(/\/+$/, "");
 }
 
@@ -230,6 +271,12 @@ export const companionAPI = {
     agentProfile: () =>
         apiFetch<{ name: string; style: string; uptime?: string; companion?: { name: string; species: string } }>(
             "/api/v1/agent/profile"
+        ),
+
+    /** Network status — local + Tailscale IPs (Sprint 11). */
+    networkStatus: () =>
+        apiFetch<{ local_ip: string; tailscale_ip: string | null; bridge_active: boolean }>(
+            "/api/v1/network/status"
         ),
 };
 

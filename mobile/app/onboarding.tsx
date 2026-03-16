@@ -1,9 +1,11 @@
 /**
  * 🚀 Onboarding v2 — Sprint 8 Task 2.
+ * Sprint 11: Connection choice (Local Only vs Anywhere Bridge).
  *
- * Two paths:
- *   1. Self-hosted: QR scan / manual IP → mode select → permissions → done
+ * Three paths:
+ *   1. Self-hosted: QR/IP → connection choice → mode select → permissions → done
  *   2. Waitlist: email signup → "spot saved" → end
+ *   3. Anywhere Bridge: Tailscale VPN guidance
  *
  * Per CREATIVE_DIRECTION.md: warm, inviting, campfire aesthetic.
  */
@@ -20,7 +22,7 @@ import {
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { companionAPI, setHost, testConnection } from "../src/api";
+import { companionAPI, setHost, setTailscaleIP, setConnectionPref, testConnection } from "../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../src/theme";
 
 /** Check if onboarding has been completed. */
@@ -29,7 +31,7 @@ export async function hasOnboarded(): Promise<boolean> {
     return mode === "selfhosted" || mode === "waitlist";
 }
 
-type OnboardingStep = "welcome" | "connect" | "waitlist_done" | "mode" | "permissions" | "done";
+type OnboardingStep = "welcome" | "connect" | "waitlist_done" | "bridge" | "vpn_guide" | "mode" | "permissions" | "done";
 
 interface OnboardingV2Props {
     onComplete: () => void;
@@ -42,6 +44,7 @@ export default function OnboardingV2({ onComplete }: OnboardingV2Props) {
     const [manualIP, setManualIP] = useState("");
     const [connecting, setConnecting] = useState(false);
     const [selectedMode, setSelectedMode] = useState<"pet" | "tool">("pet");
+    const [fetchingBridge, setFetchingBridge] = useState(false);
 
     // — Welcome —
     if (step === "welcome") {
@@ -75,7 +78,7 @@ export default function OnboardingV2({ onComplete }: OnboardingV2Props) {
             const ok = await testConnection();
             if (ok) {
                 await AsyncStorage.setItem("connectionMode", "selfhosted");
-                setStep("mode");
+                setStep("bridge"); // Sprint 11: ask connection preference next
             } else {
                 Alert.alert("Connection Failed", "Check the IP and make sure Fireside is running on your PC.");
             }
@@ -163,6 +166,124 @@ export default function OnboardingV2({ onComplete }: OnboardingV2Props) {
                         </Text>
                     </TouchableOpacity>
                 </View>
+            </ScrollView>
+        );
+    }
+
+    // — Connection Choice (Sprint 11) —
+    if (step === "bridge") {
+        const handleLocalOnly = async () => {
+            await setConnectionPref("local");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setStep("mode");
+        };
+
+        const handleBridge = async () => {
+            setFetchingBridge(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+                const ns = await companionAPI.networkStatus();
+                if (ns.tailscale_ip) {
+                    await setTailscaleIP(ns.tailscale_ip);
+                    await setConnectionPref("bridge");
+                    setStep("mode");
+                } else {
+                    // No Tailscale IP yet — show setup guide
+                    await setConnectionPref("bridge");
+                    setStep("vpn_guide");
+                }
+            } catch {
+                // Can't reach network/status — show guide anyway
+                await setConnectionPref("bridge");
+                setStep("vpn_guide");
+            }
+            setFetchingBridge(false);
+        };
+
+        return (
+            <View style={styles.screen}>
+                <Text style={styles.stepTitle}>How should your companion connect?</Text>
+                <Text style={styles.stepSubtitle}>Choose how Ember reaches Atlas when you leave home</Text>
+
+                <TouchableOpacity
+                    style={[styles.modeOption, { marginTop: spacing.xl }]}
+                    onPress={handleLocalOnly}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.modeEmoji}>🏠</Text>
+                    <Text style={styles.modeLabel}>Local Only</Text>
+                    <Text style={styles.modeDesc2}>Works only at home on Wi-Fi. Simple, no extra setup.</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.modeOption, fetchingBridge && { opacity: 0.5 }]}
+                    onPress={handleBridge}
+                    disabled={fetchingBridge}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.modeEmoji}>🌍</Text>
+                    <Text style={styles.modeLabel}>Anywhere Bridge</Text>
+                    <Text style={styles.modeDesc2}>
+                        {fetchingBridge ? "Checking..." : "Connect securely from anywhere via Tailscale VPN"}
+                    </Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    // — VPN Guidance (Sprint 11) —
+    if (step === "vpn_guide") {
+        return (
+            <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>
+                <Text style={styles.stepTitle}>Set Up Anywhere Bridge</Text>
+                <Text style={styles.stepSubtitle}>
+                    Tailscale creates a private tunnel so your phone can always reach your home PC — even from coffee shops, work, or travel.
+                </Text>
+
+                <View style={styles.pathCard}>
+                    <Text style={styles.pathEmoji}>1️⃣</Text>
+                    <Text style={styles.pathTitle}>On your PC</Text>
+                    <Text style={styles.pathDesc}>
+                        Fireside has already set up Tailscale on your computer. If not, run the setup script from the dashboard.
+                    </Text>
+                </View>
+
+                <View style={styles.pathCard}>
+                    <Text style={styles.pathEmoji}>2️⃣</Text>
+                    <Text style={styles.pathTitle}>On your iPhone</Text>
+                    <Text style={styles.pathDesc}>
+                        Download "Tailscale" from the App Store and sign in with the same account you used on your PC.
+                    </Text>
+                </View>
+
+                <View style={styles.pathCard}>
+                    <Text style={styles.pathEmoji}>3️⃣</Text>
+                    <Text style={styles.pathTitle}>That's it!</Text>
+                    <Text style={styles.pathDesc}>
+                        Once both devices are on Tailscale, your companion can reach Atlas from anywhere. Your data still never touches our servers — it goes directly between your devices.
+                    </Text>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={async () => {
+                        // Try to fetch tailscale_ip one more time
+                        try {
+                            const ns = await companionAPI.networkStatus();
+                            if (ns.tailscale_ip) {
+                                await setTailscaleIP(ns.tailscale_ip);
+                            }
+                        } catch { }
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setStep("mode");
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.primaryBtnText}>I've installed Tailscale →</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setStep("mode")} activeOpacity={0.7}>
+                    <Text style={styles.skipText}>Skip for now</Text>
+                </TouchableOpacity>
             </ScrollView>
         );
     }

@@ -1,29 +1,28 @@
-# Thor Gate — Sprint 10 Backend Complete (VISION Sprint)
-- [x] install.sh Step 4 — AI person creation (name + style: Analytical/Creative/Direct/Warm)
-- [x] Config stores both agent{} and companion{} — valhalla.yaml, companion_state.json, onboarding.json
-- [x] GET /api/v1/agent/profile — real data from state + yaml, live uptime + plugin count
-- [x] GET /api/v1/guildhall/agents — real AI + companion, live activity detection
+# Thor Gate — Sprint 11 Backend Complete (Connection Choice)
+- [x] Setup bridge scripts — `scripts/setup_bridge.sh` (macOS/Linux) + `scripts/setup_bridge.ps1` (Windows)
+- [x] GET /api/v1/network/status — returns local_ip, tailscale_ip, bridge_active
+- [x] Bifrost listener — already binds to 0.0.0.0 with Tailscale 100.x.x.x CORS regex
 
-## Files Changed
-- `install.sh` — Step 4 AI person, Step 5 confirmation card w/ both chars, dual-char success screen
-- `plugins/companion/handler.py` — `/agent/profile` + `/guildhall/agents` endpoints
-- `tests/test_sprint10_vision.py` — NEW: 37 tests
+## Files Created/Changed
+- `scripts/setup_bridge.sh` — NEW: Tailscale install + auth + IP display (bash)
+- `scripts/setup_bridge.ps1` — NEW: Tailscale install via winget + auth + IP display (PowerShell)
+- `plugins/companion/handler.py` — `/api/v1/network/status` endpoint
+- `tests/test_sprint11_bridge.py` — NEW: 26 tests
 
 ## Test Results
-**269 tests passing** (Sprints 1-10: 15+27+27+29+26+36+31+16+25+37)
+**295 tests passing** (Sprints 1-11: 15+27+27+29+26+36+31+16+25+37+26)
 
-## New Endpoints for Freya
+## Setup Script Features
+- Checks if Tailscale already installed
+- Auto-installs (brew/apt on unix, winget on windows)
+- `tailscale up` with `--hostname=fireside-<hostname>` 
+- Headless auth via `TAILSCALE_AUTHKEY` env var (stretch goal)
+- Displays both local + Tailscale IPs
+
+## New Endpoint for Freya
 | Method | Route | Purpose |
 |--------|-------|---------|
-| GET | `/api/v1/agent/profile` | Returns agent name, style, companion, owner, uptime, plugins, models |
-| GET | `/api/v1/guildhall/agents` | Returns both AI + companion with live activity (idle/building/researching/chatting) |
+| GET | `/api/v1/network/status` | Returns `{local_ip, tailscale_ip, bridge_active}` |
 
-## Install Flow (Updated)
-```
-Step 1: "What should we call you?" → name
-Step 2: "Pick a brain" → brain size
-Step 3: "Choose your companion" → species + name
-Step 4: "Who's running the show at home?" → AI name (default: Atlas) + style
-Step 5: Confirmation card (Owner, AI, Companion, Brain, Location)
-Step 6: "Atlas and Ember are getting ready..."
-```
+## Bifrost Binding (Task 3)
+Already correct — `bifrost.py` defaults to `--host 0.0.0.0` and CORS regex matches `100.\d+.\d+.\d+` (Tailscale) + `192.168.\d+.\d+` (LAN). No changes needed.

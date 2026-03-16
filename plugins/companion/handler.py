@@ -1846,6 +1846,57 @@ def register_routes(app, config: dict) -> None:
 
         return {"agents": agents}
 
-    app.include_router(router)
-    log.info("[companion] Plugin loaded (Sprint 10: two-character system + guild hall).")
+    # --- Sprint 11 Task 2: Network Status API ---
 
+    @router.get("/api/v1/network/status")
+    async def api_network_status():
+        """Return local and Tailscale IPs for mobile connection routing."""
+        import socket
+        import subprocess
+
+        # Get local IP
+        local_ip = "unknown"
+        try:
+            # Create a UDP socket to determine the primary local IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            try:
+                local_ip = socket.gethostbyname(socket.gethostname())
+            except Exception:
+                pass
+
+        # Get Tailscale IP
+        tailscale_ip = None
+        bridge_active = False
+        try:
+            result = subprocess.run(
+                ["tailscale", "ip", "-4"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                tailscale_ip = result.stdout.strip().split("\n")[0]
+                bridge_active = True
+        except FileNotFoundError:
+            # Tailscale not installed
+            pass
+        except subprocess.TimeoutExpired:
+            pass
+        except Exception:
+            pass
+
+        return {
+            "local_ip": local_ip,
+            "tailscale_ip": tailscale_ip,
+            "bridge_active": bridge_active,
+        }
+
+    # --- Sprint 11 Task 3: Bifrost listener ---
+    # bifrost.py already binds to 0.0.0.0 (line 113: --host default="0.0.0.0")
+    # CORS regex already matches Tailscale 100.x.x.x IPs (line 80)
+    # No changes needed — verified in sprint review.
+
+    app.include_router(router)
+    log.info("[companion] Plugin loaded (Sprint 11: network status + bridge).")

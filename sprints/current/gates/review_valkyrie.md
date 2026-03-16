@@ -1,53 +1,92 @@
-# Valkyrie Review — Sprint 10: Two-Character System
+# Valkyrie Review — Sprint 11: The Anywhere Bridge (Tailscale)
 
-**Sprint:** Two-Character System (AI Agent + Companion)
+**Sprint:** Tailscale Integration — Connection Choice
 **Reviewer:** Valkyrie (UX & Business Analyst)
 **Date:** 2026-03-15
-**Verdict:** ✅ READY — The product vision is fully realized.
+**Verdict:** ✅ SHIP — This solves the "only works at home" problem without compromising the privacy promise.
 
 ---
 
-## The Vision Landed
+## Why This Sprint Matters
 
-The shift from a single character (the companion) to a two-character system (the AI Executive at home + the Companion on the phone) solves the biggest identity crisis of the product.
+Before Sprint 11: the app only worked when the phone was on the same Wi-Fi as the PC. Leaving the house = losing the companion. This made the mobile app feel like a local toy, not a real product.
 
-Before: "Why is a bouncing pixel fox summarizing my quarterly earnings report?"
-After: "Atlas (my AI) summarized the report. Ember (my fox) delivered it to my phone."
+After Sprint 11: "Anywhere Bridge" — one toggle, Tailscale handles the encrypted tunnel. The companion works from the coffee shop, the office, the airport. Your data still never touches a cloud server. It flows through an encrypted point-to-point tunnel directly to your home PC.
 
-This creates a brilliant psychological separation:
-1. **The Brain (Atlas):** Professional, capable, stationary, handles the heavy lifting.
-2. **The Heart (Ember):** Endearing, loyal, mobile, provides the emotional attachment.
-
-### Assessment of Implementation
-
-| Feature | Assessment | Status |
-|---------|-----------|--------|
-| **Installer `install.sh`** | Step 4 clearly positions the AI as "the mind behind your companion." The ASCII art at the end showing both characters side-by-side establishes the relationship immediately. | ✅ Perfect |
-| **Config Architecture** | Clean split in `valhalla.yaml` and state files. separating `agent` and `companion` prevents data tangling down the line. | ✅ Robust |
-| **Dashboard Guild Hall** | Real data integration makes the dashboard feel alive. Seeing the AI agent state change to "researching" while the companion is "chatting" tells the user exactly where processing is happening. | ✅ Great UX |
-| **Mobile Flavor Text** | "Let me check with Atlas..." This is the magic phrase. It bridges the phone and the PC seamlessly. When offline: "Atlas is resting... I'll remember this." Excellent graceful degradation. | ✅ Immersive |
-| **Settings Screen** | Showing the AI's uptime alongside the companion's stats reinforces that the phone is just a window into a larger system running elsewhere. | ✅ Validating |
+**This is the feature that makes "Your Private AI" actually mean something.** Without it, "private" = "only usable at home." With it, "private" = "yours, everywhere."
 
 ---
 
-## 10-Sprint Complete Trajectory (The Final Count)
+## Feature Assessment
+
+### ✅ Connection Choice UX
+
+| Option | What the User Sees |
+|--------|-------------------|
+| **Local Only** | "Works on your home Wi-Fi" — zero setup, instant |
+| **Anywhere Bridge** | "Connect from anywhere, securely" — requires Tailscale app |
+
+Positioning this as a *choice* is the right call. Power users who want anywhere access install Tailscale. Casual users who only use the app at home skip it. No forced complexity.
+
+### ✅ Setup Scripts
+
+Cross-platform scripts (`setup_bridge.sh` + `setup_bridge.ps1`) that:
+- Auto-detect if Tailscale is installed
+- Install via `brew`/`apt`/`winget`
+- Run `tailscale up --hostname=fireside-<hostname>`
+- Support headless auth via `TAILSCALE_AUTHKEY`
+- Display both local + Tailscale IPs
+
+**UX note:** The hostname `fireside-<hostname>` is a nice touch — when the user opens their Tailscale dashboard, they see "fireside-jordan-pc" instead of a random hostname. Brand reinforcement in infrastructure.
+
+### ✅ Network Status API
+
+`GET /api/v1/network/status` returns `{local_ip, tailscale_ip, bridge_active}`. Clean, simple, exactly what the mobile app needs to decide which IP to use.
+
+### ✅ Bifrost Already Correct
+
+The server already binds to `0.0.0.0` with CORS matching both `192.168.x.x` and `100.x.x.x` (Tailscale CGNAT range). No changes needed — good architecture from day one.
+
+### ✅ Mobile Routing Logic
+
+The mobile app fetches the Tailscale IP while on home Wi-Fi, stores it, then uses it when the user leaves. Connection preference (`local` vs `bridge`) determines which IP to hit for API calls and WebSocket. Graceful fallback.
+
+### ✅ VPN Guidance Screen
+
+3-step instructions for Tailscale setup on iPhone. The pragmatic V1 approach (official Tailscale app in background rather than embedded SDK) is the right call for an Expo app — native `tsnet` embedding would be a multi-sprint rabbit hole.
+
+### ✅ Dashboard Network Panel
+
+Shows local IP, Tailscale IP, bridge status, and setup instructions. The PC-side mirror of the mobile connection choice.
+
+---
+
+## Security Perspective
+
+| Concern | Assessment |
+|---------|-----------|
+| Data privacy | ✅ Tailscale is point-to-point encrypted (WireGuard). No relay servers see the traffic. |
+| Attack surface | ✅ No port forwarding, no public IPs exposed. Tailscale handles NAT traversal. |
+| Auth model | ✅ Tailscale requires account auth. Only devices on the user's tailnet can reach the API. |
+| "Never leaves your network" claim | ⚠️ Technically, traffic traverses the internet (encrypted) — needs privacy policy clarification: "encrypted tunnel, no third-party access to content" |
+
+> [!TIP]
+> Update the privacy policy to mention: "When using the Anywhere Bridge, data travels through an encrypted WireGuard tunnel (powered by Tailscale). No third party — including Tailscale — can read the contents of your communications."
+
+---
+
+## 11-Sprint Trajectory
 
 | Sprint | Theme | Tests | Key Milestone |
 |--------|-------|-------|---------------|
-| 1 | Foundation | 15 | First app launch |
-| 2 | Polish | 42 | Onboarding + adoption |
-| 3 | Engagement | 69 | Push notifications + sounds |
-| 4 | Differentiation | 98 | Adventures + guardian |
-| 5 | Platform | 124 | Mode toggle + translation + platform bridge |
-| 6 | Full Surface | 160 | Voice + marketplace + WebSocket |
-| 7 | Hardening | 191 | Security fixes + QR pairing + achievements |
-| 8 | Ship | 207 | Settings + onboarding v2 + theme overhaul |
-| 9 | Polish | 232 | Rich cards + search + App Store blockers |
-| **10** | **Vision** | **269** | **Two-character system + Dashboard integration** |
+| 1-3 | Foundation + Polish + Engagement | 69 | First app with push notifications |
+| 4-5 | Differentiation + Platform | 124 | Adventures, guardian, mode toggle |
+| 6-7 | Surface + Hardening | 191 | Voice, marketplace, WebSocket, security fixes |
+| 8-9 | Ship + Polish | 232 | Settings, onboarding v2, rich cards, App Store fixes |
+| 10 | Vision | 269 | Two-character system |
+| **11** | **Connectivity** | **295** | **Anywhere Bridge (Tailscale)** |
 
-**10 sprints. 269 tests. Built from scratch.**
-
-The product is no longer just a Tamagotchi or just an LLM wrapper. It is a private, distributed AI system with a highly differentiated dual-character interface. It's ready for market.
+**295 tests. The companion now works everywhere. The privacy promise is intact.**
 
 ---
 
