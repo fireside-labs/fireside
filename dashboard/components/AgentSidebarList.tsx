@@ -3,42 +3,77 @@
 import AvatarSprite from "@/components/AvatarSprite";
 import Link from "next/link";
 import type { AvatarConfig } from "@/components/AvatarSprite";
+import { useEffect, useState } from "react";
 
 interface AgentSidebarItem {
     name: string;
     avatar: AvatarConfig;
     status: "online" | "busy" | "offline" | "hurt";
     currentTask?: string;
-    progress?: number; // 0-100
+    progress?: number;
 }
 
-const AGENTS: AgentSidebarItem[] = [
-    {
-        name: "Thor",
-        avatar: { style: "pixel", hairStyle: 4, hairColor: "#8B4513", skinTone: "#F5CBA7", outfit: "warrior", accessory: "none" },
-        status: "online", currentTask: "Building...", progress: 65,
-    },
-    {
-        name: "Freya",
-        avatar: { style: "pixel", hairStyle: 2, hairColor: "#F4D03F", skinTone: "#FAD7A0", outfit: "artist", accessory: "glasses" },
-        status: "busy", currentTask: "Designing UI",
-    },
-    {
-        name: "Heimdall",
-        avatar: { style: "pixel", hairStyle: 0, hairColor: "#1A1A2E", skinTone: "#D4A574", outfit: "guardian", accessory: "none" },
-        status: "online", currentTask: "Watching",
-    },
-    {
-        name: "Valkyrie",
-        avatar: { style: "pixel", hairStyle: 3, hairColor: "#C0392B", skinTone: "#FBEEE6", outfit: "crown", accessory: "none" },
-        status: "online", currentTask: "Writing docs",
-    },
-];
+const DEFAULT_AVATAR: AvatarConfig = {
+    style: "pixel", hairStyle: 1, hairColor: "#6B7280",
+    skinTone: "#D4A574", outfit: "scholar", accessory: "none",
+};
+
+function getAgentsFromConfig(): AgentSidebarItem[] {
+    if (typeof window === "undefined") return [];
+
+    try {
+        // Read agent name from onboarding data in localStorage
+        const onboarding = localStorage.getItem("fireside_onboarding");
+        if (onboarding) {
+            const data = JSON.parse(onboarding);
+            const agentName = data.agent?.name || data.agent_name || "Atlas";
+            return [{
+                name: agentName,
+                avatar: DEFAULT_AVATAR,
+                status: "online",
+                currentTask: "Ready",
+            }];
+        }
+
+        // Fallback: check companion state
+        const companion = localStorage.getItem("fireside_companion");
+        if (companion) {
+            const data = JSON.parse(companion);
+            return [{
+                name: data.agent?.name || "Atlas",
+                avatar: DEFAULT_AVATAR,
+                status: "online",
+                currentTask: "Ready",
+            }];
+        }
+    } catch {
+        // ignore parse errors
+    }
+
+    // No config found — show empty state
+    return [];
+}
 
 export default function AgentSidebarList() {
+    const [agents, setAgents] = useState<AgentSidebarItem[]>([]);
+
+    useEffect(() => {
+        setAgents(getAgentsFromConfig());
+    }, []);
+
+    if (agents.length === 0) {
+        return (
+            <div className="px-3 py-2">
+                <p className="text-[10px] text-[var(--color-rune-dim)] italic">
+                    No agents configured yet
+                </p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-1">
-            {AGENTS.map((agent) => (
+            {agents.map((agent) => (
                 <Link
                     key={agent.name}
                     href={`/agents/${agent.name.toLowerCase()}`}

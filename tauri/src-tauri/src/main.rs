@@ -16,6 +16,7 @@ use std::thread;
 #[derive(Serialize)]
 struct SystemInfo {
     ram_gb: f64,
+    vram_gb: f64,
     gpu: String,
     os: String,
     arch: String,
@@ -41,16 +42,15 @@ fn get_system_info() -> SystemInfo {
     let ram_gb = {
         #[cfg(target_os = "windows")]
         {
-            let output = Command::new("wmic")
-                .args(["computersystem", "get", "TotalPhysicalMemory", "/value"])
+            let output = Command::new("powershell")
+                .args(["-NoProfile", "-Command",
+                    "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"])
                 .output();
             match output {
                 Ok(o) => {
                     let s = String::from_utf8_lossy(&o.stdout);
-                    s.lines()
-                        .find(|l| l.starts_with("TotalPhysicalMemory="))
-                        .and_then(|l| l.split('=').nth(1))
-                        .and_then(|v| v.trim().parse::<f64>().ok())
+                    s.trim()
+                        .parse::<f64>()
                         .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
                         .unwrap_or(0.0)
                 }
@@ -76,16 +76,13 @@ fn get_system_info() -> SystemInfo {
     let gpu = {
         #[cfg(target_os = "windows")]
         {
-            Command::new("wmic")
-                .args(["path", "win32_VideoController", "get", "name", "/value"])
+            Command::new("powershell")
+                .args(["-NoProfile", "-Command",
+                    "(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name"])
                 .output()
                 .ok()
-                .and_then(|o| {
-                    let s = String::from_utf8_lossy(&o.stdout).to_string();
-                    s.lines()
-                        .find(|l| l.starts_with("Name="))
-                        .map(|l| l.trim_start_matches("Name=").trim().to_string())
-                })
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "Unknown".into())
         }
         #[cfg(target_os = "macos")]
@@ -117,8 +114,31 @@ fn get_system_info() -> SystemInfo {
         }
     };
 
+    // Detect VRAM (GPU memory)
+    let vram_gb = {
+        #[cfg(target_os = "windows")]
+        {
+            Command::new("powershell")
+                .args(["-NoProfile", "-Command",
+                    "(Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM"])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    s.parse::<f64>().ok()
+                })
+                .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
+                .unwrap_or(0.0)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            0.0 // macOS/Linux: unified memory or nvidia-smi needed
+        }
+    };
+
     SystemInfo {
         ram_gb,
+        vram_gb,
         gpu,
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),

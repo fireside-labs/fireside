@@ -17,13 +17,13 @@ interface BrainMeta {
     compatibilityNote?: string;
 }
 
-// Simulated hardware detection + brain registry
-const DETECTED_HARDWARE = {
-    device: "MacBook Pro",
-    chip: "Apple M3 Max",
-    aiMemory: "36 GB",
-    ram: "36 GB",
-};
+interface DetectedHardware {
+    device: string;
+    chip: string;
+    aiMemory: string;
+    ram: string;
+    loading: boolean;
+}
 
 const BRAINS: BrainMeta[] = [
     {
@@ -49,7 +49,55 @@ export default function BrainsPage() {
     const [installing, setInstalling] = useState<string | null>(null);
     const [showCloudSetup, setShowCloudSetup] = useState(false);
     const [apiKey, setApiKey] = useState("");
+    const [hardware, setHardware] = useState<DetectedHardware>({
+        device: "Detecting...", chip: "Scanning...", aiMemory: "—", ram: "—", loading: true,
+    });
     const { toast } = useToast();
+
+    useEffect(() => {
+        detectHardware();
+    }, []);
+
+    async function detectHardware() {
+        try {
+            // Try Tauri first
+            const w = window as unknown as Record<string, unknown>;
+            if (typeof window !== "undefined" && w.__TAURI__) {
+                const tauri = w.__TAURI__ as { core?: { invoke: (cmd: string) => Promise<unknown> } };
+                if (tauri.core?.invoke) {
+                    const info = await tauri.core.invoke("get_system_info") as { os: string; arch: string; ram_gb: number; gpu: string; vram_gb: number };
+                    setHardware({
+                        device: `${info.os} (${info.arch})`,
+                        chip: info.gpu || "Unknown GPU",
+                        aiMemory: info.vram_gb > 0 ? `${info.vram_gb} GB VRAM` : `${info.ram_gb} GB shared`,
+                        ram: `${info.ram_gb} GB`,
+                        loading: false,
+                    });
+                    return;
+                }
+            }
+            // Try API fallback
+            const res = await fetch("/api/v1/status").catch(() => null);
+            if (res?.ok) {
+                const data = await res.json();
+                setHardware({
+                    device: data.gpu || "Local Machine",
+                    chip: data.gpu || "Unknown",
+                    aiMemory: `${data.ram_gb || "?"} GB`,
+                    ram: `${data.ram_gb || "?"} GB`,
+                    loading: false,
+                });
+                return;
+            }
+        } catch {
+            // ignore
+        }
+        // Fallback: show unknown
+        setHardware({
+            device: "Local Machine", chip: "Detection unavailable",
+            aiMemory: "Unknown", ram: "Unknown", loading: false,
+        });
+    }
 
     const handleInstall = (brainId: string) => {
         if (brainId === "cloud") {
@@ -104,10 +152,10 @@ export default function BrainsPage() {
                 <span className="text-2xl">💻</span>
                 <div>
                     <p className="text-sm text-white font-medium">
-                        {DETECTED_HARDWARE.device} · {DETECTED_HARDWARE.chip}
+                        {hardware.device} · {hardware.chip}
                     </p>
                     <p className="text-xs text-[var(--color-rune-dim)]">
-                        {DETECTED_HARDWARE.aiMemory} AI Memory available
+                        {hardware.aiMemory} AI Memory available
                     </p>
                 </div>
                 <span className="ml-auto text-xs px-3 py-1 rounded-full bg-[var(--color-neon-glow)] text-[var(--color-neon)] font-bold">
