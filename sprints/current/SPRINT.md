@@ -1,132 +1,134 @@
-# Sprint 14 — "Last Mile" Wiring
+# Sprint 15 — "Ship It"
 
-> **Goal:** Make the app work end-to-end for a first-time user.  
-> **Sources:** Ullr audit (2026-03-15), old dashboard_audit.md, first user test findings  
-> **Priority:** Install → See correct specs → Chat → See real data
-
----
-
-## Already Fixed (this session)
-- [x] `main.rs` — RAM: `wmic` → `Get-CimInstance`, GPU: same, added `vram_gb` field
-- [x] `AgentSidebarList.tsx` — removed hardcoded Thor/Freya/Heimdall/Valkyrie → dynamic from localStorage
-- [x] `brains/page.tsx` — removed hardcoded "MacBook Pro / M3 Max / 36GB" → real detection via Tauri/API
+> **Goal:** A new user can install, onboard, chat, browse the store, and never see mock data or broken UI.  
+> **Timeline:** 2 days  
+> **Source:** User test round 2 (2026-03-15 11:45 PM)
 
 ---
 
 ## 🔨 Thor (Backend + Tauri)
 
-### T1. Fix Mac unified memory detection 🔴
-`main.rs` VRAM detection returns `0.0` on non-Windows. For Mac: use `sysctl hw.memsize` for total unified memory. For Linux: try `nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits`.
-- File: `tauri/src-tauri/src/main.rs` (lines 130-145 vram_gb block)
+### T1. Backend auto-start from Tauri 🔴
+Biggest blocker. Without the backend running, everything shows "Offline mode." Tauri should:
+- Launch `bifrost.py` as a child process on app start
+- Manage lifecycle (restart on crash, kill on app close)
+- Show status in system tray
+- File: `tauri/src-tauri/src/main.rs` — add `setup()` hook
 
-### T2. Implement `POST /api/v1/chat` endpoint 🔴
-Chat page sends to this endpoint but it doesn't exist in `v1.py`. Proxy to local llama.cpp at `http://127.0.0.1:8080/completion`. Stream response via SSE. Use companion personality from `~/.fireside/companion_state.json`.
+### T2. Verify nvidia-smi VRAM detection 🔴
+Sprint 14 fix may not be in the .exe user tested. Verify:
+- `nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits` → should return `32607` (MB)
+- Convert to GB: 31.8 GB
+- **Test:** rebuild .exe, fresh install, check system check screen shows ~32GB VRAM + ~64GB RAM
+- File: `tauri/src-tauri/src/main.rs` (vram_gb block, ~line 117)
+
+### T3. Store backend — plugin registry + purchases 🔴
+Current store is 100% mock (`MOCK_MARKETPLACE`, 8 fake plugins). Need:
+- `GET /api/v1/store/plugins` — real plugin registry (can start with local JSON file)
+- `POST /api/v1/store/purchase` — record purchase, validate, download plugin
+- `GET /api/v1/store/purchases` — user's purchase history
+- Payment integration can be v1.1, but the listing/install flow must work
 - File: `api/v1.py`
-- Ref: Ullr audit §2 — CompanionChat uses canned `PET_RESPONSES` array
 
-### T3. Implement `POST /api/v1/brains/install` endpoint 🔴
-`BrainInstaller.tsx` calls this but falls back to `runSimulatedInstall()` (fake 6-second progress bar). Real endpoint should: accept `{ model_id, url }`, download GGUF to `~/.fireside/models/`, stream progress via SSE.
+### T4. Config sync endpoint 🟡
+Onboarding saves `agent_name`, `agent_style`, `companion_name`, `companion_species`, `brain` via `write_config`. Need:
+- `GET /api/v1/config/onboarding` — returns all onboarding choices
+- Dashboard reads from this instead of scattered localStorage keys
 - File: `api/v1.py`
-- Ref: Ullr audit §3 — brains page
-
-### T4. Implement `GET /api/v1/guildhall/agents` endpoint 🟡
-Returns user's actual agents. Currently falls back to `FALLBACK_AGENTS = [{ name: "Atlas", activity: "idle" }]`. Should return agents from config with real activity status.
-- File: `api/v1.py`
-
-### T5. Implement `POST /api/v1/nodes` (register new node) 🟡
-Old audit flagged: "Add another device" card is purely decorative (no onClick). Need endpoint to register a new device to the mesh.
-- File: `api/v1.py`
-
-### T6. Fix API port mismatch 🔴
-Old audit found: `api.ts` has `API_BASE = localhost:8766` but install starts backend on `8765`. Verify and unify.
-- File: `dashboard/lib/api.ts` (line ~5)
 
 ---
 
 ## 🎨 Freya (Dashboard Frontend)
 
-### F1. Wire CompanionChat to real backend 🔴
-Replace `PET_RESPONSES` canned strings (lines 39-82) with `POST /api/v1/chat`. Show typing indicator during LLM response. Falls back to canned responses if backend unreachable.
-- File: `dashboard/components/CompanionChat.tsx`
+### F1. Fix Guided Tour — Next button + lock tabs 🔴
+Current state: Step 1/3 shows, "Next" button doesn't advance, tabs are NOT locked.
+- Wire `onClick` on Next button to advance tour step
+- Disable/grey out sidebar tabs until tour completes (or user clicks "Skip")
+- Tour steps: Dashboard → Brains → Chat → Done (unlock all)
+- Files: `dashboard/components/GuidedTour.tsx`, `dashboard/components/Sidebar.tsx`
 
-### F2. Wire BrainInstaller to real download 🔴
-Replace `runSimulatedInstall()` with real `POST /api/v1/brains/install` SSE stream. Show actual download progress (bytes/total). Remove hardcoded speed results (line 47, 79).
-- File: `dashboard/components/BrainInstaller.tsx`
+### F2. Settings brain picker matches onboarding 🔴
+Onboarding shows "Smart & Fast" / "Deep Thinker" / "Cloud Expert". Settings page (`BrainPicker.tsx`) shows completely different brain names. Must be identical.
+- Read brain choice from `fireside_agent_style` or config endpoint
+- Highlight the brain the user already chose during onboarding
+- Files: `dashboard/components/BrainPicker.tsx`, `dashboard/components/SettingsForm.tsx`
 
-### F3. Fire theme across dashboard 🟡
-Transition from installer → dashboard is jarring. Installer uses 🔥 amber (`#F59E0B`/`#D97706`/`#92400E`), dashboard uses 💎 neon green (`#00FF88`). Update:
-- `globals.css` — change `--color-neon: #00ff88` → warm amber `#F59E0B`, update all rgba() references
-- `--color-neon-glow` → `rgba(245, 158, 11, 0.15)`
-- Glass card hover border → amber instead of green
-- Light theme: adjust `--color-neon` similarly
-- File: `dashboard/app/globals.css`
-
-### F4. Remove hardcoded node names 🟡
-`nodes/page.tsx` has `FRIENDLY_NAMES: { odin: "Your MacBook", thor: "Office PC", freya: "Living Room PC" }`. Replace with actual node names from config or let user set friendly names.
+### F3. Node shows as user's agent name 🟡
+The "this PC" node on the nodes page should show the agent name chosen during onboarding (e.g. "Atlas"), not a generic name.
+- Read from `fireside_agent_name` localStorage
 - File: `dashboard/app/nodes/page.tsx`
 
-### F5. Wire "Add Node" button 🟡
-Add `onClick` to the "Add another device" card (currently a static div, lines 119-125). Should open a dialog with mesh join token flow (endpoint `POST /mesh/join-token` already exists).
-- File: `dashboard/app/nodes/page.tsx`
+### F4. Store page — wire to real backend 🔴
+Replace `MOCK_MARKETPLACE` (8 fake plugins) with real `GET /api/v1/store/plugins`.
+- Install button → `POST /api/v1/store/purchase`
+- Show real purchase history
+- Seller dashboard can be v1.1
+- Files: `dashboard/app/store/page.tsx`, `dashboard/app/store/sell/page.tsx`
 
-### F6. Wire save buttons (no-ops → real API) 🟡
-- Soul page: `console.log("Personality saved")` → `PUT /api/v1/soul/identity.md` (endpoint exists)
-- Config page: `console.log("Settings saved")` → `PUT /api/v1/config` (endpoint exists)
-- Personality slider: `console.log` → `POST /api/v1/soul/personality`
-- Files: `dashboard/app/soul/page.tsx`, `dashboard/app/config/page.tsx`
+### F5. Mock pages → "Coming Soon" 🟡
+Pages that aren't wired yet should show a clean "Coming Soon" card instead of fake data:
+- `/learning` — MOCK_PREDICTIONS, MOCK_SELF_MODEL
+- `/warroom` — MOCK_HYPOTHESES, MOCK_PREDICTIONS, MOCK_EVENTS
+- `/crucible` — MOCK_CRUCIBLE
+- `/debate` — MOCK_DEBATES
+- `/pipeline` — MOCK_PIPELINES
+- Files: each page's `page.tsx`
 
-### F7. Wire SystemStatus to real polling 🟡
-Currently hardcodes `{ brain: "Smart & Fast", tokS: 45, inference: "running" }` with `// In production, poll` comment. Poll `GET /api/v1/status` every 5s. "Restart" button → actually restart backend.
-- File: `dashboard/components/SystemStatus.tsx`
+### F6. Guild Hall redesign 🟡
+Current pixel art is low quality. User reference: **Game Dev Story** level pixel art, **Claude office** ambient style.
+- Higher-res sprites (48px or 64px instead of current tiny ones)
+- Warm, ambient background (fireside cabin / cozy office)
+- Agents doing contextual activities (not just floating)
+- Smooth idle animations
+- Files: `dashboard/components/GuildHall.tsx`, `dashboard/components/GuildHallAgent.tsx`, `dashboard/components/AvatarSprite.tsx`
 
-### F8. Remove/replace mock companion components 🟡
-Old audit found these inline-mock components:
-- `WeeklyCard.tsx` — `MOCK_INSIGHTS` → wire to real learning stats or hide
-- `InventoryGrid.tsx` — `MOCK_INVENTORY` → wire to localStorage
-- `TaskQueue.tsx` — `MOCK_TASKS` → wire to pipeline status
-- `AdventureCard.tsx` — `MOCK_ADVENTURES` → wire or hide
-- `PurchaseHistory.tsx` — `MOCK_PURCHASES` → wire to store
-
-### F9. Mock fallback indicator 🟡
-`api.ts` has ~800 lines of mock data that silently loads when API is unreachable. Add a visible "⚠️ Offline mode — showing cached data" banner so users know what's real.
-- File: `dashboard/lib/api.ts`
-
-### F10. Guided onboarding tour 🟡
-Lock sidebar tabs until user visits each section. Steps: Companion → Chat → Brains → Unlock all. "Skip Tour" for power users.
-- Files: [NEW] `dashboard/components/GuidedTour.tsx`, `dashboard/components/Sidebar.tsx`
+### F7. Companion name from onboarding 🟡
+Companion widget should show the name chosen during onboarding (e.g. "Ember"), not a default.
+- Read from `fireside_companion` localStorage (JSON with name, species)
+- File: `dashboard/components/CompanionSim.tsx`
 
 ---
 
 ## 🛡️ Heimdall (Audit)
 
-### H1. Security review of new endpoints
-- `POST /api/v1/chat` — sanitize input before LLM, rate limit
-- `POST /api/v1/brains/install` — validate download URLs (no SSRF), verify GGUF checksums
-- `POST /api/v1/nodes` — auth token validation
+### H1. Full end-to-end config flow audit
+Trace every onboarding field through the system:
+- `userName` → where does it appear in dashboard?
+- `agentName` → nodes? sidebar? settings? everywhere?
+- `companionName` → companion widget? chat?
+- `brainSize` → brains page? settings?
+Report any disconnects.
 
-### H2. Verify no hardcoded Norse names remain
-Grep entire codebase for "odin", "thor", "freya", "heimdall", "valkyrie" in non-sprint/non-test files. All should be dynamic or removed.
+### H2. Store security review
+- Purchase endpoint auth
+- Plugin download validation
+- No arbitrary code execution from installed plugins
 
 ---
 
 ## 📋 Valkyrie (QA)
 
-### V1. End-to-end test
-1. Fresh install via .exe → system specs correct?
-2. Onboarding → name + companion → config files written?
-3. Dashboard loads → no hardcoded agent names visible?
-4. Chat → real LLM response (not canned)?
-5. Brains page → real hardware shown?
-6. Fire theme consistent throughout?
+### V1. Fresh install end-to-end
+1. Uninstall Fireside + clear state
+2. Run .exe → system shows ~64GB RAM + ~32GB VRAM?
+3. Onboarding → name agent "Atlas", pick fox companion "Ember"
+4. Dashboard → "Atlas" shows in sidebar, settings, nodes?
+5. Tour → Next works, tabs locked until done?
+6. Brains → matches onboarding choice?
+7. Store → real listings?
+8. Chat → sends to backend (if running)?
+9. No Norse names visible anywhere?
 
 ---
 
 ## Gate Criteria
-- [ ] `npm run build` passes locally (27/27 pages)
+- [ ] Fresh install shows correct RAM + VRAM (nvidia-smi)
+- [ ] Guided tour: Next works, tabs locked
+- [ ] Agent name flows: sidebar, settings, nodes, config page
+- [ ] Companion name flows: widget, chat
+- [ ] Brain picker: settings matches onboarding
+- [ ] Store: real listings from backend (even if local JSON)
+- [ ] No "Offline mode" banner when backend is running
+- [ ] No mock data visible on any page user can reach during tour
+- [ ] `npm run build` passes
 - [ ] `cargo tauri build` produces .exe
-- [ ] Correct RAM/GPU shown in installer AND brains page
-- [ ] Mac: unified memory shown correctly
-- [ ] No "Thor/Freya/Odin/Heimdall/Valkyrie" visible to user
-- [ ] Fire theme (amber) consistent from installer → dashboard
-- [ ] Chat sends messages to real backend (when backend running)
-- [ ] API port unified (8765 everywhere)
