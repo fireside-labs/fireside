@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { getSoul, putSoul } from "@/lib/api";
 
 const SOUL_TABS = [
-    { key: "IDENTITY.odin.md", label: "Identity", icon: "⚡" },
-    { key: "SOUL.odin.md", label: "Soul", icon: "🜂" },
-    { key: "USER.odin.md", label: "User", icon: "👤" },
+    { key: "IDENTITY.md", label: "Identity", icon: "⚡" },
+    { key: "SOUL.md", label: "Soul", icon: "🜂" },
+    { key: "USER.md", label: "User", icon: "👤" },
 ];
 
 interface SoulEditorProps {

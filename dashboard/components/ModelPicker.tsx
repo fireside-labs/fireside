@@ -5,8 +5,8 @@ import { switchModel } from "@/lib/api";
 
 const ALIASES = [
     {
-        alias: "odin",
-        label: "Odin",
+        alias: "local",
+        label: "Local",
         icon: "⚡",
         model: "llama/Qwen3.5-35B-A3B-8bit",
         description: "Local Qwen 35B — fast, private, on-device",

@@ -30,7 +30,7 @@ interface PersonalityFormProps {
 }
 
 export default function PersonalityForm({ initialValues, onSave }: PersonalityFormProps) {
-    const [name, setName] = useState(initialValues?.name || "Odin");
+    const [name, setName] = useState(initialValues?.name || "My AI");
     const [role, setRole] = useState(initialValues?.role || "assistant");
     const [tone, setTone] = useState(initialValues?.tone || "friendly");
     const [skills, setSkills] = useState<string[]>(initialValues?.skills || ["Writing & editing", "Answering research questions"]);

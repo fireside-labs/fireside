@@ -17,7 +17,7 @@ interface SettingsFormProps {
 }
 
 export default function SettingsForm({ onSave }: SettingsFormProps) {
-    const [name, setName] = useState("Odin");
+    const [name, setName] = useState("My AI");
     const [role, setRole] = useState("main");
     const [brain, setBrain] = useState("fast");
     const [addons, setAddons] = useState<string[]>(ADDON_OPTIONS.filter(a => a.default).map(a => a.id));

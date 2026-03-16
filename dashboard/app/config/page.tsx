@@ -17,7 +17,7 @@ export default function SettingsPage() {
 
     // Mock raw config for Advanced view
     const rawYaml = `# Fireside Configuration
-name: odin
+name: my-ai
 role: orchestrator
 model: llama-3.1-8b
 plugins:

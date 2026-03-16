@@ -46,10 +46,22 @@ export default function MorningBriefing({ petName, species, onDismiss }: Morning
     const hour = new Date().getHours();
     const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
+    // Get user name from localStorage
+    const userName = (() => {
+        try {
+            const onboarding = localStorage.getItem("fireside_onboarding");
+            if (onboarding) {
+                const data = JSON.parse(onboarding);
+                return data.user_name || data.name || "friend";
+            }
+        } catch { /* ignore */ }
+        return "friend";
+    })();
+
     return (
         <div className="glass-card p-5 border-l-2 border-[var(--color-neon)] mb-4 animate-[slideIn_0.4s_ease-out]">
             <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-white font-medium">☀️ {greeting}, Odin!</p>
+                <p className="text-sm text-white font-medium">☀️ {greeting}, {userName}!</p>
                 <button
                     onClick={() => { setVisible(false); onDismiss(); }}
                     className="text-[var(--color-rune-dim)] hover:text-white text-xs"
