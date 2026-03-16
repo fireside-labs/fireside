@@ -1,30 +1,49 @@
 "use client";
 
+/**
+ * 🚪 Onboarding Gate — Sprint 13 update.
+ *
+ * Routes new users to the correct wizard:
+ *   • Tauri desktop (window.__TAURI__) → InstallerWizard (full setup)
+ *   • Browser → OnboardingWizard (connect-to-existing-PC flow)
+ */
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 
 const OnboardingWizard = dynamic(() => import("./OnboardingWizard"), { ssr: false });
+const InstallerWizard = dynamic(() => import("./InstallerWizard"), { ssr: false });
+
+function isTauri(): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return typeof window !== "undefined" && !!(window as any).__TAURI__;
+}
 
 export default function OnboardingGate({ children }: { children: React.ReactNode }) {
-    const [showWizard, setShowWizard] = useState(false);
+    const [showWizard, setShowWizard] = useState<"none" | "installer" | "browser">("none");
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check localStorage first (fast path)
+        // Fast path: already onboarded
         const onboarded = localStorage.getItem("fireside_onboarded");
         if (onboarded) {
             setLoading(false);
             return;
         }
 
-        // Check if install.sh already completed onboarding (via backend API)
+        if (isTauri()) {
+            // Tauri desktop — show full installer wizard
+            setShowWizard("installer");
+            setLoading(false);
+            return;
+        }
+
+        // Browser — check backend, then fall back to browser wizard
         (async () => {
             try {
                 const res = await fetch("http://127.0.0.1:8765/api/v1/system/onboarding");
                 if (res.ok) {
                     const data = await res.json();
                     if (data.onboarded) {
-                        // Sync install.sh data to localStorage so dashboard has it
                         localStorage.setItem("fireside_onboarded", "1");
                         if (data.user_name) localStorage.setItem("fireside_user_name", data.user_name);
                         if (data.personality) localStorage.setItem("fireside_personality", data.personality);
@@ -34,17 +53,21 @@ export default function OnboardingGate({ children }: { children: React.ReactNode
                     }
                 }
             } catch {
-                // Backend not reachable — fall through to wizard
+                // Backend not reachable
             }
-            setShowWizard(true);
+            setShowWizard("browser");
             setLoading(false);
         })();
     }, []);
 
     if (loading) return null;
 
-    if (showWizard) {
-        return <OnboardingWizard onComplete={() => setShowWizard(false)} />;
+    if (showWizard === "installer") {
+        return <InstallerWizard onComplete={() => setShowWizard("none")} />;
+    }
+
+    if (showWizard === "browser") {
+        return <OnboardingWizard onComplete={() => setShowWizard("none")} />;
     }
 
     return <>{children}</>;

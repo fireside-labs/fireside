@@ -1,8 +1,8 @@
 {
     "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/nicegui/json/tauri-v2.json",
-    "productName": "Valhalla",
-    "version": "2.0.0",
-    "identifier": "ai.valhalla.mesh",
+    "productName": "Fireside",
+    "version": "1.0.0",
+    "identifier": "ai.fireside.app",
     "build": {
         "beforeBuildCommand": "cd ../dashboard && npm run build",
         "beforeDevCommand": "cd ../dashboard && npm run dev",
@@ -10,10 +10,10 @@
         "devUrl": "http://localhost:3000"
     },
     "app": {
-        "title": "Valhalla",
+        "title": "Fireside",
         "windows": [
             {
-                "title": "Valhalla",
+                "title": "🔥 Fireside Setup",
                 "width": 1280,
                 "height": 800,
                 "minWidth": 900,
@@ -24,7 +24,7 @@
             }
         ],
         "security": {
-            "csp": "default-src 'self'; connect-src 'self' http://localhost:8337 ws://localhost:8337; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:"
+            "csp": "default-src 'self'; connect-src 'self' http://localhost:8765 ws://localhost:8765 http://127.0.0.1:8765; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:"
         }
     },
     "bundle": {
@@ -59,7 +59,7 @@
     "plugins": {
         "updater": {
             "endpoints": [
-                "https://releases.valhalla.ai/{{target}}/{{arch}}/{{current_version}}"
+                "https://releases.getfireside.ai/{{target}}/{{arch}}/{{current_version}}"
             ],
             "pubkey": ""
         }
