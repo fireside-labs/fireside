@@ -38,36 +38,62 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     const [recommended, setRecommended] = useState({ emoji: "⚡", name: "Smart & Fast", model: "Llama 3.1, 8B" });
 
     useEffect(() => {
-        // Detect hardware via backend API
+        // Detect hardware: Try Tauri invoke first, then backend API, then browser fallback
         (async () => {
+            // 1. Try Tauri invoke (most accurate — uses nvidia-smi)
+            try {
+                const tauriInvoke = (window as any).__TAURI__?.core?.invoke;
+                if (tauriInvoke) {
+                    const info = await tauriInvoke("get_system_info");
+                    const vram = info.vram_gb || 0;
+                    setHardware({
+                        device: `${info.os} (${info.arch})`,
+                        gpu: info.gpu || "Unknown",
+                        vram: `${vram}GB`,
+                        ram: `${info.ram_gb}GB`,
+                    });
+                    if (vram >= 20) {
+                        setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B — Requires 24GB+ VRAM" });
+                    } else if (vram >= 8) {
+                        setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
+                    } else {
+                        setRecommended({ emoji: "🌙", name: "Cloud Expert", model: "Cloud — No VRAM required" });
+                    }
+                    return; // Success — skip other detection methods
+                }
+            } catch { /* Tauri not available */ }
+
+            // 2. Try backend API
             try {
                 const res = await fetch("http://127.0.0.1:8765/api/v1/brains/available");
                 if (res.ok) {
                     const data = await res.json();
                     const vram = data.vram_gb || 0;
                     const runtime = data.detected_runtime || "unknown";
-                    const deviceName = runtime === "omlx" ? "Apple Silicon Mac" : runtime === "llamacpp" ? "NVIDIA GPU System" : "Cloud Only";
-                    const gpuName = runtime === "omlx" ? `Apple Silicon (${vram}GB unified)` : runtime === "llamacpp" ? `NVIDIA GPU (${vram}GB VRAM)` : "No local GPU";
+                    const deviceName = runtime === "omlx" ? "Apple Silicon Mac" : runtime === "llamacpp" ? "NVIDIA GPU System" : "PC";
+                    const gpuName = runtime === "omlx" ? `Apple Silicon (${vram}GB unified)` : runtime === "llamacpp" ? `NVIDIA GPU (${vram}GB VRAM)` : "Unknown GPU";
                     setHardware({ device: deviceName, gpu: gpuName, vram: `${vram}GB`, ram: `${vram}GB` });
-                    if (vram >= 48) {
-                        setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B model" });
-                    } else if (vram >= 16) {
-                        setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B model" });
+                    if (vram >= 20) {
+                        setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B — Requires 24GB+ VRAM" });
+                    } else if (vram >= 8) {
+                        setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
                     } else {
-                        setRecommended({ emoji: "💨", name: "Compact", model: "3B model" });
+                        setRecommended({ emoji: "🌙", name: "Cloud Expert", model: "Cloud — No VRAM required" });
                     }
+                    return;
                 }
-            } catch {
-                const plat = navigator?.platform || "";
-                const isMac = plat.includes("Mac");
-                const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory;
-                setHardware({
-                    device: isMac ? "Mac" : "PC",
-                    gpu: isMac ? "Apple Silicon" : "Unknown",
-                    vram: mem ? `${mem}GB` : "Unknown",
-                    ram: mem ? `${mem}GB` : "Unknown",
-                });
-            }
+            } catch { /* Backend not running */ }
+
+            // 3. Fallback: browser APIs (limited — deviceMemory is capped at 8GB)
+            const plat = navigator?.platform || "";
+            const isMac = plat.includes("Mac");
+            setHardware({
+                device: isMac ? "Mac" : "PC",
+                gpu: "Could not detect GPU (backend offline)",
+                vram: "Unknown",
+                ram: "Unknown",
+            });
+            setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
         })();
     }, []);
 
@@ -86,9 +112,19 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         localStorage.setItem("fireside_personality", personality);
         localStorage.setItem("fireside_companion_species", companionSpecies);
         localStorage.setItem("fireside_companion_name", companionName || "Ember");
+        // Also write JSON format for components that read fireside_companion
+        localStorage.setItem("fireside_companion", JSON.stringify({
+            name: companionName || "Ember",
+            species: companionSpecies,
+        }));
         // Sprint 10: Save AI agent info
         localStorage.setItem("fireside_agent_name", agentName || "Atlas");
         localStorage.setItem("fireside_agent_style", agentStyle);
+        // Save VRAM + brain for BrainPicker
+        const vramStr = hardware.vram.replace("GB", "").replace("Unknown", "0");
+        const vramNum = parseFloat(vramStr) || 0;
+        localStorage.setItem("fireside_vram", vramNum.toString());
+        localStorage.setItem("fireside_brain", vramNum >= 20 ? "deep" : "fast");
         onComplete();
     };
 

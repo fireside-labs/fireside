@@ -72,78 +72,62 @@ fn get_system_info() -> SystemInfo {
         }
     };
 
-    let gpu = {
+    // Detect GPU and VRAM
+    let (gpu, vram_gb) = {
         #[cfg(target_os = "windows")]
         {
-            Command::new("powershell")
-                .args(["-NoProfile", "-Command",
-                    "(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name"])
-                .output()
-                .ok()
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                .filter(|s| !s.is_empty())
-                .unwrap_or_else(|| "Unknown".into())
-        }
-        #[cfg(target_os = "macos")]
-        {
-            Command::new("system_profiler")
-                .args(["SPDisplaysDataType"])
-                .output()
-                .ok()
-                .and_then(|o| {
-                    let s = String::from_utf8_lossy(&o.stdout).to_string();
-                    s.lines()
-                        .find(|l| l.contains("Chipset Model:"))
-                        .map(|l| l.split(':').nth(1).unwrap_or("Unknown").trim().to_string())
-                })
-                .unwrap_or_else(|| "Unknown".into())
-        }
-        #[cfg(target_os = "linux")]
-        {
-            Command::new("lspci")
-                .output()
-                .ok()
-                .and_then(|o| {
-                    let s = String::from_utf8_lossy(&o.stdout).to_string();
-                    s.lines()
-                        .find(|l| l.contains("VGA") || l.contains("3D"))
-                        .map(|l| l.to_string())
-                })
-                .unwrap_or_else(|| "Unknown".into())
-        }
-    };
-
-    // Detect VRAM (GPU memory)
-    let vram_gb = {
-        #[cfg(target_os = "windows")]
-        {
-            // Try nvidia-smi first (accurate, no 4GB uint32 overflow)
-            let nvidia_vram = Command::new("nvidia-smi")
-                .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+            // 1. Try nvidia-smi with absolute path first (most accurate for NVIDIA)
+            let nvsmi_path = "C:\\Windows\\System32\\nvidia-smi.exe";
+            let nvidia_data = Command::new(nvsmi_path)
+                .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
                 .output()
                 .ok()
                 .and_then(|o| {
                     let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                    // nvidia-smi returns MB, e.g. "32607"
-                    s.lines().next()
-                        .and_then(|line| line.trim().parse::<f64>().ok())
-                        .map(|mb| (mb / 1024.0 * 10.0).round() / 10.0)
+                    if s.is_empty() { return None; }
+                    let first_line = s.lines().next()?;
+                    let parts: Vec<&str> = first_line.split(',').collect();
+                    if parts.len() >= 2 {
+                        let name = parts[0].trim().to_string();
+                        let mb = parts[1].trim().parse::<f64>().ok()?;
+                        let gb = (mb / 1024.0 * 10.0).round() / 10.0;
+                        Some((name, gb))
+                    } else {
+                        None
+                    }
                 });
 
-            nvidia_vram.unwrap_or_else(|| {
-                // Fallback: WMI AdapterRAM (uint32, overflows above 4GB)
-                Command::new("powershell")
+            if let Some(data) = nvidia_data {
+                data
+            } else {
+                // 2. Fallback to WMI, but find the BEST GPU (max AdapterRAM)
+                let wmi_data = Command::new("powershell")
                     .args(["-NoProfile", "-Command",
-                        "(Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM"])
+                        "Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Json"])
                     .output()
                     .ok()
                     .and_then(|o| {
                         let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                        s.parse::<f64>().ok()
-                    })
-                    .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
-                    .unwrap_or(0.0)
-            })
+                        if s.is_empty() { return None; }
+                        // Handle both single object and array
+                        if s.starts_with('[') {
+                            let list: Vec<serde_json::Value> = serde_json::from_str(&s).ok()?;
+                            list.into_iter().max_by_key(|v| v["AdapterRAM"].as_f64().unwrap_or(0.0) as u64)
+                        } else {
+                            serde_json::from_str(&s).ok()
+                        }
+                    });
+
+                match wmi_data {
+                    Some(v) => {
+                        let name = v["Name"].as_str().unwrap_or("Unknown").to_string();
+                        let b = v["AdapterRAM"].as_f64().unwrap_or(0.0);
+                        let gb = (b / 1_073_741_824.0 * 10.0).round() / 10.0;
+                        (name, gb)
+                    }
+                    None => ("Unknown".into(), 0.0)
+                }
+            }
         }
         #[cfg(target_os = "macos")]
         {
@@ -595,7 +579,7 @@ fn main() {
 
                     loop {
                         let child = spawn_backend(&dir);
-                        if let Some(mut child) = child {
+                        if let Some(child) = child {
                             {
                                 let mut s = state.lock().unwrap();
                                 s.running = true;

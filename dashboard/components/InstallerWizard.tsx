@@ -229,9 +229,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               <div className="installer-recommended">
                 <span>Recommended brain: </span>
                 <strong>
-                  {(sysInfo.vram_gb || 0) >= 24
-                    ? "🧠 Deep Thinker (35B)"
-                    : "⚡ Smart & Fast (8B)"}
+                  {(sysInfo.vram_gb || 0) >= 20
+                    ? "🧠 Deep Thinker (35B Params) — Requires 24GB+ VRAM"
+                    : "⚡ Smart & Fast (8B Params) — Requires 10GB+ VRAM"}
                 </strong>
               </div>
             )}
@@ -337,9 +337,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               <div className="installer-confirm-row">
                 <span className="installer-confirm-label">Brain</span>
                 <span className="installer-confirm-value">
-                  {sysInfo && (sysInfo.vram_gb || 0) >= 24
-                    ? "🧠 Deep Thinker (35B)"
-                    : "⚡ Smart & Fast (8B)"}
+                  {sysInfo && (sysInfo.vram_gb || 0) >= 20
+                    ? "🧠 Deep Thinker (35B Params)"
+                    : "⚡ Smart & Fast (8B Params)"}
                 </span>
               </div>
             </div>
@@ -407,8 +407,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                   name: config.companionName || "Ember",
                   species: config.companionSpecies,
                 }));
-                // Write brain choice so BrainPicker + Settings match onboarding
-                const brainId = (sysInfo?.vram_gb || 0) >= 24 ? "deep" : "fast";
+                // Write VRAM + brain choice so BrainPicker + Settings match onboarding
+                localStorage.setItem("fireside_vram", sysInfo?.vram_gb.toString() || "0");
+                const brainId = (sysInfo?.vram_gb || 0) >= 20 ? "deep" : "fast";
                 localStorage.setItem("fireside_brain", brainId);
                 onComplete();
               }}

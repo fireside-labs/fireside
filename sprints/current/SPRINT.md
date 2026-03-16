@@ -1,97 +1,77 @@
-# Sprint 16 — "Polish & Ship"
+# Sprint 17 — "Immersion"
 
-> **Goal:** Fix everything caught by Sprint 15 audit + user test.  
-> **Timeline:** 1 day  
-> **Source:** Heimdall audit S15, Valkyrie review S15, owner's user test
-
----
-
-## 🔨 Thor (Backend + Tauri)
-
-### T1. Store backend — wire to frontend 🔴
-Sprint 15 added endpoints but Valkyrie confirms store page still shows mock data.
-- Verify `GET /api/v1/store/plugins` returns 6 default plugins
-- Verify `POST /api/v1/store/purchase` records to purchases.json
-- Verify `GET /api/v1/store/purchases` returns purchase history
-- Test: `curl http://127.0.0.1:8765/api/v1/store/plugins`
-
-### T2. Backend auto-start verification 🔴
-Sprint 15 added `setup()` hook in main.rs (confirmed by Heimdall). Needs:
-- Rebuild .exe
-- Test: launch app → backend starts automatically → no "Offline mode" banner
-- Verify restart-on-crash (max 3)
-- Verify kill-on-exit
-
-### T3. BrainPicker brains → match onboarding 🟡
-Onboarding says "Smart & Fast" / "Deep Thinker". BrainPicker shows different names.
-- Read brain constants from shared config
-- Store `fireside_brain` to localStorage during onboarding
-- File: `InstallerWizard.tsx` (write), `BrainPicker.tsx` (read)
+> **Goal:** Polish the experience until it feels like ONE product — onboarding through dashboard. Fix tab locking, unify colors, add model picker for power users, upgrade artwork.
+> **Timeline:** 1 day
+> **Source:** User test round 3 (2026-03-16 10:28 AM) — hardware detection WORKS ✅
 
 ---
 
-## 🎨 Freya (Dashboard Frontend)
+## 🔨 Thor (Backend + Config)
 
-### F1. Store page → real API 🔴
-Replace mock store data with real backend calls:
-- `GET /api/v1/store/plugins` → render plugin cards
-- Install button → `POST /api/v1/store/purchase` → show confirmation
-- Purchase history from `GET /api/v1/store/purchases`
-- Handle loading/error states
-- Files: `dashboard/app/store/page.tsx`
+### T1: Model name → brain mapping
+- Add `fireside_model` localStorage key alongside `fireside_brain`
+- `brain: "fast"` → `model: "llama-3.1-8b-q6"`
+- `brain: "deep"` → `model: "qwen-2.5-35b-q4"`
+- InstallerWizard + OnboardingWizard: save both keys on finish
+- API: `/api/v1/brains/active` returns `{ brain, model }` from config
 
-### F2. Guild Hall visual upgrade 🟡
-User feedback: "ugly as fuck" / "needs Game Dev Story quality pixel art"
-- Reference: Game Dev Story pixel art quality, Claude office ambient style
-- Higher-res sprites (48px or 64px)
-- Warm ambient background (fireside cabin)
-- Agents doing contextual activities with smooth idle animations
-- Files: `GuildHall.tsx`, `GuildHallAgent.tsx`, `AvatarSprite.tsx`
+---
 
-### F3. "Coming Soon" on unreachable pages 🟢
-Sprint 15 added `ComingSoon.tsx` component. Verify it's used on:
-- `/learning`, `/warroom`, `/crucible`, `/debate`, `/pipeline`
-- Files: each page's `page.tsx`
+## 🎨 Freya (UI + Polish)
+
+### F1: Model picker row in brain selection
+- Add row 4 to InstallerWizard brain step: "Advanced: Pick a specific model"
+- Expandable dropdown showing actual GGUF model names
+- Linked to brain selection: changing brain updates model, changing model updates brain
+- Power users pick exact model, everyone else ignores it
+
+### F2: Color consistency — onboarding → dashboard
+- Extract onboarding color palette (amber/gold neon, dark backgrounds)
+- Apply same palette as dashboard default theme
+- The `--color-neon` and glass card styles should match intro feel
+- No jarring color shift when transitioning from setup to dashboard
+
+### F3: Sidebar tab locking during guided tour
+- `Sidebar.tsx` must call `useTour().isLocked(href)` for each nav item
+- Locked items: grey out, show 🔒 icon, disable click
+- GuidedTour already has the logic — Sidebar just doesn't use it
+- First time: only Dashboard unlocked → Next → Brains → Next → Chat → Done
+
+### F4: Video game layout consistency
+- Same card style, same borders, same glow effects throughout all pages
+- Guild Hall, Chat, Brains, Store, Settings — all feel like one game UI
+- No pages that break immersion with generic/corporate styling
+- Consistent font sizes, icon styles, card padding
+
+### F5: Artwork quality upgrade
+- Guild Hall sprites: higher quality pixel art (Game Dev Story level)
+- Companion sprites: more detail, animation frames
+- Agent avatars: consistent style across all views
+- Consider replacing emoji placeholders with actual pixel art icons
 
 ---
 
 ## 🛡️ Heimdall (Audit)
 
-### H1. Store purchase auth
-Add `fireside_auth_token` validation to `POST /api/v1/store/purchase` (MEDIUM from S15 audit).
+### H1: Verify tab locking works end-to-end
+- Fresh install → only Dashboard tab clickable
+- "Next" in tour → Brains unlocks
+- "Next" → Chat unlocks
+- "Skip" → everything unlocks
+- After tour done, reload → all tabs accessible
 
-### H2. Verify MorningBriefing fix
-Confirm `MorningBriefing.tsx` reads `fireside_user_name`, not "Odin!".
-
-### H3. Verify companion key consistency
-Confirm `InstallerWizard.tsx` writes `fireside_companion` JSON.
-
----
-
-## 📋 Valkyrie (QA)
-
-### V1. Full fresh install end-to-end
-Same as Sprint 15 V1 but REBUILD .EXE FIRST:
-1. Clear state (`%LOCALAPPDATA%\ai.fireside.app` + `~/.fireside`)
-2. Install fresh .exe
-3. System check: ~64GB RAM + ~32GB VRAM ← **MUST verify this time**
-4. Name agent "Atlas", pick fox "Ember"
-5. Tour: Next works, tabs locked
-6. Store: real plugin listings from backend
-7. Chat: works when backend running
-8. Settings brain: matches onboarding choice
-9. No "Odin" anywhere
-10. No "Offline mode" when backend is auto-started
+### H2: Color audit
+- Compare onboarding palette vs dashboard palette
+- Flag any jarring transitions
+- Verify all pages use CSS vars, no hardcoded colors
 
 ---
 
-## Gate Criteria
-- [ ] Backend auto-starts from Tauri → no "Offline mode"
-- [ ] Store shows real plugins from `GET /store/plugins`
-- [ ] Purchase flow works (record to JSON)  
-- [ ] System specs show correct RAM + VRAM (nvidia-smi)
-- [ ] MorningBriefing shows user's name, not "Odin"
-- [ ] Brain picker matches onboarding
-- [ ] Companion data available in GuildHall (JSON key)
-- [ ] `npm run build` passes
-- [ ] `cargo tauri build` produces .exe
+## ✅ Valkyrie (QA)
+
+### V1: Full fresh-install walkthrough
+- Clear state, install .exe, go through entire flow
+- Verify: system detected → brain recommended → companion chosen → dashboard
+- Verify: tour locks tabs → guided through Dashboard → Brains → Chat
+- Verify: colors match between onboarding and dashboard
+- Verify: model picker shows correct model for selected brain

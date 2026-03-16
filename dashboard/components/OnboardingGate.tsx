@@ -30,34 +30,48 @@ export default function OnboardingGate({ children }: { children: React.ReactNode
             return;
         }
 
-        if (isTauri()) {
-            // Tauri desktop — show full installer wizard
-            setShowWizard("installer");
-            setLoading(false);
-            return;
-        }
+        // Tauri IPC bridge may not be injected yet when useEffect fires.
+        // Retry a few times before falling back to browser wizard.
+        let attempts = 0;
+        const maxAttempts = 10; // 10 × 200ms = 2 seconds max wait
 
-        // Browser — check backend, then fall back to browser wizard
-        (async () => {
-            try {
-                const res = await fetch("http://127.0.0.1:8765/api/v1/system/onboarding");
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.onboarded) {
-                        localStorage.setItem("fireside_onboarded", "1");
-                        if (data.user_name) localStorage.setItem("fireside_user_name", data.user_name);
-                        if (data.personality) localStorage.setItem("fireside_personality", data.personality);
-                        if (data.companion) localStorage.setItem("fireside_companion", JSON.stringify(data.companion));
-                        setLoading(false);
-                        return;
-                    }
-                }
-            } catch {
-                // Backend not reachable
+        const checkTauri = () => {
+            if (isTauri()) {
+                setShowWizard("installer");
+                setLoading(false);
+                return;
             }
-            setShowWizard("browser");
-            setLoading(false);
-        })();
+
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(checkTauri, 200);
+                return;
+            }
+
+            // After 2s, Tauri is definitely not available — try backend, then browser wizard
+            (async () => {
+                try {
+                    const res = await fetch("http://127.0.0.1:8765/api/v1/system/onboarding");
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.onboarded) {
+                            localStorage.setItem("fireside_onboarded", "1");
+                            if (data.user_name) localStorage.setItem("fireside_user_name", data.user_name);
+                            if (data.personality) localStorage.setItem("fireside_personality", data.personality);
+                            if (data.companion) localStorage.setItem("fireside_companion", JSON.stringify(data.companion));
+                            setLoading(false);
+                            return;
+                        }
+                    }
+                } catch {
+                    // Backend not reachable
+                }
+                setShowWizard("browser");
+                setLoading(false);
+            })();
+        };
+
+        checkTauri();
     }, []);
 
     if (loading) return null;
