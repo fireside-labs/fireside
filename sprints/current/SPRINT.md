@@ -1,77 +1,115 @@
-# Sprint 17 — "Immersion"
+# Sprint 18 — "Pixel Perfect"
 
-> **Goal:** Polish the experience until it feels like ONE product — onboarding through dashboard. Fix tab locking, unify colors, add model picker for power users, upgrade artwork.
-> **Timeline:** 1 day
-> **Source:** User test round 3 (2026-03-16 10:28 AM) — hardware detection WORKS ✅
-
----
-
-## 🔨 Thor (Backend + Config)
-
-### T1: Model name → brain mapping
-- Add `fireside_model` localStorage key alongside `fireside_brain`
-- `brain: "fast"` → `model: "llama-3.1-8b-q6"`
-- `brain: "deep"` → `model: "qwen-2.5-35b-q4"`
-- InstallerWizard + OnboardingWizard: save both keys on finish
-- API: `/api/v1/brains/active` returns `{ brain, model }` from config
+> **Goal:** Replace all emoji/placeholder art with proper Game Dev Story-quality pixel sprites. Make the Guild Hall and companion system feel like a real retro game.
+> **Timeline:** 2 days
+> **Source:** User feedback + Claude Office / Game Dev Story research
 
 ---
 
-## 🎨 Freya (UI + Polish)
+## How Claude Office & Game Dev Story Do It
 
-### F1: Model picker row in brain selection
-- Add row 4 to InstallerWizard brain step: "Advanced: Pick a specific model"
-- Expandable dropdown showing actual GGUF model names
-- Linked to brain selection: changing brain updates model, changing model updates brain
-- Power users pick exact model, everyone else ignores it
+The technique is well-documented:
 
-### F2: Color consistency — onboarding → dashboard
-- Extract onboarding color palette (amber/gold neon, dark backgrounds)
-- Apply same palette as dashboard default theme
-- The `--color-neon` and glass card styles should match intro feel
-- No jarring color shift when transitioning from setup to dashboard
+1. **Tiny sprite sheets** — Characters are 16×16 or 32×32 PNG images with 2-4 animation frames per action (idle, walking, working, sleeping)
+2. **`image-rendering: pixelated`** — THE critical CSS property. Prevents browser anti-aliasing when you scale up small sprites. Without it, pixel art looks blurry at 2x-4x.
+3. **Limited color palette** — 8-16 colors per character max. No gradients. Every pixel is deliberate.
+4. **NO anti-aliasing** — Hard pixel edges only. This is what makes it feel retro vs generic.
+5. **Sprite sheet animation** — Single PNG with all frames laid out horizontally. CSS `background-position` shifts to animate. `steps()` timing function for frame-by-frame.
+6. **Top-down perspective** — Characters viewed at ~45° angle (3/4 view), like Game Dev Story.
 
-### F3: Sidebar tab locking during guided tour
-- `Sidebar.tsx` must call `useTour().isLocked(href)` for each nav item
-- Locked items: grey out, show 🔒 icon, disable click
-- GuidedTour already has the logic — Sidebar just doesn't use it
-- First time: only Dashboard unlocked → Next → Brains → Next → Chat → Done
+### CSS Pattern
+```css
+.sprite {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges; /* Firefox fallback */
+  width: 64px;   /* display size (4x upscale of 16px source) */
+  height: 64px;
+  background: url('/sprites/agent.png') no-repeat;
+  background-size: 256px 64px; /* 4 frames × 64px */
+  animation: walk 0.6s steps(4) infinite;
+}
+@keyframes walk {
+  to { background-position: -256px 0; }
+}
+```
 
-### F4: Video game layout consistency
-- Same card style, same borders, same glow effects throughout all pages
-- Guild Hall, Chat, Brains, Store, Settings — all feel like one game UI
-- No pages that break immersion with generic/corporate styling
-- Consistent font sizes, icon styles, card padding
+---
 
-### F5: Artwork quality upgrade
-- Guild Hall sprites: higher quality pixel art (Game Dev Story level)
-- Companion sprites: more detail, animation frames
-- Agent avatars: consistent style across all views
-- Consider replacing emoji placeholders with actual pixel art icons
+## 🎨 Freya (Art + UI)
+
+### F1: Create sprite sheet system
+- `dashboard/public/sprites/` directory for all sprite PNGs
+- `SpriteCharacter.tsx` component that renders a sprite with:
+  - `image-rendering: pixelated` (crisp scaling)
+  - `background-position` animation (sprite sheet frames)
+  - `steps()` CSS timing for frame stepping
+  - Props: `sprite`, `action`, `scale`, `direction`
+- Support actions: idle, walk, work, sleep, chat
+
+### F2: Agent sprites (32×32 base)
+- Generate sprite sheets for each agent style:
+  - `analytical` — glasses, neat hair, focused pose
+  - `creative` — beret, paint splatter, expressive
+  - `direct` — military cut, sharp features
+  - `warm` — soft features, scarf, gentle
+- 4 frames per action × 5 actions = 20 frames per sheet
+- Use `generate_image` tool to create base sprites, then hand-clean
+
+### F3: Companion sprites (24×24 base)
+- All 6 species: cat, dog, penguin, fox, owl, dragon
+- Each with: idle (2 frames), walking (4 frames), sleeping (2 frames)
+- Pixel art style matching agents — same palette approach
+
+### F4: Guild Hall environment sprites
+- Fireplace (animated, 3 frames flickering)
+- Desk/workstation
+- Bookshelf
+- Cauldron (crucible)
+- Floor tiles / wood planks as tileable patterns
+- Window with light rays
+
+### F5: Replace AvatarSprite.tsx with real sprites
+- Current `AvatarSprite.tsx` draws CSS rectangles
+- Replace with `SpriteCharacter.tsx` using actual PNG sheets
+- Scale: 4x (32px source → 128px display in guild hall)
+- Smaller scale for sidebar/chat avatars
+
+### F6: Apply `image-rendering: pixelated` globally
+- Add to `globals.css`:
+  ```css
+  .sprite, [data-sprite] {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  ```
+- Ensure all scaled pixel art uses this — no blur
+
+---
+
+## 🔨 Thor (Backend)
+
+### T1: Serve sprite assets from dashboard/public
+- Ensure `/sprites/` directory is included in Next.js static export
+- Verify sprites load in Tauri WebView (no CSP blocking)
+- Add `img-src 'self' data: blob:` already in CSP (verified)
 
 ---
 
 ## 🛡️ Heimdall (Audit)
 
-### H1: Verify tab locking works end-to-end
-- Fresh install → only Dashboard tab clickable
-- "Next" in tour → Brains unlocks
-- "Next" → Chat unlocks
-- "Skip" → everything unlocks
-- After tour done, reload → all tabs accessible
-
-### H2: Color audit
-- Compare onboarding palette vs dashboard palette
-- Flag any jarring transitions
-- Verify all pages use CSS vars, no hardcoded colors
+### H1: Pixel quality audit
+- Verify NO anti-aliasing on any sprite at any scale
+- Check all sprites render sharp at 2x, 3x, 4x
+- Verify sprite sheet alignment (no sub-pixel drift)
+- Check performance: sprite animations at 60fps
 
 ---
 
 ## ✅ Valkyrie (QA)
 
-### V1: Full fresh-install walkthrough
-- Clear state, install .exe, go through entire flow
-- Verify: system detected → brain recommended → companion chosen → dashboard
-- Verify: tour locks tabs → guided through Dashboard → Brains → Chat
-- Verify: colors match between onboarding and dashboard
-- Verify: model picker shows correct model for selected brain
+### V1: Visual comparison test
+- Screenshot Guild Hall before/after
+- Verify agents animate correctly (idle → work → chat)
+- Verify companions animate (idle → walk → sleep)
+- Check all 6 species × 4 agent styles render correctly
+- Test at different window sizes
