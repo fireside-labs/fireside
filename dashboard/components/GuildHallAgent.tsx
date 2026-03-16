@@ -78,7 +78,7 @@ export default function GuildHallAgent({
             onDoubleClick={onDoubleClick}
         >
             {/* Avatar */}
-            <AvatarSprite config={avatar} size={56} status={status} />
+            <AvatarSprite config={avatar} size={64} status={status} />
 
             {/* Name plate */}
             <div className="text-center mt-1">

@@ -12,7 +12,7 @@ interface BrainOption {
     warning?: string;
 }
 
-const BRAIN_OPTIONS: BrainOption[] = [
+export const BRAIN_OPTIONS: BrainOption[] = [
     {
         id: "fast", emoji: "⚡", name: "llama-3.1-8b", label: "Smart & Fast",
         badge: "FREE", description: "Best for quick questions and chat.",

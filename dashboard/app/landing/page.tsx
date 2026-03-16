@@ -155,7 +155,7 @@ export default function LandingPage() {
                     Your AI companion, always by your side · getfireside.ai
                 </p>
                 <p className="text-[10px] text-[var(--color-rune-dim)] mt-2 opacity-50">
-                    Built with 🔥 by Odin · Thor · Freya · Heimdall · Valkyrie
+                    Built with 🔥 by the Fireside team
                 </p>
             </div>
         </div>

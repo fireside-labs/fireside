@@ -1,47 +1,60 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 interface Purchase {
-    id: string;
-    name: string;
-    emoji: string;
-    type: string;
+    plugin_id: string;
+    plugin_name: string;
     price: number;
-    date: string;
-    installed: boolean;
+    purchased_at: string;
+    icon?: string;
 }
 
-const MOCK_PURCHASES: Purchase[] = [
-    { id: "1", name: "Smart & Fast", emoji: "⚡", type: "Brain", price: 0, date: "Mar 8", installed: true },
-    { id: "2", name: "Nordic Hall Theme", emoji: "🏰", type: "Theme", price: 0, date: "Mar 8", installed: true },
-    { id: "3", name: "Office Theme", emoji: "🏢", type: "Theme", price: 0, date: "Mar 10", installed: false },
-];
-
 export default function PurchaseHistory() {
+    const [purchases, setPurchases] = useState<Purchase[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetch("http://127.0.0.1:8765/api/v1/store/purchases")
+            .then(res => res.ok ? res.json() : { purchases: [] })
+            .then(data => {
+                const items = data.purchases || data || [];
+                setPurchases(Array.isArray(items) ? items : []);
+            })
+            .catch(() => setPurchases([]))
+            .finally(() => setLoading(false));
+    }, []);
+
     return (
         <div className="glass-card p-5">
             <h3 className="text-white font-semibold mb-3">My Purchases</h3>
-            {MOCK_PURCHASES.length === 0 ? (
-                <p className="text-xs text-[var(--color-rune-dim)]">No purchases yet.</p>
+            {loading ? (
+                <div className="space-y-2">
+                    {[1, 2].map(i => (
+                        <div key={i} className="h-12 rounded-lg bg-[var(--color-glass)] animate-pulse" />
+                    ))}
+                </div>
+            ) : purchases.length === 0 ? (
+                <div className="text-center py-8">
+                    <span className="text-3xl block mb-2">🛒</span>
+                    <p className="text-sm text-[var(--color-rune-dim)]">No purchases yet. Browse the store to find useful add-ons.</p>
+                </div>
             ) : (
                 <div className="space-y-2">
-                    {MOCK_PURCHASES.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--color-glass)]">
+                    {purchases.map((p) => (
+                        <div key={p.plugin_id} className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--color-glass)]">
                             <div className="flex items-center gap-2.5">
-                                <span className="text-xl">{p.emoji}</span>
+                                <span className="text-xl">{p.icon || "📦"}</span>
                                 <div>
-                                    <p className="text-sm text-white">{p.name}</p>
-                                    <p className="text-[10px] text-[var(--color-rune-dim)]">{p.type} · {p.date}</p>
+                                    <p className="text-sm text-white">{p.plugin_name}</p>
+                                    <p className="text-[10px] text-[var(--color-rune-dim)]">Plugin · {new Date(p.purchased_at).toLocaleDateString()}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-[var(--color-rune-dim)]">
                                     {p.price === 0 ? "Free" : `$${p.price.toFixed(2)}`}
                                 </span>
-                                {p.installed ? (
-                                    <span className="text-[10px] text-[var(--color-neon)]">✅ Installed</span>
-                                ) : (
-                                    <button className="text-[10px] text-[var(--color-neon)] hover:underline">Install</button>
-                                )}
+                                <span className="text-[10px] text-[var(--color-neon)]">✅ Installed</span>
                             </div>
                         </div>
                     ))}

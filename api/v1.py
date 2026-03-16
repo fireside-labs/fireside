@@ -1079,6 +1079,28 @@ def _load_store_registry() -> list[dict]:
             "downloads": 41,
             "icon": "🎙️",
         },
+        {
+            "id": "prompt-optimizer",
+            "name": "Prompt Optimizer",
+            "version": "1.1.0",
+            "description": "Auto-optimize prompts based on feedback loops",
+            "author": "community",
+            "category": "intelligence",
+            "price": 0,
+            "downloads": 264,
+            "icon": "✨",
+        },
+        {
+            "id": "cost-tracker",
+            "name": "Cost Tracker",
+            "version": "0.8.0",
+            "description": "Track inference costs across providers and models",
+            "author": "fireside",
+            "category": "analytics",
+            "price": 0,
+            "downloads": 89,
+            "icon": "📊",
+        },
     ]
     _STORE_REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
     _STORE_REGISTRY_PATH.write_text(json.dumps(defaults, indent=2), encoding="utf-8")
@@ -1115,11 +1137,21 @@ async def get_store_plugins():
 
 class PurchaseRequest(BaseModel):
     plugin_id: str
+    auth_token: str = ""
 
 
 @router.post("/store/purchase")
 async def store_purchase(req: PurchaseRequest):
-    """Purchase and install a plugin from the store."""
+    """Purchase and install a plugin from the store.
+    
+    Requires mesh.auth_token for authentication.
+    """
+    import hmac
+    
+    expected_token = _config.get("mesh", {}).get("auth_token", "")
+    if not expected_token or not hmac.compare_digest(req.auth_token, expected_token):
+        raise HTTPException(status_code=401, detail="Invalid or missing auth token")
+
     registry = _load_store_registry()
     plugin = next((p for p in registry if p["id"] == req.plugin_id), None)
     if not plugin:

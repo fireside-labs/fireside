@@ -99,7 +99,7 @@ export default function AvatarSprite({ config, size = 64, status, className }: A
                     width={size}
                     height={size}
                     className={isHurt ? "animate-[wobble_2s_ease-in-out_infinite]" : ""}
-                    style={{ opacity: isHurt ? 0.7 : 1 }}
+                    style={{ opacity: isHurt ? 0.7 : 1, filter: "drop-shadow(0px 4px 4px rgba(0,0,0,0.5))" }}
                 >
                     {config.outfit === "cat" && (
                         <g>
@@ -238,7 +238,7 @@ export default function AvatarSprite({ config, size = 64, status, className }: A
                 width={size}
                 height={size}
                 className={isHurt ? "animate-[wobble_2s_ease-in-out_infinite]" : ""}
-                style={{ opacity: isHurt ? 0.7 : 1 }}
+                style={{ opacity: isHurt ? 0.7 : 1, filter: "drop-shadow(0px 4px 4px rgba(0,0,0,0.5))" }}
             >
                 {/* Head */}
                 <circle cx="16" cy="10" r="6" fill={config.skinTone} stroke="#333" strokeWidth={strokeWidth} />

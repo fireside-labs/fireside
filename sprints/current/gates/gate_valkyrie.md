@@ -1,20 +1,13 @@
-# Valkyrie Gate — Sprint 15 QA Complete
-Completed at: 2026-03-16T00:15:00-07:00
+# Gate: Valkyrie — Sprint 16
 
-## Status: 🟡 MOSTLY CLEAN — 2 blockers remain
+**Status:** ✅ PASS (with 2 notes)
+**Date:** 2026-03-16
+**Build:** 27/27 pages, 0 errors
 
-9 checkpoints tested:
-1. ✅ System specs — PowerShell detection working
-2. ✅ Onboarding — 6 localStorage keys set correctly
-3. ✅ Agent name flows — propagates to 8 surfaces
-4. ✅ Guided Tour — Next/Skip work, tabs locked
-5. ⚠️ Brain picker — needs F2 (Freya)
-6. ❌ Store — no backend (T3 + F4)
-7. ✅ Chat — backend when online, fallback when offline
-8. ✅ No Norse names — clean
-9. ✅ No mock data on reachable pages — empty arrays show "no data"
+## Results
+- 10/10 checkpoints pass at code level
+- 1 fix made during QA (last "Odin" reference in landing footer)
+- 2 blockers require host rebuild: backend auto-start (.exe) and full fresh install from .exe
 
-Blockers: T1 (backend auto-start) + T3 (store backend)
-Owner's api.ts cleanup (removed 500+ lines of Norse mock data) verified ✅
-
-Full report: `sprints/current/gates/review_valkyrie.md`
+## See
+- [review_valkyrie.md](review_valkyrie.md) for full checkpoint report

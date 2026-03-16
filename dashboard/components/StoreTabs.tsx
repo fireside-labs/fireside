@@ -1,12 +1,14 @@
 "use client";
 
 interface StoreTabsProps {
+    tabs?: { id: string; label: string; emoji: string }[];
     selected: string;
     onSelect: (tab: string) => void;
     counts?: Record<string, number>;
 }
 
-const TABS = [
+const DEFAULT_TABS = [
+    { id: "plugins", label: "Plugins", emoji: "🧩" },
     { id: "agents", label: "Agents", emoji: "🤖" },
     { id: "themes", label: "Themes", emoji: "🏰" },
     { id: "avatars", label: "Avatars", emoji: "👤" },
@@ -14,10 +16,11 @@ const TABS = [
     { id: "personalities", label: "Personalities", emoji: "💬" },
 ];
 
-export default function StoreTabs({ selected, onSelect, counts }: StoreTabsProps) {
+export default function StoreTabs({ tabs = DEFAULT_TABS, selected, onSelect, counts }: StoreTabsProps) {
+    const activeTabs = tabs;
     return (
         <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Store categories">
-            {TABS.map((tab) => (
+            {activeTabs.map((tab) => (
                 <button
                     key={tab.id}
                     onClick={() => onSelect(tab.id)}

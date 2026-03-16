@@ -174,26 +174,67 @@ export default function GuildHall({ theme }: GuildHallProps) {
             className="relative w-full rounded-xl overflow-hidden"
             style={{
                 aspectRatio: "16/9",
-                background: `linear-gradient(180deg, ${themeColors.bg} 0%, ${themeColors.floor} 60%, ${themeColors.floor} 100%)`,
+                background: `linear-gradient(180deg, ${themeColors.bg} 0%, ${themeColors.floor} 50%, ${themeColors.floor} 100%)`,
                 border: `1px solid ${themeColors.accent}33`,
+                boxShadow: `inset 0 -80px 100px -40px ${themeColors.accent}20, inset 0 0 120px rgba(0,0,0,0.8), 0 8px 32px rgba(0,0,0,0.4)`,
             }}
         >
-            {/* Floor line */}
+            {/* Deep Vignette */}
+            <div className="absolute inset-0 pointer-events-none z-0" style={{
+                background: "radial-gradient(circle at 50% 50%, transparent 20%, rgba(0,0,0,0.6) 100%)"
+            }} />
+
+            {/* Ambient warm glow for all themes to give an atmospheric feel */}
             <div
-                className="absolute inset-x-0"
-                style={{ top: "45%", height: "1px", background: `${themeColors.accent}22` }}
+                className="absolute pointer-events-none"
+                style={{
+                    left: "50%", top: "40%",
+                    width: "120%", height: "120%",
+                    transform: "translate(-50%, -50%)",
+                    background: `radial-gradient(circle, ${themeColors.accent}15 0%, transparent 60%)`,
+                    animation: "pulse 6s ease-in-out infinite alternate",
+                }}
             />
 
-            {/* Theme elements (furniture/objects) */}
+            {/* Intense Fireplace/Light source glow */}
+            <div
+                className="absolute pointer-events-none"
+                style={{
+                    left: "78%", top: "55%",
+                    width: 300, height: 300,
+                    transform: "translate(-50%, -50%)",
+                    background: `radial-gradient(circle, ${themeColors.accent}33 0%, ${themeColors.accent}10 40%, transparent 70%)`,
+                    animation: "pulse 3s ease-in-out infinite",
+                    mixBlendMode: "screen"
+                }}
+            />
+
+            {/* Floor surface with subtle depth line */}
+            <div
+                className="absolute inset-x-0"
+                style={{
+                    top: "50%", height: 3,
+                    background: `linear-gradient(90deg, transparent 5%, ${themeColors.accent}25 20%, ${themeColors.accent}40 50%, ${themeColors.accent}25 80%, transparent 95%)`,
+                    boxShadow: `0 2px 10px ${themeColors.accent}20`
+                }}
+            />
+
+            {/* Back Wall line */}
+            <div
+                className="absolute inset-x-0"
+                style={{ top: "35%", height: "2px", background: `linear-gradient(90deg, transparent, ${themeColors.accent}15, transparent)` }}
+            />
+
+            {/* Theme elements (furniture/objects) — larger and more visible */}
             {elements.map((el) => (
                 <div
                     key={el.label}
-                    className="absolute"
+                    className="absolute transition-transform hover:scale-110"
                     style={{ left: `${el.x}%`, top: `${el.y}%`, transform: "translate(-50%, -50%)" }}
                 >
-                    <div className="text-center opacity-40">
-                        <span className="text-2xl block">{el.emoji}</span>
-                        <span className="text-[8px] text-[var(--color-rune-dim)]">{el.label}</span>
+                    <div className="text-center">
+                        <span className="text-3xl block" style={{ opacity: 0.65, filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }}>{el.emoji}</span>
+                        <span className="text-[8px] text-[var(--color-rune-dim)] opacity-50">{el.label}</span>
                     </div>
                 </div>
             ))}

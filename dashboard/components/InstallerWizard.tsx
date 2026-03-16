@@ -229,11 +229,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               <div className="installer-recommended">
                 <span>Recommended brain: </span>
                 <strong>
-                  {(sysInfo.vram_gb || 0) >= 48
+                  {(sysInfo.vram_gb || 0) >= 24
                     ? "🧠 Deep Thinker (35B)"
-                    : (sysInfo.vram_gb || 0) >= 16
-                      ? "⚡ Smart & Fast (7B)"
-                      : "💨 Compact (3B)"}
+                    : "⚡ Smart & Fast (8B)"}
                 </strong>
               </div>
             )}
@@ -339,11 +337,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               <div className="installer-confirm-row">
                 <span className="installer-confirm-label">Brain</span>
                 <span className="installer-confirm-value">
-                  {sysInfo && (sysInfo.vram_gb || 0) >= 48
+                  {sysInfo && (sysInfo.vram_gb || 0) >= 24
                     ? "🧠 Deep Thinker (35B)"
-                    : sysInfo && (sysInfo.vram_gb || 0) >= 16
-                      ? "⚡ Smart & Fast (7B)"
-                      : "💨 Compact (3B)"}
+                    : "⚡ Smart & Fast (8B)"}
                 </span>
               </div>
             </div>
@@ -411,6 +407,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                   name: config.companionName || "Ember",
                   species: config.companionSpecies,
                 }));
+                // Write brain choice so BrainPicker + Settings match onboarding
+                const brainId = (sysInfo?.vram_gb || 0) >= 24 ? "deep" : "fast";
+                localStorage.setItem("fireside_brain", brainId);
                 onComplete();
               }}
             >

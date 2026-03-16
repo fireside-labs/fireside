@@ -599,16 +599,34 @@ fn main() {
                             {
                                 let mut s = state.lock().unwrap();
                                 s.running = true;
+                                s.child = Some(child);
                             }
 
-                            // Wait for process to exit
-                            match child.wait() {
-                                Ok(status) => {
-                                    println!("[fireside] Backend exited: {}", status);
+                            // Wait for process to exit via polling
+                            loop {
+                                let mut s = state.lock().unwrap();
+                                if let Some(ref mut c) = s.child {
+                                    match c.try_wait() {
+                                        Ok(Some(status)) => {
+                                            println!("[fireside] Backend exited: {}", status);
+                                            s.child = None;
+                                            break;
+                                        }
+                                        Ok(None) => {
+                                            // Process is still running
+                                        }
+                                        Err(e) => {
+                                            eprintln!("[fireside] Backend wait error: {}", e);
+                                            s.child = None;
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    // Process was deleted (e.g., by exit handler)
+                                    break;
                                 }
-                                Err(e) => {
-                                    eprintln!("[fireside] Backend wait error: {}", e);
-                                }
+                                drop(s);
+                                thread::sleep(std::time::Duration::from_millis(500));
                             }
 
                             let mut s = state.lock().unwrap();

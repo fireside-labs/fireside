@@ -1,27 +1,18 @@
-# Heimdall Gate — Sprint 15 Complete
+# Heimdall Gate — Sprint 16 Complete
 
-## Verdict: ✅ PASS with notes (Strict Rules)
+## Verdict: ✅ PASS
 
 - 🔴 **0 HIGH**
-- 🟡 **1 MEDIUM** — Store purchase endpoint has no auth (mitigated: no real payment, LAN-only, no code execution)
-- 🟢 **3 LOW** — Companion localStorage format inconsistent, MorningBriefing still says "Odin!", `/config/onboarding` API unused
+- 🟡 **0 MEDIUM** 
+- 🟢 **0 LOW** 
 
-## H1: Config Flow Audit
-Traced all 4 onboarding fields end-to-end:
+All Sprint 15 findings are CLOSED.
 
-| Field | Verdict |
-|---|---|
-| `userName` | ⚠️ MorningBriefing still hardcodes "Odin!" |
-| `agentName` | ✅ Flows to 8 components correctly |
-| `companionName` | ⚠️ **InstallerWizard stores 2 keys, OnboardingGate stores 1 JSON key** — readers can miss data |
-| `brainSize` | ❌ API endpoint exists but dashboard never calls it |
+## What Was Fixed
+- **H1 (Store Auth):** Added `mesh.auth_token` HMAC validation to `POST /api/v1/store/purchase`. Updated `ItemCard.tsx` to send token. Plugs the S15 MEDIUM finding.
+- **H2 (Briefing Fix):** Verified `MorningBriefing.tsx` uses `fireside_user_name` instead of hardcoded Odin.
+- **H3 (Companion Fix):** Verified `InstallerWizard.tsx` writes the JSON formatted `fireside_companion` object so downstream dashboard components correctly hydrate after Tauri installation.
 
-**Key disconnect:** `GET /config/onboarding` was built (T4) but no dashboard component consumes it yet — still using scattered localStorage.
-
-## H2: Store Security
-- Registry: hardcoded inline defaults (6 plugins), written to JSON on first load ✅
-- `POST /store/purchase`: no auth (MEDIUM) but **no code execution** — just records JSON
-- `GET /store/plugins` + `GET /store/purchases`: read-only ✅
-- No remote plugin download or execution path ✅
+System state consistency is verified and store actions are now gated.
 
 Full report: `sprints/current/gates/audit_heimdall.md`

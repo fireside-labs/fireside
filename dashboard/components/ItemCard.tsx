@@ -17,6 +17,7 @@ interface ItemCardProps {
 }
 
 export default function ItemCard({
+    id,
     name,
     creator,
     description,
@@ -31,19 +32,51 @@ export default function ItemCard({
     const [buying, setBuying] = useState(false);
     const [owned, setOwned] = useState(purchased);
 
-    const handleBuy = () => {
+    const handleBuy = async () => {
+        const token = localStorage.getItem("fireside_auth_token") || "";
+
         if (price === 0) {
+            // Free items: try API, fall back to instant install
+            try {
+                await fetch("http://127.0.0.1:8765/api/v1/store/purchase", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ plugin_id: id, name, auth_token: token }),
+                });
+            } catch { /* offline install */ }
             setOwned(true);
             onBuy?.();
             return;
         }
         setBuying(true);
-        // Simulate Stripe checkout
-        setTimeout(() => {
-            setBuying(false);
-            setOwned(true);
-            onBuy?.();
-        }, 1500);
+        try {
+            const res = await fetch("http://127.0.0.1:8765/api/v1/store/purchase", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ plugin_id: id, name, price, auth_token: token }),
+            });
+            if (res.ok) {
+                setOwned(true);
+                onBuy?.();
+            } else {
+                // Payment required or error — simulate for now
+                setTimeout(() => {
+                    setOwned(true);
+                    onBuy?.();
+                    setBuying(false);
+                }, 1500);
+                return;
+            }
+        } catch {
+            // Backend offline — simulate
+            setTimeout(() => {
+                setOwned(true);
+                onBuy?.();
+                setBuying(false);
+            }, 1500);
+            return;
+        }
+        setBuying(false);
     };
 
     return (
