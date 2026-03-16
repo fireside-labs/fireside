@@ -201,7 +201,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
                                 avatar={agent.avatar}
                                 activity={agent.activity}
                                 status={agent.status}
-                                taskLabel={agent.taskLabel}
+                                taskLabel={agent.taskLabel ?? undefined}
                                 position={{ x: zone.x + offset, y: zone.y }}
                                 theme={theme}
                                 onClick={() => { }}

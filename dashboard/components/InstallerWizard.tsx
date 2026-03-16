@@ -13,6 +13,11 @@ import { useState, useEffect, useCallback } from "react";
 
 // ---------- Types ----------------------------------------------------------
 
+type CheckStatus = "pending" | "ok" | "fail";
+type InstallStatus = "pending" | "running" | "done" | "fail";
+interface SysCheck { label: string; status: CheckStatus; value: string; }
+interface InstallStep { label: string; status: InstallStatus; }
+
 interface SystemInfo {
   os: string;
   arch: string;
@@ -80,8 +85,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
     brainModel: "7B",
   });
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
-  const [sysChecks, setSysChecks] = useState<{ label: string; status: "pending" | "ok" | "fail"; value: string }[]>([]);
-  const [installSteps, setInstallSteps] = useState<{ label: string; status: "pending" | "running" | "done" | "fail" }[]>([]);
+  const [sysChecks, setSysChecks] = useState<SysCheck[]>([]);
+  const [installSteps, setInstallSteps] = useState<InstallStep[]>([]);
   const [animClass, setAnimClass] = useState("installer-enter");
 
   const goTo = useCallback((s: Step) => {
@@ -95,10 +100,10 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   // ── Step 1: System Check (auto-run) ──
   useEffect(() => {
     if (step !== 1) return;
-    const checks = [
-      { label: "Operating System", status: "pending" as const, value: "" },
-      { label: "Memory", status: "pending" as const, value: "" },
-      { label: "Graphics", status: "pending" as const, value: "" },
+    const checks: SysCheck[] = [
+      { label: "Operating System", status: "pending", value: "" },
+      { label: "Memory", status: "pending", value: "" },
+      { label: "Graphics", status: "pending", value: "" },
     ];
     setSysChecks(checks);
 
@@ -125,12 +130,12 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   // ── Step 5: Installing ──
   useEffect(() => {
     if (step !== 5) return;
-    const steps = [
-      { label: "Checking Python", status: "pending" as const },
-      { label: "Checking Node.js", status: "pending" as const },
-      { label: "Setting up Fireside", status: "pending" as const },
-      { label: "Installing packages", status: "pending" as const },
-      { label: "Saving your preferences", status: "pending" as const },
+    const steps: InstallStep[] = [
+      { label: "Checking Python", status: "pending" },
+      { label: "Checking Node.js", status: "pending" },
+      { label: "Setting up Fireside", status: "pending" },
+      { label: "Installing packages", status: "pending" },
+      { label: "Saving your preferences", status: "pending" },
     ];
     setInstallSteps(steps);
 
