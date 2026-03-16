@@ -1,99 +1,92 @@
-# Sprint 23 — "Actually Fix It"
+# Sprint 24 — "Make It Real"
 
-> **Goal:** Stop saying things are done when they aren't. Every item here must result in a VISIBLE change the user can see and test.
-> **Timeline:** 1 day
-> **Source:** 6 rounds of user testing (2026-03-16) — "this onboarding is sloppy as fuck"
-
----
-
-## ❌ WHAT'S BROKEN RIGHT NOW
-
-1. **Ember companion = broken image** (checkerboard on dashboard)
-2. **Tour only covers Dashboard → Brains → Chat** — skips Personality, Guild Hall, Store, Settings
-3. **Model picker auto-advances** — user can't pick a model (FIX IN CODE but needs rebuild)
-4. **Tour "Go to Brains" was plain text** — now clickable (FIX IN CODE but needs rebuild)
-5. **Chat works when brain isn't connected** — confusing, contradictory
-6. **Dashboard looks NOTHING like the installer** — still basic cards, no embers, no cinematic feel
-7. **Brain says connected but isn't** — status lies
-8. **Install step shows ❌ on Python** — should say "skipped"
+> **Goal:** Fix every broken thing from user test round 7 (2026-03-16 4:26 PM). No new features — just fix what's broken.
+> **Source:** Screenshots showing checkerboard sprites, broken buttons, wrong model, Telegram nonsense
 
 ---
 
-## 🎨 Freya — VISIBLE CHANGES ONLY
+## 🔴 BUGS (fix or remove)
 
-### F1: Fix Ember companion image (VISIBLE)
-- Find why `/sprites/companion_fox.png` shows checkerboard
-- If PNG doesn't exist → generate it with generate_image tool
-- If path is wrong → fix the path in dashboard page.tsx
-- Fallback: render emoji instead of broken img tag
-- **TEST:** Ember must show as a cute fox sprite, not ❌ or checkerboard
+### B1: Ember/companion sprite = checkerboard (CRITICAL)
+- Every screenshot shows broken PNG — checkerboard on dashboard AND Guild Hall
+- Root cause: sprite PNGs don't exist at the path GuildHall.tsx / page.tsx reference
+- **Fix:** Either generate real PNGs or use emoji fallback. NO CHECKERBOARD EVER.
+- Test: Ember must render as visual, not broken img
 
-### F2: Full guided tour — ALL tabs (VISIBLE)
-The tour must cover every tab the user will see. Update TOUR_STEPS:
-```
-Step 0: Dashboard — "Your home. See your AI's status at a glance."
-Step 1: Personality — "Customize how your AI thinks and talks."
-Step 2: Guild Hall — "Watch your agents work. This is your command center."
-Step 3: Brains — "Choose the AI model that powers your companion."
-Step 4: Store — "Get environment packs, skins, and themes."
-Step 5: Settings — "Tweak your setup. Power users: Advanced tab has everything."
-Step 6: Chat — "You're ready! Talk to your AI."
-```
-- UNLOCKED_AT_STEP must unlock each tab cumulatively
-- Tour bar auto-navigates on "Go to X" click (already fixed in code)
-- Final step unlocks everything
+### B2: Guild Hall sprites = broken mess (CRITICAL)
+- Screenshot shows: grey squares, misaligned furniture, checkerboard transparency
+- The tilemap sprites referenced in THEME_ELEMENTS don't exist
+- **Fix:** Either replace with working sprites or strip Guild Hall down to a simple agent list until sprites are ready
+- This is the "money shot" — it can't look like this
 
-### F3: Dashboard visual upgrade (VISIBLE)
-The dashboard page.tsx needs to look like the installer:
-- Same dark glass cards with amber glow borders
-- Same ember particle background (subtle)
-- Same typography (font weight, letter spacing, uppercase labels)
-- Hero section with agent name + fire emoji that MATCHES the installer welcome screen
-- Cards should feel like installer panels, not flat rectangles
-- **TEST:** Screenshot dashboard vs installer — they should feel like the same product
+### B3: Model picker doesn't persist selection
+- User selected Qwen in installer dropdown
+- Summary screen still shows "Deep Thinker (35B Params)"
+- `config.actualModel` not flowing to the summary display
+- **Fix:** Summary page must read config.actualModel, not the default brainId label
 
-### F4: Chat disabled when brain offline (VISIBLE)
-- If backend offline OR no brain downloaded → disable chat input
-- Show: "⚡ Download a brain to start chatting" with big button → navigates to Brains
-- Remove "Try asking" suggestions when brain unavailable
-- Status must honestly reflect connection state
+### B4: "Add a custom skill" button does nothing
+- Personality page has an Add button that's non-functional
+- Either wire it up or remove it — broken buttons destroy trust
+- **Fix:** Remove non-functional buttons OR implement as a text input that saves to localStorage
 
-### F5: Installer step 1 — model picker works (VISIBLE)
-- Auto-advance removed (FIX ALREADY IN CODE)
-- Continue button appears after system checks complete
-- Model picker dropdown is clickable and doesn't re-trigger nvidia detection
-- Selected model persists through to install step
+### B5: "Add a rule" button does nothing  
+- Same as B4 — Personality page, non-functional Add button
+- **Fix:** Same approach — remove or implement
+
+### B6: Telegram setup should not exist
+- There's a Telegram integration setup on the Settings/config page
+- Product has a mobile app — Telegram is confusing and wrong
+- **Fix:** Remove Telegram references. Replace with "Connect Your Phone" section that describes the Expo mobile app
+
+### B7: Colors look the same
+- User says "colors again look the same"
+- The CSS variable unification from Sprint 17 may not have propagated, or the amber theme isn't distinct enough from default dark mode
+- **Fix:** Audit and increase contrast — ember glow on active elements, brighter amber accents, more visible difference from generic dark UI
 
 ---
 
-## 🔨 Thor (Backend)
+## 🎨 Freya
 
-### T1: Brain status must be honest
-- `/api/v1/brains/active` should return actual connection state
-- If brain not downloaded → `{ connected: false, reason: "no_model" }`
-- If backend offline → `{ connected: false, reason: "offline" }`
-- Dashboard reads this and shows accurate status
+### F1: Fix companion image path (B1)
+Find every reference to companion sprite and fix:
+- `dashboard/app/page.tsx` — companion hero section
+- `dashboard/components/GuildHall.tsx` — companion in scene
+- Use emoji (🦊) as fallback in an error boundary — never show checkerboard
 
----
+### F2: Guild Hall visual fix (B2)
+The scene relies on sprite PNGs that don't exist. Options:
+- Option A: Strip to simple card layout with agent list (safe, fast)
+- Option B: Generate actual working sprites and verify they load
+- **Recommendation:** Option A for now — ambitious pixel scenes can wait
 
-## 🛡️ Heimdall (Audit)
+### F3: Fix model persistence (B3)
+In InstallerWizard.tsx summary step:
+- Read `config.actualModel` for display label
+- Map model ID to human name (e.g. "qwen-2.5-35b-q4" → "Qwen 2.5 35B (Q4)")
 
-### H1: VISUAL verification only
-- Do NOT write a gate report saying "done" unless you can describe what changed visually
-- Each Freya item must show: before screenshot description + after screenshot description
-- If it looks the same → it's NOT done
+### F4: Fix or remove Personality buttons (B4, B5)
+Remove "Add skill" and "Add rule" if they don't work.
+Non-functional buttons = user distrust.
+
+### F5: Replace Telegram with "Connect Phone" (B6)
+Remove Telegram bot setup from config page.
+Replace with mobile app connection instructions.
+
+### F6: Model catalog (FEATURE — after bugs)
+- Instead of dropdown, full-page model browser
+- Cards like Brains page but with ALL available models
+- Filter by: size, speed, compatibility, use case
+- Categories: Fast (7-8B), Deep (14-35B), Expert (Cloud)
+- This is Version 2 material but capture for backlog
 
 ---
 
 ## ✅ Valkyrie (QA)
 
-### V1: The "show me" test
-- Fresh install → onboarding → dashboard
-- For EACH item above, answer: "Can I SEE the difference?" If no → FAIL
-- Specifically verify:
-  - [ ] Ember shows as sprite, not checkerboard
-  - [ ] Tour covers all 7 steps
-  - [ ] Dashboard looks cinematic, not flat
-  - [ ] Chat is disabled when brain offline
-  - [ ] Model picker works without auto-advancing
-  - [ ] Tour "Go to X" button navigates
+### V1: Screenshot every page
+- Dashboard: Ember renders, no checkerboard
+- Guild Hall: No broken sprites  
+- Personality: No non-functional buttons
+- Brains: Selected model matches what was picked
+- Settings: No Telegram, has "Connect Phone"
