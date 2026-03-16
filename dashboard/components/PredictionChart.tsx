@@ -37,8 +37,8 @@ export default function PredictionChart({ data }: Props) {
                     <AreaChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
                         <defs>
                             <linearGradient id="neonGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#00ff88" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#00ff88" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
                             </linearGradient>
                         </defs>
                         <XAxis
@@ -69,11 +69,11 @@ export default function PredictionChart({ data }: Props) {
                         <Area
                             type="monotone"
                             dataKey="accuracy"
-                            stroke="#00ff88"
+                            stroke="#F59E0B"
                             strokeWidth={2}
                             fill="url(#neonGradient)"
-                            dot={{ fill: "#00ff88", r: 3, strokeWidth: 0 }}
-                            activeDot={{ r: 5, fill: "#00ff88", stroke: "#0a0a0f", strokeWidth: 2 }}
+                            dot={{ fill: "#F59E0B", r: 3, strokeWidth: 0 }}
+                            activeDot={{ r: 5, fill: "#F59E0B", stroke: "#0a0a0f", strokeWidth: 2 }}
                         />
                     </AreaChart>
                 </ResponsiveContainer>

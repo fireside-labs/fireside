@@ -3,6 +3,12 @@
 import { useState, useEffect } from "react";
 import { getNodes, MeshNode } from "@/lib/api";
 
+// Derive a friendly name from the node's properties or just capitalise the node name
+function getFriendlyName(node: MeshNode): string {
+    if (node.friendly_name) return node.friendly_name;
+    return node.name.charAt(0).toUpperCase() + node.name.slice(1) + "'s Device";
+}
+
 const ROLE_MAP: Record<string, string> = {
     orchestrator: "Main AI",
     backend: "Helper",
@@ -11,12 +17,7 @@ const ROLE_MAP: Record<string, string> = {
     worker: "Helper",
 };
 
-const FRIENDLY_NAMES: Record<string, string> = {
-    odin: "Your MacBook",
-    thor: "Office PC",
-    freya: "Living Room PC",
-    heimdall: "Security Server",
-};
+// Node-provided names used directly, no hardcoded mapping needed
 
 const BRAIN_ALIASES: Record<string, string> = {
     "llama-3.1-8b": "Smart & Fast",
@@ -67,7 +68,7 @@ export default function ConnectedDevicesPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     {nodes.map((node) => {
-                        const friendlyName = FRIENDLY_NAMES[node.name] || `${node.name}'s Device`;
+                        const friendlyName = node.friendly_name || `${node.name}'s Device`;
                         const friendlyRole = ROLE_MAP[node.role] || node.role;
                         const days = uptimeToDays(node.uptime);
 
@@ -116,7 +117,24 @@ export default function ConnectedDevicesPage() {
                     })}
 
                     {/* Add device CTA card */}
-                    <div className="glass-card p-5 flex flex-col items-center justify-center text-center border-dashed" style={{ borderStyle: "dashed" }}>
+                    <div
+                        className="glass-card p-5 flex flex-col items-center justify-center text-center cursor-pointer hover:border-[var(--color-neon)] transition-colors"
+                        style={{ borderStyle: "dashed" }}
+                        onClick={async () => {
+                            try {
+                                const res = await fetch("http://127.0.0.1:8765/mesh/join-token", { method: "POST" });
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    const token = data.token || data.join_token || "N/A";
+                                    window.prompt("Share this token with your other device to join the mesh:", token);
+                                } else {
+                                    alert("Could not generate a join token. Make sure the backend is running.");
+                                }
+                            } catch {
+                                alert("Backend unreachable. Start Fireside on this computer first.");
+                            }
+                        }}
+                    >
                         <span className="text-3xl mb-3">➕</span>
                         <h3 className="text-white font-semibold mb-1">Add another device</h3>
                         <p className="text-xs text-[var(--color-rune-dim)]">

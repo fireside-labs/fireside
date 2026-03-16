@@ -4,6 +4,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeToggle";
 import OnboardingGate from "@/components/OnboardingGate";
+import OfflineBanner from "@/components/OfflineBanner";
+import { TourProvider, TourOverlay } from "@/components/GuidedTour";
 
 export const metadata: Metadata = {
     title: "Fireside — Your AI Companion",
@@ -33,15 +35,20 @@ export default function RootLayout({
             <body className="bg-[var(--color-void)] text-[var(--color-rune)] antialiased">
                 <ThemeProvider>
                     <ToastProvider>
-                        <OnboardingGate>
-                            <div className="flex min-h-screen">
-                                <Sidebar />
-                                <main className="main-content flex-1 ml-64 p-8">{children}</main>
-                            </div>
-                        </OnboardingGate>
+                        <TourProvider>
+                            <OnboardingGate>
+                                <OfflineBanner />
+                                <div className="flex min-h-screen">
+                                    <Sidebar />
+                                    <main className="main-content flex-1 ml-64 p-8">{children}</main>
+                                </div>
+                                <TourOverlay />
+                            </OnboardingGate>
+                        </TourProvider>
                     </ToastProvider>
                 </ThemeProvider>
             </body>
         </html>
     );
 }
+

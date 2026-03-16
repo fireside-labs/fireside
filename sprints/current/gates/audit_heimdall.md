@@ -1,128 +1,157 @@
-# 🛡️ Heimdall Security Audit — Sprint 13
+# 🛡️ Heimdall Security Audit — Sprint 14 (Last Mile Wiring)
 
-**Sprint:** Fireside Setup App (Tauri Installer)
+**Sprint:** Last Mile Wiring
 **Auditor:** Heimdall (Security) — **STRICT RULES**
 **Date:** 2026-03-15
-**Verdict:** ✅ PASS — Zero HIGH, 1 MEDIUM, 1 LOW.
+**Verdict:** ✅ PASS with notes — Zero HIGH, **2 MEDIUM**, 1 LOW.
 
 > 🔴 HIGH = auto-FAIL | 🟡 MEDIUM = PASS with notes | 🟢 LOW = informational
 
 ---
 
-## Scope
+## Files Reviewed
 
-### Thor — 4 files
+### Thor — Backend (4 new endpoints)
+| File | Lines | Endpoint |
+|---|---|---|
+| `api/v1.py` | 737-821 | `POST /api/v1/chat` — LLM proxy via SSE |
+| `api/v1.py` | 828-884 | `POST /api/v1/brains/install` — GGUF download via SSE |
+| `api/v1.py` | 891-940 | `GET /api/v1/guildhall/agents` — real agents from config |
+| `api/v1.py` | 947-1001 | `POST /api/v1/nodes` — device registration |
+| `tauri/src-tauri/src/main.rs` | VRAM block | Mac unified memory fix |
+| `tests/test_sprint14_lastmile.py` | NEW | 42 tests |
+
+### Freya — Frontend
 | File | Change |
 |---|---|
-| `tauri/src-tauri/tauri.conf.json` | Rebrand Valhalla → Fireside, CSP, NSIS config, updater |
-| `tauri/src-tauri/src/main.rs` | 9 Tauri commands (system checks, installs, config, launch) |
-| `tauri/src-tauri/Cargo.toml` | [NEW] Rust project config |
-| `tests/test_sprint13_tauri.py` | [NEW] 38 tests |
-
-### Freya — 2 files
-| File | Change |
-|---|---|
-| `dashboard/components/InstallerWizard.tsx` | [NEW] 7-step premium installer wizard |
-| `dashboard/components/OnboardingGate.tsx` | [MOD] Routes Tauri vs browser users |
+| `CompanionChat.tsx` | [MOD] → real `POST /api/v1/chat` with canned fallback |
+| `BrainInstaller.tsx` | [MOD] → SSE stream |
+| `globals.css` | [MOD] neon green → fire amber |
+| `nodes/page.tsx` | [MOD] Norse names removed, Add Node wired |
+| `SystemStatus.tsx` | [MOD] → polls `/api/v1/status` |
+| `OfflineBanner.tsx` | [NEW] — offline detection banner |
+| `GuidedTour.tsx` | [NEW] — 3-step onboarding tour |
+| `api.ts` | [MOD] port 8766 → 8765, mock tracking |
 
 ---
 
 ## Security Analysis
 
-### ✅ `tauri.conf.json` — CSP & Bundling
+### ✅ `POST /api/v1/chat` — LLM Chat Proxy
 
 | Check | Result |
 |---|---|
-| `productName` | `"Fireside"` ✅ |
-| `identifier` | `"ai.fireside.app"` ✅ |
-| **CSP** | `default-src 'self'; connect-src 'self' http://localhost:8765 ws://localhost:8765 http://127.0.0.1:8765; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:` |
-| CSP allows only localhost + self | ✅ No external APIs |
-| `script-src 'unsafe-inline'` | ⚠️ Required for Tauri's bridge. Acceptable. |
-| NSIS `installMode` | `"currentUser"` ✅ — No admin required |
-| Updater endpoint | `https://releases.getfireside.ai/...` ✅ HTTPS |
-| Updater `pubkey` | `""` — **Must be set before production release** (see MEDIUM) |
-| `certificateThumbprint` | `null` — Expected for dev, must be set for signed releases |
-| macOS `signingIdentity` | `null` — Expected for dev |
+| Proxy target | ✅ Hardcoded `http://127.0.0.1:8080/completion` — localhost only, **no SSRF** |
+| Input length | ⚠️ No explicit max length on `req.message` (Pydantic `str` is unbounded) |
+| Context limiting | ✅ `req.context[-10:]` — capped at last 10 messages |
+| Response cap | ✅ `n_predict: 512` tokens |
+| System prompt | ✅ Server-controlled from `companion_state.json`, not user-modifiable |
+| SSE streaming | ✅ Proper `text/event-stream` + `Cache-Control: no-cache` |
+| Error handling | ✅ Graceful fallback message when llama.cpp is unreachable |
+| Stop tokens | ✅ `["User:", "System:"]` — prevents prompt continuation |
 
-### 🟡 MEDIUM — Updater Public Key is Empty
+### 🟡 MEDIUM — `POST /api/v1/brains/install` — No URL Allowlist (SSRF)
 
-**File:** `tauri.conf.json` line 64
-**Issue:** `"pubkey": ""` means the auto-updater has no signature verification. If the updater endpoint is compromised, a malicious binary could be pushed to users.
+**File:** `api/v1.py` lines 848-878
+**Code:** `urllib.request.urlopen(req.url, timeout=300)`
 
-**Required before production:** Generate an Ed25519 key pair with `tauri signer keygen`, set the public key in `tauri.conf.json`, and sign releases with the private key.
+**Issue:** The endpoint accepts an arbitrary `url` field and fetches it server-side with no domain restriction. An attacker on the local network could use this to:
+- Fetch internal services (SSRF): `http://169.254.169.254/latest/meta-data/` (cloud metadata)
+- Scan internal ports: `http://127.0.0.1:6379/` (Redis)
+- Exfiltrate data to external servers
 
-### ✅ `main.rs` — Rust Commands
+**Mitigating factors:**
+- Self-hosted, localhost-only API (not exposed to internet)
+- CORS restricts browser-initiated requests to LAN/Tailnet
+- User themselves would be the one calling this endpoint
 
-| Command | Security Assessment |
-|---|---|
-| `get_system_info()` | ✅ Uses `wmic`/`sysctl`/`lspci` with hardcoded args. No user input. |
-| `check_python()` | ✅ `Command::new("python").arg("--version")` — safe |
-| `check_node()` | ✅ `Command::new("node").arg("--version")` — safe |
-| `install_python()` | ✅ Uses `winget`/`brew`/`apt` with hardcoded package names. No user input in command args. |
-| `install_node()` | ✅ Same pattern as above |
-| `clone_repo(fireside_dir)` | ✅ Hardcoded GitHub URL. `fireside_dir` passed as arg to `git clone`, not shell-expanded |
-| `install_deps(fireside_dir)` | ✅ `pip install -r requirements.txt` + `npm install` in specified dir |
-| `write_config(config)` | ✅ String interpolation into YAML/JSON. No shell execution. Writes to `~/.fireside` and `~/.valhalla` |
-| `start_fireside(fireside_dir)` | ✅ Spawns `python bifrost.py` and `npm run dev` as child processes |
+**Required fix:**
+```python
+ALLOWED_DOMAINS = {"huggingface.co", "hf.co", "ollama.com", "github.com"}
+from urllib.parse import urlparse
+parsed = urlparse(req.url)
+if parsed.hostname not in ALLOWED_DOMAINS:
+    raise HTTPException(400, f"Downloads only allowed from: {', '.join(ALLOWED_DOMAINS)}")
+```
 
-**Key properties:**
-- All `Command::new()` calls use direct args, never `shell=true` or string concatenation into shell commands → **No shell injection vectors**
-- `write_config` uses Rust's `format!()` macro → **No eval/exec**
-- `clone_repo` checks for existing `bifrost.py` before cloning → **Prevents overwrite**
-- `FiresideConfig` is deserialized via Serde → **Type-safe input**
+**Positive notes:**
+- ✅ Filename sanitized: `req.model_id.replace("/", "_").replace("\\", "_")`
+- ✅ Partial file cleanup on error: `dest.unlink()`
+- ✅ `.gguf` extension enforced
 
-### 🟢 LOW — `write_config` Doesn't Sanitize User Input in YAML
+### 🟡 MEDIUM — `POST /api/v1/nodes` — No Authentication
 
-**File:** `main.rs` lines 295-336
-**Issue:** User-provided names (e.g. `agent_name`, `companion_name`) are interpolated directly into YAML via `format!()`. A malicious name containing YAML special characters could break the config file format.
+**File:** `api/v1.py` lines 956-1001
 
-**Practical risk:** Zero — this is a desktop installer where the user is the one entering their own name. Self-attack isn't a threat. Low priority.
+**Issue:** The node registration endpoint accepts unauthenticated requests. Anyone on the local network (or Tailnet) can register a node with arbitrary IP/port, potentially:
+- Injecting a malicious node into the mesh config
+- Persisting to `valhalla.yaml` (line 992)
+- Overwriting legitimate node config
 
-### ✅ `InstallerWizard.tsx` — Frontend
+**Mitigating factors:**
+- 409 conflict detection (can't overwrite existing node names)
+- Self-hosted, LAN/Tailnet-restricted access
+- The existing `mesh_announce` endpoint (line 336) uses token auth — this new one should too
 
-| Check | Result |
-|---|---|
-| No secrets in bundled code | ✅ |
-| localStorage stores only public metadata | ✅ (names, species, style, onboarded flag) |
-| Tauri invoke bridge detection | ✅ `window.__TAURI__` check |
-| Browser fallback uses mock data | ✅ — no real installs in browser |
-| No external API calls | ✅ — all operations via Tauri commands |
-| User input: names, species, style | ✅ — all rendered via React (XSS-safe) |
+**Required fix:** Gate behind `mesh.auth_token` validation (same as `mesh_announce`).
 
-### ✅ `OnboardingGate.tsx` — Routing
+### ✅ `GET /api/v1/guildhall/agents` — Safe
 
 | Check | Result |
 |---|---|
-| Tauri detection via `window.__TAURI__` | ✅ Client-side only |
-| Browser path checks `127.0.0.1:8765` for onboarding status | ✅ Localhost only |
-| Graceful fallback on fetch error | ✅ |
-| Dynamic imports (code splitting) | ✅ Only loads needed wizard |
+| Data source | ✅ Reads from in-memory `_config` — no external calls |
+| Sensitive data | ✅ Returns only names, style, activity status |
+| Import safety | ✅ `try/except` guards on plugin imports |
+
+### ✅ Frontend Changes — All Safe
+
+| Check | Result |
+|---|---|
+| `CompanionChat.tsx` | ✅ Calls localhost:8765 only, graceful canned fallback |
+| `OfflineBanner.tsx` | ✅ Polls localhost:8765 with 3s timeout, `AbortSignal.timeout` |
+| `OfflineBanner` detects mock data | ✅ `wasLastCallMock()` from api.ts |
+| PET_RESPONSES still present | ✅ Used as offline fallback — correct |
+| React rendering | ✅ All user input rendered via JSX — XSS-safe |
+| Port unified | ✅ `127.0.0.1:8765` everywhere |
+
+### 🟢 LOW — Chat input has no max length
+
+**File:** `api/v1.py` line 738 — `message: str` with no `max_length`
+
+A very long message could consume excessive memory. Add `message: str = Field(max_length=4096)`.
+
+---
+
+## H2 — Norse Names Audit (Completed Earlier)
+
+**16 user-facing files** identified with hardcoded Norse names. See previous audit report section. Key items:
+- `api.ts` — ~800 lines of mock data (largest offender)
+- `MorningBriefing.tsx` — "Good morning, Odin!"
+- `nodes/page.tsx` — FRIENDLY_NAMES now fixed ✅
+- `landing/page.tsx` — footer credits (acceptable — internal team attribution)
+- `agents/[name]/` — still has hardcoded agents
 
 ---
 
 ## Findings Summary
 
-| Severity | Finding | Action |
-|---|---|---|
-| 🟡 **MEDIUM** | Updater `pubkey` is empty — no signature verification | **Must set before production release** |
-| 🟢 **LOW** | User names not sanitized in YAML format string | No action needed (self-hosted desktop, self-input) |
+| Severity | Finding | File | Action |
+|---|---|---|---|
+| 🟡 **MEDIUM** | Download URL has no domain allowlist (SSRF) | `api/v1.py:850` | Add `ALLOWED_DOMAINS` check |
+| 🟡 **MEDIUM** | Node registration has no auth | `api/v1.py:956` | Gate with `mesh.auth_token` |
+| 🟢 **LOW** | Chat message has no max length | `api/v1.py:738` | Add `Field(max_length=4096)` |
 
 ---
 
 ## Test Results
+- **410 tests passing** (Sprints 1-14)
 
-- **378 total tests passing** (Sprints 1-13)
-- 38 new tests validate config rebrand, all 9 Rust commands, icon directory, Cargo.toml, and regression on prior APIs
-
----
-
-## Pre-Production Checklist (Updated)
-
-| Item | Status |
+## Cumulative Posture (Sprints 1-14)
+| Metric | Value |
 |---|---|
-| Updater pubkey | ❌ Must generate + set |
-| Code signing (Windows) | ❌ `certificateThumbprint: null` |
-| Code signing (macOS) | ❌ `signingIdentity: null` |
-| All prior sprint items | ✅ See Sprint 12 audit |
+| Open HIGHs | 0 |
+| Open MEDIUMs | 3 (S11 network-status, S14 brains-SSRF, S14 nodes-auth) |
+| Open LOWs | 3 |
+| Tests | 410 |
 
 — Heimdall 🛡️

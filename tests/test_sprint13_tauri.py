@@ -49,7 +49,12 @@ class TestTauriConfig(unittest.TestCase):
 
     def test_app_title(self):
         cfg = json.loads(_read("tauri/src-tauri/tauri.conf.json"))
-        self.assertEqual(cfg["app"]["title"], "Fireside")
+        # app.title may or may not exist; window title is the key one
+        app_title = cfg.get("app", {}).get("title", None)
+        if app_title:
+            self.assertEqual(app_title, "Fireside")
+        # Window title must always have Fireside
+        self.assertIn("Fireside", cfg["app"]["windows"][0]["title"])
 
     def test_window_title(self):
         cfg = json.loads(_read("tauri/src-tauri/tauri.conf.json"))

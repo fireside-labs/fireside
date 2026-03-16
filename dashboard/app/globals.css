@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ─── Valhalla Design System ─── */
+/* ─── Fireside Design System ─── */
 
 /* Accessibility — keyboard focus ring */
 *:focus-visible {
@@ -12,10 +12,10 @@
   --color-void: #0a0a0f;
   --color-void-light: #12121a;
   --color-void-lighter: #1a1a2e;
-  --color-neon: #00ff88;
-  --color-neon-dim: #00cc6a;
-  --color-neon-glow: rgba(0, 255, 136, 0.15);
-  --color-neon-glow-strong: rgba(0, 255, 136, 0.3);
+  --color-neon: #F59E0B;
+  --color-neon-dim: #D97706;
+  --color-neon-glow: rgba(245, 158, 11, 0.15);
+  --color-neon-glow-strong: rgba(245, 158, 11, 0.3);
   --color-rune: #a0a0b8;
   --color-rune-dim: #8585a0;
   --color-danger: #ff4466;
@@ -65,8 +65,8 @@ h6 {
 
 .glass-card:hover {
   background: var(--color-glass-hover);
-  border-color: rgba(0, 255, 136, 0.2);
-  box-shadow: 0 0 30px rgba(0, 255, 136, 0.08);
+  border-color: rgba(245, 158, 11, 0.2);
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.08);
   transform: translateY(-2px);
 }
 
@@ -76,11 +76,11 @@ h6 {
 
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.6);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6);
   }
 
   50% {
-    box-shadow: 0 0 0 8px rgba(0, 255, 136, 0);
+    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
   }
 }
 
@@ -130,13 +130,13 @@ h6 {
 
 .btn-neon:hover {
   background: var(--color-neon-glow);
-  box-shadow: 0 0 24px rgba(0, 255, 136, 0.2), inset 0 0 24px rgba(0, 255, 136, 0.05);
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.2), inset 0 0 24px rgba(245, 158, 11, 0.05);
 }
 
 .btn-neon.active {
   background: var(--color-neon);
   color: var(--color-void);
-  box-shadow: 0 0 30px rgba(0, 255, 136, 0.4);
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.4);
 }
 
 /* ─── Toast ─── */
@@ -182,8 +182,8 @@ h6 {
 }
 
 .toast-success {
-  background: rgba(0, 255, 136, 0.12);
-  border: 1px solid rgba(0, 255, 136, 0.3);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   color: var(--color-neon);
 }
 
@@ -212,8 +212,8 @@ h6 {
 }
 
 .code-editor:focus {
-  border-color: rgba(0, 255, 136, 0.3);
-  box-shadow: 0 0 20px rgba(0, 255, 136, 0.05);
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.05);
 }
 
 /* ─── Markdown Preview ─── */
@@ -362,8 +362,8 @@ h6 {
 }
 
 .tag-strength {
-  background: rgba(0, 255, 136, 0.1);
-  border: 1px solid rgba(0, 255, 136, 0.2);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
   color: var(--color-neon);
 }
 
@@ -433,10 +433,10 @@ h6 {
   --color-void: #f5f5f8;
   --color-void-light: #ffffff;
   --color-void-lighter: #e8e8ee;
-  --color-neon: #00aa55;
-  --color-neon-dim: #008844;
-  --color-neon-glow: rgba(0, 170, 85, 0.12);
-  --color-neon-glow-strong: rgba(0, 170, 85, 0.25);
+  --color-neon: #D97706;
+  --color-neon-dim: #92400E;
+  --color-neon-glow: rgba(217, 119, 6, 0.12);
+  --color-neon-glow-strong: rgba(217, 119, 6, 0.25);
   --color-rune: #4a4a5e;
   --color-rune-dim: #6a6a80;
   --color-glass: rgba(0, 0, 0, 0.03);
@@ -578,7 +578,7 @@ h6 {
 
 .chat-user {
   background: var(--color-neon-glow);
-  border: 1px solid rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.15);
   color: white;
   border-radius: 12px 12px 4px 12px;
   padding: 10px 14px;

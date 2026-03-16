@@ -731,6 +731,277 @@ async def uninstall_plugin(name: str):
 
 
 # ---------------------------------------------------------------------------
+# Endpoints: Chat  (Sprint 14 — T2)
+# ---------------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
+    message: str
+    context: list = []
+
+
+@router.post("/chat")
+async def post_chat(req: ChatRequest):
+    """Proxy chat to local llama.cpp. Stream response via SSE.
+
+    Uses companion personality from companion_state.json.
+    """
+    import urllib.request
+    from fastapi.responses import StreamingResponse
+
+    # Load companion personality for system prompt
+    state_path = Path.home() / ".valhalla" / "companion_state.json"
+    companion_name = "Ember"
+    system_prompt = "You are a helpful AI assistant."
+    try:
+        if state_path.exists():
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            companion_name = state.get("name", "Ember")
+            species = state.get("species", "fox")
+            agent = state.get("agent", {})
+            agent_name = agent.get("name", "Atlas")
+            system_prompt = (
+                f"You are {companion_name}, a {species} companion. "
+                f"You are friendly, warm, and helpful. "
+                f"Your AI partner is {agent_name} who runs on the home PC. "
+                f"Keep responses concise and conversational."
+            )
+    except Exception:
+        pass
+
+    # Build llama.cpp /completion payload
+    prompt_parts = [f"System: {system_prompt}"]
+    for msg in (req.context or [])[-10:]:
+        role = msg.get("role", "user") if isinstance(msg, dict) else "user"
+        content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+        prompt_parts.append(f"{role.capitalize()}: {content}")
+    prompt_parts.append(f"User: {req.message}")
+    prompt_parts.append("Assistant:")
+    full_prompt = "\n".join(prompt_parts)
+
+    payload = json.dumps({
+        "prompt": full_prompt,
+        "stream": True,
+        "n_predict": 512,
+        "temperature": 0.7,
+        "stop": ["User:", "System:"],
+    }).encode()
+
+    async def stream_response():
+        try:
+            http_req = urllib.request.Request(
+                "http://127.0.0.1:8080/completion",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(http_req, timeout=60) as resp:
+                for line in resp:
+                    decoded = line.decode("utf-8", errors="ignore").strip()
+                    if decoded.startswith("data: "):
+                        chunk = decoded[6:]
+                        if chunk == "[DONE]":
+                            yield f"data: [DONE]\n\n"
+                            break
+                        try:
+                            obj = json.loads(chunk)
+                            content = obj.get("content", "")
+                            if content:
+                                yield f"data: {json.dumps({'content': content})}\n\n"
+                        except json.JSONDecodeError:
+                            pass
+        except Exception as e:
+            log.warning("[chat] llama.cpp unreachable: %s", e)
+            yield f"data: {json.dumps({'content': f'{companion_name} is thinking... but the brain is offline right now. Start the backend first!'})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        stream_response(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints: Brain Install  (Sprint 14 — T3)
+# ---------------------------------------------------------------------------
+
+class BrainInstallRequest(BaseModel):
+    model_id: str
+    url: str
+
+
+@router.post("/brains/install")
+async def post_brains_install(req: BrainInstallRequest):
+    """Download a GGUF model to ~/.fireside/models/. Stream progress via SSE."""
+    import urllib.request
+    from fastapi.responses import StreamingResponse
+
+    models_dir = Path.home() / ".fireside" / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sanitize filename
+    filename = req.model_id.replace("/", "_").replace("\\", "_")
+    if not filename.endswith(".gguf"):
+        filename += ".gguf"
+    dest = models_dir / filename
+
+    async def stream_download():
+        try:
+            http_req = urllib.request.Request(req.url)
+            http_req.add_header("User-Agent", "Fireside/1.0")
+            with urllib.request.urlopen(http_req, timeout=300) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                chunk_size = 1024 * 256  # 256KB chunks
+
+                yield f"data: {json.dumps({'status': 'downloading', 'total': total, 'downloaded': 0, 'model_id': req.model_id})}\n\n"
+
+                with open(dest, "wb") as f:
+                    while True:
+                        chunk = resp.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        pct = int(downloaded / total * 100) if total > 0 else 0
+                        yield f"data: {json.dumps({'status': 'downloading', 'total': total, 'downloaded': downloaded, 'percent': pct})}\n\n"
+
+            yield f"data: {json.dumps({'status': 'complete', 'path': str(dest), 'size': downloaded})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            log.error("[brains/install] Download failed: %s", e)
+            # Clean up partial file
+            if dest.exists():
+                dest.unlink()
+            yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        stream_download(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints: Guild Hall Agents  (Sprint 14 — T4)
+# ---------------------------------------------------------------------------
+
+@router.get("/guildhall/agents")
+async def get_guildhall_agents():
+    """Return user's actual agents from config with real activity status."""
+    # Read agent + companion from config
+    agent_cfg = _config.get("agent", {})
+    companion_cfg = _config.get("companion", {})
+
+    agent_name = agent_cfg.get("name", "Atlas")
+    agent_style = agent_cfg.get("style", "Analytical")
+    companion_name = companion_cfg.get("name", "Ember")
+    companion_species = companion_cfg.get("species", "fox")
+
+    # Determine AI activity from running state
+    ai_activity = "idle"
+    try:
+        from plugin_loader import _loaded_plugins
+        if _loaded_plugins:
+            ai_activity = "building"
+    except Exception:
+        pass
+
+    # Determine companion activity
+    companion_activity = "sleeping"
+    try:
+        from plugins.companion.handler import _active_ws_connections
+        if _active_ws_connections:
+            companion_activity = "chatting"
+        else:
+            companion_activity = "idle"
+    except Exception:
+        companion_activity = "idle"
+
+    return {
+        "agents": [
+            {
+                "type": "ai",
+                "name": agent_name,
+                "style": agent_style,
+                "activity": ai_activity,
+                "online": True,
+            },
+            {
+                "type": "companion",
+                "name": companion_name,
+                "species": companion_species,
+                "activity": companion_activity,
+                "online": True,
+            },
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Endpoints: Node Registration  (Sprint 14 — T5)
+# ---------------------------------------------------------------------------
+
+class NodeRegisterRequest(BaseModel):
+    name: str
+    ip: str
+    port: int = 8765
+    role: str = "worker"
+    gpu: Optional[str] = None
+    vram_gb: Optional[float] = None
+
+
+@router.post("/nodes")
+async def register_node(req: NodeRegisterRequest):
+    """Register a new device to the mesh.
+
+    Adds the node to the mesh config and returns a success confirmation.
+    """
+    mesh = _config.get("mesh", {})
+    nodes = mesh.get("nodes", {})
+
+    if req.name in nodes:
+        raise HTTPException(status_code=409, detail=f"Node '{req.name}' already registered")
+
+    nodes[req.name] = {
+        "ip": req.ip,
+        "port": req.port,
+        "role": req.role,
+        "gpu": req.gpu,
+        "vram_gb": req.vram_gb,
+        "joined_at": datetime.now(timezone.utc).isoformat(),
+        "status": "online",
+    }
+
+    # Update in-memory config
+    if "mesh" not in _config:
+        _config["mesh"] = {"nodes": {}}
+    _config["mesh"]["nodes"] = nodes
+
+    # Persist to config file
+    try:
+        import yaml
+        config_path = Path.home() / ".fireside" / "valhalla.yaml"
+        if config_path.exists():
+            cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            if "mesh" not in cfg:
+                cfg["mesh"] = {"nodes": {}}
+            cfg["mesh"]["nodes"][req.name] = nodes[req.name]
+            config_path.write_text(yaml.dump(cfg, default_flow_style=False), encoding="utf-8")
+    except Exception as e:
+        log.warning("[nodes] Failed to persist node config: %s", e)
+
+    log.info("[nodes] Registered new node: %s (%s:%d)", req.name, req.ip, req.port)
+    return {
+        "status": "registered",
+        "node": req.name,
+        "mesh_size": len(nodes),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Initialization
 # ---------------------------------------------------------------------------
 

@@ -14,19 +14,41 @@ interface StatusData {
 
 export default function SystemStatus({ className }: SystemStatusProps) {
     const [status, setStatus] = useState<StatusData>({
-        brain: { label: "Smart & Fast", tokS: 45 },
+        brain: null,
         telegram: false,
-        inference: "running",
+        inference: "offline",
     });
 
-    // In production, poll /api/v1/system/status
-    // useEffect(() => { ... }, []);
+    // Poll /api/v1/status every 5 seconds (Sprint 14 F7)
+    useEffect(() => {
+        let mounted = true;
+        const poll = async () => {
+            try {
+                const res = await fetch("http://127.0.0.1:8765/api/v1/status");
+                if (res.ok && mounted) {
+                    const data = await res.json();
+                    setStatus({
+                        brain: data.brain || null,
+                        telegram: data.telegram ?? false,
+                        inference: data.inference || "running",
+                    });
+                }
+            } catch {
+                if (mounted) setStatus((prev) => ({ ...prev, inference: "offline" }));
+            }
+        };
+        poll();
+        const interval = setInterval(poll, 5000);
+        return () => { mounted = false; clearInterval(interval); };
+    }, []);
 
-    const handleRestart = () => {
-        setStatus(prev => ({ ...prev, inference: "starting" }));
-        setTimeout(() => {
-            setStatus(prev => ({ ...prev, inference: "running" }));
-        }, 2000);
+    const handleRestart = async () => {
+        setStatus((prev) => ({ ...prev, inference: "starting" }));
+        try {
+            await fetch("http://127.0.0.1:8765/api/v1/restart", { method: "POST" });
+        } catch {
+            // Backend will restart — poll will pick up the new state
+        }
     };
 
     return (

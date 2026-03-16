@@ -10,7 +10,7 @@ interface Props {
 const TOPIC_COLORS: Record<string, { color: string; bg: string; icon: string }> = {
     hypothesis: { color: "#b380ff", bg: "rgba(179,128,255,0.12)", icon: "🧪" },
     prediction: { color: "#44aaff", bg: "rgba(68,170,255,0.12)", icon: "🔮" },
-    "model-switch": { color: "#00ff88", bg: "rgba(0,255,136,0.12)", icon: "⚡" },
+    "model-switch": { color: "#F59E0B", bg: "rgba(245,158,11,0.12)", icon: "⚡" },
     node: { color: "#ffaa22", bg: "rgba(255,170,34,0.12)", icon: "○" },
     plugin: { color: "#00ccaa", bg: "rgba(0,204,170,0.12)", icon: "◆" },
     config: { color: "#a0a0b8", bg: "rgba(160,160,184,0.12)", icon: "⚙" },

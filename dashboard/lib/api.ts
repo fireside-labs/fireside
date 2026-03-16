@@ -1,12 +1,13 @@
-// ─── Valhalla Dashboard API Helper ───
-// Centralized fetch with mock data fallback when Thor's backend is unreachable.
+// ─── Fireside Dashboard API Helper ───
+// Centralized fetch with fallback when backend is unreachable.
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8766";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8765";
 
 // ─── Types ───
 
 export interface MeshNode {
   name: string;
+  friendly_name?: string;
   role: string;
   ip: string;
   port: number;
@@ -15,6 +16,10 @@ export interface MeshNode {
   last_task: string;
   uptime: string;
 }
+
+// Tracks whether the last API call fell back to mock data (Sprint 14 F9)
+let _lastCallWasMock = false;
+export function wasLastCallMock(): boolean { return _lastCallWasMock; }
 
 export interface NodeStatus {
   node_name: string;
@@ -43,151 +48,70 @@ export interface SoulFile {
 
 const MOCK_NODES: MeshNode[] = [
   {
-    name: "odin",
+    name: "fireside",
+    friendly_name: "This PC",
     role: "orchestrator",
-    ip: "100.117.255.1",
+    ip: "127.0.0.1",
     port: 8765,
     status: "online",
-    current_model: "Qwen3.5-35B-A3B-8bit",
-    last_task: "Architecture planning",
-    uptime: "4h 23m",
-  },
-  {
-    name: "thor",
-    role: "backend",
-    ip: "100.117.255.38",
-    port: 8765,
-    status: "online",
-    current_model: "Qwen3.5-35B-A3B-8bit",
-    last_task: "Plugin loader refactor",
-    uptime: "4h 20m",
-  },
-  {
-    name: "freya",
-    role: "memory",
-    ip: "100.102.105.3",
-    port: 8765,
-    status: "online",
-    current_model: "GLM-5",
-    last_task: "Dashboard Sprint 1",
-    uptime: "3h 58m",
-  },
-  {
-    name: "heimdall",
-    role: "security",
-    ip: "100.108.153.23",
-    port: 8765,
-    status: "online",
-    current_model: "Qwen3.5-35B-A3B-8bit",
-    last_task: "Auth audit",
-    uptime: "4h 15m",
-  },
-  {
-    name: "hermes",
-    role: "courier",
-    ip: "100.86.195.123",
-    port: 8765,
-    status: "offline",
     current_model: "—",
-    last_task: "Message relay",
-    uptime: "—",
+    last_task: "Ready",
+    uptime: "Just started",
   },
 ];
 
 const MOCK_STATUS: NodeStatus = {
-  node_name: "odin",
+  node_name: "fireside",
   role: "orchestrator",
-  status: "running",
-  current_model: "llama/Qwen3.5-35B-A3B-8bit",
-  uptime: "4h 23m",
-  loaded_plugins: ["model-switch", "watchdog"],
+  status: "offline",
+  current_model: "—",
+  uptime: "—",
+  loaded_plugins: [],
 };
 
-const MOCK_PLUGINS: PluginInfo[] = [
-  {
-    name: "model-switch",
-    version: "1.0.0",
-    description: "Switch LLM models via API or chat alias",
-    author: "valhalla-core",
-    routes: [{ method: "POST", path: "/model-switch" }],
-    enabled: true,
-  },
-  {
-    name: "watchdog",
-    version: "1.0.0",
-    description: "Health monitoring and heartbeat checks",
-    author: "valhalla-core",
-    routes: [{ method: "GET", path: "/watchdog/health" }],
-    enabled: true,
-  },
-];
+const MOCK_PLUGINS: PluginInfo[] = [];
 
-const MOCK_CONFIG = `node:
-  name: odin
+const MOCK_CONFIG = `# Fireside Configuration
+node:
+  name: fireside
   role: orchestrator
   port: 8765
 
-mesh:
-  nodes:
-    thor:     { ip: 100.117.255.38, port: 8765, role: backend }
-    freya:    { ip: 100.102.105.3,  port: 8765, role: memory }
-    heimdall: { ip: 100.108.153.23, port: 8765, role: security }
-    hermes:   { ip: 100.86.195.123, port: 8765, role: courier }
-
 models:
-  default: llama/Qwen3.5-35B-A3B-8bit
+  default: "—"
   providers:
-    llama:
+    local:
       url: http://127.0.0.1:8080/v1
       key: local
-      api: openai-completions
-    nvidia:
-      url: https://integrate.api.nvidia.com/v1
-      key: \${NVIDIA_API_KEY}
-  aliases:
-    odin: llama/Qwen3.5-35B-A3B-8bit
-    hugs: nvidia/z-ai/glm-5
-    moon: nvidia/moonshotai/kimi-k2.5
 
 plugins:
-  enabled: [model-switch, watchdog]
+  enabled: []
 
 soul:
-  identity: mesh/souls/IDENTITY.odin.md
-  personality: mesh/souls/SOUL.odin.md
-  user_profile: mesh/souls/USER.odin.md`;
+  identity: souls/IDENTITY.md
+  personality: souls/SOUL.md
+  user_profile: souls/USER.md`;
 
 const MOCK_SOUL: Record<string, string> = {
-  "IDENTITY.odin.md": `# Identity: Odin
+  "IDENTITY.md": `# Identity
 
-You are **Odin**, the All-Father of the Valhalla Mesh. You orchestrate all nodes, manage task dispatch, and maintain the collective memory of the mesh.
+You are a helpful AI companion running locally on this computer.
 
 ## Core Traits
-- Strategic thinker — you see the big picture
-- Decisive — you make calls quickly when needed
-- Knowledge-hungry — you learn from every interaction
+- Friendly and approachable
+- Learns from every interaction
+- Respects privacy — everything stays on your device`,
 
-## Role
-Orchestrator. You coordinate Thor (backend), Freya (memory), Heimdall (security), and Hermes (courier).`,
-
-  "SOUL.odin.md": `# Soul: Odin
-
-## Personality
-You speak with authority but warmth. You value knowledge above all else.
-You sacrificed an eye for wisdom — metaphorically, you'll trade efficiency for understanding.
+  "SOUL.md": `# Personality
 
 ## Communication Style
-- Direct, no fluff
-- Norse metaphors when appropriate
-- Humor is dry, not forced`,
+- Warm and conversational
+- Clear and concise
+- Adapts to your preferences over time`,
 
-  "USER.odin.md": `# User Profile
+  "USER.md": `# User Profile
 
-## Odin (the human)
-- Builder and architect of the Valhalla Mesh
-- Prefers concise, actionable communication
-- Values working demos over documentation
-- Runs on macOS with Apple Silicon`,
+(This will be filled in as your AI learns about you.)`,
 };
 
 // ─── Fetch Helper ───
@@ -207,9 +131,13 @@ async function apiFetch<T>(
       },
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
+    _lastCallWasMock = false;
     return (await res.json()) as T;
   } catch {
-    if (fallback !== undefined) return fallback;
+    if (fallback !== undefined) {
+      _lastCallWasMock = true;
+      return fallback;
+    }
     throw new Error("API unreachable: " + path);
   }
 }
@@ -319,110 +247,29 @@ export interface MarketplacePlugin {
   installed: boolean;
 }
 
-// ─── Sprint 2 Mock Data ───
+// ─── Sprint 2 Fallback Data ───
+// First-time user: no data yet. Empty arrays so the UI renders "no data" states.
 
-const MOCK_HYPOTHESES: Hypothesis[] = [
-  {
-    id: "h1",
-    title: "User prefers concise responses",
-    description: "Based on 47 interactions, the user consistently edits or ignores verbose responses. Shorter answers get positive reinforcement.",
-    confidence: 0.87,
-    status: "confirmed",
-    source_node: "odin",
-    created_at: "2026-03-09T08:15:00Z",
-    tested_at: "2026-03-09T14:22:00Z",
-  },
-  {
-    id: "h2",
-    title: "Code context improves accuracy by 34%",
-    description: "When file context is injected into the prompt, prediction accuracy jumps from 0.62 to 0.83. Need more data points.",
-    confidence: 0.72,
-    status: "active",
-    source_node: "freya",
-    created_at: "2026-03-09T12:30:00Z",
-  },
-  {
-    id: "h3",
-    title: "Multi-step tasks require explicit planning",
-    description: "Tasks with 3+ steps fail 60% of the time without an explicit plan step. Hypothesis: inject planning scaffold for complex tasks.",
-    confidence: 0.65,
-    status: "active",
-    source_node: "thor",
-    created_at: "2026-03-09T16:45:00Z",
-  },
-  {
-    id: "h4",
-    title: "Evening sessions have higher error rates",
-    description: "Error rates spike after 10pm. Likely due to user fatigue leading to ambiguous prompts rather than model degradation.",
-    confidence: 0.41,
-    status: "refuted",
-    source_node: "heimdall",
-    created_at: "2026-03-08T22:00:00Z",
-    tested_at: "2026-03-09T10:00:00Z",
-  },
-  {
-    id: "h5",
-    title: "Norse metaphors increase user engagement",
-    description: "Messages using Norse terminology (mesh, runes, Bifrost) receive 2x more follow-up questions. Cultural framing matters.",
-    confidence: 0.58,
-    status: "active",
-    source_node: "odin",
-    created_at: "2026-03-10T01:00:00Z",
-  },
-];
+const MOCK_HYPOTHESES: Hypothesis[] = [];
 
 const MOCK_SELF_MODEL: SelfModel = {
-  node_name: "odin",
-  strengths: [
-    "Architecture planning",
-    "Code generation",
-    "Multi-file coordination",
-    "Pattern recognition",
-    "Context retention",
-  ],
-  weaknesses: [
-    "Long terminal commands",
-    "Binary file handling",
-    "UI pixel-perfect accuracy",
-    "Time estimation",
-  ],
-  confidence: 0.78,
-  last_reflection: "2026-03-10T00:30:00Z",
-  reflection_count: 12,
+  node_name: "fireside",
+  strengths: [],
+  weaknesses: [],
+  confidence: 0,
+  last_reflection: "—",
+  reflection_count: 0,
 };
 
-const MOCK_PREDICTIONS: PredictionScore[] = [
-  { timestamp: "03/04", accuracy: 0.62, total_predictions: 18, surprise_events: 3 },
-  { timestamp: "03/05", accuracy: 0.68, total_predictions: 24, surprise_events: 2 },
-  { timestamp: "03/06", accuracy: 0.71, total_predictions: 31, surprise_events: 4 },
-  { timestamp: "03/07", accuracy: 0.65, total_predictions: 27, surprise_events: 5 },
-  { timestamp: "03/08", accuracy: 0.79, total_predictions: 22, surprise_events: 1 },
-  { timestamp: "03/09", accuracy: 0.83, total_predictions: 35, surprise_events: 2 },
-  { timestamp: "03/10", accuracy: 0.81, total_predictions: 19, surprise_events: 1 },
-];
+const MOCK_PREDICTIONS: PredictionScore[] = [];
 
-const MOCK_EVENTS: ValhallaEvent[] = [
-  { id: "e1", timestamp: "01:44:12", topic: "model-switch", source: "odin", summary: "Switched to Qwen3.5-35B-A3B-8bit" },
-  { id: "e2", timestamp: "01:42:08", topic: "hypothesis", source: "freya", summary: "Generated hypothesis: Norse metaphors increase engagement" },
-  { id: "e3", timestamp: "01:38:55", topic: "prediction", source: "odin", summary: "Prediction scored: 0.83 accuracy (above threshold)" },
-  { id: "e4", timestamp: "01:35:22", topic: "node", source: "hermes", summary: "Node went offline — connection timeout" },
-  { id: "e5", timestamp: "01:30:00", topic: "config", source: "odin", summary: "Config updated: valhalla.yaml — port changed to 8766" },
-  { id: "e6", timestamp: "01:25:31", topic: "plugin", source: "thor", summary: "Plugin loaded: hypotheses v1.0.0" },
-  { id: "e7", timestamp: "01:20:15", topic: "hypothesis", source: "odin", summary: "Hypothesis confirmed: User prefers concise responses" },
-  { id: "e8", timestamp: "01:15:44", topic: "error", source: "heimdall", summary: "Auth token expired for node hermes" },
-  { id: "e9", timestamp: "01:10:02", topic: "prediction", source: "freya", summary: "Surprise event: unexpected file deletion pattern" },
-  { id: "e10", timestamp: "01:05:18", topic: "node", source: "thor", summary: "Node joined mesh — backend role assigned" },
-];
+const MOCK_EVENTS: ValhallaEvent[] = [];
 
 const MOCK_MARKETPLACE: MarketplacePlugin[] = [
-  { name: "daily-brief", version: "1.2.0", description: "Generate a daily summary of mesh activity, predictions, and hypotheses", author: "valhalla-core", downloads: 342, category: "productivity", installed: false },
+  { name: "daily-brief", version: "1.2.0", description: "Generate a daily summary of activity and insights", author: "fireside", downloads: 342, category: "productivity", installed: false },
   { name: "git-watcher", version: "0.9.1", description: "Monitor git repos for changes and auto-trigger analysis", author: "community", downloads: 187, category: "integration", installed: false },
-  { name: "slack-bridge", version: "1.0.0", description: "Forward mesh events and alerts to Slack channels", author: "community", downloads: 521, category: "integration", installed: false },
-  { name: "cost-tracker", version: "0.8.0", description: "Track inference costs across providers and models", author: "valhalla-core", downloads: 89, category: "analytics", installed: false },
-  { name: "prompt-optimizer", version: "1.1.0", description: "Auto-optimize prompts based on prediction feedback loops", author: "community", downloads: 264, category: "intelligence", installed: false },
-  { name: "backup-sync", version: "1.0.2", description: "Automated backup of soul files, config, and working memory", author: "valhalla-core", downloads: 156, category: "ops", installed: false },
-  { name: "anomaly-detector", version: "0.7.0", description: "Detect unusual patterns in mesh behavior and alert", author: "community", downloads: 73, category: "security", installed: false },
-  { name: "voice-interface", version: "0.5.0", description: "Voice input/output for hands-free mesh interaction", author: "community", downloads: 41, category: "interface", installed: false },
+  { name: "backup-sync", version: "1.0.2", description: "Automated backup of soul files, config, and memory", author: "fireside", downloads: 156, category: "ops", installed: false },
+  { name: "voice-interface", version: "0.5.0", description: "Voice input/output for hands-free interaction", author: "community", downloads: 41, category: "interface", installed: false },
 ];
 
 // ─── Sprint 2 API Functions ───
@@ -619,229 +466,39 @@ export interface Debate {
   pipeline_id?: string;
 }
 
-// ─── Sprint 4 Mock Data ───
+// ─── Sprint 4 Fallback Data ───
+// First-time user: no pipelines, no crucible, no wisdom, no debates yet.
 
-const MOCK_PIPELINES: Pipeline[] = [
-  {
-    id: "pipe-001",
-    title: "Add JWT auth to the API",
-    description: "JWT-based auth on all /api/v1 endpoints. Include registration, login, and token refresh.",
-    status: "running",
-    current_stage: "Test",
-    iteration: 3,
-    max_iterations: 10,
-    stages: [
-      { name: "Spec", agent: "huginn", model: "glm-5", status: "passed", started_at: "2026-03-10T09:00:00Z", completed_at: "2026-03-10T09:05:00Z" },
-      { name: "Build", agent: "local", model: "default", status: "passed", started_at: "2026-03-10T09:05:00Z", completed_at: "2026-03-10T09:15:00Z" },
-      { name: "Test", agent: "heimdall", model: "default", status: "running", started_at: "2026-03-10T09:15:00Z" },
-      { name: "Review", agent: "socratic", model: "multi", status: "pending" },
-      { name: "Distill", agent: "muninn", model: "kimi-k2.5", status: "pending" },
-    ],
-    iterations: [
-      { number: 3, verdict: "FAIL", summary: "Running tests... 12/18 passing. Token refresh endpoint needs mutex.", tests_passing: 12, tests_total: 18, agent: "heimdall", timestamp: "2026-03-10T09:28:00Z" },
-      { number: 2, verdict: "PROGRESS", summary: "Build fixed 4 of 6 test failures. JWT signing now works. Remaining: token refresh endpoint.", tests_passing: 12, tests_total: 18, agent: "huginn", timestamp: "2026-03-10T09:22:00Z" },
-      { number: 1, verdict: "FAIL", summary: "6 tests failed. Missing JWT secret config, bcrypt import error, no token refresh endpoint.", tests_passing: 12, tests_total: 18, agent: "heimdall", timestamp: "2026-03-10T09:15:00Z" },
-    ],
-    started_at: "2026-03-10T09:00:00Z",
-    eta_minutes: 12,
-    cloud_tokens: 8200,
-    local_tokens: 45000,
-  },
-  {
-    id: "pipe-002",
-    title: "Refactor plugin loader for lazy loading",
-    description: "Optimize cold start by lazily importing plugin handlers on first route access.",
-    status: "completed",
-    current_stage: "Distill",
-    iteration: 5,
-    max_iterations: 10,
-    stages: [
-      { name: "Spec", agent: "huginn", model: "glm-5", status: "passed" },
-      { name: "Build", agent: "local", model: "default", status: "passed" },
-      { name: "Test", agent: "heimdall", model: "default", status: "passed" },
-      { name: "Review", agent: "socratic", model: "multi", status: "passed" },
-      { name: "Distill", agent: "muninn", model: "kimi-k2.5", status: "passed" },
-    ],
-    iterations: [
-      { number: 5, verdict: "PASS", summary: "All 24 tests passing. Cold start reduced from 3.2s to 0.8s.", tests_passing: 24, tests_total: 24, agent: "heimdall", timestamp: "2026-03-10T07:45:00Z" },
-      { number: 4, verdict: "PROGRESS", summary: "Fixed circular import in watchdog handler.", tests_passing: 22, tests_total: 24, agent: "huginn", timestamp: "2026-03-10T07:38:00Z" },
-      { number: 3, verdict: "FAIL", summary: "2 tests broke — circular import in watchdog plugin.", tests_passing: 22, tests_total: 24, agent: "heimdall", timestamp: "2026-03-10T07:30:00Z" },
-      { number: 2, verdict: "PROGRESS", summary: "Lazy import working for model-switch and hypotheses plugins.", tests_passing: 20, tests_total: 24, agent: "huginn", timestamp: "2026-03-10T07:22:00Z" },
-      { number: 1, verdict: "FAIL", summary: "ImportError on 4 plugins. Need to defer route registration.", tests_passing: 20, tests_total: 24, agent: "heimdall", timestamp: "2026-03-10T07:15:00Z" },
-    ],
-    started_at: "2026-03-10T07:00:00Z",
-    cloud_tokens: 12400,
-    local_tokens: 89000,
-    lessons: [
-      "Lazy imports must defer route registration to first request",
-      "Circular imports in plugin handlers need explicit dependency ordering",
-      "Cold start benchmarking should include plugin scan + route registration separately",
-    ],
-  },
-  {
-    id: "pipe-003",
-    title: "Add Telegram escalation channel",
-    description: "When pipeline regression is detected, send Telegram alert with deep link to dashboard.",
-    status: "escalated",
-    current_stage: "Build",
-    iteration: 7,
-    max_iterations: 10,
-    stages: [
-      { name: "Spec", agent: "huginn", model: "glm-5", status: "passed" },
-      { name: "Build", agent: "local", model: "default", status: "failed" },
-      { name: "Test", agent: "heimdall", model: "default", status: "pending" },
-      { name: "Distill", agent: "muninn", model: "kimi-k2.5", status: "pending" },
-    ],
-    iterations: [
-      { number: 7, verdict: "REGRESS", summary: "Fixed Telegram API call but broke the escalation event emission. Net loss.", tests_passing: 3, tests_total: 8, agent: "huginn", timestamp: "2026-03-10T08:55:00Z" },
-    ],
-    started_at: "2026-03-10T08:00:00Z",
-    cloud_tokens: 6100,
-    local_tokens: 52000,
-  },
-];
+const MOCK_PIPELINES: Pipeline[] = [];
 
 const MOCK_CRUCIBLE: CrucibleResults = {
-  last_run: "2026-03-10T04:45:00Z",
-  total_tested: 12,
-  unbreakable: 7,
-  stressed: 3,
-  broken: 2,
-  procedures: [
-    { id: "proc-1", name: "JWT token validation", verdict: "unbreakable", confidence: 0.96, edge_cases: ["Expired token returns 401", "Malformed token returns 400", "Empty bearer header returns 401"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-2", name: "Model alias resolution", verdict: "unbreakable", confidence: 0.94, edge_cases: ["Unknown alias falls back to default", "Empty alias returns error"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-3", name: "Plugin hot-reload", verdict: "stressed", confidence: 0.72, edge_cases: ["Concurrent reload requests cause race condition", "Missing plugin.yaml handled gracefully"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-4", name: "Config YAML parsing", verdict: "unbreakable", confidence: 0.98, edge_cases: ["Malformed YAML returns clear error", "Missing required fields enumerated"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-5", name: "Node health polling", verdict: "stressed", confidence: 0.68, edge_cases: ["Offline node timeout too slow (30s)", "DNS resolution failure not handled"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-6", name: "Soul file path traversal guard", verdict: "unbreakable", confidence: 0.99, edge_cases: ["../../etc/passwd blocked", "Encoded traversal (.%2e/) blocked"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-7", name: "Event bus pub/sub", verdict: "unbreakable", confidence: 0.91, edge_cases: ["No subscribers — event silently dropped", "Subscriber crash isolated"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-8", name: "Working memory recall", verdict: "stressed", confidence: 0.65, edge_cases: ["Empty memory returns graceful empty array", "Very long observations truncated at 4096 chars"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-9", name: "Rate limiter middleware", verdict: "unbreakable", confidence: 0.93, edge_cases: ["Concurrent requests properly counted", "429 includes Retry-After header"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-10", name: "Pipeline max iteration enforcement", verdict: "unbreakable", confidence: 0.97, edge_cases: ["Hard cap at 25 even if config says 100"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-11", name: "Hypothesis dream cycle", verdict: "broken", confidence: 0.35, edge_cases: ["Model timeout during generation causes silent failure", "No retry mechanism for failed generations"], tested_at: "2026-03-10T04:45:00Z" },
-    { id: "proc-12", name: "Config sync across nodes", verdict: "broken", confidence: 0.42, edge_cases: ["Offline node receives stale config on reconnect — no sync trigger", "Partial config push leaves node in inconsistent state"], tested_at: "2026-03-10T04:45:00Z" },
-  ],
+  last_run: "—",
+  total_tested: 0,
+  unbreakable: 0,
+  stressed: 0,
+  broken: 0,
+  procedures: [],
 };
 
 const MOCK_WISDOM: WisdomPrompt = {
-  content: `## Operational Wisdom — Rebuilt ${new Date().toLocaleDateString()}
-
-### What I Know Well
-- JWT token validation and refresh flows — tested extensively
-- YAML config parsing with environment variable resolution
-- Plugin hot-reload with graceful error handling
-- Path traversal prevention in file-serving endpoints
-
-### What I'm Still Learning
-- Concurrent WebSocket connection management under load
-- Optimal model selection for different task types
-- Memory consolidation — balancing compression vs. detail retention
-
-### What to Watch For
-- Friday deployments have historically caused issues — prefer Monday
-- Config sync is unreliable when nodes are offline — queue changes
-- Rate limiter counts are per-process, not per-cluster — consider Redis
-- bcrypt.checkpw is the correct API, not == comparison
-
-### Procedural Shortcuts
-- Always test login flow after any auth changes
-- JWT refresh needs mutex to prevent race conditions
-- Plugin handlers must defer route registration for lazy loading
-- Circular imports in plugins need explicit dependency ordering`,
-  section_count: 4,
-  last_rebuilt: "2026-03-10T05:00:00Z",
-  word_count: 142,
+  content: `## Getting Started\n\nYour AI hasn't learned anything yet. Start chatting and it will build operational wisdom over time.`,
+  section_count: 1,
+  last_rebuilt: "—",
+  word_count: 0,
 };
 
 const MOCK_MODEL_ROUTER: ModelRouterStats = {
-  total_tokens: 167600,
-  total_cost: 0.48,
-  local_tokens: 134000,
-  cloud_tokens: 33600,
-  breakdown: [
-    { model: "local/Qwen3.5-35B-A3B", tokens: 134000, cost: 0, is_local: true },
-    { model: "cloud/glm-5", tokens: 16400, cost: 0.28, is_local: false },
-    { model: "cloud/kimi-k2.5", tokens: 8400, cost: 0.12, is_local: false },
-    { model: "cloud/deepseek", tokens: 8800, cost: 0.08, is_local: false },
-  ],
-  routing_rules: [
-    { task_type: "spec", model: "cloud/glm-5", reason: "Structured spec generation needs strong reasoning" },
-    { task_type: "review", model: "cloud/glm-5", reason: "Quality analysis requires nuanced judgment" },
-    { task_type: "regression", model: "cloud/deepseek", reason: "Code reasoning and diff analysis" },
-    { task_type: "memory", model: "cloud/kimi-k2.5", reason: "128K context window for lesson distillation" },
-    { task_type: "build", model: "local/default", reason: "Bulk iteration — free" },
-    { task_type: "test", model: "local/default", reason: "Test execution — free" },
-  ],
+  total_tokens: 0,
+  total_cost: 0,
+  local_tokens: 0,
+  cloud_tokens: 0,
+  breakdown: [],
+  routing_rules: [],
 };
 
-const MOCK_BELIEF_SHADOWS: BeliefShadow[] = [
-  {
-    node: "odin", dimensions: [
-      { label: "Code Quality", confidence: 0.85, accuracy: 0.82 },
-      { label: "Security", confidence: 0.70, accuracy: 0.88 },
-      { label: "Architecture", confidence: 0.90, accuracy: 0.78 },
-      { label: "Testing", confidence: 0.75, accuracy: 0.80 },
-      { label: "Performance", confidence: 0.65, accuracy: 0.72 },
-    ], gap_score: 0.08
-  },
-  {
-    node: "thor", dimensions: [
-      { label: "Code Quality", confidence: 0.92, accuracy: 0.90 },
-      { label: "Security", confidence: 0.60, accuracy: 0.55 },
-      { label: "Architecture", confidence: 0.88, accuracy: 0.85 },
-      { label: "Testing", confidence: 0.80, accuracy: 0.78 },
-      { label: "Performance", confidence: 0.85, accuracy: 0.70 },
-    ], gap_score: 0.12
-  },
-  {
-    node: "heimdall", dimensions: [
-      { label: "Code Quality", confidence: 0.70, accuracy: 0.72 },
-      { label: "Security", confidence: 0.95, accuracy: 0.93 },
-      { label: "Architecture", confidence: 0.65, accuracy: 0.60 },
-      { label: "Testing", confidence: 0.90, accuracy: 0.92 },
-      { label: "Performance", confidence: 0.55, accuracy: 0.58 },
-    ], gap_score: 0.04
-  },
-];
+const MOCK_BELIEF_SHADOWS: BeliefShadow[] = [];
 
-const MOCK_DEBATES: Debate[] = [
-  {
-    id: "debate-001",
-    topic: "JWT Auth Design — Token Refresh Race Condition",
-    status: "consensus",
-    rounds_completed: 3,
-    max_rounds: 3,
-    consensus: 0.85,
-    pipeline_id: "pipe-001",
-    started_at: "2026-03-10T09:30:00Z",
-    messages: [
-      { persona: "🏛️ Architect", agent: "huginn", model: "glm-5", content: "The auth middleware is solid but the token refresh flow has a race condition. If two requests hit /refresh simultaneously, both get new tokens but only one is stored. The other client silently loses its session.", round: 1, type: "critique" },
-      { persona: "😈 Devil's Advocate", agent: "heimdall", model: "deepseek", content: "What happens in 6 months when you have 50 endpoints? This middleware pattern requires manual annotation on every route. One missed route = security hole. Need an allowlist, not a denylist.", round: 1, type: "critique" },
-      { persona: "👤 End User", agent: "local", model: "default", content: "The error messages are cryptic. 'Invalid JWT' tells me nothing. What expired? What do I do? I'd close the tab.", round: 1, type: "critique" },
-      { persona: "💬 Thor", agent: "thor", model: "default", content: "Good catch on the race condition — adding mutex. Re: route annotation — I'll add a decorator pattern with @require_auth. Re: error messages — agreed, will add context like 'Token expired. Please log in again.'", round: 2, type: "defense" },
-      { persona: "🏛️ Architect", agent: "huginn", model: "glm-5", content: "Decorator approach is good. I'd also add a startup check that warns if any route lacks auth annotation. Concede on the refresh fix — mutex is the right call.", round: 3, type: "response" },
-      { persona: "😈 Devil's Advocate", agent: "heimdall", model: "deepseek", content: "The startup check addresses my concern. I'll concede if you also add integration tests that verify every route is either in the allowlist or has @require_auth.", round: 3, type: "response" },
-      { persona: "👤 End User", agent: "local", model: "default", content: "Better error messages accepted. Would also like a 'session expired' banner in the dashboard that auto-redirects to login. Concede.", round: 3, type: "response" },
-    ],
-  },
-  {
-    id: "debate-002",
-    topic: "Plugin Lazy Loading — Import Order",
-    status: "consensus",
-    rounds_completed: 2,
-    max_rounds: 3,
-    consensus: 0.92,
-    pipeline_id: "pipe-002",
-    started_at: "2026-03-10T07:40:00Z",
-    messages: [
-      { persona: "🏛️ Architect", agent: "huginn", model: "glm-5", content: "The lazy loading approach is clean. Only concern: what's the latency on first request to a lazy-loaded route? If it's >500ms, users will notice.", round: 1, type: "critique" },
-      { persona: "😈 Devil's Advocate", agent: "heimdall", model: "deepseek", content: "Lazy loading hides import errors until runtime. A plugin with a typo in handler.py won't fail at startup — it'll fail on the first user request. That's worse.", round: 1, type: "critique" },
-      { persona: "💬 Thor", agent: "thor", model: "default", content: "First request: ~120ms for most plugins — acceptable. For the import validation concern: I'll add a 'validate' pass at startup that imports but doesn't register routes. Best of both worlds.", round: 2, type: "defense" },
-      { persona: "🏛️ Architect", agent: "huginn", model: "glm-5", content: "120ms is fine. Validate pass solves the runtime error concern too. Concede.", round: 2, type: "response" },
-      { persona: "😈 Devil's Advocate", agent: "heimdall", model: "deepseek", content: "Validate pass addresses my concern. Concede.", round: 2, type: "response" },
-    ],
-  },
-];
+const MOCK_DEBATES: Debate[] = [];
 
 // ─── Sprint 4 API Functions ───
 
@@ -1036,7 +693,7 @@ export async function installAgent(id: string): Promise<{ status: string }> {
 }
 
 export async function exportAgent(name: string): Promise<{ status: string; url: string }> {
-  return apiFetch(`/api/v1/agents/export`, { method: "POST", body: JSON.stringify({ name }) }, { status: "exported", url: `/downloads/${name}.valhalla` });
+  return apiFetch(`/api/v1/agents/export`, { method: "POST", body: JSON.stringify({ name }) }, { status: "exported", url: `/downloads/${name}.fireside` });
 }
 
 export async function publishAgent(data: { name: string; version: string; description: string; category: string; price: number }): Promise<{ status: string }> {

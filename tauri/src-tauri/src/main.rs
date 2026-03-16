@@ -130,9 +130,39 @@ fn get_system_info() -> SystemInfo {
                 .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
                 .unwrap_or(0.0)
         }
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(target_os = "macos")]
         {
-            0.0 // macOS/Linux: unified memory or nvidia-smi needed
+            // Apple Silicon: unified memory IS the GPU memory
+            Command::new("sysctl")
+                .args(["-n", "hw.memsize"])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    s.parse::<f64>().ok()
+                })
+                .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
+                .unwrap_or(0.0)
+        }
+        #[cfg(target_os = "linux")]
+        {
+            // Try nvidia-smi for discrete GPU VRAM
+            Command::new("nvidia-smi")
+                .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                        // nvidia-smi returns MiB
+                        s.lines().next()
+                            .and_then(|l| l.trim().parse::<f64>().ok())
+                            .map(|mb| (mb / 1024.0 * 10.0).round() / 10.0)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0.0)
         }
     };
 

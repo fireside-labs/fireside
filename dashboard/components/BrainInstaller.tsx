@@ -36,23 +36,51 @@ export default function BrainInstaller({ brainLabel, brainId, onComplete, onCanc
             if (!res.ok) {
                 const err = await res.json().catch(() => ({ detail: "Install failed" }));
                 console.error("Brain install failed:", err);
-                // Fall back to simulated progress for demo
                 runSimulatedInstall();
                 return;
             }
 
+            // Check if SSE stream
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("text/event-stream")) {
+                const reader = res.body?.getReader();
+                const decoder = new TextDecoder();
+                if (reader) {
+                    let buf = "";
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buf += decoder.decode(value, { stream: true });
+                        const lines = buf.split("\n");
+                        buf = lines.pop() || "";
+                        for (const line of lines) {
+                            if (line.startsWith("data: ")) {
+                                try {
+                                    const evt = JSON.parse(line.slice(6));
+                                    if (evt.progress != null) setProgress(evt.progress);
+                                    if (evt.phase) setPhase(evt.phase as Phase);
+                                    if (evt.tok_s) { setTokS(evt.tok_s); }
+                                } catch { /* skip malformed */ }
+                            }
+                        }
+                    }
+                    setPhase("done");
+                    onComplete?.(tokS || 45);
+                    return;
+                }
+            }
+
             const data = await res.json();
             if (data.ok) {
-                // Install succeeded — server is running
-                const finalTokS = brainId === "fast" ? 45 : brainId === "deep" ? 18 : 120;
                 setProgress(100);
                 setPhase("configuring");
                 setTimeout(() => {
                     setPhase("verifying");
                     setTimeout(() => {
-                        setTokS(finalTokS);
+                        const measuredTokS = data.tok_s || 45;
+                        setTokS(measuredTokS);
                         setPhase("done");
-                        onComplete?.(finalTokS);
+                        onComplete?.(measuredTokS);
                     }, 1500);
                 }, 1000);
             }

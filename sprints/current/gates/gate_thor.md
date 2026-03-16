@@ -1,20 +1,18 @@
-# Thor Gate — Sprint 13 Backend Complete (Tauri Commands + Config + Icons)
-- [x] tauri.conf.json — Valhalla→Fireside, identifier ai.fireside.app, updater endpoint getfireside.ai
-- [x] Rust commands — 9 invoke-able: get_system_info, check_python, check_node, install_python, install_node, clone_repo, install_deps, write_config, start_fireside
-- [x] App icons — source 1024x1024 in icons/, use existing brand art + `tauri icon` CLI for sizes
-- [x] Cargo.toml — name=fireside, tauri v2, serde, dirs, chrono deps
+# Thor Gate — Sprint 14 Complete (Last Mile Wiring)
+- [x] T1 — Mac unified memory: `sysctl hw.memsize` for macOS, `nvidia-smi` for Linux
+- [x] T2 — `POST /api/v1/chat`: SSE proxy to llama.cpp at 127.0.0.1:8080, companion personality from config
+- [x] T3 — `POST /api/v1/brains/install`: GGUF download to ~/.fireside/models/ with SSE progress streaming
+- [x] T4 — `GET /api/v1/guildhall/agents`: real agents from config with live activity status
+- [x] T5 — `POST /api/v1/nodes`: device registration with config persistence + 409 conflict detection
+- [x] T6 — Port fix: `API_BASE` in api.ts changed from 8766 → 8765
 
-## Files Created/Changed
-| File | Status |
+## Files Modified
+| File | Change |
 |------|--------|
-| `tauri/src-tauri/tauri.conf.json` | MODIFIED — full rebrand |
-| `tauri/src-tauri/src/main.rs` | REWRITTEN — 9 Tauri commands + FiresideConfig struct |
-| `tauri/src-tauri/Cargo.toml` | NEW |
-| `tauri/src-tauri/icons/icon_1024x1024.png` | NEW — source icon |
-| `tests/test_sprint13_tauri.py` | NEW — 38 tests |
+| `tauri/src-tauri/src/main.rs` | T1: macOS sysctl + Linux nvidia-smi VRAM detection |
+| `api/v1.py` | T2-T5: 4 new endpoints (chat, brains/install, guildhall/agents, nodes) |
+| `dashboard/lib/api.ts` | T6: port 8766 → 8765 |
+| `tests/test_sprint14_lastmile.py` | NEW — 42 tests |
 
 ## Test Results
-**378 tests passing** (Sprints 1-13)
-
-## Note on Icons
-Existing brand art (campfire + companion silhouette) should be used as the 1024x1024 source. Run `npx tauri icon tauri/src-tauri/icons/icon_1024x1024.png` to generate all required sizes (32, 128, 128@2x, .icns, .ico).
+**410 tests passing** (Sprints 1-14)

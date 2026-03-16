@@ -6,7 +6,7 @@ const PERSONA_COLORS: Record<string, string> = {
     "🏛️ Architect": "#a855f7",
     "😈 Devil's Advocate": "#ef4444",
     "👤 End User": "#3b82f6",
-    "💬 Thor": "#00ff88",
+    "💬 Builder": "#F59E0B",
 };
 
 export default function DebateTranscript({ messages }: { messages: DebateMessage[] }) {

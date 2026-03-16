@@ -119,13 +119,31 @@ export default function CompanionChat({ species, petName, mood }: CompanionChatP
         setInput("");
         setTyping(true);
 
-        // Simulate pet thinking
-        await new Promise((r) => setTimeout(r, 1000 + Math.random() * 1500));
-
-        const responses = PET_RESPONSES[species];
         const prefix = getMoodPrefix(species, mood);
-        const response = prefix + responses[Math.floor(Math.random() * responses.length)];
 
+        try {
+            // Try real backend first
+            const res = await fetch("http://127.0.0.1:8765/api/v1/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: userMsg, species, mood }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const reply = prefix + (data.response || data.content || "...");
+                setMessages((prev) => [...prev, { role: "pet", content: reply }]);
+                setTyping(false);
+                return;
+            }
+        } catch {
+            // Backend unreachable — use canned responses
+        }
+
+        // Fallback to canned responses
+        await new Promise((r) => setTimeout(r, 800 + Math.random() * 800));
+        const responses = PET_RESPONSES[species];
+        const response = prefix + responses[Math.floor(Math.random() * responses.length)];
         setMessages((prev) => [...prev, { role: "pet", content: response }]);
         setTyping(false);
     };
@@ -157,8 +175,8 @@ export default function CompanionChat({ species, petName, mood }: CompanionChatP
                 {messages.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                         <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-xs ${msg.role === "user"
-                                ? "bg-[var(--color-neon-glow)] text-[var(--color-neon)] border border-[rgba(0,255,136,0.15)]"
-                                : "glass-card text-[var(--color-rune)]"
+                            ? "bg-[var(--color-neon-glow)] text-[var(--color-neon)] border border-[rgba(0,255,136,0.15)]"
+                            : "glass-card text-[var(--color-rune)]"
                             }`}>
                             {msg.role === "pet" && <span className="text-[9px] text-[var(--color-rune-dim)] block mb-0.5">{petName}</span>}
                             <p className="leading-relaxed">{msg.content}</p>
