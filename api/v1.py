@@ -22,7 +22,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 log = logging.getLogger("valhalla.api.v1")
 
@@ -735,7 +735,7 @@ async def uninstall_plugin(name: str):
 # ---------------------------------------------------------------------------
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(max_length=4096)
     context: list = []
 
 
@@ -825,6 +825,9 @@ async def post_chat(req: ChatRequest):
 # Endpoints: Brain Install  (Sprint 14 — T3)
 # ---------------------------------------------------------------------------
 
+ALLOWED_DOWNLOAD_DOMAINS = {"huggingface.co", "hf.co", "ollama.com", "github.com", "objects.githubusercontent.com"}
+
+
 class BrainInstallRequest(BaseModel):
     model_id: str
     url: str
@@ -834,7 +837,13 @@ class BrainInstallRequest(BaseModel):
 async def post_brains_install(req: BrainInstallRequest):
     """Download a GGUF model to ~/.fireside/models/. Stream progress via SSE."""
     import urllib.request
+    from urllib.parse import urlparse
     from fastapi.responses import StreamingResponse
+
+    # SSRF protection: only allow downloads from trusted domains
+    parsed = urlparse(req.url)
+    if parsed.hostname not in ALLOWED_DOWNLOAD_DOMAINS:
+        raise HTTPException(400, f"Downloads only allowed from: {', '.join(sorted(ALLOWED_DOWNLOAD_DOMAINS))}")
 
     models_dir = Path.home() / ".fireside" / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -951,6 +960,7 @@ class NodeRegisterRequest(BaseModel):
     role: str = "worker"
     gpu: Optional[str] = None
     vram_gb: Optional[float] = None
+    auth_token: str = ""
 
 
 @router.post("/nodes")
@@ -958,7 +968,13 @@ async def register_node(req: NodeRegisterRequest):
     """Register a new device to the mesh.
 
     Adds the node to the mesh config and returns a success confirmation.
+    Requires mesh.auth_token for authentication.
     """
+    # Auth check — same pattern as mesh_announce
+    expected_token = _config.get("mesh", {}).get("auth_token", "")
+    if not expected_token or not hmac.compare_digest(req.auth_token, expected_token):
+        raise HTTPException(status_code=403, detail="Invalid or missing mesh auth token")
+
     mesh = _config.get("mesh", {})
     nodes = mesh.get("nodes", {})
 
