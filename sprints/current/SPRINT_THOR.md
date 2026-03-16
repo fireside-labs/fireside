@@ -1,140 +1,121 @@
-# Sprint 12 — THOR (Native iOS APIs + Proactive Engine + Siri)
+# Sprint 13 — THOR (Tauri Commands + Config + Icons)
 
 // turbo-all
 
-**Your role:** Backend/Mobile engineer. Swift (native modules), Python (backend), React Native (Expo).
+**Your role:** Backend/Systems engineer. Rust (Tauri commands), Python, PowerShell.
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
 
 > [!CAUTION]
 > **GATE FILE IS MANDATORY.** Create `sprints/current/gates/gate_thor.md` when complete.
 
 > [!IMPORTANT]
-> **READ FIRST:** `VISION.md` + `sprints/current/SPRINT_12.md` — the full design for this sprint.
+> **READ FIRST:** `VISION.md` + `tauri/src-tauri/tauri.conf.json` — existing Tauri v2 config.
 
 ---
 
 ## Context
 
-Ember needs to be useful when Atlas is offline. Instead of an on-device LLM (heavy, battery-draining), we give Ember **access to iOS native APIs**. She can read Calendar, Contacts, Reminders, and Health data — things ChatGPT and Atlas literally cannot do because they're not on the phone.
-
-> "The small brain's value isn't intelligence — it's **access**."
-
-This sprint requires **Expo native modules** (Swift) exposed to React Native.
+There's already a Tauri v2 skeleton in `tauri/src-tauri/`. It wraps the dashboard at `localhost:3000` into a native app window. Your job is to:
+1. Update the branding from "Valhalla" → "Fireside"
+2. Create Rust commands that the frontend wizard calls to do the actual installation
+3. Generate branded icons
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Calendar Module (EventKit)
+### Task 1 — Update `tauri.conf.json`
 
-Create an Expo native module `NativeCalendar` that exposes:
-
-```typescript
-// What Ember needs:
-NativeCalendar.getUpcomingEvents(hours: number): Promise<CalendarEvent[]>
-NativeCalendar.getNextEvent(): Promise<CalendarEvent | null>
-NativeCalendar.getTodayEvents(): Promise<CalendarEvent[]>
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  startDate: string; // ISO
-  endDate: string;
-  location?: string;
-  notes?: string;
-  attendees?: string[];
+```json
+{
+  "productName": "Fireside",
+  "version": "1.0.0",
+  "identifier": "ai.fireside.app",
+  "app": {
+    "title": "Fireside",
+    "windows": [{ "title": "🔥 Fireside Setup" }]
+  }
 }
 ```
 
-- Request `NSCalendarsUsageDescription` permission with: *"Ember reads your calendar to remind you about upcoming meetings and help you prepare."*
-- Use `EKEventStore` in Swift, expose via Expo Modules API.
+Update all references from "Valhalla" to "Fireside". Update the auto-updater endpoint to `https://releases.getfireside.ai/...` (placeholder is fine for now).
 
-### Task 2 — Contacts Module (Contacts.framework)
+### Task 2 — Tauri Rust Commands
 
-Create `NativeContacts` module:
+In `tauri/src-tauri/src/main.rs` (or `lib.rs`), create invoke-able commands:
 
-```typescript
-NativeContacts.searchByName(name: string): Promise<Contact[]>
-NativeContacts.getRecent(count: number): Promise<Contact[]>
+```rust
+#[tauri::command]
+fn get_system_info() -> SystemInfo {
+    // Return RAM_GB, GPU name, OS, architecture
+}
 
-interface Contact {
-  id: string;
-  name: string;
-  phone?: string;
-  email?: string;
-  organization?: string;
-  lastContacted?: string;
+#[tauri::command]
+fn check_python() -> Option<String> {
+    // Run `python --version`, return version string or None
+}
+
+#[tauri::command]
+fn check_node() -> Option<String> {
+    // Run `node --version`, return version string or None
+}
+
+#[tauri::command]
+async fn install_python() -> Result<(), String> {
+    // Windows: winget install Python.Python.3.12
+    // macOS: brew install python@3.12
+}
+
+#[tauri::command]
+async fn install_node() -> Result<(), String> {
+    // Windows: winget install OpenJS.NodeJS.LTS
+    // macOS: brew install node@20
+}
+
+#[tauri::command]
+async fn clone_repo(fireside_dir: String) -> Result<(), String> {
+    // git clone https://github.com/JordanFableFur/valhalla-mesh.git ~/.fireside
+}
+
+#[tauri::command]
+async fn install_deps(fireside_dir: String) -> Result<(), String> {
+    // pip install -r requirements.txt
+    // cd dashboard && npm install
+}
+
+#[tauri::command]
+fn write_config(config: FiresideConfig) -> Result<(), String> {
+    // Write valhalla.yaml, companion_state.json, onboarding.json
+    // Same output as install.sh / install.ps1
+}
+
+#[tauri::command]
+async fn start_fireside(fireside_dir: String) -> Result<(), String> {
+    // Start bifrost.py + npm run dev as background processes
 }
 ```
 
-- Permission string: *"Ember looks up contacts when you mention someone by name, so she can help you connect."*
+Register all commands in the Tauri builder.
 
-### Task 3 — Health Module (HealthKit)
+### Task 3 — App Icons
 
-Create `NativeHealth` module:
+Generate icon files for all required sizes in `tauri/src-tauri/icons/`:
+- `32x32.png`
+- `128x128.png`
+- `128x128@2x.png`
+- `icon.icns` (macOS)
+- `icon.ico` (Windows)
 
-```typescript
-NativeHealth.getSteps(date: string): Promise<number>
-NativeHealth.getSleepHours(date: string): Promise<number>
-NativeHealth.getActivitySummary(): Promise<{ steps: number; calories: number; activeMinutes: number }>
-```
+The icon should be the Fireside campfire (🔥) or a fox silhouette with fire-amber brand colors. Use the `tauri icon` CLI to generate from a single 1024x1024 source if possible.
 
-- Permission string: *"Ember checks your daily stats to give you personalized wellness nudges."*
-- Read-only permissions only. Ember never writes health data.
+### Task 4 — Update Cargo.toml
 
-### Task 4 — Proactive Alert Engine
+Ensure `tauri/src-tauri/Cargo.toml` has:
+- `name = "fireside"`
+- All required Tauri v2 dependencies
+- The `tauri-build` in build-dependencies
 
-Create `ProactiveEngine.ts` that runs logic to generate contextual notifications:
-
-```typescript
-// Called from BGAppRefreshTask or on app foreground
-async function runProactiveChecks(): Promise<ProactiveAlert[]> {
-  const alerts: ProactiveAlert[] = [];
-  
-  // 1. Next meeting in < 30 min?
-  const next = await NativeCalendar.getNextEvent();
-  if (next && minutesUntil(next.startDate) < 30) {
-    alerts.push({ type: 'meeting_prep', event: next });
-  }
-  
-  // 2. Late night + Messages app active? → Guardian nudge
-  const hour = new Date().getHours();
-  if (hour >= 23 || hour < 5) {
-    alerts.push({ type: 'guardian_time', message: 'It\'s late... sleep on it?' });
-  }
-  
-  // 3. Morning briefing (7-9 AM, once per day)
-  if (hour >= 7 && hour <= 9 && !briefedToday()) {
-    const events = await NativeCalendar.getTodayEvents();
-    const steps = await NativeHealth.getSteps(today());
-    alerts.push({ type: 'morning_briefing', events, steps });
-  }
-  
-  return alerts;
-}
-```
-
-### Task 5 — Siri Intents (AppIntents)
-
-Create Swift `AppIntent` structs:
-
-1. **AskEmberIntent** — *"Hey Siri, ask Ember what's my next meeting"*
-   - Reads calendar, returns formatted response
-2. **RememberIntent** — *"Hey Siri, tell Ember to remember I like oat milk"*
-   - Saves to taught facts via API (if Atlas is online) or local queue
-3. **StepsIntent** — *"Hey Siri, ask Ember how many steps I took today"*
-   - Reads HealthKit, returns formatted response
-
-### Task 6 — Drop Your Gate
-
----
-
-## Technical Notes
-
-- **Expo Modules API:** Use `expo-modules-core` to create Swift native modules. See https://docs.expo.dev/modules/overview/
-- **Permissions:** All permissions must be requested at first use, never upfront. iOS will reject apps that request all permissions at launch.
-- **BGAppRefreshTask:** Register in `AppDelegate` / Expo plugin config. iOS gives ~30 seconds, a few times per day.
-- **No data leaves the phone** unless user explicitly taps "Ask Atlas." Heimdall will verify.
+### Task 5 — Drop Your Gate
 
 ---
 

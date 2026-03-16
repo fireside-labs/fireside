@@ -1,147 +1,170 @@
-# Sprint 12 — FREYA (Widgets + Live Activities + UI Integration)
+# Sprint 13 — FREYA (Installer Wizard UI in Tauri)
 
 // turbo-all
 
-**Your role:** Frontend engineer. React Native/Expo (mobile), Swift (WidgetKit).
+**Your role:** Frontend engineer. React/Next.js (dashboard), TypeScript.
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
 
 > [!CAUTION]
 > **GATE FILE IS MANDATORY.** Create `sprints/current/gates/gate_freya.md` when complete.
 
 > [!IMPORTANT]
-> **READ FIRST:** `VISION.md` + `sprints/current/SPRINT_12.md` — the full design.
-> **READ ALSO:** `sprints/current/CREATIVE_DIRECTION.md` — brand palette (fire amber, warm tones).
+> **READ FIRST:** `VISION.md` + `sprints/current/CREATIVE_DIRECTION.md` — brand palette.
+> **READ ALSO:** `dashboard/components/OnboardingWizard.tsx` — existing wizard (reuse heavily).
 
 ---
 
 ## Context
 
-Ember is getting iOS superpowers. Thor is building native modules for Calendar, Contacts, Health, and Siri. Your job is to build the visual surfaces: home screen widgets, lock screen widgets, Live Activities, and chat integration for native data cards.
+The Tauri app wraps the dashboard. When there's no config (first launch), the user should see a beautiful **Installer Wizard** instead of the dashboard. Thor is building Tauri commands you can invoke from JS. Your job is the UI.
+
+The wizard MUST feel premium. This is literally the first thing every user sees. It sells the product.
 
 ---
 
 ## Your Tasks
 
-### Task 1 — Home Screen Widgets (WidgetKit)
+### Task 1 — InstallerWizard Component
 
-Create a WidgetKit extension with 3 widget sizes. Use the fire amber brand palette.
+Create `dashboard/components/InstallerWizard.tsx` with 7 steps:
 
-**Small Widget (2x2):**
+**Step 1 — Welcome**
 ```
-┌──────────────┐
-│  🦊 Ember     │
-│  😊 Happy     │
-│               │
-│  Next: 3pm    │
-│  PrePass Demo │
-└──────────────┘
+🔥
+FIRESIDE
+
+The AI companion that learns while you sleep.
+
+[Get Started →]
+```
+Full-screen, centered, fire-amber gradient background. Animated fire particles or gentle glow. Premium font (Inter or Outfit from Google Fonts).
+
+**Step 2 — System Check**
+```
+Checking your system...
+
+✔ Windows 11 (Build 22621)
+✔ 32GB RAM
+✔ NVIDIA RTX 4090
+
+Recommended brain: Smart & Fast (7B)
+```
+Auto-runs `invoke('get_system_info')`. Show animated checkmarks appearing one by one. Auto-advances after 2 seconds.
+
+**Step 3 — Choose Your Companion**
+```
+Choose a companion for your journey.
+
+  🐱 Cat       🐶 Dog       🐧 Penguin
+  🦊 Fox       🦉 Owl       🐉 Dragon
+
+[Selected: 🦊 Fox]
+
+Name your companion: [Ember]
+
+[Next →]
+```
+6 clickable cards with hover animations. Selected card glows amber. Name input below.
+
+**Step 4 — Create Your AI**
+```
+Every companion has someone at the fireside.
+This is the mind behind Ember — your AI.
+
+Name: [Atlas]
+
+What's Atlas's style?
+  🎯 Analytical    🎨 Creative
+  ⚡ Direct         🌿 Warm
+
+[Next →]
+```
+4 style cards with descriptions and hover effects.
+
+**Step 5 — Confirmation**
+```
+Ready to install.
+
+  Owner       Jordan
+  AI          Atlas (🎯)
+  Companion   🦊 Ember
+  Brain       Smart & Fast (7B)
+
+[Install Fireside →]
+```
+Beautiful card with all choices. "Install" button is large, amber, with a subtle pulse animation.
+
+**Step 6 — Installing**
+```
+Atlas and Ember are getting ready...
+
+  ✔ Python ready
+  ✔ Node.js ready
+  ██████████░░░░░░░ Downloading Fireside...
+  ○ Installing packages
+  ○ Saving your preferences
+```
+Sequential progress. Each step calls the corresponding Tauri command. Animated progress bar. Show the companion emoji doing a little idle animation.
+
+**Step 7 — Success**
+```
+🔥 Fireside is live.
+
+Atlas is at the fireside.
+Ember is by their side.
+
+       🔥
+       🦊
+
+Atlas & Ember are ready for you, Jordan.
+
+  Things to try:
+  1. Say "Hello Ember!"
+  2. Ask "Take me for a walk"
+  3. Say "Remember: I like coffee black"
+
+[Open Dashboard →]
+```
+Celebratory moment. Maybe a brief confetti or fire-spark animation. The "Open Dashboard" button transitions to the actual dashboard.
+
+### Task 2 — Installer Gate
+
+Update `dashboard/components/OnboardingGate.tsx` to:
+- Check if running inside Tauri (`window.__TAURI__`)
+- If Tauri + no onboarding.json → show InstallerWizard
+- If Tauri + already onboarded → show dashboard
+- If browser (not Tauri) → show existing OnboardingWizard
+
+### Task 3 — Tauri Command Integration
+
+Call Thor's commands from the wizard using `@tauri-apps/api/core`:
+
+```typescript
+import { invoke } from '@tauri-apps/api/core';
+
+const sysInfo = await invoke('get_system_info');
+const hasPython = await invoke('check_python');
+await invoke('install_python');
+await invoke('clone_repo', { firesideDir: '~/.fireside' });
+await invoke('write_config', { config: { ... } });
+await invoke('start_fireside', { firesideDir: '~/.fireside' });
 ```
 
-**Medium Widget (4x2):**
-```
-┌──────────────────────────────┐
-│  🦊 Good morning, Jordan!    │
-│                               │
-│  📅 9:00  Standup             │
-│  📅 3:00  PrePass Demo        │
-│                               │
-│  👣 2,340 steps so far        │
-│  [Chat with Ember →]          │
-└──────────────────────────────┘
-```
+### Task 4 — Responsive Design
 
-**Lock Screen Widget (circular):**
-```
-  🦊
- 3pm
-```
-Shows companion emoji + next event time. Tap opens chat.
-
-- Use `WidgetKit` + `SwiftUI` in a widget extension target.
-- Read data from shared `UserDefaults` (app group) written by the native modules.
-- Refresh timeline: `.atEnd` with 15-minute intervals.
-- Brand: dark background, fire amber accent, warm tones per Creative Direction.
-
-### Task 2 — Live Activities
-
-Create a Live Activity that shows during active events:
-
-```
-┌────────────────────────────────────────────┐
-│ 🦊 Meeting: PrePass Demo                    │
-│    Started 5 min ago · John, Sarah + 2       │
-│    Last time: discussed toll accuracy        │
-└────────────────────────────────────────────┘
-```
-
-- Starts when a calendar event begins (ProactiveEngine triggers it).
-- Shows event title, attendees, and last meeting context (from contacts/memory).
-- Auto-dismisses when event ends.
-- Use `ActivityKit` in Swift.
-
-### Task 3 — Native Data Cards in Chat
-
-When Ember pulls native data, render it as rich cards (like Sprint 9 action cards):
-
-**Calendar Card:**
-```
-┌─────────────────────────┐
-│ 📅 Next Meeting          │
-│ PrePass Demo · 3:00 PM   │
-│ 📍 Conference Room B     │
-│ 👥 John, Sarah + 2       │
-│                           │
-│ [Prep with Atlas →]       │
-└─────────────────────────┘
-```
-
-**Health Card:**
-```
-┌─────────────────────────┐
-│ 👣 Today's Activity      │
-│ 2,340 steps              │
-│ 🔥 180 calories           │
-│ ⏱ 22 active minutes      │
-│                           │
-│ ███████░░░ 47% of goal   │
-└─────────────────────────┘
-```
-
-**Contact Card:**
-```
-┌─────────────────────────┐
-│ 👤 John Smith             │
-│ PrePass · VP Engineering  │
-│ 📧 john@prepass.com       │
-│ Last met: Feb 14          │
-│                           │
-│ [Call] [Message] [Email]  │
-└─────────────────────────┘
-```
-
-Add these as new `ActionCard` types: `calendar_event`, `health_summary`, `contact_info`.
-
-### Task 4 — Permission Request Flow
-
-Design a friendly, non-greedy permission flow:
-
-1. On first calendar-related question: *"Ember would like to read your calendar to help with meetings. [Allow] [Not Now]"*
-2. On first contact lookup: *"To look up people by name, Ember needs access to your contacts. [Allow] [Not Now]"*
-3. On first health question: *"Want Ember to track your daily stats? She'll need Health access. [Allow] [Not Now]"*
-
-Each permission is requested **in context**, not at app launch. Show the companion asking nicely with brand personality.
+The Tauri window is 1280×800. Design for this exact viewport. No mobile responsive needed — this is desktop only.
 
 ### Task 5 — Drop Your Gate
 
 ---
 
-## Technical Notes
-
-- **WidgetKit requires a separate target** in Xcode. For Expo, use `expo-apple-targets` or configure via Expo plugin.
-- **Shared data:** Use App Groups (`group.com.fablefur.fireside`) to share data between the main app and the widget extension.
-- **Live Activities:** Require `NSSupportsLiveActivities = YES` in Info.plist.
-- **Action Button (iPhone 15 Pro):** Register a Siri Shortcut that opens Ember voice input. Users can assign it to the Action Button in iOS Settings.
-- **Follow Creative Direction:** Fire amber palette, dark backgrounds, warm companion personality.
+## Design Requirements
+- Fire amber palette (#F59E0B, #D97706, #92400E)
+- Dark background (#0F0F0F or #1A1A1A)
+- Google Fonts: Inter or Outfit
+- Smooth step transitions (slide or fade, 300ms)
+- Each step should feel like a page in a storybook, not a form
+- The companion should feel ALIVE — small animations, personality hints
 
 ---
 
