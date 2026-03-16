@@ -15,9 +15,11 @@ export default function SettingsPage() {
         toast("Settings saved! Changes apply immediately.", "success");
     };
 
+    const agentName = typeof window !== "undefined" ? localStorage.getItem("fireside_agent_name") || "atlas" : "atlas";
+
     // Mock raw config for Advanced view
     const rawYaml = `# Fireside Configuration
-name: my-ai
+name: ${agentName.toLowerCase()}
 role: orchestrator
 model: llama-3.1-8b
 plugins:
