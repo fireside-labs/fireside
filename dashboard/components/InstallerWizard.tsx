@@ -14,404 +14,403 @@ import { useState, useEffect, useCallback } from "react";
 // ---------- Types ----------------------------------------------------------
 
 interface SystemInfo {
-    os: string;
-    arch: string;
-    ram_gb: number;
-    gpu: string;
-    vram_gb: number;
+  os: string;
+  arch: string;
+  ram_gb: number;
+  gpu: string;
+  vram_gb: number;
 }
 
 interface InstallerConfig {
-    userName: string;
-    companionSpecies: string;
-    companionName: string;
-    agentName: string;
-    agentStyle: string;
-    brainSize: string;
-    brainModel: string;
+  userName: string;
+  companionSpecies: string;
+  companionName: string;
+  agentName: string;
+  agentStyle: string;
+  brainSize: string;
+  brainModel: string;
 }
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 const SPECIES = [
-    { id: "cat", emoji: "🐱", label: "Cat" },
-    { id: "dog", emoji: "🐶", label: "Dog" },
-    { id: "penguin", emoji: "🐧", label: "Penguin" },
-    { id: "fox", emoji: "🦊", label: "Fox" },
-    { id: "owl", emoji: "🦉", label: "Owl" },
-    { id: "dragon", emoji: "🐉", label: "Dragon" },
+  { id: "cat", emoji: "🐱", label: "Cat" },
+  { id: "dog", emoji: "🐶", label: "Dog" },
+  { id: "penguin", emoji: "🐧", label: "Penguin" },
+  { id: "fox", emoji: "🦊", label: "Fox" },
+  { id: "owl", emoji: "🦉", label: "Owl" },
+  { id: "dragon", emoji: "🐉", label: "Dragon" },
 ];
 
 const STYLES = [
-    { id: "analytical", emoji: "🎯", label: "Analytical", desc: "Data-driven, precise, sees patterns" },
-    { id: "creative", emoji: "🎨", label: "Creative", desc: "Imaginative, lateral thinker" },
-    { id: "direct", emoji: "⚡", label: "Direct", desc: "No-nonsense, efficient, to the point" },
-    { id: "warm", emoji: "🌿", label: "Warm", desc: "Empathetic, supportive, reads the room" },
+  { id: "analytical", emoji: "🎯", label: "Analytical", desc: "Data-driven, precise, sees patterns" },
+  { id: "creative", emoji: "🎨", label: "Creative", desc: "Imaginative, lateral thinker" },
+  { id: "direct", emoji: "⚡", label: "Direct", desc: "No-nonsense, efficient, to the point" },
+  { id: "warm", emoji: "🌿", label: "Warm", desc: "Empathetic, supportive, reads the room" },
 ];
 
 // ---------- Tauri Helpers --------------------------------------------------
 
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    if (w.__TAURI__) {
-        const { invoke } = await import("@tauri-apps/api/core");
-        return invoke<T>(cmd, args);
-    }
-    // Browser fallback — mock for development
-    console.log(`[mock] invoke(${cmd})`, args);
-    await new Promise((r) => setTimeout(r, 800));
-    if (cmd === "get_system_info") return { os: "Windows 11", arch: "x86_64", ram_gb: 32, gpu: "NVIDIA RTX 4090", vram_gb: 24 } as T;
-    if (cmd === "check_python") return "3.12.2" as T;
-    if (cmd === "check_node") return "20.11.0" as T;
-    return {} as T;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  if (w.__TAURI__?.core?.invoke) {
+    return w.__TAURI__.core.invoke(cmd, args) as Promise<T>;
+  }
+  // Browser fallback — mock for development
+  console.log(`[mock] invoke(${cmd})`, args);
+  await new Promise((r) => setTimeout(r, 800));
+  if (cmd === "get_system_info") return { os: "Windows 11", arch: "x86_64", ram_gb: 32, gpu: "NVIDIA RTX 4090", vram_gb: 24 } as T;
+  if (cmd === "check_python") return "3.12.2" as T;
+  if (cmd === "check_node") return "20.11.0" as T;
+  return {} as T;
 }
 
 // ---------- Component ------------------------------------------------------
 
 export default function InstallerWizard({ onComplete }: { onComplete: () => void }) {
-    const [step, setStep] = useState<Step>(0);
-    const [config, setConfig] = useState<InstallerConfig>({
-        userName: "",
-        companionSpecies: "fox",
-        companionName: "Ember",
-        agentName: "Atlas",
-        agentStyle: "analytical",
-        brainSize: "smart",
-        brainModel: "7B",
-    });
-    const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
-    const [sysChecks, setSysChecks] = useState<{ label: string; status: "pending" | "ok" | "fail"; value: string }[]>([]);
-    const [installSteps, setInstallSteps] = useState<{ label: string; status: "pending" | "running" | "done" | "fail" }[]>([]);
-    const [animClass, setAnimClass] = useState("installer-enter");
+  const [step, setStep] = useState<Step>(0);
+  const [config, setConfig] = useState<InstallerConfig>({
+    userName: "",
+    companionSpecies: "fox",
+    companionName: "Ember",
+    agentName: "Atlas",
+    agentStyle: "analytical",
+    brainSize: "smart",
+    brainModel: "7B",
+  });
+  const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
+  const [sysChecks, setSysChecks] = useState<{ label: string; status: "pending" | "ok" | "fail"; value: string }[]>([]);
+  const [installSteps, setInstallSteps] = useState<{ label: string; status: "pending" | "running" | "done" | "fail" }[]>([]);
+  const [animClass, setAnimClass] = useState("installer-enter");
 
-    const goTo = useCallback((s: Step) => {
-        setAnimClass("installer-exit");
-        setTimeout(() => {
-            setStep(s);
-            setAnimClass("installer-enter");
-        }, 250);
-    }, []);
+  const goTo = useCallback((s: Step) => {
+    setAnimClass("installer-exit");
+    setTimeout(() => {
+      setStep(s);
+      setAnimClass("installer-enter");
+    }, 250);
+  }, []);
 
-    // ── Step 1: System Check (auto-run) ──
-    useEffect(() => {
-        if (step !== 1) return;
-        const checks = [
-            { label: "Operating System", status: "pending" as const, value: "" },
-            { label: "Memory", status: "pending" as const, value: "" },
-            { label: "Graphics", status: "pending" as const, value: "" },
-        ];
-        setSysChecks(checks);
+  // ── Step 1: System Check (auto-run) ──
+  useEffect(() => {
+    if (step !== 1) return;
+    const checks = [
+      { label: "Operating System", status: "pending" as const, value: "" },
+      { label: "Memory", status: "pending" as const, value: "" },
+      { label: "Graphics", status: "pending" as const, value: "" },
+    ];
+    setSysChecks(checks);
 
-        (async () => {
-            const info = await tauriInvoke<SystemInfo>("get_system_info");
-            setSysInfo(info);
+    (async () => {
+      const info = await tauriInvoke<SystemInfo>("get_system_info");
+      setSysInfo(info);
 
-            const update = (i: number, v: string) => {
-                checks[i] = { ...checks[i], status: "ok", value: v };
-                setSysChecks([...checks]);
-            };
-            await new Promise((r) => setTimeout(r, 400));
-            update(0, `${info.os} (${info.arch})`);
-            await new Promise((r) => setTimeout(r, 400));
-            update(1, `${info.ram_gb}GB RAM`);
-            await new Promise((r) => setTimeout(r, 400));
-            update(2, info.gpu || "No GPU detected");
+      const update = (i: number, v: string) => {
+        checks[i] = { ...checks[i], status: "ok", value: v };
+        setSysChecks([...checks]);
+      };
+      await new Promise((r) => setTimeout(r, 400));
+      update(0, `${info.os} (${info.arch})`);
+      await new Promise((r) => setTimeout(r, 400));
+      update(1, `${info.ram_gb}GB RAM`);
+      await new Promise((r) => setTimeout(r, 400));
+      update(2, info.gpu || "No GPU detected");
 
-            // Auto-advance
-            setTimeout(() => goTo(2), 1200);
-        })();
-    }, [step, goTo]);
+      // Auto-advance
+      setTimeout(() => goTo(2), 1200);
+    })();
+  }, [step, goTo]);
 
-    // ── Step 5: Installing ──
-    useEffect(() => {
-        if (step !== 5) return;
-        const steps = [
-            { label: "Checking Python", status: "pending" as const },
-            { label: "Checking Node.js", status: "pending" as const },
-            { label: "Setting up Fireside", status: "pending" as const },
-            { label: "Installing packages", status: "pending" as const },
-            { label: "Saving your preferences", status: "pending" as const },
-        ];
-        setInstallSteps(steps);
+  // ── Step 5: Installing ──
+  useEffect(() => {
+    if (step !== 5) return;
+    const steps = [
+      { label: "Checking Python", status: "pending" as const },
+      { label: "Checking Node.js", status: "pending" as const },
+      { label: "Setting up Fireside", status: "pending" as const },
+      { label: "Installing packages", status: "pending" as const },
+      { label: "Saving your preferences", status: "pending" as const },
+    ];
+    setInstallSteps(steps);
 
-        (async () => {
-            const run = async (i: number, fn: () => Promise<void>) => {
-                steps[i] = { ...steps[i], status: "running" };
-                setInstallSteps([...steps]);
-                try {
-                    await fn();
-                    steps[i] = { ...steps[i], status: "done" };
-                } catch {
-                    steps[i] = { ...steps[i], status: "fail" };
-                }
-                setInstallSteps([...steps]);
-            };
+    (async () => {
+      const run = async (i: number, fn: () => Promise<void>) => {
+        steps[i] = { ...steps[i], status: "running" };
+        setInstallSteps([...steps]);
+        try {
+          await fn();
+          steps[i] = { ...steps[i], status: "done" };
+        } catch {
+          steps[i] = { ...steps[i], status: "fail" };
+        }
+        setInstallSteps([...steps]);
+      };
 
-            await run(0, async () => {
-                const py = await tauriInvoke<string | null>("check_python");
-                if (!py) await tauriInvoke("install_python");
-            });
-            await run(1, async () => {
-                const nd = await tauriInvoke<string | null>("check_node");
-                if (!nd) await tauriInvoke("install_node");
-            });
-            await run(2, async () => {
-                await tauriInvoke("clone_repo", { firesideDir: "~/.fireside" });
-            });
-            await run(3, async () => {
-                await tauriInvoke("install_deps", { firesideDir: "~/.fireside" });
-            });
-            await run(4, async () => {
-                await tauriInvoke("write_config", {
-                    config: {
-                        user_name: config.userName || "User",
-                        agent_name: config.agentName,
-                        agent_style: config.agentStyle,
-                        companion_species: config.companionSpecies,
-                        companion_name: config.companionName,
-                    },
-                });
-            });
+      await run(0, async () => {
+        const py = await tauriInvoke<string | null>("check_python");
+        if (!py) await tauriInvoke("install_python");
+      });
+      await run(1, async () => {
+        const nd = await tauriInvoke<string | null>("check_node");
+        if (!nd) await tauriInvoke("install_node");
+      });
+      await run(2, async () => {
+        await tauriInvoke("clone_repo", { firesideDir: "~/.fireside" });
+      });
+      await run(3, async () => {
+        await tauriInvoke("install_deps", { firesideDir: "~/.fireside" });
+      });
+      await run(4, async () => {
+        await tauriInvoke("write_config", {
+          config: {
+            user_name: config.userName || "User",
+            agent_name: config.agentName,
+            agent_style: config.agentStyle,
+            companion_species: config.companionSpecies,
+            companion_name: config.companionName,
+          },
+        });
+      });
 
-            setTimeout(() => goTo(6), 800);
-        })();
-    }, [step, config, goTo]);
+      setTimeout(() => goTo(6), 800);
+    })();
+  }, [step, config, goTo]);
 
-    const speciesEmoji = SPECIES.find((s) => s.id === config.companionSpecies)?.emoji || "🦊";
+  const speciesEmoji = SPECIES.find((s) => s.id === config.companionSpecies)?.emoji || "🦊";
 
-    // ── Shared progress bar ──
-    const progress = ((step / 6) * 100);
+  // ── Shared progress bar ──
+  const progress = ((step / 6) * 100);
 
-    return (
-        <div className="installer-root">
-            <style>{installerCSS}</style>
+  return (
+    <div className="installer-root">
+      <style>{installerCSS}</style>
 
-            {/* Progress */}
-            <div className="installer-progress">
-                <div className="installer-progress-fill" style={{ width: `${progress}%` }} />
+      {/* Progress */}
+      <div className="installer-progress">
+        <div className="installer-progress-fill" style={{ width: `${progress}%` }} />
+      </div>
+
+      <div className={`installer-content ${animClass}`}>
+        {/* Step 0: Welcome */}
+        {step === 0 && (
+          <div className="installer-center">
+            <div className="installer-fire">🔥</div>
+            <h1 className="installer-brand">FIRESIDE</h1>
+            <p className="installer-tagline">The AI companion that learns while you sleep.</p>
+            <div className="installer-spacer" />
+            <button className="installer-btn-primary" onClick={() => goTo(1)}>
+              Get Started →
+            </button>
+          </div>
+        )}
+
+        {/* Step 1: System Check */}
+        {step === 1 && (
+          <div className="installer-center">
+            <h2 className="installer-title">Checking your system...</h2>
+            <div className="installer-checks">
+              {sysChecks.map((c, i) => (
+                <div key={i} className="installer-check-row">
+                  <span className="installer-check-icon">
+                    {c.status === "pending" ? "⏳" : c.status === "ok" ? "✔" : "❌"}
+                  </span>
+                  <span className="installer-check-label">{c.label}</span>
+                  {c.value && <span className="installer-check-value">{c.value}</span>}
+                </div>
+              ))}
             </div>
+            {sysInfo && (
+              <div className="installer-recommended">
+                <span>Recommended brain: </span>
+                <strong>
+                  {(sysInfo.vram_gb || 0) >= 48
+                    ? "🧠 Deep Thinker (35B)"
+                    : (sysInfo.vram_gb || 0) >= 16
+                      ? "⚡ Smart & Fast (7B)"
+                      : "💨 Compact (3B)"}
+                </strong>
+              </div>
+            )}
+          </div>
+        )}
 
-            <div className={`installer-content ${animClass}`}>
-                {/* Step 0: Welcome */}
-                {step === 0 && (
-                    <div className="installer-center">
-                        <div className="installer-fire">🔥</div>
-                        <h1 className="installer-brand">FIRESIDE</h1>
-                        <p className="installer-tagline">The AI companion that learns while you sleep.</p>
-                        <div className="installer-spacer" />
-                        <button className="installer-btn-primary" onClick={() => goTo(1)}>
-                            Get Started →
-                        </button>
-                    </div>
-                )}
-
-                {/* Step 1: System Check */}
-                {step === 1 && (
-                    <div className="installer-center">
-                        <h2 className="installer-title">Checking your system...</h2>
-                        <div className="installer-checks">
-                            {sysChecks.map((c, i) => (
-                                <div key={i} className="installer-check-row">
-                                    <span className="installer-check-icon">
-                                        {c.status === "pending" ? "⏳" : c.status === "ok" ? "✔" : "❌"}
-                                    </span>
-                                    <span className="installer-check-label">{c.label}</span>
-                                    {c.value && <span className="installer-check-value">{c.value}</span>}
-                                </div>
-                            ))}
-                        </div>
-                        {sysInfo && (
-                            <div className="installer-recommended">
-                                <span>Recommended brain: </span>
-                                <strong>
-                                    {(sysInfo.vram_gb || 0) >= 48
-                                        ? "🧠 Deep Thinker (35B)"
-                                        : (sysInfo.vram_gb || 0) >= 16
-                                            ? "⚡ Smart & Fast (7B)"
-                                            : "💨 Compact (3B)"}
-                                </strong>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Step 2: Choose Companion */}
-                {step === 2 && (
-                    <div className="installer-center">
-                        <h2 className="installer-title">Choose a companion for your journey</h2>
-                        <p className="installer-subtitle">Every journey starts with a friend.</p>
-                        <div className="installer-species-grid">
-                            {SPECIES.map((s) => (
-                                <button
-                                    key={s.id}
-                                    className={`installer-species-card ${config.companionSpecies === s.id ? "selected" : ""}`}
-                                    onClick={() => setConfig((c) => ({ ...c, companionSpecies: s.id }))}
-                                >
-                                    <span className="installer-species-emoji">{s.emoji}</span>
-                                    <span className="installer-species-label">{s.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                        <input
-                            className="installer-input"
-                            value={config.companionName}
-                            onChange={(e) => setConfig((c) => ({ ...c, companionName: e.target.value }))}
-                            placeholder="Name your companion..."
-                        />
-                        <div className="installer-nav">
-                            <button className="installer-btn-back" onClick={() => goTo(1)}>← Back</button>
-                            <button className="installer-btn-primary" onClick={() => goTo(3)}>Next →</button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 3: Create AI */}
-                {step === 3 && (
-                    <div className="installer-center">
-                        <h2 className="installer-title">Every companion has someone at the fireside.</h2>
-                        <p className="installer-subtitle">
-                            This is the mind behind {config.companionName || "Ember"} — your AI.
-                        </p>
-                        <label className="installer-label">What should we call you?</label>
-                        <input
-                            className="installer-input"
-                            value={config.userName}
-                            onChange={(e) => setConfig((c) => ({ ...c, userName: e.target.value }))}
-                            placeholder="Your name..."
-                        />
-                        <label className="installer-label">Give your AI a name:</label>
-                        <input
-                            className="installer-input"
-                            value={config.agentName}
-                            onChange={(e) => setConfig((c) => ({ ...c, agentName: e.target.value }))}
-                            placeholder="Atlas"
-                        />
-                        <label className="installer-label">What&apos;s {config.agentName || "Atlas"}&apos;s style?</label>
-                        <div className="installer-style-grid">
-                            {STYLES.map((s) => (
-                                <button
-                                    key={s.id}
-                                    className={`installer-style-card ${config.agentStyle === s.id ? "selected" : ""}`}
-                                    onClick={() => setConfig((c) => ({ ...c, agentStyle: s.id }))}
-                                >
-                                    <span className="installer-style-emoji">{s.emoji}</span>
-                                    <span className="installer-style-label">{s.label}</span>
-                                    <span className="installer-style-desc">{s.desc}</span>
-                                </button>
-                            ))}
-                        </div>
-                        <div className="installer-nav">
-                            <button className="installer-btn-back" onClick={() => goTo(2)}>← Back</button>
-                            <button className="installer-btn-primary" onClick={() => goTo(4)}>Next →</button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 4: Confirmation */}
-                {step === 4 && (
-                    <div className="installer-center">
-                        <h2 className="installer-title">Ready to install.</h2>
-                        <div className="installer-confirm-card">
-                            <div className="installer-confirm-row">
-                                <span className="installer-confirm-label">Owner</span>
-                                <span className="installer-confirm-value">{config.userName || "You"}</span>
-                            </div>
-                            <div className="installer-confirm-divider" />
-                            <div className="installer-confirm-row">
-                                <span className="installer-confirm-label">AI</span>
-                                <span className="installer-confirm-value">
-                                    {config.agentName || "Atlas"} ({STYLES.find((s) => s.id === config.agentStyle)?.emoji})
-                                </span>
-                            </div>
-                            <div className="installer-confirm-divider" />
-                            <div className="installer-confirm-row">
-                                <span className="installer-confirm-label">Companion</span>
-                                <span className="installer-confirm-value">
-                                    {speciesEmoji} {config.companionName || "Ember"}
-                                </span>
-                            </div>
-                            <div className="installer-confirm-divider" />
-                            <div className="installer-confirm-row">
-                                <span className="installer-confirm-label">Brain</span>
-                                <span className="installer-confirm-value">
-                                    {sysInfo && (sysInfo.vram_gb || 0) >= 48
-                                        ? "🧠 Deep Thinker (35B)"
-                                        : sysInfo && (sysInfo.vram_gb || 0) >= 16
-                                            ? "⚡ Smart & Fast (7B)"
-                                            : "💨 Compact (3B)"}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="installer-nav">
-                            <button className="installer-btn-back" onClick={() => goTo(3)}>← Back</button>
-                            <button className="installer-btn-install" onClick={() => goTo(5)}>
-                                Install Fireside →
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 5: Installing */}
-                {step === 5 && (
-                    <div className="installer-center">
-                        <h2 className="installer-title">
-                            {config.agentName || "Atlas"} and {config.companionName || "Ember"} are getting ready...
-                        </h2>
-                        <div className="installer-install-steps">
-                            {installSteps.map((s, i) => (
-                                <div key={i} className={`installer-install-row ${s.status}`}>
-                                    <span className="installer-install-icon">
-                                        {s.status === "pending" ? "○" : s.status === "running" ? "⏳" : s.status === "done" ? "✔" : "❌"}
-                                    </span>
-                                    <span className="installer-install-label">{s.label}</span>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="installer-install-companion">
-                            {speciesEmoji}
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 6: Success */}
-                {step === 6 && (
-                    <div className="installer-center">
-                        <div className="installer-success-fire">🔥</div>
-                        <h2 className="installer-success-title">Fireside is live.</h2>
-                        <p className="installer-success-subtitle">
-                            {config.agentName || "Atlas"} is at the fireside.{"\n"}
-                            {config.companionName || "Ember"} is by their side.
-                        </p>
-                        <div className="installer-success-scene">
-                            <span className="installer-success-fire-emoji">🔥</span>
-                            <span className="installer-success-companion">{speciesEmoji}</span>
-                        </div>
-                        <div className="installer-success-tips">
-                            <p className="installer-success-tip-title">Things to try:</p>
-                            <p className="installer-success-tip">1. Say &quot;Hello {config.companionName || "Ember"}!&quot;</p>
-                            <p className="installer-success-tip">2. Ask &quot;Take me for a walk&quot;</p>
-                            <p className="installer-success-tip">3. Say &quot;Remember: I like coffee black&quot;</p>
-                        </div>
-                        <button
-                            className="installer-btn-primary"
-                            onClick={() => {
-                                localStorage.setItem("fireside_onboarded", "1");
-                                if (config.userName) localStorage.setItem("fireside_user_name", config.userName);
-                                localStorage.setItem("fireside_agent_name", config.agentName || "Atlas");
-                                localStorage.setItem("fireside_agent_style", config.agentStyle);
-                                localStorage.setItem("fireside_companion_species", config.companionSpecies);
-                                localStorage.setItem("fireside_companion_name", config.companionName || "Ember");
-                                onComplete();
-                            }}
-                        >
-                            Open Dashboard →
-                        </button>
-                    </div>
-                )}
+        {/* Step 2: Choose Companion */}
+        {step === 2 && (
+          <div className="installer-center">
+            <h2 className="installer-title">Choose a companion for your journey</h2>
+            <p className="installer-subtitle">Every journey starts with a friend.</p>
+            <div className="installer-species-grid">
+              {SPECIES.map((s) => (
+                <button
+                  key={s.id}
+                  className={`installer-species-card ${config.companionSpecies === s.id ? "selected" : ""}`}
+                  onClick={() => setConfig((c) => ({ ...c, companionSpecies: s.id }))}
+                >
+                  <span className="installer-species-emoji">{s.emoji}</span>
+                  <span className="installer-species-label">{s.label}</span>
+                </button>
+              ))}
             </div>
-        </div>
-    );
+            <input
+              className="installer-input"
+              value={config.companionName}
+              onChange={(e) => setConfig((c) => ({ ...c, companionName: e.target.value }))}
+              placeholder="Name your companion..."
+            />
+            <div className="installer-nav">
+              <button className="installer-btn-back" onClick={() => goTo(1)}>← Back</button>
+              <button className="installer-btn-primary" onClick={() => goTo(3)}>Next →</button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Create AI */}
+        {step === 3 && (
+          <div className="installer-center">
+            <h2 className="installer-title">Every companion has someone at the fireside.</h2>
+            <p className="installer-subtitle">
+              This is the mind behind {config.companionName || "Ember"} — your AI.
+            </p>
+            <label className="installer-label">What should we call you?</label>
+            <input
+              className="installer-input"
+              value={config.userName}
+              onChange={(e) => setConfig((c) => ({ ...c, userName: e.target.value }))}
+              placeholder="Your name..."
+            />
+            <label className="installer-label">Give your AI a name:</label>
+            <input
+              className="installer-input"
+              value={config.agentName}
+              onChange={(e) => setConfig((c) => ({ ...c, agentName: e.target.value }))}
+              placeholder="Atlas"
+            />
+            <label className="installer-label">What&apos;s {config.agentName || "Atlas"}&apos;s style?</label>
+            <div className="installer-style-grid">
+              {STYLES.map((s) => (
+                <button
+                  key={s.id}
+                  className={`installer-style-card ${config.agentStyle === s.id ? "selected" : ""}`}
+                  onClick={() => setConfig((c) => ({ ...c, agentStyle: s.id }))}
+                >
+                  <span className="installer-style-emoji">{s.emoji}</span>
+                  <span className="installer-style-label">{s.label}</span>
+                  <span className="installer-style-desc">{s.desc}</span>
+                </button>
+              ))}
+            </div>
+            <div className="installer-nav">
+              <button className="installer-btn-back" onClick={() => goTo(2)}>← Back</button>
+              <button className="installer-btn-primary" onClick={() => goTo(4)}>Next →</button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Confirmation */}
+        {step === 4 && (
+          <div className="installer-center">
+            <h2 className="installer-title">Ready to install.</h2>
+            <div className="installer-confirm-card">
+              <div className="installer-confirm-row">
+                <span className="installer-confirm-label">Owner</span>
+                <span className="installer-confirm-value">{config.userName || "You"}</span>
+              </div>
+              <div className="installer-confirm-divider" />
+              <div className="installer-confirm-row">
+                <span className="installer-confirm-label">AI</span>
+                <span className="installer-confirm-value">
+                  {config.agentName || "Atlas"} ({STYLES.find((s) => s.id === config.agentStyle)?.emoji})
+                </span>
+              </div>
+              <div className="installer-confirm-divider" />
+              <div className="installer-confirm-row">
+                <span className="installer-confirm-label">Companion</span>
+                <span className="installer-confirm-value">
+                  {speciesEmoji} {config.companionName || "Ember"}
+                </span>
+              </div>
+              <div className="installer-confirm-divider" />
+              <div className="installer-confirm-row">
+                <span className="installer-confirm-label">Brain</span>
+                <span className="installer-confirm-value">
+                  {sysInfo && (sysInfo.vram_gb || 0) >= 48
+                    ? "🧠 Deep Thinker (35B)"
+                    : sysInfo && (sysInfo.vram_gb || 0) >= 16
+                      ? "⚡ Smart & Fast (7B)"
+                      : "💨 Compact (3B)"}
+                </span>
+              </div>
+            </div>
+            <div className="installer-nav">
+              <button className="installer-btn-back" onClick={() => goTo(3)}>← Back</button>
+              <button className="installer-btn-install" onClick={() => goTo(5)}>
+                Install Fireside →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Installing */}
+        {step === 5 && (
+          <div className="installer-center">
+            <h2 className="installer-title">
+              {config.agentName || "Atlas"} and {config.companionName || "Ember"} are getting ready...
+            </h2>
+            <div className="installer-install-steps">
+              {installSteps.map((s, i) => (
+                <div key={i} className={`installer-install-row ${s.status}`}>
+                  <span className="installer-install-icon">
+                    {s.status === "pending" ? "○" : s.status === "running" ? "⏳" : s.status === "done" ? "✔" : "❌"}
+                  </span>
+                  <span className="installer-install-label">{s.label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="installer-install-companion">
+              {speciesEmoji}
+            </div>
+          </div>
+        )}
+
+        {/* Step 6: Success */}
+        {step === 6 && (
+          <div className="installer-center">
+            <div className="installer-success-fire">🔥</div>
+            <h2 className="installer-success-title">Fireside is live.</h2>
+            <p className="installer-success-subtitle">
+              {config.agentName || "Atlas"} is at the fireside.{"\n"}
+              {config.companionName || "Ember"} is by their side.
+            </p>
+            <div className="installer-success-scene">
+              <span className="installer-success-fire-emoji">🔥</span>
+              <span className="installer-success-companion">{speciesEmoji}</span>
+            </div>
+            <div className="installer-success-tips">
+              <p className="installer-success-tip-title">Things to try:</p>
+              <p className="installer-success-tip">1. Say &quot;Hello {config.companionName || "Ember"}!&quot;</p>
+              <p className="installer-success-tip">2. Ask &quot;Take me for a walk&quot;</p>
+              <p className="installer-success-tip">3. Say &quot;Remember: I like coffee black&quot;</p>
+            </div>
+            <button
+              className="installer-btn-primary"
+              onClick={() => {
+                localStorage.setItem("fireside_onboarded", "1");
+                if (config.userName) localStorage.setItem("fireside_user_name", config.userName);
+                localStorage.setItem("fireside_agent_name", config.agentName || "Atlas");
+                localStorage.setItem("fireside_agent_style", config.agentStyle);
+                localStorage.setItem("fireside_companion_species", config.companionSpecies);
+                localStorage.setItem("fireside_companion_name", config.companionName || "Ember");
+                onComplete();
+              }}
+            >
+              Open Dashboard →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ---------- Embedded CSS (scoped to installer) ----------------------------
