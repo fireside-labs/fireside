@@ -47,7 +47,11 @@ jobs:
 
       - name: Install dashboard dependencies
         working-directory: dashboard
-        run: npm ci
+        run: npm install
+
+      - name: Build dashboard (static export)
+        working-directory: dashboard
+        run: npm run build
 
       # ─── Rust ───
       - name: Setup Rust
@@ -69,6 +73,7 @@ jobs:
         run: cargo tauri build --target ${{ matrix.target }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          NO_STRIP: true
 
       # ─── Upload artifacts ───
       - name: Upload Windows installer
