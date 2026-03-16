@@ -8,7 +8,7 @@
  * "Next" button advances. "Skip Tour" for power users.
  */
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 interface TourState {
     active: boolean;
@@ -131,6 +131,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 export function TourOverlay() {
     const { tour, advanceTour, skipTour } = useTour();
     const pathname = usePathname();
+    const router = useRouter();
 
     if (!tour.active) return null;
 
@@ -229,15 +230,22 @@ export function TourOverlay() {
                         {tour.currentStep < TOUR_STEPS.length - 1 ? "Next →" : "Done ✓"}
                     </button>
                 ) : (
-                    <div style={{
-                        fontSize: 13,
-                        color: "#F59E0B",
-                        whiteSpace: "nowrap",
-                        fontWeight: 600,
-                        textAlign: "center",
-                    }}>
+                    <button
+                        onClick={() => router.push(step.href)}
+                        style={{
+                            background: "rgba(245,158,11,0.15)",
+                            border: "1px solid rgba(245,158,11,0.4)",
+                            color: "#F59E0B",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            padding: "10px 24px",
+                            borderRadius: 10,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
                         👆 Go to {step.label}
-                    </div>
+                    </button>
                 )}
                 <button
                     onClick={skipTour}

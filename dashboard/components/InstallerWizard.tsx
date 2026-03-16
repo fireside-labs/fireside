@@ -128,9 +128,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       update(1, `${info.ram_gb}GB RAM`);
       await new Promise((r) => setTimeout(r, 400));
       update(2, info.gpu || "No GPU detected");
-
-      // Auto-advance
-      setTimeout(() => goTo(2), 1200);
+      // No auto-advance — let user review system info + pick model
     })();
   }, [step, goTo]);
 
@@ -356,6 +354,14 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                   )}
                 </div>
               </div>
+            )}
+            {sysInfo && (
+              <div className="installer-spacer" />
+            )}
+            {sysInfo && (
+              <button className="installer-btn-primary" onClick={() => goTo(2)}>
+                Continue →
+              </button>
             )}
           </div>
         )}
