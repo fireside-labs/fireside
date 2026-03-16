@@ -25,16 +25,22 @@ interface TourContextType {
 
 // Tour steps mapped to sidebar hrefs
 const TOUR_STEPS = [
-    { href: "/", label: "Dashboard", icon: "🏠", description: "This is your home — see your AI's status at a glance." },
-    { href: "/brains", label: "Brains", icon: "🧠", description: "Choose and manage AI models that power your companion." },
-    { href: "/", label: "Chat", icon: "💬", description: "Talk to your AI — it learns from every conversation." },
+    { href: "/", label: "Dashboard", icon: "🏠", description: "Your home — see your AI's status at a glance." },
+    { href: "/soul", label: "Personality", icon: "🎭", description: "Customize how your AI thinks and talks." },
+    { href: "/guildhall", label: "Guild Hall", icon: "🏰", description: "Watch your agents work. This is your command center." },
+    { href: "/brains", label: "Brains", icon: "🧠", description: "Choose the AI model that powers your companion." },
+    { href: "/store", label: "Store", icon: "🏪", description: "Get environment packs, skins, and themes." },
+    { href: "/config", label: "Settings", icon: "⚙", description: "Tweak your setup. Advanced tab has everything." },
 ];
 
 // Hrefs unlocked at each step (cumulative)
 const UNLOCKED_AT_STEP: string[][] = [
-    ["/"],                                                      // Step 0: Chat only
-    ["/", "/brains", "/soul"],                                  // Step 1: + Brains, Personality
-    ["/", "/brains", "/soul", "/guildhall", "/store", "/config"], // Step 2: Everything
+    ["/"],                                                                      // Step 0: Dashboard
+    ["/", "/soul"],                                                             // Step 1: + Personality
+    ["/", "/soul", "/guildhall"],                                               // Step 2: + Guild Hall
+    ["/", "/soul", "/guildhall", "/brains"],                                    // Step 3: + Brains
+    ["/", "/soul", "/guildhall", "/brains", "/store"],                          // Step 4: + Store
+    ["/", "/soul", "/guildhall", "/brains", "/store", "/config"],               // Step 5: Everything
 ];
 
 const TourContext = createContext<TourContextType>({

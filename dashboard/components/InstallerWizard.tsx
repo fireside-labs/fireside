@@ -111,6 +111,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       { label: "Operating System", status: "pending", value: "" },
       { label: "Memory", status: "pending", value: "" },
       { label: "Graphics", status: "pending", value: "" },
+      { label: "VRAM", status: "pending", value: "" },
     ];
     setSysChecks(checks);
 
@@ -128,6 +129,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       update(1, `${info.ram_gb}GB RAM`);
       await new Promise((r) => setTimeout(r, 400));
       update(2, info.gpu || "No GPU detected");
+      await new Promise((r) => setTimeout(r, 400));
+      update(3, info.vram_gb ? `${info.vram_gb}GB VRAM` : "Not detected");
       // No auto-advance — let user review system info + pick model
     })();
   }, [step, goTo]);
@@ -607,7 +610,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 localStorage.setItem("fireside_vram", sysInfo?.vram_gb.toString() || "0");
                 const brainId = (sysInfo?.vram_gb || 0) >= 20 ? "deep" : "fast";
                 localStorage.setItem("fireside_brain", brainId);
-                localStorage.setItem("fireside_model", config.actualModel || (brainId === "deep" ? "qwen-2.5-35b-q4" : "llama-3.1-8b-q6"));
+                // fireside_model is set only when brain actually downloads (line 235)
                 onComplete();
               }}
             >
