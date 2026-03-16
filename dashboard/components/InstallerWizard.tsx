@@ -417,133 +417,324 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 // ---------- Embedded CSS (scoped to installer) ----------------------------
 
 const installerCSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
   .installer-root {
     position: fixed; inset: 0; z-index: 9999;
-    background: #0F0F0F;
-    font-family: 'Inter', 'Outfit', -apple-system, sans-serif;
+    background: #0A0A0A;
+    font-family: 'Inter', -apple-system, sans-serif;
     color: #F0DCC8;
     display: flex; flex-direction: column;
     overflow: hidden;
   }
 
-  /* Progress bar */
-  .installer-progress { height: 3px; background: #1A1A1A; }
-  .installer-progress-fill { height: 100%; background: linear-gradient(90deg, #D97706, #F59E0B); transition: width 0.4s ease; border-radius: 2px; }
+  /* ── Ambient background glow ── */
+  .installer-root::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 600px 400px at 50% 80%, rgba(217,119,6,0.12) 0%, transparent 70%),
+      radial-gradient(ellipse 300px 300px at 30% 20%, rgba(245,158,11,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 200px 200px at 75% 30%, rgba(146,64,14,0.08) 0%, transparent 60%);
+    animation: ambientShift 8s ease-in-out infinite alternate;
+  }
+  @keyframes ambientShift {
+    0% { opacity: 0.7; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1.05); }
+  }
 
-  /* Animation */
-  .installer-enter { animation: installerFadeIn 0.3s ease-out forwards; }
-  .installer-exit { animation: installerFadeOut 0.2s ease-in forwards; }
-  @keyframes installerFadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes installerFadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-12px); } }
+  /* ── Vignette overlay ── */
+  .installer-root::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+  }
+
+  /* ── Fire particle system (CSS only) ── */
+  .installer-root .installer-content::before {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 300px;
+    background:
+      radial-gradient(2px 2px at 20% 90%, #F59E0B, transparent),
+      radial-gradient(2px 2px at 40% 85%, #D97706, transparent),
+      radial-gradient(2px 2px at 60% 92%, #F59E0B, transparent),
+      radial-gradient(2px 2px at 80% 88%, #D97706, transparent),
+      radial-gradient(3px 3px at 10% 95%, #F59E0B, transparent),
+      radial-gradient(3px 3px at 50% 80%, #92400E, transparent),
+      radial-gradient(2px 2px at 70% 93%, #F59E0B, transparent),
+      radial-gradient(2px 2px at 90% 87%, #D97706, transparent),
+      radial-gradient(1px 1px at 25% 75%, #F59E0B, transparent),
+      radial-gradient(1px 1px at 55% 70%, #D97706, transparent),
+      radial-gradient(1px 1px at 85% 78%, #F59E0B, transparent),
+      radial-gradient(1px 1px at 15% 82%, #D97706, transparent);
+    background-size: 100% 100%;
+    animation: particleRise 4s ease-in-out infinite;
+    pointer-events: none; opacity: 0.4;
+  }
+  @keyframes particleRise {
+    0% { transform: translateY(0) scaleY(1); opacity: 0.4; }
+    50% { transform: translateY(-30px) scaleY(1.1); opacity: 0.6; }
+    100% { transform: translateY(0) scaleY(1); opacity: 0.4; }
+  }
+
+  /* Progress bar */
+  .installer-progress { height: 2px; background: #111; position: relative; z-index: 10; }
+  .installer-progress-fill {
+    height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, #92400E, #D97706, #F59E0B);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 12px rgba(245,158,11,0.5);
+  }
+
+  /* ── Cinematic transitions ── */
+  .installer-enter { animation: cineFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .installer-exit { animation: cineFadeOut 0.3s cubic-bezier(0.7, 0, 0.84, 0) forwards; }
+  @keyframes cineFadeIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); filter: blur(4px); }
+    to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+  @keyframes cineFadeOut {
+    from { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    to { opacity: 0; transform: translateY(-20px) scale(1.02); filter: blur(4px); }
+  }
 
   /* Content */
-  .installer-content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; }
-  .installer-center { display: flex; flex-direction: column; align-items: center; max-width: 560px; width: 100%; }
-  .installer-spacer { height: 40px; }
+  .installer-content {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 48px; position: relative; z-index: 5;
+  }
+  .installer-center {
+    display: flex; flex-direction: column; align-items: center;
+    max-width: 560px; width: 100%;
+  }
+  .installer-spacer { height: 48px; }
 
-  /* Welcome */
-  .installer-fire { font-size: 80px; margin-bottom: 16px; animation: fireGlow 2s ease-in-out infinite alternate; }
-  @keyframes fireGlow { from { filter: brightness(0.9); } to { filter: brightness(1.2) drop-shadow(0 0 30px rgba(245,166,35,0.4)); } }
-  .installer-brand { font-size: 48px; font-weight: 800; letter-spacing: 6px; background: linear-gradient(135deg, #F59E0B, #D97706, #92400E); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
-  .installer-tagline { font-size: 16px; color: #A08264; margin-bottom: 0; }
+  /* ── Welcome ── */
+  .installer-fire {
+    font-size: 100px; margin-bottom: 20px;
+    animation: fireFloat 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 40px rgba(245,158,11,0.5));
+  }
+  @keyframes fireFloat {
+    0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 0 40px rgba(245,158,11,0.5)); }
+    50% { transform: translateY(-10px) scale(1.05); filter: drop-shadow(0 0 60px rgba(245,158,11,0.7)); }
+  }
+  .installer-brand {
+    font-size: 56px; font-weight: 900; letter-spacing: 10px;
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 40%, #92400E 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+    text-shadow: none;
+    filter: drop-shadow(0 2px 8px rgba(217,119,6,0.3));
+  }
+  .installer-tagline {
+    font-size: 16px; color: rgba(160,130,100,0.8); margin-bottom: 0;
+    letter-spacing: 2px; text-transform: uppercase; font-weight: 500;
+  }
 
   /* Typography */
-  .installer-title { font-size: 24px; font-weight: 700; color: #F0DCC8; text-align: center; margin-bottom: 8px; }
-  .installer-subtitle { font-size: 14px; color: #A08264; text-align: center; margin-bottom: 24px; }
-  .installer-label { font-size: 12px; color: #A08264; align-self: flex-start; margin-bottom: 6px; margin-top: 16px; }
+  .installer-title {
+    font-size: 26px; font-weight: 700; color: #F0DCC8;
+    text-align: center; margin-bottom: 8px;
+    text-shadow: 0 2px 12px rgba(245,158,11,0.15);
+  }
+  .installer-subtitle { font-size: 14px; color: #7A6A5A; text-align: center; margin-bottom: 28px; }
+  .installer-label { font-size: 11px; color: #7A6A5A; align-self: flex-start; margin-bottom: 6px; margin-top: 18px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
 
   /* Inputs */
   .installer-input {
-    width: 100%; padding: 12px 16px; border-radius: 10px;
-    background: #1A1A1A; border: 1px solid #2A2A2A; color: #F0DCC8;
-    font-size: 15px; outline: none; transition: border-color 0.2s;
+    width: 100%; padding: 14px 18px; border-radius: 12px;
+    background: rgba(26,26,26,0.8); border: 1px solid rgba(255,255,255,0.06);
+    color: #F0DCC8; font-size: 15px; outline: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(8px);
   }
-  .installer-input:focus { border-color: #D97706; }
-  .installer-input::placeholder { color: #5A4A3A; }
+  .installer-input:focus {
+    border-color: rgba(217,119,6,0.6);
+    box-shadow: 0 0 20px rgba(217,119,6,0.15), inset 0 0 20px rgba(217,119,6,0.05);
+  }
+  .installer-input::placeholder { color: #3A3028; }
 
-  /* Buttons */
+  /* ── Buttons — game menu feel ── */
   .installer-btn-primary {
-    padding: 14px 40px; border-radius: 12px; border: none; cursor: pointer;
-    background: linear-gradient(135deg, #D97706, #F59E0B); color: #0F0F0F;
-    font-size: 16px; font-weight: 700; letter-spacing: 0.5px;
-    box-shadow: 0 4px 20px rgba(245,158,11,0.3);
-    transition: all 0.2s; margin-top: 24px;
+    padding: 16px 48px; border-radius: 14px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #D97706, #F59E0B);
+    color: #0A0A0A; font-size: 16px; font-weight: 800; letter-spacing: 1px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 24px rgba(245,158,11,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 28px;
+    position: relative; overflow: hidden;
   }
-  .installer-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(245,158,11,0.5); }
-  .installer-btn-back { background: none; border: none; color: #A08264; font-size: 14px; cursor: pointer; padding: 10px 16px; }
-  .installer-btn-back:hover { color: #F0DCC8; }
-  .installer-btn-install {
-    padding: 16px 48px; border-radius: 12px; border: none; cursor: pointer;
-    background: linear-gradient(135deg, #D97706, #F59E0B); color: #0F0F0F;
-    font-size: 18px; font-weight: 800; letter-spacing: 0.5px;
-    box-shadow: 0 4px 24px rgba(245,158,11,0.4);
-    transition: all 0.2s; animation: installPulse 2s ease-in-out infinite;
+  .installer-btn-primary::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
   }
-  @keyframes installPulse { 0%,100% { box-shadow: 0 4px 24px rgba(245,158,11,0.4); } 50% { box-shadow: 0 4px 36px rgba(245,158,11,0.7); } }
-  .installer-btn-install:hover { transform: translateY(-2px); }
-  .installer-nav { display: flex; justify-content: space-between; width: 100%; margin-top: 32px; align-items: center; }
+  .installer-btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 32px rgba(245,158,11,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+  }
+  .installer-btn-primary:hover::before { transform: translateX(100%); }
 
-  /* Species grid */
-  .installer-species-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; margin-bottom: 20px; }
-  .installer-species-card {
-    display: flex; flex-direction: column; align-items: center; padding: 20px 12px;
-    border-radius: 12px; border: 2px solid #2A2A2A; background: #1A1A1A;
-    cursor: pointer; transition: all 0.2s;
+  .installer-btn-back {
+    background: none; border: 1px solid rgba(255,255,255,0.06);
+    color: #7A6A5A; font-size: 13px; cursor: pointer;
+    padding: 10px 20px; border-radius: 10px;
+    transition: all 0.2s;
   }
-  .installer-species-card:hover { border-color: #5A4A3A; transform: translateY(-2px); }
-  .installer-species-card.selected { border-color: #D97706; background: rgba(217,119,6,0.08); box-shadow: 0 0 20px rgba(217,119,6,0.2); }
-  .installer-species-emoji { font-size: 36px; margin-bottom: 6px; }
-  .installer-species-label { font-size: 13px; color: #F0DCC8; font-weight: 500; }
+  .installer-btn-back:hover { color: #F0DCC8; border-color: rgba(255,255,255,0.15); }
+
+  .installer-btn-install {
+    padding: 18px 56px; border-radius: 14px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #D97706, #F59E0B);
+    color: #0A0A0A; font-size: 18px; font-weight: 900; letter-spacing: 1.5px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 30px rgba(245,158,11,0.4);
+    transition: all 0.3s; animation: installPulse 2.5s ease-in-out infinite;
+    position: relative; overflow: hidden;
+  }
+  @keyframes installPulse {
+    0%, 100% { box-shadow: 0 4px 30px rgba(245,158,11,0.4); }
+    50% { box-shadow: 0 4px 50px rgba(245,158,11,0.7), 0 0 80px rgba(245,158,11,0.2); }
+  }
+  .installer-btn-install:hover { transform: translateY(-3px) scale(1.03); }
+  .installer-nav { display: flex; justify-content: space-between; width: 100%; margin-top: 36px; align-items: center; }
+
+  /* ── Species grid — glassmorphism cards ── */
+  .installer-species-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; width: 100%; margin-bottom: 24px; }
+  .installer-species-card {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 14px; border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(26,26,26,0.6);
+    backdrop-filter: blur(12px);
+    cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .installer-species-card:hover {
+    border-color: rgba(217,119,6,0.3); transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+  }
+  .installer-species-card.selected {
+    border-color: #D97706;
+    background: rgba(217,119,6,0.1);
+    box-shadow: 0 0 30px rgba(217,119,6,0.2), inset 0 0 30px rgba(217,119,6,0.05);
+    transform: translateY(-4px) scale(1.02);
+  }
+  .installer-species-emoji { font-size: 40px; margin-bottom: 8px; transition: transform 0.3s; }
+  .installer-species-card:hover .installer-species-emoji { transform: scale(1.15); }
+  .installer-species-card.selected .installer-species-emoji { transform: scale(1.2); animation: selectedBounce 1s ease-in-out infinite; }
+  @keyframes selectedBounce { 0%,100% { transform: scale(1.2) translateY(0); } 50% { transform: scale(1.2) translateY(-4px); } }
+  .installer-species-label { font-size: 13px; color: #A08264; font-weight: 600; letter-spacing: 0.5px; }
 
   /* Style grid */
-  .installer-style-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; }
+  .installer-style-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; width: 100%; }
   .installer-style-card {
-    display: flex; flex-direction: column; padding: 16px;
-    border-radius: 12px; border: 2px solid #2A2A2A; background: #1A1A1A;
-    cursor: pointer; transition: all 0.2s; text-align: left;
+    display: flex; flex-direction: column; padding: 18px;
+    border-radius: 14px; border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(26,26,26,0.6); backdrop-filter: blur(12px);
+    cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); text-align: left;
   }
-  .installer-style-card:hover { border-color: #5A4A3A; }
-  .installer-style-card.selected { border-color: #D97706; background: rgba(217,119,6,0.08); box-shadow: 0 0 20px rgba(217,119,6,0.2); }
-  .installer-style-emoji { font-size: 24px; margin-bottom: 4px; }
-  .installer-style-label { font-size: 14px; color: #F0DCC8; font-weight: 600; margin-bottom: 2px; }
-  .installer-style-desc { font-size: 12px; color: #A08264; }
+  .installer-style-card:hover { border-color: rgba(217,119,6,0.3); transform: translateY(-2px); }
+  .installer-style-card.selected {
+    border-color: #D97706; background: rgba(217,119,6,0.1);
+    box-shadow: 0 0 30px rgba(217,119,6,0.2), inset 0 0 20px rgba(217,119,6,0.05);
+  }
+  .installer-style-emoji { font-size: 28px; margin-bottom: 6px; }
+  .installer-style-label { font-size: 14px; color: #F0DCC8; font-weight: 700; margin-bottom: 3px; }
+  .installer-style-desc { font-size: 12px; color: #7A6A5A; }
 
   /* System checks */
-  .installer-checks { width: 100%; margin-top: 24px; }
-  .installer-check-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #1A1A1A; animation: checkSlide 0.4s ease-out; }
-  @keyframes checkSlide { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
-  .installer-check-icon { font-size: 18px; width: 24px; text-align: center; }
-  .installer-check-label { font-size: 14px; color: #A08264; }
-  .installer-check-value { margin-left: auto; font-size: 14px; color: #F0DCC8; font-weight: 500; }
-  .installer-recommended { margin-top: 24px; padding: 16px; border-radius: 10px; background: rgba(217,119,6,0.1); border: 1px solid #D97706; text-align: center; font-size: 14px; color: #A08264; }
+  .installer-checks { width: 100%; margin-top: 28px; }
+  .installer-check-row {
+    display: flex; align-items: center; gap: 14px; padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    animation: checkReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes checkReveal {
+    from { opacity: 0; transform: translateX(-16px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+  }
+  .installer-check-icon { font-size: 18px; width: 24px; text-align: center; filter: drop-shadow(0 0 4px rgba(34,197,94,0.3)); }
+  .installer-check-label { font-size: 14px; color: #7A6A5A; }
+  .installer-check-value { margin-left: auto; font-size: 14px; color: #F0DCC8; font-weight: 600; }
+  .installer-recommended {
+    margin-top: 28px; padding: 18px; border-radius: 12px;
+    background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.3);
+    text-align: center; font-size: 14px; color: #7A6A5A;
+    backdrop-filter: blur(8px);
+  }
   .installer-recommended strong { color: #F59E0B; }
 
   /* Confirm card */
-  .installer-confirm-card { width: 100%; background: #1A1A1A; border-radius: 14px; border: 1px solid #D97706; padding: 24px; margin-top: 20px; }
-  .installer-confirm-row { display: flex; justify-content: space-between; padding: 10px 0; }
-  .installer-confirm-label { font-size: 14px; color: #A08264; }
-  .installer-confirm-value { font-size: 14px; color: #F0DCC8; font-weight: 600; }
-  .installer-confirm-divider { height: 1px; background: #2A2A2A; }
+  .installer-confirm-card {
+    width: 100%; border-radius: 16px; padding: 28px;
+    margin-top: 24px;
+    background: rgba(26,26,26,0.7); backdrop-filter: blur(16px);
+    border: 1px solid rgba(217,119,6,0.3);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 0 40px rgba(217,119,6,0.03);
+  }
+  .installer-confirm-row { display: flex; justify-content: space-between; padding: 12px 0; }
+  .installer-confirm-label { font-size: 13px; color: #7A6A5A; text-transform: uppercase; letter-spacing: 1px; }
+  .installer-confirm-value { font-size: 14px; color: #F0DCC8; font-weight: 700; }
+  .installer-confirm-divider { height: 1px; background: rgba(255,255,255,0.04); }
 
   /* Install progress */
-  .installer-install-steps { width: 100%; margin-top: 28px; }
-  .installer-install-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; transition: all 0.3s; }
-  .installer-install-row.done .installer-install-icon { color: #22C55E; }
-  .installer-install-row.running .installer-install-label { color: #F59E0B; }
+  .installer-install-steps { width: 100%; margin-top: 32px; }
+  .installer-install-row {
+    display: flex; align-items: center; gap: 14px; padding: 12px 0;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .installer-install-row.done .installer-install-icon { color: #22C55E; filter: drop-shadow(0 0 6px rgba(34,197,94,0.4)); }
+  .installer-install-row.running .installer-install-label { color: #F59E0B; text-shadow: 0 0 8px rgba(245,158,11,0.3); }
+  .installer-install-row.running .installer-install-icon { animation: spinGlow 1s linear infinite; }
+  @keyframes spinGlow { 0% { filter: brightness(0.8); } 50% { filter: brightness(1.3) drop-shadow(0 0 6px rgba(245,158,11,0.5)); } 100% { filter: brightness(0.8); } }
   .installer-install-row.fail .installer-install-icon { color: #EF4444; }
   .installer-install-icon { font-size: 16px; width: 22px; text-align: center; }
-  .installer-install-label { font-size: 14px; color: #A08264; }
-  .installer-install-companion { font-size: 48px; margin-top: 32px; animation: companionBounce 1.5s ease-in-out infinite; }
-  @keyframes companionBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  .installer-install-label { font-size: 14px; color: #7A6A5A; }
+  .installer-install-companion {
+    font-size: 56px; margin-top: 36px;
+    animation: companionFloat 3s ease-in-out infinite;
+    filter: drop-shadow(0 8px 24px rgba(0,0,0,0.4));
+  }
+  @keyframes companionFloat {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    33% { transform: translateY(-12px) rotate(1deg); }
+    66% { transform: translateY(-6px) rotate(-1deg); }
+  }
 
-  /* Success */
-  .installer-success-fire { font-size: 64px; animation: fireGlow 2s ease-in-out infinite alternate; }
-  .installer-success-title { font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #F59E0B, #D97706); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-top: 8px; margin-bottom: 4px; }
-  .installer-success-subtitle { font-size: 15px; color: #A08264; text-align: center; white-space: pre-line; margin-bottom: 20px; }
-  .installer-success-scene { display: flex; gap: 24px; align-items: flex-end; margin-bottom: 28px; }
-  .installer-success-fire-emoji { font-size: 48px; }
-  .installer-success-companion { font-size: 36px; animation: companionBounce 1.5s ease-in-out infinite; }
-  .installer-success-tips { text-align: left; background: #1A1A1A; border-radius: 12px; padding: 20px; margin-bottom: 20px; width: 100%; }
-  .installer-success-tip-title { font-size: 14px; color: #D97706; font-weight: 600; margin-bottom: 10px; }
-  .installer-success-tip { font-size: 13px; color: #A08264; margin-bottom: 4px; }
+  /* ── Success — celebration ── */
+  .installer-success-fire {
+    font-size: 80px;
+    animation: fireFloat 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 50px rgba(245,158,11,0.6));
+  }
+  .installer-success-title {
+    font-size: 32px; font-weight: 900;
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-top: 12px; margin-bottom: 4px;
+    filter: drop-shadow(0 2px 8px rgba(217,119,6,0.3));
+  }
+  .installer-success-subtitle {
+    font-size: 15px; color: #7A6A5A; text-align: center;
+    white-space: pre-line; margin-bottom: 24px;
+  }
+  .installer-success-scene {
+    display: flex; gap: 32px; align-items: flex-end; margin-bottom: 32px;
+  }
+  .installer-success-fire-emoji {
+    font-size: 56px;
+    filter: drop-shadow(0 0 20px rgba(245,158,11,0.5));
+  }
+  .installer-success-companion {
+    font-size: 42px;
+    animation: companionFloat 3s ease-in-out infinite;
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,0.4));
+  }
+  .installer-success-tips {
+    text-align: left; border-radius: 14px; padding: 22px;
+    margin-bottom: 24px; width: 100%;
+    background: rgba(26,26,26,0.7); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .installer-success-tip-title { font-size: 13px; color: #D97706; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .installer-success-tip { font-size: 13px; color: #7A6A5A; margin-bottom: 6px; }
 `;
