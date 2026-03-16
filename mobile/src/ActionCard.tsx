@@ -36,6 +36,12 @@ export default function ActionCard({ action }: ActionCardProps) {
             return <MemoryRecallCard action={action} />;
         case "translation_result":
             return <TranslationResultCard action={action} />;
+        case "calendar_event":
+            return <CalendarEventCard action={action} />;
+        case "health_summary":
+            return <HealthSummaryCard action={action} />;
+        case "contact_info":
+            return <ContactInfoCard action={action} />;
         default:
             return null;
     }
@@ -226,6 +232,157 @@ function TranslationResultCard({ action }: { action: ActionData }) {
     );
 }
 
+/** 📅 Calendar Event — meeting details with prep button (Sprint 12) */
+function CalendarEventCard({ action }: { action: ActionData }) {
+    const formatTime = (iso?: string) => {
+        if (!iso) return "";
+        return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    };
+
+    return (
+        <View style={[styles.card, styles.calendarCard]}>
+            <View style={styles.cardHeader}>
+                <Text style={styles.cardIcon}>📅</Text>
+                <Text style={styles.cardTitle}>{action.title || "Upcoming Event"}</Text>
+            </View>
+
+            <View style={styles.calendarDetail}>
+                <Text style={styles.calendarDetailIcon}>🕐</Text>
+                <Text style={styles.calendarDetailText}>
+                    {formatTime(action.startDate)}{action.endDate ? ` – ${formatTime(action.endDate)}` : ""}
+                </Text>
+            </View>
+
+            {action.location && (
+                <View style={styles.calendarDetail}>
+                    <Text style={styles.calendarDetailIcon}>📍</Text>
+                    <Text style={styles.calendarDetailText}>{action.location}</Text>
+                </View>
+            )}
+
+            {action.attendees && action.attendees.length > 0 && (
+                <View style={styles.calendarDetail}>
+                    <Text style={styles.calendarDetailIcon}>👥</Text>
+                    <Text style={styles.calendarDetailText}>
+                        {action.attendees.slice(0, 3).join(", ")}
+                        {action.attendees.length > 3 ? ` + ${action.attendees.length - 3}` : ""}
+                    </Text>
+                </View>
+            )}
+
+            <TouchableOpacity style={styles.prepBtn} activeOpacity={0.7}
+                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
+                <Text style={styles.prepBtnText}>Prep with Atlas →</Text>
+            </TouchableOpacity>
+        </View>
+    );
+}
+
+/** 👣 Health Summary — daily activity with goal progress (Sprint 12) */
+function HealthSummaryCard({ action }: { action: ActionData }) {
+    const steps = action.steps ?? 0;
+    const calories = action.calories ?? 0;
+    const active = action.activeMinutes ?? 0;
+    const goal = action.goal ?? 10000;
+    const pct = Math.min(Math.round((steps / goal) * 100), 100);
+
+    return (
+        <View style={[styles.card, styles.healthCard]}>
+            <View style={styles.cardHeader}>
+                <Text style={styles.cardIcon}>👣</Text>
+                <Text style={styles.cardTitle}>{action.title || "Today's Activity"}</Text>
+            </View>
+
+            <View style={styles.healthStats}>
+                <View style={styles.healthStat}>
+                    <Text style={styles.healthStatIcon}>👣</Text>
+                    <Text style={styles.healthStatValue}>{steps.toLocaleString()}</Text>
+                    <Text style={styles.healthStatLabel}>steps</Text>
+                </View>
+                <View style={styles.healthStat}>
+                    <Text style={styles.healthStatIcon}>🔥</Text>
+                    <Text style={styles.healthStatValue}>{calories}</Text>
+                    <Text style={styles.healthStatLabel}>calories</Text>
+                </View>
+                <View style={styles.healthStat}>
+                    <Text style={styles.healthStatIcon}>⏱</Text>
+                    <Text style={styles.healthStatValue}>{active}</Text>
+                    <Text style={styles.healthStatLabel}>active minutes</Text>
+                </View>
+            </View>
+
+            <View style={styles.goalBar}>
+                <View style={[styles.goalFill, {
+                    width: `${pct}%`,
+                    backgroundColor: pct >= 100 ? colors.success : colors.neon,
+                }]} />
+            </View>
+            <Text style={styles.goalText}>
+                {pct >= 100 ? "🎉 Goal reached!" : `${pct}% of daily goal`}
+            </Text>
+        </View>
+    );
+}
+
+/** 👤 Contact Info — person card with action buttons (Sprint 12) */
+function ContactInfoCard({ action }: { action: ActionData }) {
+    return (
+        <View style={[styles.card, styles.contactCard]}>
+            <View style={styles.cardHeader}>
+                <Text style={styles.cardIcon}>👤</Text>
+                <Text style={styles.cardTitle}>Contact</Text>
+            </View>
+
+            <Text style={styles.contactName}>{action.name || action.title || "Unknown"}</Text>
+            {action.organization && (
+                <Text style={styles.contactOrg}>{action.organization}</Text>
+            )}
+
+            {action.email && (
+                <View style={styles.contactDetail}>
+                    <Text style={styles.calendarDetailIcon}>📧</Text>
+                    <Text style={styles.contactDetailText}>{action.email}</Text>
+                </View>
+            )}
+
+            {action.phone && (
+                <View style={styles.contactDetail}>
+                    <Text style={styles.calendarDetailIcon}>📱</Text>
+                    <Text style={styles.contactDetailText}>{action.phone}</Text>
+                </View>
+            )}
+
+            {action.lastContacted && (
+                <View style={styles.contactDetail}>
+                    <Text style={styles.calendarDetailIcon}>📅</Text>
+                    <Text style={styles.contactDetailText}>Last met: {action.lastContacted}</Text>
+                </View>
+            )}
+
+            <View style={styles.contactActions}>
+                {action.phone && (
+                    <TouchableOpacity style={styles.contactActionBtn} activeOpacity={0.7}
+                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL(`tel:${action.phone}`); }}>
+                        <Text style={styles.contactActionText}>📞 Call</Text>
+                    </TouchableOpacity>
+                )}
+                {action.phone && (
+                    <TouchableOpacity style={styles.contactActionBtn} activeOpacity={0.7}
+                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL(`sms:${action.phone}`); }}>
+                        <Text style={styles.contactActionText}>💬 Message</Text>
+                    </TouchableOpacity>
+                )}
+                {action.email && (
+                    <TouchableOpacity style={styles.contactActionBtn} activeOpacity={0.7}
+                        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL(`mailto:${action.email}`); }}>
+                        <Text style={styles.contactActionText}>📧 Email</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     // Shared card
     card: { borderRadius: borderRadius.lg, borderWidth: 1, padding: spacing.md, marginTop: spacing.sm, ...shadows.card },
@@ -271,4 +428,33 @@ const styles = StyleSheet.create({
     translationText: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textDim, lineHeight: 20 },
     copyBtn: { alignSelf: "flex-start", backgroundColor: colors.bgInput, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginTop: spacing.xs },
     copyBtnText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim },
+
+    // Calendar (Sprint 12)
+    calendarCard: { backgroundColor: "rgba(59, 130, 246, 0.06)", borderColor: "#3B82F6", borderLeftWidth: 3 },
+    calendarDetail: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
+    calendarDetailIcon: { fontSize: 14 },
+    calendarDetailText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textSecondary },
+    prepBtn: { alignSelf: "flex-start", backgroundColor: colors.neonGlow, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.neonBorder, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginTop: spacing.sm },
+    prepBtnText: { fontFamily: "Inter_500Medium", fontSize: fontSize.xs, color: colors.neon },
+
+    // Health (Sprint 12)
+    healthCard: { backgroundColor: "rgba(239, 68, 68, 0.05)", borderColor: "#EF4444", borderLeftWidth: 3 },
+    healthStats: { gap: spacing.sm, marginBottom: spacing.sm },
+    healthStat: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    healthStatIcon: { fontSize: 16 },
+    healthStatValue: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.textPrimary },
+    healthStatLabel: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim },
+    goalBar: { height: 8, backgroundColor: colors.bgInput, borderRadius: 4, overflow: "hidden", marginBottom: spacing.xs },
+    goalFill: { height: "100%", borderRadius: 4 },
+    goalText: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textMuted },
+
+    // Contact (Sprint 12)
+    contactCard: { backgroundColor: "rgba(139, 92, 246, 0.06)", borderColor: "#8B5CF6", borderLeftWidth: 3 },
+    contactName: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.textPrimary, marginBottom: 2 },
+    contactOrg: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, marginBottom: spacing.sm },
+    contactDetail: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
+    contactDetailText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textSecondary },
+    contactActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+    contactActionBtn: { flex: 1, backgroundColor: colors.bgInput, borderRadius: borderRadius.md, paddingVertical: spacing.sm, alignItems: "center" },
+    contactActionText: { fontFamily: "Inter_500Medium", fontSize: fontSize.xs, color: colors.textDim },
 });

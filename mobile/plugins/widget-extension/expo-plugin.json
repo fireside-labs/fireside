@@ -1,0 +1,43 @@
+{
+    "expo": {
+        "plugins": [
+            [
+                "expo-apple-targets",
+                {
+                    "targets": [
+                        {
+                            "name": "FiresideWidgets",
+                            "type": "widget",
+                            "bundleIdentifier": "com.fablefur.fireside.widgets",
+                            "entitlements": {
+                                "com.apple.security.application-groups": [
+                                    "group.com.fablefur.fireside"
+                                ]
+                            },
+                            "frameworks": [
+                                "WidgetKit",
+                                "SwiftUI",
+                                "ActivityKit"
+                            ],
+                            "deploymentTarget": "17.0"
+                        }
+                    ]
+                }
+            ]
+        ],
+        "ios": {
+            "infoPlist": {
+                "NSSupportsLiveActivities": true,
+                "NSCalendarsUsageDescription": "Ember reads your calendar to remind you about upcoming meetings and help you prepare.",
+                "NSContactsUsageDescription": "Ember looks up contacts when you mention someone by name, so she can help you connect.",
+                "NSHealthShareUsageDescription": "Want Ember to track your daily stats? She'll read your step count and activity to give you personalized wellness nudges.",
+                "NSHealthUpdateUsageDescription": "Ember never writes health data — read-only access only."
+            },
+            "entitlements": {
+                "com.apple.security.application-groups": [
+                    "group.com.fablefur.fireside"
+                ]
+            }
+        }
+    }
+}
