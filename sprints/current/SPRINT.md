@@ -1,103 +1,82 @@
-# Sprint 19 — "Alive"
+# Sprint 20 — "Less is More"
 
-> **Goal:** Fix the post-onboarding experience. User should NEVER feel lost. Lock tabs, guide them through setup, download the brain, make the companion a real sprite — not an emoji. Then wire everything to life.
+> **Goal:** Cut sidebar from 10 tabs to 6. Reduce overwhelm. Power user features move to Settings sub-tabs, not deleted. Companion folds into Guild Hall.
 > **Timeline:** 1 day
-> **Source:** User test round 4 (2026-03-16 12:35 PM) — install is cool, but AFTER install user is lost
+> **Source:** User testing — "I'm overwhelmed. Getting rid of useless features matters more than adding new ones."
 
 ---
 
-## 🚨 CRITICAL FIXES (from user testing)
+## Sidebar: Before → After
 
-### C1: Guided Tour MUST activate after onboarding
-- **Bug:** `TourProvider` checks `fireside_onboarded` in a one-shot `useEffect([])`, but onboarding hasn't completed yet when it runs
-- **Fix ALREADY IN CODE:** `GuidedTour.tsx` now polls localStorage every 500ms until `fireside_onboarded` appears
-- Agent job: verify this works end-to-end in a fresh install
-
-### C2: Tabs MUST be locked on first launch  
-- Sidebar already has `isLocked()` wiring (verified lines 113-126)
-- Tour must activate (C1 above) for locks to engage
-- Only Dashboard unlocked → Next → Brains → Next → Chat → Done (unlock all)
-- **Test this with a FRESH INSTALL, not just code review**
-
-### C3: Brain must actually be downloaded during setup
-- Currently the installer picks a brain but never downloads the model
-- Add a step after "Saving preferences" that starts the brain download
-- Show download progress (e.g. "Downloading Llama 3.1 8B... 2.3 / 4.6 GB")
-- Can continue to dashboard while download happens in background
-- BrainInstaller.tsx already has download simulation — wire it to real download or at minimum make it clear the brain needs to be installed from the Brains page
-
-### C4: Companion is an emoji, not a sprite
-- Ember (and all companions) show as emoji on the dashboard
-- Sprint 18 created sprite PNGs (`companion_fox.png`, etc.)
-- Replace emoji rendering with `SpriteCharacter.tsx` component
-- Must show in: sidebar, chat, guild hall, companion page
-
-### C5: Post-onboarding must feel guided, not overwhelming
-- Tour bar at bottom should be OBVIOUS — big, clear, with arrow pointing to next step
-- "Welcome to your new AI! Let's show you around." messaging
-- Dashboard should show a welcoming first state, not empty cards
-
-### C6: Colors must match onboarding embers
-- InstallerWizard uses CSS vars now, but dashboard may have different values
-- Audit `globals.css` — `--color-neon` must be the same amber/gold as onboarding
-- No jarring color shift between installer and dashboard
+| Before (10 tabs) | After (6 tabs) | What happens to cut items |
+|---|---|---|
+| 💬 Chat | ✅ **KEEP** | Core product |
+| 🧠 Personality | ✅ **KEEP** | Configure AI |
+| 📱 Connected Devices | ❌ CUT | → Settings > Advanced > Devices |
+| 🐾 Companion | ❌ CUT | → Mascot lives in Guild Hall |
+| 📋 Task Builder | ❌ CUT | → Settings > Advanced > Tasks |
+| 📊 How It's Learning | ❌ CUT | → Dashboard widget + Settings > Advanced > Learning |
+| 🏰 Guild Hall | ✅ **KEEP** | Money shot |
+| ⚙ Settings | ✅ **KEEP** | Now includes Advanced sub-tabs |
+| 🧠 Brains | ✅ **KEEP** | Model management |
+| 🏪 Store | ✅ **KEEP** | Revenue |
 
 ---
 
-## 🎨 Freya (UI + Animation)
+## 🎨 Freya (UI)
 
-### F1: Wire StatusOverlay to agent state
-- Poll `/api/v1/status/agent` every 5s from GuildHall
-- Map: processing → 🔥, idle → 💤, error → 💀, task_complete → 🎉
+### F1: Reduce Sidebar to 6 items
+- Update `Sidebar.tsx` NAV_SECTIONS to only show:
+  - **Your AI:** Chat, Personality
+  - **World:** Guild Hall
+  - **System:** Brains, Store, Settings
+- Remove Companion, Connected Devices, Task Builder, Learning from sidebar
 
-### F2: Agent idle animations in Guild Hall
-- Breathing/subtle movement loops using `steps()` CSS
-- Different animation per activity
+### F2: Settings gets "Advanced" sub-tabs
+- Settings page gets tab strip: General | Brains | Advanced
+- Advanced sub-tab contains:
+  - Connected Devices (was `/nodes`)
+  - Task Builder (was `/pipeline`)
+  - Learning Stats (was `/learning`)
+- Power users find everything. Grandma never sees it.
 
-### F3: Companion follows agent + reacts
-- Uses SpriteCharacter.tsx, NOT emoji
-- Idle: tail wag. Agent 🔥: happy bounce. Agent 💤: curls up
+### F3: Fold companion into Guild Hall
+- Remove `/companion` page from sidebar
+- Companion is always visible in Guild Hall (mascot)
+- Companion name shown in Guild Hall tooltip
+- Companion selection only happens during onboarding
 
-### F4: Interactive furniture tooltips
-- Click/hover elements → show label + status
-
-### F5: Install step error handling
-- Non-critical failures → "skipped — already set up" not ❌
-- **Fix ALREADY IN CODE:** InstallerWizard.tsx updated
+### F4: Dashboard "How It's Learning" widget
+- Small card on main dashboard showing:
+  - "47 things learned" + last learned topic
+  - Links to Settings > Advanced > Learning for details
+- Replaces the dedicated `/learning` page for casual users
 
 ---
 
 ## 🔨 Thor (Backend)
 
-### T1: Agent status API
-- `GET /api/v1/status/agent` → real state for status effects
-- Falls back to mock if backend offline
-
-### T2: Brain download endpoint or guide
-- Either wire actual GGUF download during install
-- Or redirect user to Brains page with clear "Download your brain" prompt
+### T1: No backend changes needed
+- All existing API endpoints stay — just frontend routing changes
+- Settings page fetches from same endpoints as the removed pages
 
 ---
 
 ## 🛡️ Heimdall (Audit)
 
-### H1: Fresh install end-to-end
-- Clear ALL state → install .exe → complete onboarding
-- Verify: tour activates → tabs locked → guide works → brain prompt shown
-- This MUST be tested as a real install, not code review
+### H1: Verify removed routes don't 404
+- `/nodes`, `/pipeline`, `/learning`, `/companion` should redirect to Settings > Advanced
+- No dead links in the app
 
-### H2: Color consistency audit
-- Compare onboarding vars vs dashboard vars
-- No hardcoded colors remaining
+### H2: Verify power user access
+- Every feature that was cut from sidebar is still accessible via Settings > Advanced
 
 ---
 
 ## ✅ Valkyrie (QA)
 
-### V1: First-time user experience test
-- Fresh install → onboarding → dashboard
-- Tabs locked? Tour bar visible? Know where to go?
-- Companion shows as sprite, not emoji?
-- Brain download prompted or in progress?
-- Colors match between installer and dashboard?
-- NO ❌ on non-critical install steps?
+### V1: Fresh user experience
+- Install → onboard → see 6 clean tabs
+- Not overwhelmed — clear path: Chat, Guild Hall, Brains
+- Settings > Advanced contains everything for power users
+- Companion visible in Guild Hall, not a separate page
