@@ -117,17 +117,33 @@ fn get_system_info() -> SystemInfo {
     let vram_gb = {
         #[cfg(target_os = "windows")]
         {
-            Command::new("powershell")
-                .args(["-NoProfile", "-Command",
-                    "(Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM"])
+            // Try nvidia-smi first (accurate, no 4GB uint32 overflow)
+            let nvidia_vram = Command::new("nvidia-smi")
+                .args(["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
                 .output()
                 .ok()
                 .and_then(|o| {
                     let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                    s.parse::<f64>().ok()
-                })
-                .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
-                .unwrap_or(0.0)
+                    // nvidia-smi returns MB, e.g. "32607"
+                    s.lines().next()
+                        .and_then(|line| line.trim().parse::<f64>().ok())
+                        .map(|mb| (mb / 1024.0 * 10.0).round() / 10.0)
+                });
+
+            nvidia_vram.unwrap_or_else(|| {
+                // Fallback: WMI AdapterRAM (uint32, overflows above 4GB)
+                Command::new("powershell")
+                    .args(["-NoProfile", "-Command",
+                        "(Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM"])
+                    .output()
+                    .ok()
+                    .and_then(|o| {
+                        let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                        s.parse::<f64>().ok()
+                    })
+                    .map(|b| (b / 1_073_741_824.0 * 10.0).round() / 10.0)
+                    .unwrap_or(0.0)
+            })
         }
         #[cfg(target_os = "macos")]
         {
