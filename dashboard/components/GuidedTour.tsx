@@ -57,12 +57,30 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         const done = localStorage.getItem("fireside_tour_done");
-        if (!done) {
-            const onboarded = localStorage.getItem("fireside_onboarded");
-            if (onboarded) {
+        if (done) return;
+
+        // Check immediately
+        const onboarded = localStorage.getItem("fireside_onboarded");
+        if (onboarded) {
+            setTour({ active: true, currentStep: 0, completedSteps: [] });
+            return;
+        }
+
+        // Onboarding might not be done yet — poll until it is
+        const interval = setInterval(() => {
+            const nowOnboarded = localStorage.getItem("fireside_onboarded");
+            const nowDone = localStorage.getItem("fireside_tour_done");
+            if (nowDone) {
+                clearInterval(interval);
+                return;
+            }
+            if (nowOnboarded) {
+                clearInterval(interval);
                 setTour({ active: true, currentStep: 0, completedSteps: [] });
             }
-        }
+        }, 500);
+
+        return () => clearInterval(interval);
     }, []);
 
     const advanceTour = useCallback(() => {

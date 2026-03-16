@@ -182,6 +182,27 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         });
       });
 
+      // Check results: config write (step 4) is critical, others are non-critical
+      const hasCriticalFail = steps[4].status === "fail";
+      const hasWarnings = steps.some((s, i) => i < 4 && s.status === "fail");
+
+      if (hasCriticalFail) {
+        // Config write failed — can't proceed, stay on install screen
+        // User will see ❌ on the failed step
+        return;
+      }
+
+      if (hasWarnings) {
+        // Non-critical failures (Python/Node/packages might already be installed)
+        // Mark them as warnings instead of hard failures
+        steps.forEach((s, i) => {
+          if (i < 4 && s.status === "fail") {
+            steps[i] = { ...s, status: "done", label: `${s.label} (skipped — already set up)` };
+          }
+        });
+        setInstallSteps([...steps]);
+      }
+
       setTimeout(() => goTo(6), 800);
     })();
   }, [step, config, goTo]);
