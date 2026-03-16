@@ -3,7 +3,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeToggle";
-import { OnboardingGate } from "@/components/OnboardingGate";
+import OnboardingGate from "@/components/OnboardingGate";
 
 export const metadata: Metadata = {
     title: "Fireside — Your AI Companion",
