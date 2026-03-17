@@ -186,7 +186,7 @@ class TestGoogleProvider:
 class TestBugFixes:
     def test_philosopher_rename(self):
         """Master Debater renamed to Philosopher."""
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         assert mod.ACHIEVEMENTS["debate_win_10"]["name"] == "Philosopher"
 
 

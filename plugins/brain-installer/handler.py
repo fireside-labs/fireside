@@ -343,7 +343,208 @@ def register_routes(app, config: dict) -> None:
             "families": ["Llama", "Qwen", "DeepSeek", "Gemma", "Mistral", "Phi", "Moonshot", "Zhipu"],
         }
 
+    @router.post("/api/v1/brains/onboard")
+    async def api_onboard(req: InstallRequest):
+        """Full installer onboarding sequence (idempotent).
+
+        Steps:
+          1. Detect GPU / VRAM
+          2. Install runtime binary (llama.cpp or oMLX)
+          3. Download selected model (GGUF from HuggingFace)
+          4. Install LanceDB (pip install lancedb)
+          5. Install voice dependencies (kokoro, faster-whisper)
+          6. Start inference server
+          7. Health check on inference port
+
+        Each step is idempotent — skips if already done.
+        Returns step-by-step results with status for each step.
+        """
+        import subprocess
+        import sys
+        import urllib.request
+
+        from plugins.brain_installer.registry import get_model
+
+        model = get_model(req.model_id)
+        if not model:
+            raise HTTPException(status_code=404, detail=f"Unknown model: {req.model_id}")
+
+        steps = []
+
+        # --- Step 1: Detect GPU ---
+        vram = _get_vram()
+        runtime = _detect_runtime()
+        steps.append({
+            "step": 1,
+            "name": "detect_gpu",
+            "status": "done",
+            "vram_gb": vram,
+            "runtime": runtime,
+        })
+
+        # --- Step 2: Install runtime ---
+        step2 = {"step": 2, "name": "install_runtime", "status": "skipped"}
+        if model.get("provider"):
+            step2["status"] = "skipped"
+            step2["detail"] = "Cloud model — no local runtime needed"
+        elif runtime in ("llamacpp", "omlx"):
+            try:
+                if runtime == "llamacpp":
+                    from plugins.brain_installer.installers.llamacpp import (
+                        install_runtime, is_installed,
+                    )
+                else:
+                    from plugins.brain_installer.installers.omlx import (
+                        install_runtime, is_installed,
+                    )
+                if is_installed():
+                    step2["status"] = "already_installed"
+                else:
+                    r = install_runtime()
+                    step2["status"] = "done" if r.get("ok") else "error"
+                    if not r.get("ok"):
+                        step2["error"] = r.get("error")
+            except Exception as e:
+                step2["status"] = "error"
+                step2["error"] = str(e)
+        else:
+            step2["status"] = "error"
+            step2["error"] = "No compatible runtime found. Use a cloud model."
+        steps.append(step2)
+
+        # --- Step 3: Download model ---
+        step3 = {"step": 3, "name": "download_model", "status": "skipped"}
+        if model.get("provider"):
+            step3["detail"] = "Cloud model — no download needed"
+        elif model.get("gguf_url"):
+            try:
+                from plugins.brain_installer.installers.llamacpp import download_model
+                r = download_model(model["id"], model["gguf_url"])
+                step3["status"] = "done" if r.get("ok") else "error"
+                step3["path"] = r.get("path", "")
+                if r.get("message") == "Already downloaded":
+                    step3["status"] = "already_installed"
+                if not r.get("ok"):
+                    step3["error"] = r.get("error")
+            except Exception as e:
+                step3["status"] = "error"
+                step3["error"] = str(e)
+        steps.append(step3)
+
+        # --- Step 4: Install LanceDB ---
+        step4 = {"step": 4, "name": "install_lancedb", "status": "skipped"}
+        try:
+            import lancedb  # noqa: F401
+            step4["status"] = "already_installed"
+        except ImportError:
+            try:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "lancedb", "-q"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=300,
+                )
+                step4["status"] = "done"
+            except Exception as e:
+                step4["status"] = "error"
+                step4["error"] = str(e)
+        steps.append(step4)
+
+        # --- Step 5: Install voice deps ---
+        step5 = {"step": 5, "name": "install_voice_deps", "status": "skipped"}
+        voice_pkgs = []
+        try:
+            import kokoro  # noqa: F401
+        except ImportError:
+            voice_pkgs.extend(["kokoro", "soundfile"])
+        try:
+            import faster_whisper  # noqa: F401
+        except ImportError:
+            voice_pkgs.append("faster-whisper")
+
+        if not voice_pkgs:
+            step5["status"] = "already_installed"
+        else:
+            try:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install"] + voice_pkgs + ["-q"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=300,
+                )
+                step5["status"] = "done"
+                step5["installed"] = voice_pkgs
+            except Exception as e:
+                step5["status"] = "error"
+                step5["error"] = str(e)
+        steps.append(step5)
+
+        # --- Step 6: Start server ---
+        step6 = {"step": 6, "name": "start_server", "status": "skipped"}
+        if model.get("provider"):
+            step6["detail"] = "Cloud model — no local server"
+        elif step3.get("path"):
+            try:
+                from plugins.brain_installer.installers.llamacpp import start_server
+                r = start_server(
+                    step3["path"],
+                    port=req.port,
+                    context=model.get("context", 32768),
+                )
+                step6["status"] = "done" if r.get("ok") else "error"
+                step6["port"] = req.port
+                step6["pid"] = r.get("pid")
+                if not r.get("ok"):
+                    step6["error"] = r.get("error")
+            except Exception as e:
+                step6["status"] = "error"
+                step6["error"] = str(e)
+        steps.append(step6)
+
+        # --- Step 7: Health check ---
+        step7 = {"step": 7, "name": "health_check", "status": "skipped"}
+        if model.get("provider"):
+            step7["status"] = "done"
+            step7["detail"] = "Cloud model — always healthy"
+        elif step6.get("status") == "done":
+            import time as _time
+            healthy = False
+            for attempt in range(10):
+                try:
+                    url = f"http://127.0.0.1:{req.port}/health"
+                    with urllib.request.urlopen(url, timeout=3) as resp:
+                        if resp.status == 200:
+                            healthy = True
+                            break
+                except Exception:
+                    _time.sleep(1)
+            step7["status"] = "done" if healthy else "error"
+            step7["attempts"] = attempt + 1
+            if not healthy:
+                step7["error"] = f"Server not responding on port {req.port} after 10 attempts"
+        steps.append(step7)
+
+        # --- Summary ---
+        all_ok = all(
+            s["status"] in ("done", "already_installed", "skipped")
+            for s in steps
+        )
+
+        _publish("brain.onboarded", {
+            "model_id": req.model_id,
+            "success": all_ok,
+            "steps": len(steps),
+        })
+
+        return {
+            "ok": all_ok,
+            "model_id": req.model_id,
+            "runtime": runtime,
+            "steps": steps,
+        }
+
     app.include_router(router)
     log.info("[brain-installer] Plugin loaded. Runtime: %s, Installed: %d",
              _detect_runtime(), len(_installed_brains))
+
 

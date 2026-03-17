@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 log = logging.getLogger("valhalla.brain-installer.omlx")
@@ -28,13 +29,10 @@ def is_available() -> bool:
 
 
 def is_installed() -> bool:
-    """Check if mlx-lm is installed."""
+    """Check if mlx-lm is installed in the current Python environment."""
     try:
-        r = subprocess.run(
-            ["python3", "-m", "mlx_lm", "--help"],
-            capture_output=True, text=True, timeout=10,
-        )
-        return r.returncode == 0 or "mlx_lm" in r.stdout + r.stderr
+        import importlib.util
+        return importlib.util.find_spec("mlx_lm") is not None
     except Exception:
         return False
 
@@ -46,21 +44,18 @@ def install_runtime() -> dict:
 
     # Check Python 3.10+
     try:
-        r = subprocess.run(
-            ["python3", "--version"],
-            capture_output=True, text=True, timeout=5,
-        )
-        version = r.stdout.strip().split()[-1]
+        import platform
+        version = platform.python_version()
         major, minor = int(version.split(".")[0]), int(version.split(".")[1])
         if major < 3 or (major == 3 and minor < 10):
             return {"ok": False, "error": f"Python 3.10+ required, found {version}"}
     except Exception as e:
         return {"ok": False, "error": f"Python check failed: {e}"}
 
-    # Install mlx-lm
+    # Install mlx-lm using current Python's pip
     try:
         r = subprocess.run(
-            ["pip3", "install", "mlx-lm"],
+            [sys.executable, "-m", "pip", "install", "mlx-lm", "-q"],
             capture_output=True, text=True, timeout=300,
         )
         if r.returncode != 0:
@@ -71,11 +66,14 @@ def install_runtime() -> dict:
 
 
 def download_model(omlx_id: str) -> dict:
-    """Download a model via mlx-lm (HuggingFace cache)."""
+    """Download a model via mlx-lm (HuggingFace cache).
+
+    Uses mlx_lm.generate with a tiny prompt to trigger the HuggingFace
+    download.  The model is cached in ~/.cache/huggingface/.
+    """
     try:
-        # mlx_lm.generate with a tiny prompt triggers download
         r = subprocess.run(
-            ["python3", "-m", "mlx_lm.generate",
+            [sys.executable, "-m", "mlx_lm.generate",
              "--model", omlx_id,
              "--prompt", "Hi",
              "--max-tokens", "1"],
@@ -88,18 +86,23 @@ def download_model(omlx_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-def start_server(omlx_id: str, port: int = DEFAULT_PORT) -> dict:
-    """Start oMLX server."""
+def start_server(omlx_id: str, port: int = DEFAULT_PORT,
+                 host: str = "0.0.0.0") -> dict:
+    """Start oMLX server (OpenAI-compatible API).
+
+    Binds to 0.0.0.0 by default so the mesh can reach it.
+    """
     try:
         cmd = [
-            "python3", "-m", "mlx_lm.server",
+            sys.executable, "-m", "mlx_lm.server",
             "--model", omlx_id,
+            "--host", host,
             "--port", str(port),
         ]
         proc = subprocess.Popen(
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
-        log.info("[omlx] Started server PID=%d on port %d", proc.pid, port)
+        log.info("[omlx] Started server PID=%d on %s:%d", proc.pid, host, port)
         return {"ok": True, "pid": proc.pid, "port": port}
     except Exception as e:
         return {"ok": False, "error": str(e)}

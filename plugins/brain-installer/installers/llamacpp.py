@@ -35,8 +35,10 @@ def is_available() -> bool:
 
 def is_installed() -> bool:
     """Check if llama-server binary exists."""
-    return shutil.which("llama-server") is not None or \
-           (MODELS_DIR.parent / "bin" / "llama-server").exists()
+    system = platform.system().lower()
+    exe = "llama-server.exe" if system == "windows" else "llama-server"
+    return shutil.which(exe) is not None or \
+           (MODELS_DIR.parent / "bin" / exe).exists()
 
 
 def _get_binary_url() -> str:
@@ -46,7 +48,10 @@ def _get_binary_url() -> str:
 
     base = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_CPP_RELEASE}"
 
-    if system == "darwin":
+    if system == "windows":
+        # Windows CUDA binary (CUDA 12.4, x64)
+        return f"{base}/llama-{LLAMA_CPP_RELEASE}-bin-win-cuda-cu12.4-x64.zip"
+    elif system == "darwin":
         return f"{base}/llama-{LLAMA_CPP_RELEASE}-bin-macos-arm64.zip"
     elif system == "linux" and "x86" in machine:
         return f"{base}/llama-{LLAMA_CPP_RELEASE}-bin-ubuntu-x64.zip"
@@ -73,9 +78,12 @@ def install_runtime() -> dict:
         with zipfile.ZipFile(str(zip_path), 'r') as zf:
             zf.extractall(str(bin_dir))
 
-        # Find and make executable
-        for f in bin_dir.rglob("llama-server"):
-            os.chmod(str(f), 0o755)
+        # Find and make executable (not needed on Windows)
+        system = platform.system().lower()
+        exe_name = "llama-server.exe" if system == "windows" else "llama-server"
+        for f in bin_dir.rglob(exe_name):
+            if system != "windows":
+                os.chmod(str(f), 0o755)
 
         zip_path.unlink(missing_ok=True)
         return {"ok": True, "message": "llama-server installed"}
@@ -103,13 +111,15 @@ def download_model(model_id: str, gguf_url: str) -> dict:
 def start_server(model_path: str, port: int = DEFAULT_PORT,
                  context: int = 32768, gpu_layers: int = 99) -> dict:
     """Start llama-server with optimal settings."""
-    binary = shutil.which("llama-server")
+    system = platform.system().lower()
+    exe = "llama-server.exe" if system == "windows" else "llama-server"
+    binary = shutil.which(exe)
     if not binary:
-        alt = MODELS_DIR.parent / "bin" / "llama-server"
+        alt = MODELS_DIR.parent / "bin" / exe
         if alt.exists():
             binary = str(alt)
         else:
-            return {"ok": False, "error": "llama-server binary not found"}
+            return {"ok": False, "error": f"{exe} binary not found"}
 
     try:
         cmd = [
@@ -137,5 +147,5 @@ def get_install_info() -> dict:
         "name": "llama.cpp (NVIDIA GPU)",
         "available": is_available(),
         "installed": is_installed(),
-        "platform": "Linux/Mac (NVIDIA CUDA)",
+        "platform": "Windows/Linux/Mac (NVIDIA CUDA)",
     }

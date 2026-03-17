@@ -31,11 +31,11 @@ def _load_module(plugin_name: str, filename: str = "handler.py"):
 
 class TestChatXPCap:
     def test_cap_constant(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         assert mod.CHAT_XP_DAILY_CAP == 20
 
     def test_chat_xp_tracked(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         name = f"test_chatcap_{int(time.time())}"
         result = mod.award_event_xp(name, "chat.response")
         assert result is not None
@@ -45,7 +45,7 @@ class TestChatXPCap:
         f.unlink(missing_ok=True)
 
     def test_chat_xp_capped_after_limit(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         name = f"test_chatcap2_{int(time.time())}"
         # Award 10 XP twice (total 20 = cap)
         mod.award_event_xp(name, "chat.response")
@@ -59,7 +59,7 @@ class TestChatXPCap:
         f.unlink(missing_ok=True)
 
     def test_non_chat_xp_not_capped(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         name = f"test_nocap_{int(time.time())}"
         # Pipeline XP should not be capped
         result = mod.award_event_xp(name, "pipeline.shipped")
@@ -69,7 +69,7 @@ class TestChatXPCap:
         f.unlink(missing_ok=True)
 
     def test_today_key_format(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         key = mod._today_key()
         assert len(key) == 10  # YYYY-MM-DD
         assert key.count("-") == 2
@@ -81,7 +81,7 @@ class TestChatXPCap:
 
 class TestChatRouting:
     def test_personality_to_prompt_applied(self):
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         prompt = mod.personality_to_prompt({
             "creative_precise": 0.9,
             "bold_cautious": 0.1,
@@ -91,7 +91,7 @@ class TestChatRouting:
 
     def test_system_prompt_includes_personality(self):
         """System prompt should incorporate personality modifiers."""
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         # The function exists and works without crashing
         prompt = mod._load_system_prompt("test-agent")
         assert isinstance(prompt, str)
@@ -99,11 +99,11 @@ class TestChatRouting:
 
     def test_byok_providers_in_stream_chat(self):
         """_stream_chat should handle provider routing."""
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         assert hasattr(mod, "_stream_chat")
 
     def test_chat_request_model(self):
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         req = mod.ChatRequest(message="hello", agent="thor")
         assert req.message == "hello"
         assert req.agent == "thor"
@@ -180,10 +180,10 @@ class TestLearningSummary:
 
 class TestBugFixes:
     def test_philosopher_name(self):
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         assert mod.ACHIEVEMENTS["debate_win_10"]["name"] == "Philosopher"
 
     def test_crucible_desc_rename(self):
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         desc = mod.ACHIEVEMENTS["crucible_100"]["desc"]
         assert "knowledge check" in desc.lower()

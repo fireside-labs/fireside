@@ -1,19 +1,22 @@
 """
-task-persistence/handler.py — Crash-resilient task management.
+task-persistence/handler.py — Crash-resilient task management + SQLite chat history.
 
-Checkpoint pattern:
+Task persistence (checkpoint pattern):
   1. Create task → writes state to data/tasks/{task_id}.json
   2. At each step, checkpoint → updates progress
   3. On crash/restart → scan for in_progress tasks → resume from last checkpoint
   4. Notify user via Telegram on resume
 
-This is the biological equivalent of waking from unconsciousness
-and remembering what you were doing.
+Chat persistence (SQLite):
+  - All chat messages stored in ~/.valhalla/chat.db
+  - Session-based: each conversation gets a session_id
+  - Paginated retrieval, session listing, per-session deletion
 """
 from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import time
 import uuid
 from pathlib import Path
@@ -33,9 +36,9 @@ def _publish(topic: str, payload: dict) -> None:
         pass
 
 
-# ---------------------------------------------------------------------------
-# Persistence
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# Task Persistence (JSON checkpoint files)
+# ===========================================================================
 
 _TASKS_DIR: Path = Path.home() / ".valhalla" / "tasks"
 
@@ -201,9 +204,155 @@ def resume_task(task_id: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# Chat Persistence (SQLite)
+# ===========================================================================
+
+_CHAT_DB_PATH: Path = Path.home() / ".valhalla" / "chat.db"
+
+
+class ChatDB:
+    """SQLite-backed chat message store."""
+
+    def __init__(self, db_path: Path = _CHAT_DB_PATH):
+        self._db_path = db_path
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+
+    def _conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self._db_path))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+    def _init_db(self):
+        with self._conn() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id          TEXT PRIMARY KEY,
+                    session_id  TEXT NOT NULL,
+                    role        TEXT NOT NULL,
+                    content     TEXT NOT NULL,
+                    timestamp   REAL NOT NULL,
+                    metadata    TEXT DEFAULT '{}'
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chat_session
+                ON chat_messages(session_id, timestamp)
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chat_ts
+                ON chat_messages(timestamp)
+            """)
+        log.info("[chat-db] SQLite initialized at %s", self._db_path)
+
+    def save_message(self, session_id: str, role: str, content: str,
+                     timestamp: float = 0.0,
+                     metadata: dict | None = None) -> dict:
+        """Save a chat message."""
+        msg_id = str(uuid.uuid4())[:12]
+        ts = timestamp or time.time()
+        meta_json = json.dumps(metadata or {})
+
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO chat_messages (id, session_id, role, content, timestamp, metadata) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (msg_id, session_id, role, content, ts, meta_json),
+            )
+
+        return {
+            "id": msg_id,
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "timestamp": ts,
+        }
+
+    def get_history(self, session_id: str = "", limit: int = 100,
+                    offset: int = 0) -> list[dict]:
+        """Get chat history, optionally filtered by session."""
+        with self._conn() as conn:
+            if session_id:
+                rows = conn.execute(
+                    "SELECT * FROM chat_messages WHERE session_id = ? "
+                    "ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+                    (session_id, limit, offset),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM chat_messages "
+                    "ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+                    (limit, offset),
+                ).fetchall()
+
+        return [
+            {
+                "id": r["id"],
+                "session_id": r["session_id"],
+                "role": r["role"],
+                "content": r["content"],
+                "timestamp": r["timestamp"],
+                "metadata": json.loads(r["metadata"] or "{}"),
+            }
+            for r in reversed(rows)  # chronological order
+        ]
+
+    def list_sessions(self, limit: int = 50) -> list[dict]:
+        """List distinct sessions with stats."""
+        with self._conn() as conn:
+            rows = conn.execute("""
+                SELECT session_id,
+                       COUNT(*) as message_count,
+                       MIN(timestamp) as first_message,
+                       MAX(timestamp) as last_message
+                FROM chat_messages
+                GROUP BY session_id
+                ORDER BY last_message DESC
+                LIMIT ?
+            """, (limit,)).fetchall()
+
+        return [
+            {
+                "session_id": r["session_id"],
+                "message_count": r["message_count"],
+                "first_message": r["first_message"],
+                "last_message": r["last_message"],
+            }
+            for r in rows
+        ]
+
+    def delete_session(self, session_id: str) -> int:
+        """Delete all messages in a session. Returns count deleted."""
+        with self._conn() as conn:
+            cursor = conn.execute(
+                "DELETE FROM chat_messages WHERE session_id = ?",
+                (session_id,),
+            )
+            return cursor.rowcount
+
+    def total_messages(self) -> int:
+        with self._conn() as conn:
+            row = conn.execute("SELECT COUNT(*) as cnt FROM chat_messages").fetchone()
+            return row["cnt"] if row else 0
+
+
+# Global instance
+_chat_db: ChatDB | None = None
+
+
+def get_chat_db() -> ChatDB:
+    """Return the global ChatDB instance."""
+    global _chat_db
+    if _chat_db is None:
+        _chat_db = ChatDB()
+    return _chat_db
+
+
+# ===========================================================================
 # Request models
-# ---------------------------------------------------------------------------
+# ===========================================================================
 
 class TaskCreateRequest(BaseModel):
     title: str
@@ -217,9 +366,17 @@ class CheckpointRequest(BaseModel):
     data: Optional[dict] = None
 
 
-# ---------------------------------------------------------------------------
+class ChatMessageRequest(BaseModel):
+    session_id: str = ""
+    role: str  # "user" or "assistant"
+    content: str
+    timestamp: float = 0.0
+    metadata: Optional[dict] = None
+
+
+# ===========================================================================
 # On startup: scan for interrupted tasks
-# ---------------------------------------------------------------------------
+# ===========================================================================
 
 def on_startup() -> list:
     """Called on server start. Resumes any interrupted tasks."""
@@ -234,19 +391,24 @@ def on_startup() -> list:
     return resumed
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # Registration
-# ---------------------------------------------------------------------------
+# ===========================================================================
 
 def register_routes(app, config: dict) -> None:
-    global _TASKS_DIR
+    global _TASKS_DIR, _chat_db
 
     tasks_cfg = config.get("tasks", {})
     data_dir = Path(tasks_cfg.get("data_dir", str(Path.home() / ".valhalla" / "tasks")))
     _TASKS_DIR = data_dir
     _ensure_dir()
 
+    # Initialize chat database
+    _chat_db = ChatDB()
+
     router = APIRouter(tags=["task-persistence"])
+
+    # --- Task endpoints (existing) ---
 
     @router.post("/api/v1/tasks")
     async def api_create(req: TaskCreateRequest):
@@ -281,8 +443,63 @@ def register_routes(app, config: dict) -> None:
         """Mark task as completed."""
         return complete_task(task_id)
 
+    # --- Chat history endpoints (new — SQLite backed) ---
+
+    @router.post("/api/v1/chat/history")
+    async def api_save_chat(req: ChatMessageRequest):
+        """Save a chat message to persistent SQLite history."""
+        if req.role not in ("user", "assistant", "system", "companion"):
+            raise HTTPException(400, "role must be 'user', 'assistant', 'system', or 'companion'")
+        if not req.content or not isinstance(req.content, str):
+            raise HTTPException(400, "content must be a non-empty string")
+        if len(req.content) > 10000:
+            raise HTTPException(400, "content too long (max 10000 chars)")
+
+        session_id = req.session_id or str(uuid.uuid4())[:8]
+        msg = _chat_db.save_message(
+            session_id=session_id,
+            role=req.role,
+            content=req.content,
+            timestamp=req.timestamp,
+            metadata=req.metadata,
+        )
+
+        _publish("chat.saved", {"session_id": session_id, "role": req.role})
+
+        return {"ok": True, "message": msg, "total": _chat_db.total_messages()}
+
+    @router.get("/api/v1/chat/history")
+    async def api_get_chat(session_id: str = "", limit: int = 100, offset: int = 0):
+        """Get chat history (paginated, chronological)."""
+        messages = _chat_db.get_history(session_id, limit, offset)
+        return {
+            "ok": True,
+            "messages": messages,
+            "count": len(messages),
+            "total": _chat_db.total_messages(),
+        }
+
+    @router.get("/api/v1/chat/sessions")
+    async def api_chat_sessions(limit: int = 50):
+        """List distinct chat sessions."""
+        sessions = _chat_db.list_sessions(limit)
+        return {
+            "ok": True,
+            "sessions": sessions,
+            "count": len(sessions),
+        }
+
+    @router.delete("/api/v1/chat/history/{session_id}")
+    async def api_delete_chat(session_id: str):
+        """Delete all messages in a session."""
+        deleted = _chat_db.delete_session(session_id)
+        if deleted == 0:
+            raise HTTPException(404, f"No messages found for session '{session_id}'")
+        return {"ok": True, "deleted": deleted, "session_id": session_id}
+
     app.include_router(router)
 
     # Auto-resume interrupted tasks
     resumed = on_startup()
-    log.info("[task-persistence] Plugin loaded. Resumed %d interrupted task(s).", len(resumed))
+    log.info("[task-persistence] Plugin loaded. Resumed %d interrupted task(s). "
+             "Chat DB: %d messages.", len(resumed), _chat_db.total_messages())

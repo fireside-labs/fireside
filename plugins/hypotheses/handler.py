@@ -792,6 +792,12 @@ class SharePayload(BaseModel):
     ts: int = 0
 
 
+# Rebuild models to resolve forward references from `from __future__ import annotations`
+GenerateRequest.model_rebuild()
+TestRequest.model_rebuild()
+SharePayload.model_rebuild()
+
+
 # ---------------------------------------------------------------------------
 # Plugin registration
 # ---------------------------------------------------------------------------

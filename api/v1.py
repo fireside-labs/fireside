@@ -527,10 +527,10 @@ async def get_config_endpoint():
 @router.put("/config")
 async def update_config(req: ConfigUpdateRequest):
     """Update valhalla.yaml, hot-reload, and push to mesh peers."""
+    global _config
     from config_loader import save_config_yaml, ConfigError
     try:
         new_config = save_config_yaml(req.yaml_content)
-        global _config
         _config = new_config
 
         # Push to mesh peers (fire-and-forget)
@@ -550,6 +550,7 @@ async def receive_config(req: ConfigReceiveRequest):
     Called by the orchestrator when PUT /config triggers mesh sync.
     Validates auth_token against mesh.auth_token.
     """
+    global _config
     # Auth check — timing-safe comparison (Heimdall Sprint 3)
     import hmac
     expected_token = _config.get("mesh", {}).get("auth_token", "")
@@ -562,7 +563,6 @@ async def receive_config(req: ConfigReceiveRequest):
     from config_loader import save_config_yaml, ConfigError
     try:
         new_config = save_config_yaml(req.yaml_content)
-        global _config
         _config = new_config
         log.info("[config] Received and applied config push from %s", req.sender)
         return {"ok": True, "message": f"Config received from {req.sender}"}

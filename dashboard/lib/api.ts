@@ -703,3 +703,110 @@ export async function publishAgent(data: { name: string; version: string; descri
 export async function reviewAgent(id: string, review: { rating: number; text: string }): Promise<{ status: string }> {
   return apiFetch(`/api/v1/marketplace/${id}/review`, { method: "POST", body: JSON.stringify(review) }, { status: "review_added" });
 }
+
+// ═══════════════════════════════════════════════
+// BACKEND INFRASTRUCTURE — Onboarding + Chat
+// ═══════════════════════════════════════════════
+
+// ─── Onboarding Types ───
+
+export interface OnboardStep {
+  step: number;
+  name: string;
+  status: "done" | "already_installed" | "skipped" | "error";
+  error?: string;
+  detail?: string;
+  vram_gb?: number;
+  runtime?: string;
+  path?: string;
+  port?: number;
+  pid?: number;
+  installed?: string[];
+  attempts?: number;
+}
+
+export interface OnboardResult {
+  ok: boolean;
+  model_id: string;
+  runtime: string;
+  steps: OnboardStep[];
+}
+
+// ─── Chat Types ───
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: string;
+  content: string;
+  timestamp: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ChatSession {
+  session_id: string;
+  message_count: number;
+  first_message: number;
+  last_message: number;
+}
+
+// ─── Onboarding API ───
+
+export async function onboardBrain(modelId: string, port: number = 8080): Promise<OnboardResult> {
+  return apiFetch("/api/v1/brains/onboard", {
+    method: "POST",
+    body: JSON.stringify({ model_id: modelId, port }),
+  }, {
+    ok: false,
+    model_id: modelId,
+    runtime: "unknown",
+    steps: [],
+  });
+}
+
+// ─── Chat Persistence API ───
+
+export async function saveChatMessage(
+  sessionId: string,
+  role: string,
+  content: string,
+  metadata?: Record<string, unknown>,
+): Promise<{ ok: boolean; message: ChatMessage; total: number }> {
+  return apiFetch("/api/v1/chat/history", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, role, content, metadata }),
+  }, { ok: false, message: {} as ChatMessage, total: 0 });
+}
+
+export async function getChatHistory(
+  sessionId: string = "",
+  limit: number = 100,
+  offset: number = 0,
+): Promise<{ ok: boolean; messages: ChatMessage[]; count: number; total: number }> {
+  const params = new URLSearchParams();
+  if (sessionId) params.set("session_id", sessionId);
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  return apiFetch(`/api/v1/chat/history?${params}`, undefined, {
+    ok: true, messages: [], count: 0, total: 0,
+  });
+}
+
+export async function getChatSessions(limit: number = 50): Promise<{ ok: boolean; sessions: ChatSession[]; count: number }> {
+  return apiFetch(`/api/v1/chat/sessions?limit=${limit}`, undefined, {
+    ok: true, sessions: [], count: 0,
+  });
+}
+
+export async function deleteChatSession(sessionId: string): Promise<{ ok: boolean; deleted: number }> {
+  return apiFetch(`/api/v1/chat/history/${sessionId}`, { method: "DELETE" }, { ok: false, deleted: 0 });
+}
+
+// ─── Working Memory Search ───
+
+export async function searchMemory(query: string, topK: number = 5): Promise<{ results: unknown[]; count: number; backend: string }> {
+  return apiFetch("/api/v1/working-memory/search", {
+    method: "POST",
+    body: JSON.stringify({ query, top_k: topK }),
+  }, { results: [], count: 0, backend: "offline" });
+}

@@ -57,6 +57,12 @@ class ChatRequest(BaseModel):
     agent: Optional[str] = None
 
 
+# Rebuild models to resolve forward references from `from __future__ import annotations`
+PersonalityUpdate.model_rebuild()
+XPRequest.model_rebuild()
+ChatRequest.model_rebuild()
+
+
 # ---------------------------------------------------------------------------
 # Personality → system prompt mapping
 # ---------------------------------------------------------------------------

@@ -31,7 +31,7 @@ def _load_module(plugin_name: str, filename: str = "handler.py"):
 
 class TestLeveling:
     def test_default_profile(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         profile = mod._default_profile("test-agent")
         assert profile["level"] == 1
         assert profile["xp"] == 0
@@ -39,7 +39,7 @@ class TestLeveling:
         assert "personality" in profile
 
     def test_add_xp(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         # Use a unique temp agent
         name = f"test_xp_{int(time.time())}"
         result = mod.add_xp(name, 250, "test")
@@ -52,7 +52,7 @@ class TestLeveling:
         f.unlink(missing_ok=True)
 
     def test_level_up(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         name = f"test_lvl_{int(time.time())}"
         mod.add_xp(name, 499, "almost")
         result = mod.add_xp(name, 2, "level up!")
@@ -62,20 +62,20 @@ class TestLeveling:
         f.unlink(missing_ok=True)
 
     def test_get_level_info(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         info = mod.get_level_info(1250)
         assert info["level"] == 3
         assert info["xp_in_level"] == 250
         assert info["progress_pct"] == 50
 
     def test_xp_rewards_defined(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         assert mod.XP_REWARDS["pipeline.shipped"] == 100
         assert mod.XP_REWARDS["crucible.survived"] == 50
         assert mod.XP_REWARDS["socratic.won"] == 75
 
     def test_award_event_xp(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         name = f"test_evt_{int(time.time())}"
         result = mod.award_event_xp(name, "pipeline.shipped")
         assert result is not None
@@ -84,12 +84,12 @@ class TestLeveling:
         f.unlink(missing_ok=True)
 
     def test_unknown_event_returns_none(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         result = mod.award_event_xp("test", "unknown.event")
         assert result is None
 
     def test_update_skill(self):
-        mod = _load_module("agent-profiles", "leveling.py")
+        mod = _load_module("agent_profiles", "leveling.py")
         name = f"test_skill_{int(time.time())}"
         mod.update_skill(name, "python", 5)
         profile = mod.load_profile(name)
@@ -104,11 +104,11 @@ class TestLeveling:
 
 class TestAchievements:
     def test_all_achievements_defined(self):
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         assert len(mod.ACHIEVEMENTS) >= 18
 
     def test_check_achievements_streak(self):
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         profile = {
             "level": 1, "xp": 0,
             "stats": {
@@ -126,7 +126,7 @@ class TestAchievements:
         assert "tasks_10" in ids
 
     def test_no_duplicate_achievements(self):
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         profile = {
             "level": 5, "xp": 2500,
             "stats": {
@@ -141,13 +141,13 @@ class TestAchievements:
         assert "streak_3" not in ids  # Should not re-award
 
     def test_get_all_achievements(self):
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         all_a = mod.get_all_achievements()
         assert len(all_a) >= 18
         assert all("id" in a and "name" in a and "emoji" in a for a in all_a)
 
     def test_get_next_achievements(self):
-        mod = _load_module("agent-profiles", "achievements.py")
+        mod = _load_module("agent_profiles", "achievements.py")
         profile = {
             "level": 1, "xp": 0,
             "stats": {
@@ -167,17 +167,17 @@ class TestAchievements:
 
 class TestPersonality:
     def test_personality_to_prompt_creative(self):
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         prompt = mod.personality_to_prompt({"creative_precise": 0.9})
         assert "creative" in prompt.lower() or "risk" in prompt.lower()
 
     def test_personality_to_prompt_cautious(self):
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         prompt = mod.personality_to_prompt({"bold_cautious": 0.1})
         assert "verify" in prompt.lower() or "safety" in prompt.lower()
 
     def test_personality_to_prompt_balanced(self):
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         prompt = mod.personality_to_prompt({
             "creative_precise": 0.5,
             "verbose_concise": 0.5,
@@ -226,10 +226,10 @@ class TestDesktopPackaging:
 
 class TestPluginStructure:
     def test_agent_profiles_manifest(self):
-        assert (REPO_ROOT / "plugins" / "agent-profiles" / "plugin.yaml").exists()
+        assert (REPO_ROOT / "plugins" / "agent_profiles" / "plugin.yaml").exists()
 
     def test_agent_profiles_handler(self):
-        mod = _load_module("agent-profiles")
+        mod = _load_module("agent_profiles")
         assert hasattr(mod, "register_routes")
         assert hasattr(mod, "on_event")
 
