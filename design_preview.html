@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fireside — Brain Picker Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #060609;
+    font-family: 'Outfit', system-ui, sans-serif;
+    color: #F0DCC8;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Ambient background ── */
+  .bg-layer {
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 600px 400px at 25% 60%, rgba(245,158,11,0.03) 0%, transparent 60%),
+      radial-gradient(ellipse 600px 400px at 75% 40%, rgba(167,139,250,0.03) 0%, transparent 60%),
+      radial-gradient(ellipse 400px 300px at 50% 80%, rgba(52,211,153,0.02) 0%, transparent 60%);
+  }
+
+  /* ── Stars ── */
+  .stars { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  .star {
+    position: absolute; width: 2px; height: 2px;
+    background: #fff; border-radius: 50%;
+    animation: twinkle ease-in-out infinite alternate; opacity: 0.2;
+  }
+  @keyframes twinkle { 0% { opacity: 0.05; transform: scale(0.5); } 100% { opacity: 0.5; transform: scale(1.2); } }
+
+  /* ── Embers ── */
+  .embers { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+  .ember {
+    position: absolute; border-radius: 50%;
+    background: radial-gradient(circle, #F59E0B, #D97706);
+    animation: emberFloat ease-in-out infinite;
+    filter: blur(0.5px);
+    box-shadow: 0 0 6px rgba(245,158,11,0.5), 0 0 12px rgba(245,158,11,0.2);
+  }
+  @keyframes emberFloat {
+    0% { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+    10% { opacity: 0.8; }
+    50% { transform: translateY(-40vh) translateX(20px) scale(0.6); opacity: 0.5; }
+    100% { transform: translateY(-90vh) translateX(-15px) scale(0.2); opacity: 0; }
+  }
+
+  .screen { display: none; position: relative; z-index: 10; }
+  .screen.active { display: flex; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ══════════════════════════════════════════
+     SCREEN 1 — CATEGORY CARDS (unchanged)
+     ══════════════════════════════════════════ */
+  .screen1 { flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 40px 24px; animation: fadeUp 0.5s ease; }
+  .title { font-size: 32px; font-weight: 900; margin-bottom: 6px; background: linear-gradient(135deg, #F0DCC8 0%, #FBBF24 50%, #D97706 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { font-size: 14px; color: #4A3D30; margin-bottom: 48px; }
+  .card-grid { display: grid; grid-template-columns: repeat(3, 200px); gap: 28px; }
+  .card {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    padding: 48px 24px 40px; border-radius: 22px; aspect-ratio: 3 / 4; cursor: pointer;
+    background: radial-gradient(ellipse at 50% 25%, var(--glow-soft) 0%, rgba(8,8,14,0.98) 55%);
+    border: 2px solid var(--border-idle);
+    box-shadow: 0 0 35px var(--shadow-outer), 0 0 15px var(--shadow-diffuse), inset 0 0 25px rgba(0,0,0,0.3);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: cardIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both, borderPulse 3s ease-in-out infinite alternate;
+  }
+  .card:nth-child(1) { animation-delay: 0s, 0s; } .card:nth-child(2) { animation-delay: 0.12s, 0.5s; } .card:nth-child(3) { animation-delay: 0.24s, 1s; }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(50px) scale(0.8); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes borderPulse { 0% { border-color: var(--border-idle); box-shadow: 0 0 25px var(--shadow-diffuse), 0 0 10px var(--shadow-diffuse); } 100% { border-color: var(--border-glow); box-shadow: 0 0 45px var(--shadow-outer), 0 0 20px var(--shadow-diffuse); } }
+  .card::before { content: ''; position: absolute; top: -30px; left: 50%; width: 220px; height: 220px; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(circle, var(--glow-strong) 0%, var(--glow-mid) 35%, transparent 65%); z-index: -1; pointer-events: none; animation: outerGlow 3.5s ease-in-out infinite alternate; opacity: 0.6; }
+  @keyframes outerGlow { 0% { opacity: 0.4; transform: translateX(-50%) scale(0.85); } 100% { opacity: 0.8; transform: translateX(-50%) scale(1.1); } }
+  .card::after { content: ''; position: absolute; inset: -1px; border-radius: 22px; background: linear-gradient(180deg, var(--border-glow) 0%, var(--border-glow-dim) 30%, transparent 50%, var(--border-glow-dim) 80%, var(--border-glow) 100%); z-index: -1; mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: xor; -webkit-mask-composite: xor; padding: 1.5px; opacity: 1; }
+  .shimmer { position: absolute; inset: 0; border-radius: 22px; overflow: hidden; pointer-events: none; }
+  .shimmer::after { content: ''; position: absolute; inset: -50% -50%; background: linear-gradient(105deg, transparent 30%, var(--shimmer-color) 50%, transparent 100%); animation: sweep 6s ease-in-out infinite; }
+  @keyframes sweep { 0% { left: -100%; } 35%, 100% { left: 250%; } }
+  .card-icon { width: 140px; height: 140px; object-fit: contain; position: relative; z-index: 2; filter: drop-shadow(0 0 30px var(--glow-strong)); animation: iconBreathe 5s ease-in-out infinite; mix-blend-mode: screen; -webkit-mask-image: radial-gradient(circle, white 35%, transparent 70%); mask-image: radial-gradient(circle, white 35%, transparent 70%); }
+  @keyframes iconBreathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-7px) scale(1.04); } }
+  .card-label { font-size: 18px; font-weight: 900; color: var(--accent); text-transform: uppercase; letter-spacing: 4px; position: relative; z-index: 2; text-shadow: 0 0 30px var(--glow-strong); }
+  .card-desc { font-size: 12px; color: #5A4D40; text-align: center; line-height: 1.5; position: relative; z-index: 2; max-width: 140px; }
+  .card-count { font-size: 9px; color: #3A3530; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; position: relative; z-index: 2; }
+  .card:hover { transform: translateY(-12px) scale(1.06); border-color: var(--border-hover); box-shadow: 0 30px 80px var(--shadow-outer), 0 0 120px var(--shadow-diffuse), 0 0 40px var(--shadow-outer); }
+  .card:hover::before { opacity: 1; width: 280px; height: 280px; }
+  .card:hover .card-icon { filter: drop-shadow(0 0 50px var(--glow-strong)); transform: translateY(-4px) scale(1.1); }
+  .card-speed { --accent: #F59E0B; --glow-strong: rgba(245,158,11,0.25); --glow-mid: rgba(217,119,6,0.10); --glow-soft: rgba(245,158,11,0.06); --border-idle: rgba(245,158,11,0.30); --border-hover: rgba(245,158,11,0.85); --border-glow: rgba(245,158,11,0.55); --border-glow-dim: rgba(245,158,11,0.25); --shadow-outer: rgba(245,158,11,0.12); --shadow-diffuse: rgba(245,158,11,0.06); --shimmer-color: rgba(245,158,11,0.04); }
+  .card-power { --accent: #A78BFA; --glow-strong: rgba(167,139,250,0.25); --glow-mid: rgba(139,92,246,0.10); --glow-soft: rgba(167,139,250,0.06); --border-idle: rgba(167,139,250,0.30); --border-hover: rgba(167,139,250,0.85); --border-glow: rgba(167,139,250,0.55); --border-glow-dim: rgba(167,139,250,0.25); --shadow-outer: rgba(167,139,250,0.12); --shadow-diffuse: rgba(167,139,250,0.06); --shimmer-color: rgba(167,139,250,0.04); }
+  .card-specialist { --accent: #34D399; --glow-strong: rgba(52,211,153,0.25); --glow-mid: rgba(16,185,129,0.10); --glow-soft: rgba(52,211,153,0.06); --border-idle: rgba(52,211,153,0.30); --border-hover: rgba(52,211,153,0.85); --border-glow: rgba(52,211,153,0.55); --border-glow-dim: rgba(52,211,153,0.25); --shadow-outer: rgba(52,211,153,0.12); --shadow-diffuse: rgba(52,211,153,0.06); --shimmer-color: rgba(52,211,153,0.04); }
+  .hint { margin-top: 48px; font-size: 11px; color: #2A2520; letter-spacing: 1px; text-transform: uppercase; animation: fadeIn 1s 0.8s both; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ══════════════════════════════════════════
+     SCREEN 2 — MODEL GRID + SLIDE-OUT PANEL
+     ══════════════════════════════════════════ */
+  .screen2 { flex-direction: column; align-items: center; min-height: 100vh; padding: 28px 24px; animation: fadeUp 0.4s ease; }
+
+  .s2-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; width: 100%; max-width: 960px; }
+  .s2-back { padding: 8px 16px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #8A7A6A; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+  .s2-back:hover { background: rgba(255,255,255,0.08); color: #F0DCC8; }
+  .s2-cat-badge { padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; border: 1px solid; }
+  .s2-vram { margin-left: auto; padding: 6px 14px; border-radius: 8px; font-size: 11px; color: #6A5A4A; font-weight: 600; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+
+  .s2-search-wrap { position: relative; width: 100%; max-width: 960px; margin-bottom: 16px; }
+  .s2-search { width: 100%; padding: 16px 20px 16px 48px; border-radius: 16px; border: 1.5px solid rgba(245,158,11,0.12); background: rgba(245,158,11,0.03); color: #F0DCC8; font-size: 15px; font-family: 'Outfit', system-ui; outline: none; transition: all 0.3s; box-shadow: 0 0 20px rgba(245,158,11,0.04); }
+  .s2-search:focus { border-color: color-mix(in srgb, var(--cat-color) 50%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--cat-color) 12%, transparent); background: rgba(245,158,11,0.05); }
+  .s2-search::placeholder { color: #4A3D30; font-weight: 500; }
+  .s2-search-icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 16px; pointer-events: none; opacity: 0.6; }
+
+  /* ── Model Grid ── */
+  .s2-models { width: 100%; max-width: 960px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+  .model-card {
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+    border: 1.5px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: cardSlide 0.4s ease both;
+    display: flex; flex-direction: column; gap: 12px;
+    position: relative;
+  }
+  .model-card:nth-child(1) { animation-delay: 0s; }
+  .model-card:nth-child(2) { animation-delay: 0.07s; }
+  .model-card:nth-child(3) { animation-delay: 0.14s; }
+  .model-card:nth-child(4) { animation-delay: 0.21s; }
+  .model-card:nth-child(5) { animation-delay: 0.28s; }
+  .model-card:nth-child(6) { animation-delay: 0.35s; }
+  @keyframes cardSlide { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+  .model-card:hover {
+    transform: translateY(-6px) scale(1.02);
+    border-color: color-mix(in srgb, var(--cat-color) 35%, transparent);
+    box-shadow: 0 12px 40px color-mix(in srgb, var(--cat-color) 8%, transparent), 0 0 20px color-mix(in srgb, var(--cat-color) 5%, transparent);
+  }
+  .model-card.selected {
+    border-color: color-mix(in srgb, var(--cat-color) 50%, transparent);
+    box-shadow: 0 0 30px color-mix(in srgb, var(--cat-color) 12%, transparent);
+  }
+
+  /* VRAM dimming */
+  .model-card.dim-vram {
+    opacity: 0.35; pointer-events: none;
+  }
+  .model-card.dim-vram::after {
+    content: '⚠ Over VRAM'; position: absolute; bottom: 12px; right: 12px;
+    font-size: 9px; font-weight: 700; color: #EF4444; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  /* Recommended badge */
+  .model-rec {
+    position: absolute; top: -6px; right: -6px;
+    padding: 3px 10px; border-radius: 8px;
+    font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    background: linear-gradient(135deg, #D97706, #F59E0B);
+    color: #0A0A0A;
+    box-shadow: 0 2px 12px rgba(245,158,11,0.4);
+    animation: recPulse 2s ease-in-out infinite alternate;
+  }
+  @keyframes recPulse { 0% { box-shadow: 0 2px 12px rgba(245,158,11,0.3); } 100% { box-shadow: 0 4px 20px rgba(245,158,11,0.6); } }
+
+  .mc-name { font-size: 15px; font-weight: 700; color: #F0DCC8; }
+  .mc-family { font-size: 11px; color: #5A4D40; }
+  .mc-badges { display: flex; gap: 6px; margin-top: 2px; }
+  .mc-badge { padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; color: #6A5A4A; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); }
+
+  /* Mini stat bars on card */
+  .mc-stats { display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
+  .mc-stat { display: flex; align-items: center; gap: 6px; }
+  .mc-stat-label { font-size: 9px; font-weight: 700; color: #4A3D30; text-transform: uppercase; width: 16px; text-align: center; }
+  .mc-stat-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.04); overflow: hidden; }
+  .mc-stat-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .mc-stat-fill.intel { background: linear-gradient(90deg, #DB2777, #F472B6); }
+  .mc-stat-fill.speed { background: linear-gradient(90deg, #10B981, #34D399); }
+  .mc-stat-fill.size { background: linear-gradient(90deg, #3B82F6, #60A5FA); }
+
+  /* ── Slide-out Detail Panel ── */
+  .detail-overlay {
+    display: none; position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease;
+  }
+  .detail-overlay.open { display: block; }
+
+  .detail-panel {
+    position: fixed; top: 0; right: -420px; bottom: 0; z-index: 51;
+    width: 400px;
+    background: linear-gradient(180deg, #0C0C14 0%, #080810 100%);
+    border-left: 1.5px solid rgba(255,255,255,0.08);
+    box-shadow: -20px 0 60px rgba(0,0,0,0.5);
+    padding: 28px 24px;
+    overflow-y: auto;
+    transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .detail-panel.open { right: 0; }
+
+  .dp-close {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 6px 12px; color: #6A5A4A;
+    font-size: 12px; cursor: pointer; font-family: 'Outfit'; transition: all 0.2s;
+  }
+  .dp-close:hover { background: rgba(255,255,255,0.1); color: #F0DCC8; }
+
+  .dp-name { font-size: 22px; font-weight: 800; color: #F0DCC8; margin-bottom: 4px; }
+  .dp-family { font-size: 13px; color: #5A4D40; margin-bottom: 16px; }
+
+  .dp-tags { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+  .dp-tag { padding: 4px 12px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--cat-color); background: color-mix(in srgb, var(--cat-color) 8%, transparent); border: 1px solid color-mix(in srgb, var(--cat-color) 15%, transparent); }
+
+  .dp-section-title { font-size: 10px; font-weight: 700; color: #5A4D40; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+
+  /* Panel quant pills */
+  .dp-quant-pills { display: flex; gap: 6px; margin-bottom: 24px; }
+  .dp-qpill {
+    flex: 1; padding: 10px 8px; border-radius: 12px; cursor: pointer;
+    background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.08);
+    color: #6A5A4A; font-family: 'Outfit'; font-size: 13px; font-weight: 700;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; transition: all 0.3s;
+  }
+  .dp-qpill:hover { background: rgba(255,255,255,0.06); border-color: color-mix(in srgb, var(--cat-color) 30%, transparent); }
+  .dp-qpill.active { background: color-mix(in srgb, var(--cat-color) 15%, transparent); border-color: var(--cat-color); color: var(--cat-color); box-shadow: 0 0 25px color-mix(in srgb, var(--cat-color) 15%, transparent); }
+  .dp-qpill-bits { font-size: 10px; font-weight: 600; opacity: 0.5; }
+
+  /* Panel stat bars */
+  .dp-stats { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+  .dp-stat-row { display: flex; align-items: center; gap: 10px; }
+  .dp-stat-icon { font-size: 15px; width: 22px; text-align: center; filter: saturate(1.4); }
+  .dp-stat-name { font-size: 11px; font-weight: 700; color: #6A5A4A; text-transform: uppercase; width: 85px; letter-spacing: 0.5px; }
+  .dp-stat-bar-bg { flex: 1; height: 12px; border-radius: 6px; background: rgba(255,255,255,0.04); overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); }
+  .dp-stat-fill {
+    height: 100%; border-radius: 6px; position: relative; overflow: hidden;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 12px var(--bar-glow, rgba(255,255,255,0.1));
+  }
+  .dp-stat-fill::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, rgba(255,255,255,0.3), transparent); }
+  .dp-stat-fill::after { content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%; border-radius: 6px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: barShine 3s ease-in-out infinite; }
+  @keyframes barShine { 0% { left: -100%; } 50%, 100% { left: 200%; } }
+  .dp-stat-fill.intel { background: linear-gradient(90deg, #9D174D, #DB2777, #EC4899, #F472B6); --bar-glow: rgba(236,72,153,0.35); }
+  .dp-stat-fill.speed { background: linear-gradient(90deg, #047857, #059669, #10B981, #34D399); --bar-glow: rgba(16,185,129,0.35); }
+  .dp-stat-fill.size { background: linear-gradient(90deg, #1D4ED8, #2563EB, #3B82F6, #60A5FA); --bar-glow: rgba(59,130,246,0.35); }
+  .dp-stat-value { font-size: 11px; color: #6A5A4A; width: 65px; text-align: right; font-weight: 700; }
+
+  .dp-select-btn {
+    width: 100%; padding: 16px; border-radius: 14px; border: none;
+    cursor: pointer; font-family: 'Outfit'; font-size: 15px; font-weight: 800;
+    background: linear-gradient(135deg, #D97706, #F59E0B); color: #0A0A0A;
+    box-shadow: 0 4px 24px rgba(245,158,11,0.25); transition: all 0.3s;
+  }
+  .dp-select-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(245,158,11,0.4); }
+
+  /* ── Mascot Guide ── */
+  .mascot {
+    position: fixed; bottom: 16px; left: 20px; z-index: 40;
+    display: flex; align-items: flex-end; gap: 0;
+    pointer-events: none;
+  }
+  .mascot-img {
+    width: 180px; height: 180px; object-fit: contain;
+    filter: drop-shadow(0 4px 30px rgba(245,158,11,0.4));
+    animation: mascotBob 4s ease-in-out infinite;
+    mix-blend-mode: screen;
+    -webkit-mask-image: radial-gradient(circle, white 30%, transparent 60%);
+    mask-image: radial-gradient(circle, white 30%, transparent 60%);
+  }
+  @keyframes mascotBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  .mascot-bubble {
+    position: relative; bottom: 50px;
+    background: rgba(20,18,28,0.92); border: 1.5px solid rgba(245,158,11,0.20);
+    border-radius: 14px 14px 14px 4px;
+    padding: 10px 14px; max-width: 220px;
+    font-size: 12px; color: #C4A882; line-height: 1.5;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    animation: bubbleIn 0.4s ease both;
+    pointer-events: auto;
+  }
+  .mascot-bubble::after {
+    content: ''; position: absolute; bottom: 8px; left: -8px;
+    border: 6px solid transparent; border-right-color: rgba(20,18,28,0.92);
+  }
+  @keyframes bubbleIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="stars" id="stars"></div>
+<div class="embers" id="embers"></div>
+
+<!-- SCREEN 1: CATEGORIES -->
+<div class="screen screen1 active" id="screen1">
+  <h1 class="title">Choose Your Path</h1>
+  <p class="subtitle">What matters most to you?</p>
+  <div class="card-grid">
+    <div class="card card-speed" onclick="showModels('speed')">
+      <div class="shimmer"></div>
+      <img class="card-icon" src="/hub/card_speed.png" alt="Speed" />
+      <div class="card-label">Speed</div>
+      <div class="card-desc">Fast responses, lighter models</div>
+      <div class="card-count">4 MODELS</div>
+    </div>
+    <div class="card card-power" onclick="showModels('power')">
+      <div class="shimmer"></div>
+      <img class="card-icon" src="/hub/card_power.png" alt="Power" />
+      <div class="card-label">Power</div>
+      <div class="card-desc">Deep intelligence, larger models</div>
+      <div class="card-count">4 MODELS</div>
+    </div>
+    <div class="card card-specialist" onclick="showModels('specialist')">
+      <div class="shimmer"></div>
+      <img class="card-icon" src="/hub/card_specialist.png" alt="Specialist" />
+      <div class="card-label">Specialist</div>
+      <div class="card-desc">Code, math, creative writing</div>
+      <div class="card-count">2 MODELS</div>
+    </div>
+  </div>
+  <div class="hint">Click a card to begin →</div>
+</div>
+
+<!-- SCREEN 2: MODELS -->
+<div class="screen screen2" id="screen2">
+  <div class="s2-header">
+    <button class="s2-back" onclick="showCategories()">← Back</button>
+    <span class="s2-cat-badge" id="catBadge">⚡ SPEED</span>
+    <span class="s2-vram">🖥 <span id="vramDisplay">31.8</span> GB VRAM</span>
+  </div>
+  <div class="s2-search-wrap">
+    <span class="s2-search-icon">🔍</span>
+    <input type="text" class="s2-search" id="searchInput" placeholder="Search models..." oninput="filterModels()">
+  </div>
+  <div class="s2-models" id="modelList"></div>
+</div>
+
+<!-- DETAIL PANEL (slide-out) -->
+<div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <button class="dp-close" onclick="closeDetail()">✕ Close</button>
+  <div id="detailContent"></div>
+</div>
+
+<!-- MASCOT -->
+<div class="mascot" id="mascot">
+  <img class="mascot-img" src="/hub/mascot_fox.png" alt="Fox Guide" />
+  <div class="mascot-bubble" id="mascotBubble">Hey there! Pick a path that fits your style ✨</div>
+</div>
+
+<script>
+const VRAM = 31.8; // Simulated detected VRAM
+const MODELS = {
+  speed: [
+    { name: "Phi-3 Mini", family: "Microsoft", params: "3.8B", speed: "~80 tok/s", tags: ["compact","efficient"], recommended: false,
+      desc: "Microsoft's ultra-compact model. Surprisingly capable for its size — trained on high-quality textbook data. Great for quick Q&A and simple tasks when you need instant responses.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 25, spd: 95, sizeGB: 2.2, size: "2.2 GB" },
+        { label: "Medium", bits: "6-bit", intel: 30, spd: 90, sizeGB: 2.9, size: "2.9 GB" },
+        { label: "High", bits: "8-bit", intel: 32, spd: 80, sizeGB: 3.8, size: "3.8 GB" },
+      ]},
+    { name: "Llama 3.1 8B", family: "Meta", params: "8B", speed: "~45 tok/s", tags: ["general","reliable"], recommended: true,
+      desc: "Meta's open-source workhorse. Llama 3.1 set the standard for open models — reliable across every task from writing to analysis. The 8B version is the sweet spot of speed and smarts.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 45, spd: 70, sizeGB: 4.9, size: "4.9 GB" },
+        { label: "Medium", bits: "6-bit", intel: 50, spd: 60, sizeGB: 6.6, size: "6.6 GB" },
+        { label: "High", bits: "8-bit", intel: 55, spd: 50, sizeGB: 8.5, size: "8.5 GB" },
+        { label: "Ultra", bits: "16-bit", intel: 58, spd: 35, sizeGB: 16, size: "16 GB" },
+      ]},
+    { name: "Qwen 3.5 7B", family: "Alibaba", params: "7B", speed: "~50 tok/s", tags: ["versatile","thinking"], recommended: false,
+      desc: "Alibaba's latest thinking model. Qwen 3.5 introduced hybrid reasoning — it can 'think step by step' for hard problems or respond instantly for simple ones. Multilingual powerhouse.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 50, spd: 75, sizeGB: 4.4, size: "4.4 GB" },
+        { label: "Medium", bits: "6-bit", intel: 55, spd: 65, sizeGB: 5.6, size: "5.6 GB" },
+        { label: "High", bits: "8-bit", intel: 60, spd: 55, sizeGB: 7.5, size: "7.5 GB" },
+      ]},
+    { name: "Gemma 2 9B", family: "Google", params: "9B", speed: "~40 tok/s", tags: ["balanced","modern"], recommended: false,
+      desc: "Google's open model built on Gemini research. Clean, balanced, and efficient. Punches above its weight on benchmarks. Great all-rounder with strong instruction following.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 50, spd: 65, sizeGB: 5.5, size: "5.5 GB" },
+        { label: "Medium", bits: "6-bit", intel: 55, spd: 55, sizeGB: 7.0, size: "7.0 GB" },
+        { label: "High", bits: "8-bit", intel: 58, spd: 45, sizeGB: 9.1, size: "9.1 GB" },
+      ]},
+  ],
+  power: [
+    { name: "Qwen 2.5 14B", family: "Alibaba", params: "14B", speed: "~25 tok/s", tags: ["deep","reasoning"], recommended: true,
+      desc: "The thinking powerhouse. Alibaba's 14B model rivals GPT-4 on many benchmarks at a fraction of the size. Exceptional at reasoning, math, and complex multi-step tasks.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 70, spd: 50, sizeGB: 9.0, size: "9.0 GB" },
+        { label: "Medium", bits: "6-bit", intel: 75, spd: 40, sizeGB: 11.4, size: "11.4 GB" },
+        { label: "High", bits: "8-bit", intel: 80, spd: 30, sizeGB: 14.5, size: "14.5 GB" },
+        { label: "Ultra", bits: "16-bit", intel: 85, spd: 18, sizeGB: 28, size: "28 GB" },
+      ]},
+    { name: "Llama 3.1 70B", family: "Meta", params: "70B", speed: "~8 tok/s", tags: ["frontier","powerful"], recommended: false,
+      desc: "Meta's flagship open model. 70 billion parameters of raw intelligence. Closest thing to GPT-4 you can run locally — if you have the VRAM. Slow but brilliant.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 90, spd: 18, sizeGB: 40, size: "40 GB" },
+        { label: "Medium", bits: "6-bit", intel: 93, spd: 10, sizeGB: 55, size: "55 GB" },
+      ]},
+    { name: "Command R 35B", family: "Cohere", params: "35B", speed: "~15 tok/s", tags: ["RAG","enterprise"], recommended: false,
+      desc: "Built by Cohere specifically for enterprise RAG workflows. Excels at grounded generation — citing sources accurately and following complex instructions in business contexts.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 78, spd: 30, sizeGB: 20, size: "20 GB" },
+        { label: "Medium", bits: "6-bit", intel: 82, spd: 22, sizeGB: 27, size: "27 GB" },
+        { label: "High", bits: "8-bit", intel: 85, spd: 15, sizeGB: 35, size: "35 GB" },
+      ]},
+    { name: "GPT-4o (Cloud)", family: "OpenAI", params: "~200B+", speed: "~60 tok/s", tags: ["cloud","best"], recommended: false,
+      desc: "OpenAI's multimodal flagship. The gold standard in AI — handles text, vision, and audio. Requires an API key and internet connection. Unmatched quality, but data leaves your machine.",
+      quants: [
+        { label: "Cloud", bits: "API", intel: 98, spd: 85, sizeGB: 0, size: "0 GB" },
+      ]},
+  ],
+  specialist: [
+    { name: "Qwen 2.5 Coder 14B", family: "Alibaba", params: "14B", speed: "~25 tok/s", tags: ["code","autocomplete"], recommended: true,
+      desc: "Purpose-built for developers. Alibaba's coding specialist handles autocomplete, code review, debugging, and generation across 90+ languages. Top-tier on coding benchmarks.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 72, spd: 50, sizeGB: 9.0, size: "9.0 GB" },
+        { label: "Medium", bits: "6-bit", intel: 78, spd: 40, sizeGB: 11.4, size: "11.4 GB" },
+        { label: "High", bits: "8-bit", intel: 82, spd: 30, sizeGB: 14.5, size: "14.5 GB" },
+      ]},
+    { name: "DeepSeek Coder V2", family: "DeepSeek", params: "16B", speed: "~22 tok/s", tags: ["code","math","reasoning"], recommended: false,
+      desc: "DeepSeek's coding + math hybrid. Uses Mixture-of-Experts architecture for efficiency. Exceptional at mathematical reasoning and complex code generation. Strong open-source contender.",
+      quants: [
+        { label: "Low", bits: "4-bit", intel: 75, spd: 45, sizeGB: 9.5, size: "9.5 GB" },
+        { label: "Medium", bits: "6-bit", intel: 80, spd: 35, sizeGB: 12, size: "12 GB" },
+        { label: "High", bits: "8-bit", intel: 85, spd: 25, sizeGB: 16, size: "16 GB" },
+      ]},
+  ]
+};
+
+const CAT_COLORS = { speed: "#F59E0B", power: "#A78BFA", specialist: "#34D399" };
+const CAT_LABELS = { speed: "⚡ SPEED", power: "🧠 POWER", specialist: "🔧 SPECIALIST" };
+let currentCat = "speed";
+let detailQuant = 0;
+
+function showModels(cat) {
+  currentCat = cat;
+  document.getElementById("screen1").classList.remove("active");
+  document.getElementById("screen2").classList.add("active");
+  document.getElementById("screen2").style.setProperty("--cat-color", CAT_COLORS[cat]);
+  const badge = document.getElementById("catBadge");
+  badge.textContent = CAT_LABELS[cat];
+  badge.style.color = CAT_COLORS[cat];
+  badge.style.borderColor = CAT_COLORS[cat] + "4D";
+  badge.style.background = CAT_COLORS[cat] + "14";
+  document.getElementById("searchInput").value = "";
+  renderModels();
+  setMascotText("Click any model card to see the details! ★ means I recommend it 🦊");
+}
+
+function showCategories() {
+  closeDetail();
+  document.getElementById("screen2").classList.remove("active");
+  document.getElementById("screen1").classList.add("active");
+  setMascotText("Hey there! Pick a path that fits your style ✨");
+}
+
+function filterModels() { renderModels(); }
+
+function openDetail(idx) {
+  detailQuant = 0;
+  // Highlight selected card
+  document.querySelectorAll('.model-card').forEach((c, i) => {
+    c.classList.toggle('selected', i === idx);
+  });
+  renderDetail(idx);
+  document.getElementById("detailOverlay").classList.add("open");
+  document.getElementById("detailPanel").classList.add("open");
+  document.getElementById("detailPanel").style.setProperty("--cat-color", CAT_COLORS[currentCat]);
+  setMascotText("Try different quality levels! Higher quality = smarter but slower 🧠");
+}
+
+function closeDetail() {
+  document.getElementById("detailOverlay").classList.remove("open");
+  document.getElementById("detailPanel").classList.remove("open");
+  document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
+  setMascotText("Click any model card to see the details! ★ means I recommend it 🦊");
+}
+
+function setMascotText(text) {
+  const bubble = document.getElementById('mascotBubble');
+  bubble.style.animation = 'none'; bubble.offsetHeight;
+  bubble.style.animation = 'bubbleIn 0.4s ease both';
+  bubble.textContent = text;
+}
+
+function setDetailQuant(idx, qi) {
+  detailQuant = qi;
+  renderDetail(idx);
+}
+
+function renderDetail(idx) {
+  const models = MODELS[currentCat];
+  const q = document.getElementById("searchInput").value.toLowerCase();
+  const filtered = models.filter(m => !q || m.name.toLowerCase().includes(q) || m.family.toLowerCase().includes(q) || m.tags.some(t => t.includes(q)));
+  const m = filtered[idx];
+  if (!m) return;
+  const quant = m.quants[detailQuant];
+  const sizePercent = Math.min(100, quant.sizeGB / 40 * 100);
+
+  document.getElementById("detailContent").innerHTML = `
+    <div class="dp-name">${m.name}</div>
+    <div class="dp-family">${m.family} · ${m.params} · ${m.speed}</div>
+    <div class="dp-tags">${m.tags.map(t => `<span class="dp-tag">${t}</span>`).join('')}</div>
+
+    <div style="font-size: 13px; color: #8A7A6A; line-height: 1.7; margin-bottom: 20px; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);">${m.desc}</div>
+
+    <div class="dp-section-title">Quality</div>
+    <div class="dp-quant-pills">
+      ${m.quants.map((qo, j) => `
+        <button class="dp-qpill ${j === detailQuant ? 'active' : ''}" onclick="setDetailQuant(${idx}, ${j})">
+          <span>${qo.label}</span>
+          <span class="dp-qpill-bits">${qo.bits}</span>
+        </button>
+      `).join('')}
+    </div>
+
+    <div class="dp-section-title">Stats</div>
+    <div class="dp-stats">
+      <div class="dp-stat-row">
+        <span class="dp-stat-icon">🧠</span>
+        <span class="dp-stat-name">Intelligence</span>
+        <div class="dp-stat-bar-bg"><div class="dp-stat-fill intel" style="width: ${quant.intel}%"></div></div>
+        <span class="dp-stat-value">${m.params}</span>
+      </div>
+      <div class="dp-stat-row">
+        <span class="dp-stat-icon">⚡</span>
+        <span class="dp-stat-name">Speed</span>
+        <div class="dp-stat-bar-bg"><div class="dp-stat-fill speed" style="width: ${quant.spd}%"></div></div>
+        <span class="dp-stat-value">${m.speed}</span>
+      </div>
+      <div class="dp-stat-row">
+        <span class="dp-stat-icon">💾</span>
+        <span class="dp-stat-name">Size</span>
+        <div class="dp-stat-bar-bg"><div class="dp-stat-fill size" style="width: ${sizePercent}%"></div></div>
+        <span class="dp-stat-value">${quant.size}</span>
+      </div>
+    </div>
+
+    <button class="dp-select-btn" onclick="alert('Selected: ${m.name} (${quant.bits})')">
+      Select ${m.name} · ${quant.bits} →
+    </button>
+  `;
+}
+
+function renderModels() {
+  const q = document.getElementById("searchInput").value.toLowerCase();
+  const models = MODELS[currentCat].filter(m =>
+    !q || m.name.toLowerCase().includes(q) || m.family.toLowerCase().includes(q) || m.tags.some(t => t.includes(q))
+  );
+  const list = document.getElementById("modelList");
+  list.innerHTML = models.map((m, i) => {
+    const defaultQ = m.quants[0];
+    const minVram = defaultQ.sizeGB;
+    const overVram = minVram > VRAM && defaultQ.bits !== "API";
+    return `
+      <div class="model-card ${overVram ? 'dim-vram' : ''}" onclick="openDetail(${i})">
+        ${m.recommended ? '<div class="model-rec">★ Best Pick</div>' : ''}
+        <div class="mc-name">${m.name}</div>
+        <div class="mc-family">${m.family}</div>
+        <div class="mc-badges">
+          <span class="mc-badge">${m.params}</span>
+          <span class="mc-badge">${m.speed}</span>
+        </div>
+        <div class="mc-stats">
+          <div class="mc-stat">
+            <span class="mc-stat-label">🧠</span>
+            <div class="mc-stat-bar"><div class="mc-stat-fill intel" style="width: ${defaultQ.intel}%"></div></div>
+          </div>
+          <div class="mc-stat">
+            <span class="mc-stat-label">⚡</span>
+            <div class="mc-stat-bar"><div class="mc-stat-fill speed" style="width: ${defaultQ.spd}%"></div></div>
+          </div>
+          <div class="mc-stat">
+            <span class="mc-stat-label">💾</span>
+            <div class="mc-stat-bar"><div class="mc-stat-fill size" style="width: ${Math.min(100, defaultQ.sizeGB / 40 * 100)}%"></div></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Stars
+const starsEl = document.getElementById('stars');
+for (let i = 0; i < 60; i++) {
+  const s = document.createElement('div'); s.className = 'star';
+  s.style.left = Math.random()*100+'%'; s.style.top = Math.random()*100+'%';
+  s.style.animationDuration = (2+Math.random()*4)+'s'; s.style.animationDelay = Math.random()*5+'s';
+  s.style.width = s.style.height = (1+Math.random()*2)+'px'; starsEl.appendChild(s);
+}
+// Embers
+const embersEl = document.getElementById('embers');
+for (let i = 0; i < 20; i++) {
+  const e = document.createElement('div'); e.className = 'ember';
+  e.style.left = Math.random()*100+'%'; e.style.bottom = (Math.random()*30-10)+'%';
+  const sz = 2+Math.random()*4; e.style.width=sz+'px'; e.style.height=sz+'px';
+  e.style.animationDuration = (4+Math.random()*6)+'s'; e.style.animationDelay = Math.random()*8+'s';
+  embersEl.appendChild(e);
+}
+</script>
+</body>
+</html>

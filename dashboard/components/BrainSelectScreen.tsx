@@ -122,9 +122,9 @@ const MODELS: ModelDef[] = [
 ];
 
 const CATEGORIES = [
-  { id: "speed" as const, icon: "⚡", label: "Speed", color: "#F59E0B", subtitle: "Fast responses, lighter models", bg: "rgba(245,158,11,0.06)" },
-  { id: "power" as const, icon: "🧠", label: "Power", color: "#A78BFA", subtitle: "Deep intelligence, larger models", bg: "rgba(167,139,250,0.06)" },
-  { id: "specialist" as const, icon: "🔧", label: "Specialist", color: "#34D399", subtitle: "Code, math, creative", bg: "rgba(52,211,153,0.06)" },
+  { id: "speed" as const, icon: "⚡", img: "/hub/card_speed.png", label: "Speed", color: "#F59E0B", subtitle: "Fast responses, lighter models", bg: "rgba(245,158,11,0.06)" },
+  { id: "power" as const, icon: "🧠", img: "/hub/card_power.png", label: "Power", color: "#A78BFA", subtitle: "Deep intelligence, larger models", bg: "rgba(167,139,250,0.06)" },
+  { id: "specialist" as const, icon: "🔧", img: "/hub/card_specialist.png", label: "Specialist", color: "#34D399", subtitle: "Code, math, creative", bg: "rgba(52,211,153,0.06)" },
 ];
 
 // ── Component ──

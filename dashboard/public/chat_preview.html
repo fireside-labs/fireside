@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fireside — Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #060609;
+    font-family: 'Outfit', system-ui, sans-serif;
+    color: #F0DCC8;
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── Stars (background) ── */
+  .stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .star { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%; animation: twinkle ease-in-out infinite alternate; opacity: 0.15; }
+  @keyframes twinkle { 0% { opacity: 0.05; } 100% { opacity: 0.35; } }
+
+  /* ── Embers ── */
+  .embers { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .ember { position: absolute; border-radius: 50%; background: radial-gradient(circle, #F59E0B, #D97706); animation: emberFloat ease-in-out infinite; filter: blur(0.5px); box-shadow: 0 0 4px rgba(245,158,11,0.4); }
+  @keyframes emberFloat {
+    0% { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+    10% { opacity: 0.6; }
+    50% { transform: translateY(-30vh) translateX(10px) scale(0.5); opacity: 0.3; }
+    100% { transform: translateY(-60vh) translateX(-8px) scale(0.1); opacity: 0; }
+  }
+
+  /* ── Warm ambient glow from bottom ── */
+  .ambient {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 300px; z-index: 0;
+    background: radial-gradient(ellipse 80% 100% at 50% 100%, rgba(245,158,11,0.04) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  /* ══════════════════════════════════ */
+  /* ── CHAT HEADER ── */
+  /* ══════════════════════════════════ */
+  .chat-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 24px;
+    background: rgba(8,8,14,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    z-index: 20; position: relative;
+  }
+  .ch-back {
+    background: none; border: 1px solid rgba(255,255,255,0.08);
+    color: #5A4D40; font-size: 12px; font-weight: 700; cursor: pointer;
+    padding: 6px 14px; border-radius: 10px; transition: all 0.2s;
+    font-family: 'Outfit';
+  }
+  .ch-back:hover { color: #F0DCC8; border-color: rgba(245,158,11,0.25); }
+  .ch-avatar {
+    width: 38px; height: 38px; border-radius: 12px;
+    object-fit: contain;
+    background: rgba(245,158,11,0.06);
+    border: 1px solid rgba(245,158,11,0.1);
+  }
+  .ch-info { flex: 1; }
+  .ch-name { font-size: 15px; font-weight: 800; color: #F0DCC8; }
+  .ch-status { font-size: 11px; color: #4A3D30; display: flex; align-items: center; gap: 5px; }
+  .ch-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #34D399; box-shadow: 0 0 6px rgba(52,211,153,0.4); }
+  .ch-model {
+    font-size: 10px; color: #3A3530; padding: 3px 10px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px; font-weight: 600;
+  }
+
+  /* ══════════════════════════════════ */
+  /* ── MESSAGES ── */
+  /* ══════════════════════════════════ */
+  .messages {
+    flex: 1; overflow-y: auto; padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 10; position: relative;
+    max-width: 720px; width: 100%; margin: 0 auto;
+  }
+  .messages::-webkit-scrollbar { width: 3px; }
+  .messages::-webkit-scrollbar-thumb { background: rgba(245,158,11,0.1); border-radius: 2px; }
+
+  /* ── Message row ── */
+  .msg { display: flex; gap: 10px; animation: msgIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .msg-user { justify-content: flex-end; }
+  .msg-ai { justify-content: flex-start; align-items: flex-start; }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .msg-avatar {
+    width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+    object-fit: contain; margin-top: 2px;
+    background: rgba(245,158,11,0.04);
+    border: 1px solid rgba(245,158,11,0.08);
+  }
+
+  /* ── Bubbles ── */
+  .bbl {
+    max-width: 70%; padding: 12px 16px;
+    font-size: 14px; line-height: 1.65; font-weight: 500;
+  }
+  .bbl-user {
+    background: linear-gradient(135deg, rgba(217,119,6,0.12), rgba(245,158,11,0.08));
+    border: 1px solid rgba(245,158,11,0.1);
+    color: #F0DCC8; border-radius: 18px 18px 4px 18px;
+  }
+  .bbl-ai {
+    background: rgba(15,13,22,0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.04);
+    color: #B8A898; border-radius: 18px 18px 18px 4px;
+  }
+
+  /* ── Typing indicator ── */
+  .typing { display: flex; gap: 5px; align-items: center; padding: 16px 20px; }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #5A4D40;
+    animation: dotBounce 1.4s ease-in-out infinite;
+  }
+  .dot:nth-child(2) { animation-delay: 0.15s; }
+  .dot:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dotBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+  /* ── Morning briefing card ── */
+  .briefing {
+    margin: 8px 0 12px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, rgba(245,158,11,0.06), rgba(245,158,11,0.02));
+    border: 1px solid rgba(245,158,11,0.1);
+    border-radius: 16px;
+    animation: msgIn 0.5s 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+    max-width: 480px;
+  }
+  .briefing-title { font-size: 11px; font-weight: 800; color: #F59E0B; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+  .briefing-item { font-size: 13px; color: #8A7A6A; line-height: 1.6; margin-bottom: 4px; }
+  .briefing-item strong { color: #C4A882; }
+
+  /* ── Context memory pill ── */
+  .memory-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; color: #4A3D30; padding: 3px 10px;
+    background: rgba(167,139,250,0.06); border: 1px solid rgba(167,139,250,0.1);
+    border-radius: 20px; margin-bottom: 4px;
+  }
+  .memory-pill::before { content: '🧠'; font-size: 10px; }
+
+  /* ── Timestamp ── */
+  .timestamp { font-size: 10px; color: #2A2520; text-align: center; margin: 12px 0 4px; }
+
+  /* ══════════════════════════════════ */
+  /* ── INPUT BAR ── */
+  /* ══════════════════════════════════ */
+  .input-bar {
+    padding: 12px 24px 20px;
+    background: rgba(8,8,14,0.80);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255,255,255,0.04);
+    z-index: 20; position: relative;
+    display: flex; justify-content: center;
+  }
+  .input-wrap {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; max-width: 720px;
+  }
+
+  /* Voice button */
+  .voice-btn {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    color: #4A3D40; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .voice-btn:hover { color: #F59E0B; border-color: rgba(245,158,11,0.2); background: rgba(245,158,11,0.05); }
+
+  /* Attach button */
+  .attach-btn {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    color: #4A3D40; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .attach-btn:hover { color: #60A5FA; border-color: rgba(96,165,250,0.2); background: rgba(96,165,250,0.05); }
+
+  /* Text input */
+  .chat-input {
+    flex: 1; padding: 12px 18px;
+    border-radius: 14px;
+    background: rgba(18,16,26,0.7);
+    backdrop-filter: blur(12px);
+    border: 1.5px solid rgba(255,255,255,0.06);
+    color: #F0DCC8; font-size: 14px; font-weight: 500; outline: none;
+    font-family: 'Outfit'; transition: all 0.3s;
+    min-height: 42px;
+  }
+  .chat-input:focus {
+    border-color: rgba(245,158,11,0.25);
+    box-shadow: 0 0 20px rgba(245,158,11,0.06);
+  }
+  .chat-input::placeholder { color: rgba(240,220,200,0.2); }
+
+  /* Send button */
+  .send-btn {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: linear-gradient(135deg, #D97706, #F59E0B);
+    border: none; cursor: pointer; flex-shrink: 0;
+    color: #0A0A0A; font-size: 16px; font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 12px rgba(245,158,11,0.2);
+  }
+  .send-btn:hover { transform: scale(1.05); box-shadow: 0 4px 20px rgba(245,158,11,0.3); }
+  .send-btn:disabled { opacity: 0.2; cursor: default; transform: none; }
+
+  /* ── Skills badge in message ── */
+  .skill-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; color: #34D399; padding: 2px 8px;
+    background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.1);
+    border-radius: 6px; margin-top: 6px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  /* ── Thinking card ── */
+  .thinking {
+    padding: 10px 16px; margin-bottom: 4px;
+    background: rgba(167,139,250,0.04);
+    border: 1px solid rgba(167,139,250,0.08);
+    border-radius: 12px;
+    font-size: 11px; color: #6A5A8A; line-height: 1.5;
+    max-width: 70%;
+  }
+  .thinking-label { font-size: 9px; font-weight: 800; color: #A78BFA; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+<div class="embers" id="embers"></div>
+<div class="ambient"></div>
+
+<!-- ═══ HEADER ═══ -->
+<div class="chat-header">
+  <button class="ch-back">← Hub</button>
+  <img class="ch-avatar" src="/hub/mascot_fox.png" alt="Fox" />
+  <div class="ch-info">
+    <div class="ch-name">Atlas</div>
+    <div class="ch-status"><span class="ch-status-dot"></span> Online · at the fireside</div>
+  </div>
+  <span class="ch-model">Qwen 2.5 14B · 6-bit</span>
+</div>
+
+<!-- ═══ MESSAGES ═══ -->
+<div class="messages" id="messages">
+
+  <!-- Timestamp -->
+  <div class="timestamp">Today · 9:14 AM</div>
+
+  <!-- Morning briefing -->
+  <div class="msg msg-ai">
+    <img class="msg-avatar" src="/hub/mascot_fox.png" alt="" />
+    <div>
+      <div class="briefing">
+        <div class="briefing-title">☀️ Morning Briefing</div>
+        <div class="briefing-item">📊 You were working on the <strong>analytics report</strong> last night — want to continue?</div>
+        <div class="briefing-item">📧 <strong>3 emails</strong> came in overnight about the product launch.</div>
+        <div class="briefing-item">🧠 I had a thought about your <strong>pricing strategy</strong> — ask me when ready.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User message -->
+  <div class="msg msg-user">
+    <div class="bbl bbl-user">Yeah, let's pick up where we left off on the analytics report. What was the last thing we were working on?</div>
+  </div>
+
+  <!-- Context memory shown -->
+  <div class="msg msg-ai">
+    <img class="msg-avatar" src="/hub/mascot_fox.png" alt="" />
+    <div>
+      <div class="memory-pill">Recalled: analytics report session · Mar 16</div>
+      <div class="bbl bbl-ai">
+        Last session you were analyzing the sentiment data from the social listening scan. We got through the Reddit and Twitter data, but hadn't started on the competitor comparative analysis yet.
+        <br><br>
+        You mentioned wanting to focus on three things:
+        <br>• <strong>Nurse Portal friction points</strong> — top complaint theme
+        <br>• <strong>Competitor sentiment comparison</strong> — Athena vs Epic
+        <br>• <strong>Executive summary</strong> for the slide deck
+        <br><br>
+        Want me to pull up the data and start with the competitor comparison?
+      </div>
+    </div>
+  </div>
+
+  <!-- User response -->
+  <div class="msg msg-user">
+    <div class="bbl bbl-user">Yes, start with the competitor comparison. Also, what was the overall sentiment split we found?</div>
+  </div>
+
+  <!-- Thinking step (Deep Thinking skill) -->
+  <div class="msg msg-ai">
+    <img class="msg-avatar" src="/hub/mascot_fox.png" alt="" />
+    <div>
+      <div class="thinking">
+        <div class="thinking-label">💭 Deep Thinking</div>
+        Recalling sentiment percentages from prior session... cross-referencing with the scraped data tables... calculating competitor delta...
+      </div>
+      <div class="bbl bbl-ai">
+        From the March 16 analysis across 12,847 posts:
+        <br><br>
+        <strong>Overall sentiment:</strong>
+        <br>• Positive: 34% · Neutral: 41% · Negative: 25%
+        <br><br>
+        <strong>Competitor comparison:</strong>
+        <br>• <strong>Athena</strong> — 38% positive (higher satisfaction with UI)
+        <br>• <strong>Epic</strong> — 29% positive (complaints about complexity)
+        <br>• <strong>Ours</strong> — 34% positive (strong on features, weak on onboarding)
+        <br><br>
+        The gap isn't in capabilities — it's in the first-time experience. Sound familiar? 😏
+        <div class="skill-tag">✦ Deep Thinking · Long-Term Memory</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User reacting -->
+  <div class="msg msg-user">
+    <div class="bbl bbl-user">Ha, yeah that does sound familiar. Can you draft the executive summary slide?</div>
+  </div>
+
+  <!-- AI typing -->
+  <div class="msg msg-ai">
+    <img class="msg-avatar" src="/hub/mascot_fox.png" alt="" />
+    <div class="bbl bbl-ai typing">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ INPUT BAR ═══ -->
+<div class="input-bar">
+  <div class="input-wrap">
+    <button class="voice-btn" title="Voice mode">🎙</button>
+    <button class="attach-btn" title="Attach file">📎</button>
+    <input class="chat-input" placeholder="Message Atlas..." />
+    <button class="send-btn" disabled>▶</button>
+  </div>
+</div>
+
+<script>
+// Stars
+const starsEl = document.getElementById('stars');
+for (let i = 0; i < 40; i++) {
+  const s = document.createElement('div'); s.className = 'star';
+  s.style.left = Math.random()*100+'%'; s.style.top = Math.random()*100+'%';
+  s.style.animationDuration = (2+Math.random()*4)+'s'; s.style.animationDelay = Math.random()*5+'s';
+  s.style.width = s.style.height = (1+Math.random()*1.5)+'px'; starsEl.appendChild(s);
+}
+// Embers (subtle, fewer in chat)
+const embersEl = document.getElementById('embers');
+for (let i = 0; i < 10; i++) {
+  const e = document.createElement('div'); e.className = 'ember';
+  e.style.left = (30+Math.random()*40)+'%'; e.style.bottom = '0%';
+  const sz = 1.5+Math.random()*2.5; e.style.width=sz+'px'; e.style.height=sz+'px';
+  e.style.animationDuration = (5+Math.random()*8)+'s'; e.style.animationDelay = Math.random()*10+'s';
+  embersEl.appendChild(e);
+}
+// Enable send button on input
+const input = document.querySelector('.chat-input');
+const sendBtn = document.querySelector('.send-btn');
+input.addEventListener('input', () => { sendBtn.disabled = !input.value.trim(); });
+// Scroll to bottom
+document.getElementById('messages').scrollTop = 99999;
+</script>
+</body>
+</html>

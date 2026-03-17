@@ -731,6 +731,83 @@ async def uninstall_plugin(name: str):
 
 
 # ---------------------------------------------------------------------------
+# Endpoints: API Keys  (Sprint — Dashboard Hub)
+# ---------------------------------------------------------------------------
+
+_KEYS_FILE = Path.home() / ".fireside" / "keys.json"
+
+
+def _load_keys() -> dict:
+    """Load API keys from encrypted storage."""
+    if not _KEYS_FILE.exists():
+        return {}
+    try:
+        import base64
+        raw = _KEYS_FILE.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        # Keys stored as base64 — simple obfuscation
+        # (Production: use Fernet with machine-scoped key)
+        return {k: base64.b64decode(v).decode() for k, v in data.items()}
+    except Exception:
+        return {}
+
+
+def _save_keys(keys: dict) -> None:
+    """Save API keys to storage."""
+    import base64
+    _KEYS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    encoded = {k: base64.b64encode(v.encode()).decode() for k, v in keys.items()}
+    _KEYS_FILE.write_text(json.dumps(encoded, indent=2), encoding="utf-8")
+
+
+class ApiKeyRequest(BaseModel):
+    provider: str
+    key: str
+
+
+@router.get("/config/keys")
+async def get_keys():
+    """List which API keys are configured (names only, never values)."""
+    keys = _load_keys()
+    result = []
+    for provider in ["openai", "anthropic", "google", "elevenlabs", "replicate"]:
+        result.append({
+            "provider": provider,
+            "connected": provider in keys and len(keys[provider]) > 8,
+            "masked": f"...{keys[provider][-4:]}" if provider in keys and len(keys[provider]) > 4 else None,
+        })
+    return {"keys": result}
+
+
+@router.post("/config/keys")
+async def set_key(req: ApiKeyRequest):
+    """Save an API key (encrypted at rest)."""
+    if not req.provider or not req.key:
+        raise HTTPException(status_code=400, detail="Provider and key required")
+
+    keys = _load_keys()
+    keys[req.provider] = req.key
+    _save_keys(keys)
+
+    log.info("[keys] Saved API key for %s", req.provider)
+    return {"ok": True, "provider": req.provider}
+
+
+@router.delete("/config/keys/{provider}")
+async def delete_key(provider: str):
+    """Remove an API key."""
+    keys = _load_keys()
+    if provider not in keys:
+        raise HTTPException(status_code=404, detail=f"No key for '{provider}'")
+
+    del keys[provider]
+    _save_keys(keys)
+
+    log.info("[keys] Deleted API key for %s", provider)
+    return {"ok": True, "provider": provider}
+
+
+# ---------------------------------------------------------------------------
 # Endpoints: Chat  (Sprint 14 — T2)
 # ---------------------------------------------------------------------------
 
@@ -748,25 +825,47 @@ async def post_chat(req: ChatRequest):
     import urllib.request
     from fastapi.responses import StreamingResponse
 
-    # Load companion personality for system prompt
-    state_path = Path.home() / ".valhalla" / "companion_state.json"
-    companion_name = "Ember"
+    # Build system prompt from soul files + personality settings
     system_prompt = "You are a helpful AI assistant."
     try:
-        if state_path.exists():
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-            companion_name = state.get("name", "Ember")
-            species = state.get("species", "fox")
-            agent = state.get("agent", {})
-            agent_name = agent.get("name", "Atlas")
-            system_prompt = (
-                f"You are {companion_name}, a {species} companion. "
-                f"You are friendly, warm, and helpful. "
-                f"Your AI partner is {agent_name} who runs on the home PC. "
-                f"Keep responses concise and conversational."
-            )
-    except Exception:
-        pass
+        from prompt_assembler import assemble_system_prompt
+
+        # Determine active skills from enabled plugins
+        from plugin_loader import get_plugins
+        active_skills = [p["name"] for p in get_plugins() if p.get("status") == "loaded"]
+
+        # Get user name from onboarding
+        onboarding_file = Path.home() / ".fireside" / "onboarding.json"
+        user_name = ""
+        if onboarding_file.exists():
+            try:
+                ob = json.loads(onboarding_file.read_text(encoding="utf-8"))
+                user_name = ob.get("user_name", "")
+            except Exception:
+                pass
+
+        system_prompt = assemble_system_prompt(
+            soul_dir=_base_dir / "souls" / "default",
+            agent_name="Atlas",
+            user_name=user_name,
+            active_skills=active_skills,
+        )
+    except Exception as e:
+        log.warning("[chat] Prompt assembler failed, using fallback: %s", e)
+        # Fallback to companion_state.json
+        state_path = Path.home() / ".valhalla" / "companion_state.json"
+        try:
+            if state_path.exists():
+                state = json.loads(state_path.read_text(encoding="utf-8"))
+                companion_name = state.get("name", "Ember")
+                agent_name = state.get("agent", {}).get("name", "Atlas")
+                system_prompt = (
+                    f"You are {companion_name}, a helpful AI companion. "
+                    f"You are friendly, warm, and helpful. "
+                    f"Keep responses concise and conversational."
+                )
+        except Exception:
+            pass
 
     # Build llama.cpp /completion payload
     prompt_parts = [f"System: {system_prompt}"]

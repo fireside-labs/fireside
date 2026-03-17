@@ -31,6 +31,8 @@ interface SystemInfo {
 
 interface InstallerConfig {
   userName: string;
+  userRole: string;
+  userContext: string;
   companionSpecies: string;
   companionName: string;
   agentName: string;
@@ -96,6 +98,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   const [step, setStep] = useState<Step>(0);
   const [config, setConfig] = useState<InstallerConfig>({
     userName: "",
+    userRole: "",
+    userContext: "",
     companionSpecies: "fox",
     companionName: "Ember",
     agentName: "Atlas",
@@ -416,32 +420,61 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
           </div>
         )}
 
-        {/* Step 4: Create AI */}
+        {/* Step 4: Create AI + About You */}
         {step === 4 && (
-          <div className="installer-center">
-            <h2 className="installer-title">Every companion has someone at the fireside.</h2>
+          <div className="installer-center" style={{ maxWidth: 520 }}>
+            <h2 className="installer-title">Let&apos;s set up the fireside.</h2>
             <p className="installer-subtitle">
-              This is the mind behind {config.companionName || "Ember"} — your AI.
+              Tell {config.companionName || "Ember"} who you are so your AI can be useful from day one.
             </p>
-            <label className="installer-label">What should we call you?</label>
-            <input
-              className="installer-input"
-              value={config.userName}
-              onChange={(e) => setConfig((c) => ({ ...c, userName: e.target.value }))}
-              placeholder="Your name..."
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', marginBottom: 8 }}>
+              <div>
+                <label className="installer-label">Your name</label>
+                <input className="installer-input" value={config.userName}
+                  onChange={(e) => setConfig((c) => ({ ...c, userName: e.target.value }))}
+                  placeholder="Jordan" />
+              </div>
+              <div>
+                <label className="installer-label">Your AI&apos;s name</label>
+                <input className="installer-input" value={config.agentName}
+                  onChange={(e) => setConfig((c) => ({ ...c, agentName: e.target.value }))}
+                  placeholder="Atlas" />
+              </div>
+            </div>
+
+            <label className="installer-label">What do you do?</label>
+            <div className="installer-role-grid">
+              {[
+                { id: "work", emoji: "💼", label: "Work" },
+                { id: "student", emoji: "📚", label: "Student" },
+                { id: "creative", emoji: "🎨", label: "Creative" },
+                { id: "founder", emoji: "🚀", label: "Founder" },
+                { id: "developer", emoji: "💻", label: "Developer" },
+                { id: "other", emoji: "✨", label: "Other" },
+              ].map((r) => (
+                <button key={r.id}
+                  className={`installer-role-chip ${config.userRole === r.id ? "selected" : ""}`}
+                  onClick={() => { playTick(); setConfig((c) => ({ ...c, userRole: r.id })); }}
+                >
+                  <span>{r.emoji}</span> {r.label}
+                </button>
+              ))}
+            </div>
+
+            <label className="installer-label">Anything {config.agentName || "Atlas"} should know about you?</label>
+            <textarea
+              className="installer-textarea"
+              value={config.userContext}
+              onChange={(e) => setConfig((c) => ({ ...c, userContext: e.target.value }))}
+              placeholder="e.g. I'm a startup founder in healthcare, I like concise answers, I work late at night..."
+              rows={3}
             />
-            <label className="installer-label">Give your AI a name:</label>
-            <input
-              className="installer-input"
-              value={config.agentName}
-              onChange={(e) => setConfig((c) => ({ ...c, agentName: e.target.value }))}
-              placeholder="Atlas"
-            />
-            <label className="installer-label">What&apos;s {config.agentName || "Atlas"}&apos;s style?</label>
+
+            <label className="installer-label" style={{ marginTop: 8 }}>What&apos;s {config.agentName || "Atlas"}&apos;s style?</label>
             <div className="installer-style-grid">
               {STYLES.map((s) => (
-                <button
-                  key={s.id}
+                <button key={s.id}
                   className={`installer-style-card ${config.agentStyle === s.id ? "selected" : ""}`}
                   onClick={() => { playTick(); setConfig((c) => ({ ...c, agentStyle: s.id })); }}
                 >
@@ -645,6 +678,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               onClick={() => {
                 localStorage.setItem("fireside_onboarded", "1");
                 if (config.userName) localStorage.setItem("fireside_user_name", config.userName);
+                if (config.userRole) localStorage.setItem("fireside_user_role", config.userRole);
+                if (config.userContext) localStorage.setItem("fireside_user_context", config.userContext);
                 localStorage.setItem("fireside_agent_name", config.agentName || "Atlas");
                 localStorage.setItem("fireside_agent_style", config.agentStyle);
                 localStorage.setItem("fireside_companion_species", config.companionSpecies);
@@ -806,6 +841,37 @@ const installerCSS = `
     box-shadow: 0 0 20px var(--color-neon-glow), inset 0 0 20px rgba(217,119,6,0.05);
   }
   .installer-input::placeholder { color: #3A3028; }
+
+  /* Role chips */
+  .installer-role-grid {
+    display: flex; flex-wrap: wrap; gap: 8px; width: 100%; margin-bottom: 8px;
+  }
+  .installer-role-chip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(26,26,26,0.6); color: #7A6A5A; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.25s; font-family: 'Outfit', system-ui;
+  }
+  .installer-role-chip:hover { border-color: rgba(245,158,11,0.2); color: #C4A882; }
+  .installer-role-chip.selected {
+    border-color: rgba(245,158,11,0.4); color: #F59E0B;
+    background: rgba(245,158,11,0.08);
+    box-shadow: 0 0 12px rgba(245,158,11,0.1);
+  }
+
+  /* Textarea */
+  .installer-textarea {
+    width: 100%; padding: 14px 18px; border-radius: 12px; resize: vertical;
+    background: rgba(26,26,26,0.8); border: 1px solid rgba(255,255,255,0.06);
+    color: #F0DCC8; font-size: 13px; line-height: 1.6; outline: none;
+    font-family: 'Outfit', system-ui; transition: all 0.3s;
+    backdrop-filter: blur(8px); min-height: 70px;
+  }
+  .installer-textarea:focus {
+    border-color: var(--color-neon-dim);
+    box-shadow: 0 0 20px var(--color-neon-glow), inset 0 0 20px rgba(217,119,6,0.05);
+  }
+  .installer-textarea::placeholder { color: #3A3028; }
 
   /* ── Buttons — game menu feel ── */
   .installer-btn-primary {

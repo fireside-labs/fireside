@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fireside — All Screens Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060609;
+    --card-bg: rgba(255,255,255,0.03);
+    --card-border: rgba(255,255,255,0.06);
+    --text-primary: #F0DCC8;
+    --text-dim: #5A4D40;
+    --text-muted: #3A3530;
+    --amber: #F59E0B;
+    --purple: #A78BFA;
+    --blue: #60A5FA;
+    --green: #34D399;
+    --pink: #F472B6;
+    --cyan: #22D3EE;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text-primary); font-family: 'Outfit', system-ui, sans-serif; min-height: 100vh; }
+
+  /* ═══ Stars ═══ */
+  .stars { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  .star { position: absolute; width: 2px; height: 2px; background: #fff; border-radius: 50%; animation: twinkle ease-in-out infinite alternate; opacity: 0.2; }
+  @keyframes twinkle { 0% { opacity: 0.05; } 100% { opacity: 0.5; } }
+
+  /* ═══ Embers ═══ */
+  .embers { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+  .ember { position: absolute; border-radius: 50%; background: radial-gradient(circle, #F59E0B, #D97706); animation: emberFloat ease-in-out infinite; filter: blur(0.5px); box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+  @keyframes emberFloat {
+    0% { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+    10% { opacity: 0.8; }
+    50% { transform: translateY(-35vh) translateX(15px) scale(0.6); opacity: 0.5; }
+    100% { transform: translateY(-70vh) translateX(-10px) scale(0.2); opacity: 0; }
+  }
+
+  /* ═══ Ambient Glow ═══ */
+  .ambient { position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 700px 500px at 50% 85%, rgba(245,158,11,0.06) 0%, transparent 55%),
+      radial-gradient(ellipse 500px 350px at 45% 90%, rgba(217,119,6,0.04) 0%, transparent 45%);
+    animation: ambP 4s ease-in-out infinite alternate;
+  }
+  @keyframes ambP { 0% { opacity: 0.7; } 100% { opacity: 1; } }
+
+  /* ═══ Tab Navigation ═══ */
+  .tab-nav {
+    display: flex; gap: 0; position: sticky; top: 0; z-index: 100;
+    background: rgba(6,6,9,0.85); backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(245,158,11,0.08);
+  }
+  .tab-btn {
+    padding: 14px 20px; border: none; background: none;
+    color: var(--text-dim); font-family: 'Outfit'; font-size: 13px;
+    font-weight: 700; cursor: pointer; transition: all 0.3s;
+    border-bottom: 2px solid transparent; letter-spacing: 0.5px;
+  }
+  .tab-btn:hover { color: var(--text-primary); background: rgba(245,158,11,0.02); }
+  .tab-btn.active { color: var(--amber); border-bottom-color: var(--amber); background: rgba(245,158,11,0.03); }
+
+  .tab-content { display: none; padding: 32px; max-width: 720px; margin: 0 auto; position: relative; z-index: 10; }
+  .tab-content.active { display: block; }
+
+  /* ═══ Shared ═══ */
+  .glass-card { background: rgba(15,13,22,0.6); border: 1px solid rgba(245,158,11,0.06); border-radius: 16px; padding: 20px; margin-bottom: 16px; backdrop-filter: blur(8px); transition: all 0.3s; }
+  .glass-card:hover { background: rgba(15,13,22,0.7); border-color: rgba(245,158,11,0.1); }
+  .page-title { font-size: 28px; font-weight: 900; margin-bottom: 6px; background: linear-gradient(135deg, #F0DCC8, #FBBF24, #D97706); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .page-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; }
+  .section-title { font-size: 15px; font-weight: 800; color: var(--text-primary); margin-bottom: 2px; }
+  .section-desc { font-size: 11px; color: #4A3D30; margin-bottom: 12px; }
+
+  /* ═══ HUB ═══ */
+  .hub-wrapper { display: flex; align-items: center; gap: 50px; max-width: 1000px; margin: 0 auto; padding: 40px 32px; position: relative; z-index: 10; }
+  .hub-left { flex: 0 0 360px; text-align: center; }
+  .hub-right { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .hub-title { font-size: 38px; font-weight: 900; background: linear-gradient(135deg, #F0DCC8 0%, #FBBF24 50%, #D97706 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 2px; }
+  .hub-sub { font-size: 14px; color: #4A3D30; margin-bottom: 20px; }
+
+  .scene { position: relative; width: 380px; height: 300px; margin: 0 auto 16px; }
+  .campfire-img { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 380px; height: 300px; object-fit: contain; mix-blend-mode: screen; -webkit-mask-image: radial-gradient(ellipse 65% 70% at 50% 55%, white 30%, transparent 65%); mask-image: radial-gradient(ellipse 65% 70% at 50% 55%, white 30%, transparent 65%); filter: drop-shadow(0 0 40px rgba(245,158,11,0.3)); animation: fireGlow 3s ease-in-out infinite alternate; }
+  .fox-img { position: absolute; bottom: 10px; left: 10px; width: 150px; height: 150px; object-fit: contain; mix-blend-mode: screen; -webkit-mask-image: radial-gradient(circle, white 35%, transparent 65%); mask-image: radial-gradient(circle, white 35%, transparent 65%); filter: drop-shadow(0 0 25px rgba(245,158,11,0.35)); animation: foxBob 4s ease-in-out infinite; }
+  .speech { position: absolute; top: 40px; left: 100px; background: rgba(15,13,22,0.90); border: 1px solid rgba(245,158,11,0.12); border-radius: 14px 14px 14px 4px; padding: 12px 16px; max-width: 200px; font-size: 12px; color: #C4A882; line-height: 1.6; box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 15px rgba(245,158,11,0.03); }
+  .model-badge { padding: 8px 22px; border-radius: 10px; background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.12); font-size: 11px; color: #6A5A4A; font-weight: 600; display: inline-block; }
+  .model-badge strong { color: var(--amber); }
+
+  @keyframes fireGlow { 0% { filter: drop-shadow(0 0 30px rgba(245,158,11,0.2)) brightness(0.95); } 100% { filter: drop-shadow(0 0 50px rgba(245,158,11,0.4)) brightness(1.05); } }
+  @keyframes foxBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+  .nav-card {
+    display: flex; align-items: center; gap: 18px; padding: 18px 24px; border-radius: 16px; cursor: pointer;
+    background: rgba(15,13,22,0.5); border: 1.5px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(8px); transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    position: relative; overflow: hidden;
+  }
+  .nav-card::before { content: ''; position: absolute; left: 0; top: 15%; bottom: 15%; width: 3px; border-radius: 0 3px 3px 0; background: var(--nc); box-shadow: 0 0 12px var(--nc); opacity: 0.5; transition: opacity 0.3s; }
+  .nav-card:hover { transform: translateX(6px); border-color: color-mix(in srgb, var(--nc) 30%, transparent); box-shadow: 0 6px 30px color-mix(in srgb, var(--nc) 8%, transparent); }
+  .nav-card:hover::before { opacity: 1; }
+  .nc-icon { font-size: 32px; flex-shrink: 0; filter: drop-shadow(0 0 10px var(--nc)); }
+  .nc-title { font-size: 14px; font-weight: 800; color: var(--nc); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 2px; }
+  .nc-desc { font-size: 11px; color: #5A4D40; }
+  .nc-arrow { font-size: 14px; color: #3A3530; margin-left: auto; }
+  .nav-card:hover .nc-arrow { color: var(--nc); transform: translateX(3px); }
+  .c1 { --nc: #F59E0B; } .c2 { --nc: #A78BFA; } .c3 { --nc: #FBBF24; } .c4 { --nc: #F97316; } .c5 { --nc: #60A5FA; }
+
+  /* ═══ CHAT ═══ */
+  .chat-layout { display: flex; gap: 16px; min-height: 480px; }
+  .chat-sidebar { width: 220px; flex-shrink: 0; background: rgba(15,13,22,0.5); border-radius: 16px; border: 1px solid rgba(245,158,11,0.06); padding: 14px; backdrop-filter: blur(8px); }
+  .chat-search { width: 100%; padding: 10px 14px; border-radius: 10px; background: rgba(10,10,15,0.6); border: 1px solid rgba(245,158,11,0.06); color: var(--text-primary); font-size: 12px; outline: none; font-family: 'Outfit'; margin-bottom: 10px; }
+  .chat-date { font-size: 9px; color: #4A3D30; font-weight: 700; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 1px; }
+  .chat-thread { padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: all 0.2s; margin-bottom: 3px; }
+  .chat-thread:hover { background: rgba(245,158,11,0.04); }
+  .chat-thread.active { background: rgba(245,158,11,0.06); border-left: 2px solid var(--amber); }
+  .chat-thread-title { font-size: 12px; font-weight: 600; }
+  .chat-thread-preview { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .chat-main { flex: 1; display: flex; flex-direction: column; }
+  .chat-messages { flex: 1; padding: 20px; overflow-y: auto; background: rgba(15,13,22,0.4); border-radius: 16px; border: 1px solid rgba(245,158,11,0.06); backdrop-filter: blur(8px); }
+  .chat-msg { margin-bottom: 16px; max-width: 85%; }
+  .chat-msg.user { margin-left: auto; text-align: right; }
+  .chat-msg-bubble { display: inline-block; padding: 12px 16px; border-radius: 14px; font-size: 13px; line-height: 1.6; }
+  .chat-msg.user .chat-msg-bubble { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.15); }
+  .chat-msg.ai .chat-msg-bubble { background: rgba(15,13,22,0.7); border: 1px solid rgba(245,158,11,0.06); color: #C4A882; }
+  .chat-msg-time { font-size: 9px; color: #3A3530; margin-top: 4px; }
+  .chat-input-area { display: flex; gap: 10px; margin-top: 12px; }
+  .chat-input { flex: 1; padding: 14px 18px; border-radius: 14px; background: rgba(10,10,15,0.6); border: 1px solid rgba(245,158,11,0.08); color: var(--text-primary); font-size: 14px; outline: none; font-family: 'Outfit'; }
+  .chat-input:focus { border-color: rgba(245,158,11,0.25); box-shadow: 0 0 20px rgba(245,158,11,0.04); }
+  .chat-send { padding: 14px 24px; border-radius: 14px; border: none; cursor: pointer; background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.25)); color: var(--amber); font-weight: 700; font-family: 'Outfit'; font-size: 13px; }
+  .chat-send:hover { background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.35)); box-shadow: 0 0 20px rgba(245,158,11,0.08); }
+
+  /* ═══ SKILLS ═══ */
+  .sk-power-card { padding: 20px 24px; border-radius: 18px; margin-bottom: 24px; background: rgba(15,13,22,0.5); border: 1px solid rgba(245,158,11,0.1); backdrop-filter: blur(8px); }
+  .sk-power-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .sk-power-label { font-size: 14px; font-weight: 800; }
+  .sk-power-value { font-size: 13px; font-weight: 700; color: var(--amber); }
+  .sk-power-bar { width: 100%; height: 8px; border-radius: 4px; background: rgba(245,158,11,0.06); overflow: hidden; }
+  .sk-power-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, rgba(245,158,11,0.3), #F59E0B); box-shadow: 0 0 12px rgba(245,158,11,0.3); transition: width 0.5s; }
+  .sk-group-label { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .sk-group-desc { font-size: 11px; color: #4A3D30; margin-bottom: 12px; }
+  .sk-rarity-badge { font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .sk-card { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-radius: 16px; background: rgba(15,13,22,0.5); border: 1px solid rgba(245,158,11,0.06); margin-bottom: 8px; backdrop-filter: blur(8px); transition: all 0.3s; }
+  .sk-card:hover { background: rgba(15,13,22,0.65); border-color: rgba(245,158,11,0.1); }
+  .sk-card-left { display: flex; align-items: flex-start; gap: 14px; flex: 1; }
+  .sk-icon { font-size: 28px; flex-shrink: 0; }
+  .sk-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; flex-wrap: wrap; }
+  .sk-name { font-size: 15px; font-weight: 700; }
+  .sk-rarity-tag { font-size: 8px; font-weight: 800; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; }
+  .sk-power-tag { font-size: 9px; font-weight: 700; color: var(--text-dim); }
+  .sk-desc { font-size: 12px; color: #6A5A4A; line-height: 1.5; }
+  .sk-toggle { width: 48px; height: 26px; border-radius: 13px; border: none; cursor: pointer; position: relative; transition: all 0.3s; margin-left: 14px; flex-shrink: 0; }
+  .sk-toggle.on { box-shadow: 0 0 14px var(--tg); }
+  .sk-toggle-knob { position: absolute; top: 3px; width: 20px; height: 20px; border-radius: 50%; transition: all 0.3s; }
+  .sk-toggle.on .sk-toggle-knob { left: 25px; }
+  .sk-toggle.off .sk-toggle-knob { left: 3px; background: #4A3D30; }
+
+  /* ═══ PERSONALITY ═══ */
+  .per-input { width: 100%; padding: 12px 16px; border-radius: 12px; background: rgba(10,10,15,0.6); border: 1px solid rgba(245,158,11,0.08); color: var(--text-primary); font-size: 16px; font-weight: 700; outline: none; font-family: 'Outfit'; }
+  .per-input:focus { border-color: rgba(245,158,11,0.25); box-shadow: 0 0 20px rgba(245,158,11,0.04); }
+  .per-preset-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .per-preset-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 6px; border-radius: 14px; cursor: pointer; background: rgba(15,13,22,0.4); border: 1.5px solid rgba(245,158,11,0.06); transition: all 0.3s; }
+  .per-preset-card:hover { background: rgba(15,13,22,0.55); transform: translateY(-3px); }
+  .per-preset-card.active { box-shadow: 0 0 20px var(--pg); border-color: var(--pg); background: rgba(15,13,22,0.6); }
+  .per-preset-emoji { font-size: 28px; }
+  .per-preset-label { font-size: 12px; font-weight: 800; }
+  .per-preset-desc { font-size: 9px; color: #4A3D30; text-align: center; line-height: 1.3; }
+  .per-role-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .per-role-chip { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(245,158,11,0.06); background: rgba(10,10,15,0.6); color: #6A5A4A; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.25s; }
+  .per-role-chip:hover { border-color: rgba(245,158,11,0.15); color: #C4A882; }
+  .per-role-chip.active { border-color: rgba(245,158,11,0.4); color: var(--amber); background: rgba(245,158,11,0.06); box-shadow: 0 0 12px rgba(245,158,11,0.08); }
+  .per-mini-label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .per-textarea { width: 100%; padding: 14px 16px; border-radius: 12px; resize: vertical; background: rgba(10,10,15,0.6); border: 1px solid rgba(245,158,11,0.06); color: var(--text-primary); font-size: 13px; line-height: 1.6; outline: none; font-family: 'Outfit'; min-height: 80px; }
+  .per-textarea:focus { border-color: rgba(245,158,11,0.2); box-shadow: 0 0 20px rgba(245,158,11,0.03); }
+  .per-trait { margin-bottom: 18px; }
+  .per-trait-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .per-trait-label { font-size: 13px; font-weight: 700; color: #C4A882; }
+  .per-trait-value { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .per-slider { width: 100%; height: 6px; border-radius: 3px; appearance: none; cursor: pointer; background: linear-gradient(90deg, rgba(245,158,11,0.08), rgba(245,158,11,0.15)); }
+  .per-slider::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--amber); border: 3px solid var(--bg); box-shadow: 0 0 10px rgba(245,158,11,0.4); }
+  .per-trait-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+  .per-style-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .per-style-btn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 8px; border-radius: 14px; cursor: pointer; background: rgba(15,13,22,0.4); border: 1.5px solid rgba(245,158,11,0.06); transition: all 0.25s; }
+  .per-style-btn:hover { background: rgba(15,13,22,0.55); transform: translateY(-2px); }
+  .per-style-btn.active { background: rgba(245,158,11,0.06); border-color: rgba(245,158,11,0.25); box-shadow: 0 0 20px rgba(245,158,11,0.06); }
+  .per-style-icon { font-size: 28px; }
+  .per-style-name { font-size: 11px; font-weight: 700; color: #6A5A4A; }
+  .per-style-btn.active .per-style-name { color: var(--amber); }
+
+  /* ═══ SETTINGS ═══ */
+  .settings-tabs { display: flex; gap: 0; margin-bottom: 24px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(245,158,11,0.06); }
+  .settings-tab { flex: 1; padding: 12px; border: none; cursor: pointer; background: rgba(15,13,22,0.4); color: var(--text-dim); font-family: 'Outfit'; font-size: 13px; font-weight: 700; transition: all 0.3s; }
+  .settings-tab.active { background: rgba(245,158,11,0.06); color: var(--amber); }
+  .key-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-radius: 12px; margin-bottom: 8px; background: rgba(10,10,15,0.5); border: 1px solid rgba(245,158,11,0.04); }
+  .key-provider { font-size: 14px; font-weight: 700; }
+  .key-status { font-size: 11px; font-weight: 600; }
+  .key-status.ok { color: var(--green); }
+  .key-status.off { color: var(--text-dim); }
+  .key-input { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(245,158,11,0.06); background: rgba(10,10,15,0.6); color: var(--text-primary); font-size: 12px; width: 200px; outline: none; font-family: 'Outfit'; }
+
+  .btn-save { width: 100%; padding: 14px; border-radius: 14px; border: none; cursor: pointer; background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.18)); color: var(--amber); font-weight: 800; font-family: 'Outfit'; font-size: 14px; transition: all 0.3s; margin-top: 16px; }
+  .btn-save:hover { background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.28)); box-shadow: 0 4px 20px rgba(245,158,11,0.08); }
+  .mb8 { margin-bottom: 32px; }
+</style>
+</head>
+<body>
+
+<!-- Atmosphere -->
+<div class="ambient"></div>
+<div class="stars" id="stars"></div>
+<div class="embers" id="embers"></div>
+
+<!-- Tab Navigation -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('hub',this)">🔥 Hub</button>
+  <button class="tab-btn" onclick="switchTab('chat',this)">💬 Chat</button>
+  <button class="tab-btn" onclick="switchTab('skills',this)">✦ Skills</button>
+  <button class="tab-btn" onclick="switchTab('personality',this)">🦊 Personality</button>
+  <button class="tab-btn" onclick="switchTab('settings',this)">⚙ Settings</button>
+</nav>
+
+<!-- ═══ HUB ═══ -->
+<div id="tab-hub" class="tab-content active" style="max-width:1000px">
+  <div class="hub-wrapper">
+    <div class="hub-left">
+      <h1 class="hub-title">Fireside</h1>
+      <p class="hub-sub">Your AI Companion</p>
+      <div class="scene">
+        <div class="speech">Good morning! What are we building today? 🦊</div>
+        <img class="fox-img" src="/hub/mascot_fox.png" alt="Fox" />
+        <img class="campfire-img" src="/hub/campfire.png" alt="Campfire" />
+      </div>
+      <div class="model-badge">Active: <strong>Qwen 2.5 14B</strong> · Medium · 🟢 Ready</div>
+    </div>
+    <div class="hub-right">
+      <div class="nav-card c1" onclick="switchTab('chat',document.querySelectorAll('.tab-btn')[1])">
+        <span class="nc-icon"><img src="/hub/nav_chat.png" style="width:34px;height:34px;mix-blend-mode:screen;filter:drop-shadow(0 0 10px var(--nc))"/></span>
+        <div><div class="nc-title">Chat</div><div class="nc-desc">Talk with your AI — ask anything, anytime</div></div>
+        <span class="nc-arrow">→</span>
+      </div>
+      <div class="nav-card c2" onclick="switchTab('brain',document.querySelectorAll('.tab-btn')[0])">
+        <span class="nc-icon"><img src="/hub/nav_brain.png" style="width:34px;height:34px;mix-blend-mode:screen;filter:drop-shadow(0 0 10px var(--nc))"/></span>
+        <div><div class="nc-title">Brain</div><div class="nc-desc">Switch models, adjust quality, download new ones</div></div>
+        <span class="nc-arrow">→</span>
+      </div>
+      <div class="nav-card c3" onclick="switchTab('skills',document.querySelectorAll('.tab-btn')[2])">
+        <span class="nc-icon"><img src="/hub/nav_skills.png" style="width:34px;height:34px;mix-blend-mode:screen;filter:drop-shadow(0 0 10px var(--nc))"/></span>
+        <div><div class="nc-title">Skills</div><div class="nc-desc">Toggle AI abilities — memory, voice, browsing</div></div>
+        <span class="nc-arrow">→</span>
+      </div>
+      <div class="nav-card c4" onclick="switchTab('personality',document.querySelectorAll('.tab-btn')[3])">
+        <span class="nc-icon"><img src="/hub/nav_personality.png" style="width:34px;height:34px;mix-blend-mode:screen;filter:drop-shadow(0 0 10px var(--nc))"/></span>
+        <div><div class="nc-title">Personality</div><div class="nc-desc">Define who your AI is, how it speaks</div></div>
+        <span class="nc-arrow">→</span>
+      </div>
+      <div class="nav-card c5" onclick="switchTab('settings',document.querySelectorAll('.tab-btn')[4])">
+        <span class="nc-icon"><img src="/hub/nav_settings.png" style="width:34px;height:34px;mix-blend-mode:screen;filter:drop-shadow(0 0 10px var(--nc))"/></span>
+        <div><div class="nc-title">Settings</div><div class="nc-desc">API keys, config, developer tools</div></div>
+        <span class="nc-arrow">→</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CHAT ═══ -->
+<div id="tab-chat" class="tab-content">
+  <div class="chat-layout">
+    <div class="chat-sidebar">
+      <input class="chat-search" placeholder="🔍 Search chats..." />
+      <div class="chat-date">Today</div>
+      <div class="chat-thread active"><div class="chat-thread-title">Startup strategy</div><div class="chat-thread-preview">Let me break down the pricing...</div></div>
+      <div class="chat-thread"><div class="chat-thread-title">Code review: auth flow</div><div class="chat-thread-preview">Found 3 issues in the endpoint...</div></div>
+      <div class="chat-date">Yesterday</div>
+      <div class="chat-thread"><div class="chat-thread-title">Morning briefing</div><div class="chat-thread-preview">3 tasks due, weather is clear...</div></div>
+      <div class="chat-thread"><div class="chat-thread-title">Product roadmap</div><div class="chat-thread-preview">I'd prioritize onboarding...</div></div>
+      <div class="chat-date">Mar 15</div>
+      <div class="chat-thread"><div class="chat-thread-title">Healthcare research</div><div class="chat-thread-preview">3 dominant trends in Q1...</div></div>
+    </div>
+    <div class="chat-main">
+      <div class="chat-messages">
+        <div class="chat-msg user"><div class="chat-msg-bubble">What pricing model should we use for Fireside?</div><div class="chat-msg-time">10:14 AM</div></div>
+        <div class="chat-msg ai"><div class="chat-msg-bubble">I'd think about this in three tiers:<br><br><b>Free</b> — local only, 1 brain, community skills. Gets people in the door.<br><br><b>Pro ($9/mo)</b> — cloud fallback, premium skills, model mesh across devices.<br><br><b>Team ($29/seat)</b> — shared brains, role-based access, deployment templates.<br><br>Key insight: the free tier should feel <em>complete</em>, not crippled.</div><div class="chat-msg-time">10:14 AM · Atlas 🦊</div></div>
+        <div class="chat-msg user"><div class="chat-msg-bubble">That makes sense. What about the marketplace cut?</div><div class="chat-msg-time">10:15 AM</div></div>
+        <div class="chat-msg ai"><div class="chat-msg-bubble">Standard 70/30 split. But offer <b>90/10 for year one</b> to attract top creators. Once you have supply, adjust.<br><br>Also: free skills should exist alongside paid ones. A healthy marketplace has both.</div><div class="chat-msg-time">10:15 AM · Atlas 🦊</div></div>
+      </div>
+      <div class="chat-input-area">
+        <input class="chat-input" placeholder="Message Atlas..." />
+        <button class="chat-send">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SKILLS ═══ -->
+<div id="tab-skills" class="tab-content">
+  <h1 class="page-title">✦ Skills</h1>
+  <p class="page-sub">Equip your AI with new abilities.</p>
+  <div class="sk-power-card">
+    <div class="sk-power-header"><span class="sk-power-label">Power Level</span><span class="sk-power-value">🔥 Maxed Out · 70/100</span></div>
+    <div class="sk-power-bar"><div class="sk-power-fill" style="width:70%"></div></div>
+  </div>
+  <div class="mb8">
+    <div class="sk-group-label">🔥 Core <span class="sk-rarity-badge" style="color:#F59E0B;background:rgba(245,158,11,0.08)">Legendary</span></div>
+    <div class="sk-group-desc">These make your AI feel alive.</div>
+    <div class="sk-card"><div class="sk-card-left"><span class="sk-icon">🧠</span><div><div class="sk-name-row"><span class="sk-name" style="color:#A78BFA">Long-Term Memory</span><span class="sk-rarity-tag" style="color:#F59E0B;background:rgba(245,158,11,0.08)">Legendary</span><span class="sk-power-tag">+20</span></div><div class="sk-desc">Remembers conversations and learns your preferences.</div></div></div><button class="sk-toggle on" style="background:rgba(167,139,250,0.3);--tg:rgba(167,139,250,0.2)"><span class="sk-toggle-knob" style="left:25px;background:#A78BFA;box-shadow:0 0 10px #A78BFA"></span></button></div>
+    <div class="sk-card"><div class="sk-card-left"><span class="sk-icon">💫</span><div><div class="sk-name-row"><span class="sk-name" style="color:#F59E0B">Soul Evolution</span><span class="sk-rarity-tag" style="color:#F59E0B;background:rgba(245,158,11,0.08)">Legendary</span><span class="sk-power-tag">+15</span></div><div class="sk-desc">Personality adapts based on interactions.</div></div></div><button class="sk-toggle on" style="background:rgba(245,158,11,0.3);--tg:rgba(245,158,11,0.2)"><span class="sk-toggle-knob" style="left:25px;background:#F59E0B;box-shadow:0 0 10px #F59E0B"></span></button></div>
+    <div class="sk-card"><div class="sk-card-left"><span class="sk-icon">🪞</span><div><div class="sk-name-row"><span class="sk-name" style="color:#34D399">Self-Awareness</span><span class="sk-rarity-tag" style="color:#F59E0B;background:rgba(245,158,11,0.08)">Legendary</span><span class="sk-power-tag">+15</span></div><div class="sk-desc">Reflects on strengths and weaknesses.</div></div></div><button class="sk-toggle on" style="background:rgba(52,211,153,0.3);--tg:rgba(52,211,153,0.2)"><span class="sk-toggle-knob" style="left:25px;background:#34D399;box-shadow:0 0 10px #34D399"></span></button></div>
+    <div class="sk-card"><div class="sk-card-left"><span class="sk-icon">💭</span><div><div class="sk-name-row"><span class="sk-name" style="color:#60A5FA">Deep Thinking</span><span class="sk-rarity-tag" style="color:#F59E0B;background:rgba(245,158,11,0.08)">Legendary</span><span class="sk-power-tag">+20</span></div><div class="sk-desc">Chain-of-thought reasoning for hard questions.</div></div></div><button class="sk-toggle on" style="background:rgba(96,165,250,0.3);--tg:rgba(96,165,250,0.2)"><span class="sk-toggle-knob" style="left:25px;background:#60A5FA;box-shadow:0 0 10px #60A5FA"></span></button></div>
+  </div>
+  <div class="mb8">
+    <div class="sk-group-label">✨ Enhancements <span class="sk-rarity-badge" style="color:#A78BFA;background:rgba(167,139,250,0.08)">Rare</span></div>
+    <div class="sk-group-desc">Add new capabilities.</div>
+    <div class="sk-card"><div class="sk-card-left"><span class="sk-icon">🎙</span><div><div class="sk-name-row"><span class="sk-name" style="color:#F472B6">Voice Mode</span><span class="sk-rarity-tag" style="color:#A78BFA;background:rgba(167,139,250,0.08)">Rare</span><span class="sk-power-tag">+8</span></div><div class="sk-desc">Talk to your AI with voice.</div></div></div><button class="sk-toggle off" style="background:rgba(255,255,255,0.05)"><span class="sk-toggle-knob" style="left:3px;background:#4A3D30"></span></button></div>
+    <div class="sk-card"><div class="sk-card-left"><span class="sk-icon">🌐</span><div><div class="sk-name-row"><span class="sk-name" style="color:#38BDF8">Web Browsing</span><span class="sk-rarity-tag" style="color:#A78BFA;background:rgba(167,139,250,0.08)">Rare</span><span class="sk-power-tag">+8</span></div><div class="sk-desc">Search and summarize web pages.</div></div></div><button class="sk-toggle off" style="background:rgba(255,255,255,0.05)"><span class="sk-toggle-knob" style="left:3px;background:#4A3D30"></span></button></div>
+    <div class="sk-card"><div class="sk-card-left"><span class="sk-icon">🔔</span><div><div class="sk-name-row"><span class="sk-name" style="color:#FBBF24">Smart Alerts</span><span class="sk-rarity-tag" style="color:#A78BFA;background:rgba(167,139,250,0.08)">Rare</span><span class="sk-power-tag">+5</span></div><div class="sk-desc">Proactive notifications when AI has something for you.</div></div></div><button class="sk-toggle off" style="background:rgba(255,255,255,0.05)"><span class="sk-toggle-knob" style="left:3px;background:#4A3D30"></span></button></div>
+  </div>
+</div>
+
+<!-- ═══ PERSONALITY ═══ -->
+<div id="tab-personality" class="tab-content">
+  <h1 class="page-title">🦊 Personality</h1>
+  <p class="page-sub">Define who your AI is — and tell it about yourself.</p>
+  <div class="glass-card"><div class="section-title">Name</div><div class="section-desc">What should your AI be called?</div><input class="per-input" value="Atlas" /></div>
+  <div class="glass-card"><div class="section-title">Start With a Template</div><div class="section-desc">Pick a starting personality — customize below.</div>
+    <div class="per-preset-grid">
+      <div class="per-preset-card active" style="--pg:rgba(245,158,11,0.3);border-color:rgba(245,158,11,0.3)"><span class="per-preset-emoji">🏋️</span><span class="per-preset-label" style="color:#F59E0B">Coach</span><span class="per-preset-desc">Motivating, direct</span></div>
+      <div class="per-preset-card"><span class="per-preset-emoji">🎨</span><span class="per-preset-label" style="color:#A78BFA">Creative</span><span class="per-preset-desc">Playful, imaginative</span></div>
+      <div class="per-preset-card"><span class="per-preset-emoji">📊</span><span class="per-preset-label" style="color:#60A5FA">Analyst</span><span class="per-preset-desc">Data-driven, precise</span></div>
+      <div class="per-preset-card"><span class="per-preset-emoji">🤗</span><span class="per-preset-label" style="color:#34D399">Friend</span><span class="per-preset-desc">Warm, supportive</span></div>
+      <div class="per-preset-card"><span class="per-preset-emoji">✏️</span><span class="per-preset-label" style="color:#F472B6">Custom</span><span class="per-preset-desc">Write your own</span></div>
+    </div>
+  </div>
+  <div class="glass-card"><div class="section-title">About You</div><div class="section-desc">Help your AI understand who you are.</div>
+    <span class="per-mini-label">What do you do?</span>
+    <div class="per-role-grid"><div class="per-role-chip">💼 Work</div><div class="per-role-chip">📚 Student</div><div class="per-role-chip">🎨 Creative</div><div class="per-role-chip active">🚀 Founder</div><div class="per-role-chip">💻 Developer</div><div class="per-role-chip">✨ Other</div></div>
+    <span class="per-mini-label" style="margin-top:12px">Anything else?</span>
+    <textarea class="per-textarea" rows="3">Building an AI companion platform. Prefer concise answers. Want an AI that pushes back when I'm wrong.</textarea>
+  </div>
+  <div class="glass-card"><div class="section-title">Personality Prompt</div><div class="section-desc">Tell your AI who it should be.</div><textarea class="per-textarea" rows="4">You are a motivating life coach. You're direct, encouraging, and hold the user accountable. You celebrate wins but push back on excuses.</textarea></div>
+  <div class="glass-card"><div class="section-title">Traits</div><div class="section-desc">Adjust the personality spectrum.</div>
+    <div class="per-trait"><div class="per-trait-header"><span class="per-trait-label">Warmth</span><span class="per-trait-value">70%</span></div><input type="range" min="0" max="100" value="70" class="per-slider"/><div class="per-trait-ends"><span>Distant</span><span>Affectionate</span></div></div>
+    <div class="per-trait"><div class="per-trait-header"><span class="per-trait-label">Humor</span><span class="per-trait-value">40%</span></div><input type="range" min="0" max="100" value="40" class="per-slider"/><div class="per-trait-ends"><span>Serious</span><span>Playful</span></div></div>
+    <div class="per-trait"><div class="per-trait-header"><span class="per-trait-label">Directness</span><span class="per-trait-value">95%</span></div><input type="range" min="0" max="100" value="95" class="per-slider"/><div class="per-trait-ends"><span>Diplomatic</span><span>Blunt</span></div></div>
+    <div class="per-trait"><div class="per-trait-header"><span class="per-trait-label">Curiosity</span><span class="per-trait-value">60%</span></div><input type="range" min="0" max="100" value="60" class="per-slider"/><div class="per-trait-ends"><span>Focused</span><span>Explorative</span></div></div>
+    <div class="per-trait"><div class="per-trait-header"><span class="per-trait-label">Formality</span><span class="per-trait-value">40%</span></div><input type="range" min="0" max="100" value="40" class="per-slider"/><div class="per-trait-ends"><span>Casual</span><span>Formal</span></div></div>
+  </div>
+  <div class="glass-card"><div class="section-title">Communication Style</div>
+    <div class="per-style-grid">
+      <div class="per-style-btn"><span class="per-style-icon">😊</span><span class="per-style-name">Casual</span></div>
+      <div class="per-style-btn active"><span class="per-style-icon">⚖</span><span class="per-style-name">Balanced</span></div>
+      <div class="per-style-btn"><span class="per-style-icon">💼</span><span class="per-style-name">Professional</span></div>
+      <div class="per-style-btn"><span class="per-style-icon">🎓</span><span class="per-style-name">Academic</span></div>
+    </div>
+  </div>
+  <button class="btn-save">Save Personality</button>
+  <p style="text-align:center;font-size:11px;color:#3A3530;margin-top:8px">Changes take effect on next message.</p>
+</div>
+
+<!-- ═══ SETTINGS ═══ -->
+<div id="tab-settings" class="tab-content">
+  <h1 class="page-title">⚙ Settings</h1>
+  <p class="page-sub">API keys, configuration, developer tools.</p>
+  <div class="settings-tabs">
+    <button class="settings-tab active" onclick="showST('general',this)">General</button>
+    <button class="settings-tab" onclick="showST('keys',this)">API Keys</button>
+    <button class="settings-tab" onclick="showST('advanced',this)">Advanced</button>
+  </div>
+  <div id="st-general" class="st-panel">
+    <div class="glass-card"><div class="section-title">Inference</div><div class="section-desc">Where your AI runs — detected automatically.</div>
+      <div class="key-row"><span class="key-provider">llama.cpp</span><span class="key-status off">Checking...</span></div>
+      <div class="key-row"><span class="key-provider">Ollama</span><span class="key-status off">Checking...</span></div>
+      <p style="font-size:10px;color:#3A3530;margin-top:8px">Hardware & model info loads from the backend at runtime.</p>
+    </div>
+  </div>
+  <div id="st-keys" class="st-panel" style="display:none">
+    <div class="glass-card"><div class="section-title">Cloud API Keys</div><div class="section-desc">Optional — for cloud model fallback and premium features. Keys are encrypted at rest.</div>
+      <div class="key-row"><div><span class="key-provider">OpenAI</span></div><div style="display:flex;align-items:center;gap:10px"><input class="key-input" placeholder="sk-..."/><span class="key-status off">Not set</span></div></div>
+      <div class="key-row"><div><span class="key-provider">Anthropic</span></div><div style="display:flex;align-items:center;gap:10px"><input class="key-input" placeholder="sk-ant-..."/><span class="key-status off">Not set</span></div></div>
+      <div class="key-row"><div><span class="key-provider">Google</span></div><div style="display:flex;align-items:center;gap:10px"><input class="key-input" placeholder="AIza..."/><span class="key-status off">Not set</span></div></div>
+      <div class="key-row"><div><span class="key-provider">ElevenLabs</span></div><div style="display:flex;align-items:center;gap:10px"><input class="key-input" placeholder="Voice TTS key..."/><span class="key-status off">Not set</span></div></div>
+      <button class="btn-save">Save Keys</button>
+    </div>
+  </div>
+  <div id="st-advanced" class="st-panel" style="display:none">
+    <div class="glass-card"><div class="section-title">Developer Tools</div>
+      <div class="key-row"><span class="key-provider">📝 valhalla.yaml</span><span class="key-status" style="color:#60A5FA;cursor:pointer">View →</span></div>
+      <div class="key-row"><span class="key-provider">🔌 Plugin Loader</span><span class="key-status" style="color:#60A5FA;cursor:pointer">Logs →</span></div>
+      <div class="key-row"><span class="key-provider">🧠 Prompt Debug</span><span class="key-status" style="color:#60A5FA;cursor:pointer">View →</span></div>
+    </div>
+    <div class="glass-card"><div class="section-title" style="color:#EF4444">Danger Zone</div>
+      <div class="key-row"><span class="key-provider" style="color:#EF4444">🗑 Reset Memory</span><span class="key-status" style="color:#EF4444;cursor:pointer">Reset</span></div>
+      <div class="key-row"><span class="key-provider" style="color:#EF4444">💀 Factory Reset</span><span class="key-status" style="color:#EF4444;cursor:pointer">Reset</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Stars
+const starsEl = document.getElementById('stars');
+for (let i = 0; i < 60; i++) {
+  const s = document.createElement('div'); s.className = 'star';
+  s.style.left = Math.random()*100+'%'; s.style.top = Math.random()*100+'%';
+  s.style.animationDuration = (2+Math.random()*4)+'s'; s.style.animationDelay = Math.random()*5+'s';
+  s.style.width = s.style.height = (1+Math.random()*2)+'px'; starsEl.appendChild(s);
+}
+// Embers
+const embersEl = document.getElementById('embers');
+for (let i = 0; i < 20; i++) {
+  const e = document.createElement('div'); e.className = 'ember';
+  e.style.left = (20+Math.random()*60)+'%'; e.style.bottom = '0%';
+  const sz = 2+Math.random()*4; e.style.width = sz+'px'; e.style.height = sz+'px';
+  e.style.animationDuration = (4+Math.random()*6)+'s'; e.style.animationDelay = Math.random()*8+'s';
+  embersEl.appendChild(e);
+}
+// Tab switching
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById('tab-'+id);
+  if (target) target.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+// Settings sub-tabs
+function showST(id, btn) {
+  document.querySelectorAll('.st-panel').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.settings-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('st-'+id).style.display = 'block';
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

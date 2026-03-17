@@ -16,20 +16,14 @@ const NAV_SECTIONS: NavSection[] = [
         title: "Your AI",
         items: [
             { href: "/", label: "Chat", icon: "💬" },
-            { href: "/soul", label: "Personality", icon: "🧠" },
-        ],
-    },
-    {
-        title: "World",
-        items: [
-            { href: "/guildhall", label: "Guild Hall", icon: "🏰" },
+            { href: "/brains", label: "Brain", icon: "🧠" },
+            { href: "/skills", label: "Skills", icon: "✦" },
+            { href: "/personality", label: "Personality", icon: "🦊" },
         ],
     },
     {
         title: "System",
         items: [
-            { href: "/brains", label: "Brains", icon: "🧠" },
-            { href: "/store", label: "Store", icon: "🏪" },
             { href: "/config", label: "Settings", icon: "⚙" },
         ],
     },

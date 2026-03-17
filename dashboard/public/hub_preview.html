@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fireside — Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #060609;
+      font-family: 'Outfit', system-ui, sans-serif;
+      color: #F0DCC8;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Stars */
+    .stars {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .star {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: #fff;
+      border-radius: 50%;
+      animation: twinkle ease-in-out infinite alternate;
+      opacity: 0.2;
+    }
+
+    @keyframes twinkle {
+      0% {
+        opacity: 0.05;
+      }
+
+      100% {
+        opacity: 0.5;
+      }
+    }
+
+    /* Embers */
+    .embers {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .ember {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle, #F59E0B, #D97706);
+      animation: emberFloat ease-in-out infinite;
+      filter: blur(0.5px);
+      box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+    }
+
+    @keyframes emberFloat {
+      0% {
+        transform: translateY(0) translateX(0) scale(1);
+        opacity: 0;
+      }
+
+      10% {
+        opacity: 0.8;
+      }
+
+      50% {
+        transform: translateY(-35vh) translateX(15px) scale(0.6);
+        opacity: 0.5;
+      }
+
+      100% {
+        transform: translateY(-70vh) translateX(-10px) scale(0.2);
+        opacity: 0;
+      }
+    }
+
+    /* Warm ambient */
+    .ambient {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 700px 500px at 30% 65%, rgba(245, 158, 11, 0.06) 0%, transparent 55%),
+        radial-gradient(ellipse 500px 350px at 25% 75%, rgba(217, 119, 6, 0.04) 0%, transparent 45%);
+      animation: ambP 4s ease-in-out infinite alternate;
+    }
+
+    @keyframes ambP {
+      0% {
+        opacity: 0.7;
+      }
+
+      100% {
+        opacity: 1;
+      }
+    }
+
+    /* ── Split layout ── */
+    .hub {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      max-width: 1100px;
+      padding: 0 40px;
+      gap: 60px;
+    }
+
+    /* ── LEFT: Scene ── */
+    .left {
+      flex: 0 0 420px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hub-title {
+      font-size: 42px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #F0DCC8 0%, #FBBF24 50%, #D97706 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: fadeIn 0.8s ease both;
+      margin-bottom: 2px;
+    }
+
+    .hub-sub {
+      font-size: 14px;
+      color: #4A3D30;
+      margin-bottom: 24px;
+      animation: fadeIn 0.8s 0.15s ease both;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .scene {
+      position: relative;
+      width: 400px;
+      height: 320px;
+      margin-bottom: 20px;
+    }
+
+    .campfire-img {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 380px;
+      height: 300px;
+      object-fit: contain;
+      mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(ellipse 65% 70% at 50% 55%, white 30%, transparent 65%);
+      mask-image: radial-gradient(ellipse 65% 70% at 50% 55%, white 30%, transparent 65%);
+      filter: drop-shadow(0 0 40px rgba(245, 158, 11, 0.3));
+      animation: fireGlow 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes fireGlow {
+      0% {
+        filter: drop-shadow(0 0 30px rgba(245, 158, 11, 0.2)) brightness(0.95);
+      }
+
+      100% {
+        filter: drop-shadow(0 0 50px rgba(245, 158, 11, 0.4)) brightness(1.05);
+      }
+    }
+
+    .fox-img {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      width: 150px;
+      height: 150px;
+      object-fit: contain;
+      mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(circle, white 35%, transparent 65%);
+      mask-image: radial-gradient(circle, white 35%, transparent 65%);
+      filter: drop-shadow(0 0 25px rgba(245, 158, 11, 0.35));
+      animation: foxBob 4s ease-in-out infinite;
+    }
+
+    @keyframes foxBob {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-5px);
+      }
+    }
+
+    .speech {
+      position: absolute;
+      top: 55px;
+      left: 120px;
+      background: rgba(15, 13, 22, 0.90);
+      border: 1px solid rgba(245, 158, 11, 0.12);
+      border-radius: 14px 14px 14px 4px;
+      padding: 12px 16px;
+      max-width: 210px;
+      font-size: 12px;
+      color: #C4A882;
+      line-height: 1.6;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(245, 158, 11, 0.03);
+      animation: bubIn 0.5s 1.2s ease both;
+    }
+
+    .speech::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 20px;
+      border: 6px solid transparent;
+      border-top-color: rgba(15, 13, 22, 0.90);
+    }
+
+    @keyframes bubIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .model-badge {
+      padding: 8px 22px;
+      border-radius: 10px;
+      background: rgba(245, 158, 11, 0.05);
+      border: 1px solid rgba(245, 158, 11, 0.12);
+      font-size: 11px;
+      color: #6A5A4A;
+      font-weight: 600;
+      animation: fadeIn 0.8s 1s ease both;
+    }
+
+    .model-badge strong {
+      color: #F59E0B;
+    }
+
+    /* ── RIGHT: Nav stack ── */
+    .right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .nav-card {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 22px 28px;
+      border-radius: 18px;
+      cursor: pointer;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.012));
+      border: 1.5px solid rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(8px);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: cardIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .nav-card:nth-child(1) {
+      animation-delay: 0.3s;
+    }
+
+    .nav-card:nth-child(2) {
+      animation-delay: 0.4s;
+    }
+
+    .nav-card:nth-child(3) {
+      animation-delay: 0.5s;
+    }
+
+    .nav-card:nth-child(4) {
+      animation-delay: 0.6s;
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateX(30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    /* Colored left accent */
+    .nav-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 15%;
+      bottom: 15%;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--nc);
+      box-shadow: 0 0 12px var(--nc), 0 0 4px var(--nc);
+      opacity: 0.6;
+      transition: opacity 0.3s;
+    }
+
+    /* Shimmer */
+    .nav-card::after {
+      content: '';
+      position: absolute;
+      inset: -50% -50%;
+      background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--nc) 3%, transparent) 50%, transparent 100%);
+      animation: sweep 8s ease-in-out infinite;
+    }
+
+    @keyframes sweep {
+      0% {
+        left: -100%;
+      }
+
+      25%,
+      100% {
+        left: 250%;
+      }
+    }
+
+    .nav-card:hover {
+      transform: translateX(8px);
+      border-color: color-mix(in srgb, var(--nc) 35%, transparent);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--nc) 4%, transparent), rgba(255, 255, 255, 0.015));
+      box-shadow:
+        0 8px 40px color-mix(in srgb, var(--nc) 8%, transparent),
+        0 0 25px color-mix(in srgb, var(--nc) 4%, transparent);
+    }
+
+    .nav-card:hover::before {
+      opacity: 1;
+    }
+
+    .nc-icon {
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nc-icon img {
+      width: 64px;
+      height: 64px;
+      mix-blend-mode: screen;
+      -webkit-mask-image: radial-gradient(circle, white 35%, transparent 65%);
+      mask-image: radial-gradient(circle, white 35%, transparent 65%);
+      filter: drop-shadow(0 0 10px var(--nc));
+      transition: transform 0.3s;
+    }
+
+    .nav-card:hover .nc-icon img {
+      transform: scale(1.15);
+      filter: drop-shadow(0 0 18px var(--nc));
+    }
+
+    .nc-text {
+      flex: 1;
+    }
+
+    .nc-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--nc);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 3px;
+    }
+
+    .nc-desc {
+      font-size: 12px;
+      color: #5A4D40;
+      line-height: 1.4;
+    }
+
+    .nc-arrow {
+      font-size: 16px;
+      color: #3A3530;
+      transition: all 0.3s;
+    }
+
+    .nav-card:hover .nc-arrow {
+      color: var(--nc);
+      transform: translateX(4px);
+    }
+
+    /* Notification */
+    .nc-notif {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 9px;
+      font-weight: 800;
+      color: #fff;
+      background: #EF4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+      animation: dotP 2s ease-in-out infinite;
+    }
+
+    @keyframes dotP {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.7;
+      }
+    }
+
+    .c1 {
+      --nc: #F59E0B;
+    }
+
+    .c2 {
+      --nc: #A78BFA;
+    }
+
+    .c3 {
+      --nc: #34D399;
+    }
+
+    .c4 {
+      --nc: #60A5FA;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="ambient"></div>
+  <div class="stars" id="stars"></div>
+  <div class="embers" id="embers"></div>
+
+  <div class="hub">
+    <!-- LEFT: Scene -->
+    <div class="left">
+      <h1 class="hub-title">Fireside</h1>
+      <p class="hub-sub">Your AI Companion</p>
+      <div class="scene">
+        <div class="speech">Welcome back! What shall we work on today? 🦊</div>
+        <img class="fox-img" src="/hub/mascot_fox.png" alt="Fox" />
+        <img class="campfire-img" src="/hub/campfire.png" alt="Campfire" />
+      </div>
+      <div class="model-badge">Active: <strong>Qwen 2.5 14B</strong> · Medium (6-bit) · 🟢 Ready</div>
+    </div>
+
+    <!-- RIGHT: Nav stack -->
+    <div class="right">
+      <div class="nav-card c1">
+        <div class="nc-notif">NEW</div>
+        <div class="nc-icon"><img src="/hub/nav_chat.png" style="width:34px;height:34px;mix-blend-mode:screen;"/></div>
+        <div class="nc-text">
+          <div class="nc-title">Chat</div>
+          <div class="nc-desc">Talk with your AI — ask anything, anytime</div>
+        </div>
+        <span class="nc-arrow">→</span>
+      </div>
+      <div class="nav-card c2">
+        <div class="nc-icon"><img src="/hub/nav_brain.png" style="width:34px;height:34px;mix-blend-mode:screen;"/></div>
+        <div class="nc-text">
+          <div class="nc-title">Brain</div>
+          <div class="nc-desc">Switch models, adjust quality, or download new ones</div>
+        </div>
+        <span class="nc-arrow">→</span>
+      </div>
+      <div class="nav-card c4">
+        <div class="nc-icon"><img src="/hub/nav_settings.png" style="width:34px;height:34px;mix-blend-mode:screen;"/></div>
+        <div class="nc-text">
+          <div class="nc-title">Settings</div>
+          <div class="nc-desc">Voice, personality, API keys, and more</div>
+        </div>
+        <span class="nc-arrow">→</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const starsEl = document.getElementById('stars');
+    for (let i = 0; i < 60; i++) {
+      const s = document.createElement('div'); s.className = 'star';
+      s.style.left = Math.random() * 100 + '%'; s.style.top = Math.random() * 100 + '%';
+      s.style.animationDuration = (2 + Math.random() * 4) + 's'; s.style.animationDelay = Math.random() * 5 + 's';
+      s.style.width = s.style.height = (1 + Math.random() * 2) + 'px'; starsEl.appendChild(s);
+    }
+    const embersEl = document.getElementById('embers');
+    for (let i = 0; i < 25; i++) {
+      const e = document.createElement('div'); e.className = 'ember';
+      e.style.left = (15 + Math.random() * 30) + '%'; e.style.bottom = (20 + Math.random() * 20) + '%';
+      const sz = 2 + Math.random() * 4; e.style.width = sz + 'px'; e.style.height = sz + 'px';
+      e.style.animationDuration = (4 + Math.random() * 6) + 's'; e.style.animationDelay = Math.random() * 8 + 's';
+      embersEl.appendChild(e);
+    }
+  </script>
+</body>
+
+</html>
