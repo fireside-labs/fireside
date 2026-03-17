@@ -16,8 +16,8 @@
 
 export const colors = {
     // Backgrounds
-    bgPrimary: "#0D0D1A",      // --midnight (deepest)
-    bgSecondary: "#1A1A2E",    // --deep-charcoal
+    bgPrimary: "#060609",      // deepest dark per spec
+    bgSecondary: "#0E0E1A",    // slightly lighter surface
     bgCard: "rgba(255, 255, 255, 0.04)",
     bgCardHover: "rgba(255, 255, 255, 0.08)",
     bgInput: "rgba(255, 255, 255, 0.06)",
@@ -57,7 +57,7 @@ export const colors = {
     // Tab bar
     tabInactive: "rgba(245, 245, 247, 0.3)",
     tabActive: "#E8712C",      // fire-orange
-    tabBg: "#0D0D1A",          // midnight
+    tabBg: "#060609",          // matches bgPrimary
 
     // Connection status
     offlineDot: "rgba(255, 68, 102, 0.6)",

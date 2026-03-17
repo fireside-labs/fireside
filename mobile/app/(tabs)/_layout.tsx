@@ -1,11 +1,11 @@
 /**
  * Tab layout — Mode-aware bottom tab navigator.
  *
- * Companion Mode: 💬 Chat | 🐾 Care | 🎒 Bag | 📋 Tasks | ⚔️ Quest
- * Executive Mode: 💬 Chat | 🔧 Tools | 📋 Tasks
+ * Companion Mode: 🏠 Care | 💬 Chat | 🧠 Brain | ⚡ Skills | 🎭 More
+ * Executive Mode: 💬 Chat | 🔧 Tools | 📋 Tasks | 🧠 Brain | 🎭 More
  *
- * Sprint 5: Mode toggle via ModeContext.
- * Sprint 8: Renamed Pet→Companion, Tool→Executive (display only).
+ * "More" gives access to: Tasks, Quest, Bag, Marketplace, Personality.
+ * Screens without a tab bar entry are still navigable but hidden from the bar.
  */
 import { Tabs } from "expo-router";
 import { Text, StyleSheet } from "react-native";
@@ -25,6 +25,16 @@ export default function TabsLayout() {
                 tabBarLabelStyle: styles.tabLabel,
             }}
         >
+            {/* ── Both modes ── */}
+            <Tabs.Screen
+                name="care"
+                options={{
+                    title: isPetMode ? "Home" : "Home",
+                    tabBarIcon: ({ focused }) => (
+                        <Text style={[styles.icon, focused && styles.iconActive]}>🏠</Text>
+                    ),
+                }}
+            />
             <Tabs.Screen
                 name="chat"
                 options={{
@@ -34,16 +44,8 @@ export default function TabsLayout() {
                     ),
                 }}
             />
-            <Tabs.Screen
-                name="care"
-                options={{
-                    title: "Care",
-                    tabBarIcon: ({ focused }) => (
-                        <Text style={[styles.icon, focused && styles.iconActive]}>🐾</Text>
-                    ),
-                    href: isPetMode ? "/(tabs)/care" : null,
-                }}
-            />
+
+            {/* ── Tools (Executive only in tab bar) ── */}
             <Tabs.Screen
                 name="tools"
                 options={{
@@ -54,14 +56,27 @@ export default function TabsLayout() {
                     href: isPetMode ? null : "/(tabs)/tools",
                 }}
             />
+
+            {/* ── Brain ── */}
             <Tabs.Screen
-                name="bag"
+                name="brain"
                 options={{
-                    title: "Bag",
+                    title: "Brain",
                     tabBarIcon: ({ focused }) => (
-                        <Text style={[styles.icon, focused && styles.iconActive]}>🎒</Text>
+                        <Text style={[styles.icon, focused && styles.iconActive]}>🧠</Text>
                     ),
-                    href: isPetMode ? "/(tabs)/bag" : null,
+                }}
+            />
+
+            {/* ── Skills (Companion mode in tab bar) / Tasks (Executive mode in tab bar) ── */}
+            <Tabs.Screen
+                name="skills"
+                options={{
+                    title: "Skills",
+                    tabBarIcon: ({ focused }) => (
+                        <Text style={[styles.icon, focused && styles.iconActive]}>⚡</Text>
+                    ),
+                    href: isPetMode ? "/(tabs)/skills" : null,
                 }}
             />
             <Tabs.Screen
@@ -71,24 +86,17 @@ export default function TabsLayout() {
                     tabBarIcon: ({ focused }) => (
                         <Text style={[styles.icon, focused && styles.iconActive]}>📋</Text>
                     ),
+                    href: isPetMode ? null : "/(tabs)/tasks",
                 }}
             />
+
+            {/* ── Personality (both modes, last tab) ── */}
             <Tabs.Screen
-                name="quest"
+                name="personality"
                 options={{
-                    title: "Quest",
+                    title: "Soul",
                     tabBarIcon: ({ focused }) => (
-                        <Text style={[styles.icon, focused && styles.iconActive]}>⚔️</Text>
-                    ),
-                    href: isPetMode ? "/(tabs)/quest" : null,
-                }}
-            />
-            <Tabs.Screen
-                name="marketplace"
-                options={{
-                    title: "Market",
-                    tabBarIcon: ({ focused }) => (
-                        <Text style={[styles.icon, focused && styles.iconActive]}>🛒</Text>
+                        <Text style={[styles.icon, focused && styles.iconActive]}>🎭</Text>
                     ),
                 }}
             />

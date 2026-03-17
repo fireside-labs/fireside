@@ -78,13 +78,15 @@ export default function SkillsPage() {
         }
     };
 
-    // Power Level calculation
-    const powerLevel = useMemo(() => {
-        return SKILLS.reduce((sum, s) => sum + (enabledSkills[s.id] ? s.power : 0), 0);
+    // Power Level calculation — unbounded XP, no cap
+    const powerXP = useMemo(() => {
+        return SKILLS.reduce((sum, s) => sum + (enabledSkills[s.id] ? s.power * 50 : 0), 0);
     }, [enabledSkills]);
 
-    const powerLabel = powerLevel >= 80 ? "🔥 Maxed Out" : powerLevel >= 60 ? "⚡ Strong" : powerLevel >= 40 ? "💪 Solid" : "🌱 Basic";
-    const powerColor = powerLevel >= 80 ? "#F59E0B" : powerLevel >= 60 ? "#A78BFA" : powerLevel >= 40 ? "#34D399" : "#5A4D40";
+    const powerTier = powerXP >= 4000 ? "🌟 Ascended" : powerXP >= 3000 ? "🔥 Mythic" : powerXP >= 2000 ? "⚡ Legendary" : powerXP >= 1500 ? "💪 Strong" : powerXP >= 800 ? "🌿 Solid" : "🌱 Basic";
+    const powerColor = powerXP >= 4000 ? "#FBBF24" : powerXP >= 3000 ? "#F59E0B" : powerXP >= 2000 ? "#A78BFA" : powerXP >= 1500 ? "#60A5FA" : powerXP >= 800 ? "#34D399" : "#5A4D40";
+    const tierSize = 500;
+    const tierProgress = ((powerXP % tierSize) / tierSize) * 100;
 
     const coreSkills = SKILLS.filter(s => s.category === "core");
     const enhancementSkills = SKILLS.filter(s => s.category === "enhancement");
@@ -103,10 +105,10 @@ export default function SkillsPage() {
             <div className="sk-power-card">
                 <div className="sk-power-header">
                     <span className="sk-power-label">Power Level</span>
-                    <span className="sk-power-value" style={{ color: powerColor }}>{powerLabel} · {powerLevel}/100</span>
+                    <span className="sk-power-value" style={{ color: powerColor }}>{powerTier} · {powerXP.toLocaleString()} XP</span>
                 </div>
                 <div className="sk-power-bar">
-                    <div className="sk-power-fill" style={{ width: `${powerLevel}%`, background: `linear-gradient(90deg, ${powerColor}44, ${powerColor})` }} />
+                    <div className="sk-power-fill" style={{ width: `${Math.min(tierProgress, 100)}%`, background: `linear-gradient(90deg, ${powerColor}44, ${powerColor})` }} />
                 </div>
                 <div className="sk-power-stats">
                     <span>{SKILLS.filter(s => enabledSkills[s.id]).length}/{SKILLS.length} skills active</span>

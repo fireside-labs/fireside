@@ -1,8 +1,8 @@
 /**
  * Companion Mode context — Sprint 5 Task 1.
  *
- * Pet Mode (default): Chat, Care, Bag, Quest, Tasks — full gamification.
- * Tool Mode: Chat, Tools, Tasks — guardian, translation, teach me, no gamification.
+ * Pet Mode (default): Chat, Care, Brain, Skills, Personality — full gamification.
+ * Tool Mode: Chat, Tools, Tasks, Brain, Personality — no gamification.
  *
  * Persisted in AsyncStorage.
  */

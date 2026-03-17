@@ -256,62 +256,27 @@ export default function CareTab() {
         setAdopting(false);
     }, [adoptName, adoptSpecies, isOnline, sync, updateCompanionLocal]);
 
-    // No companion — show adoption flow
+    // No companion — show transfer instruction (companion comes from PC)
     if (!petName) {
         return (
             <ScrollView style={styles.container} contentContainerStyle={styles.adoptContent}>
-                <Text style={styles.adoptTitle}>🐾 Adopt a Companion</Text>
+                <Text style={styles.adoptTitle}>🔥 Waiting for Companion</Text>
                 <Text style={styles.adoptSubtitle}>
-                    Choose a species and give your companion a name!
+                    Your companion is created on your PC and transferred to your phone during QR pairing.
                 </Text>
 
-                {/* Species picker */}
-                <View style={styles.speciesGrid}>
-                    {ADOPTABLE_SPECIES.map((s) => (
-                        <TouchableOpacity
-                            key={s.species}
-                            style={[
-                                styles.speciesCard,
-                                adoptSpecies === s.species && styles.speciesCardSelected,
-                            ]}
-                            onPress={() => {
-                                setAdoptSpecies(s.species);
-                                Haptics.selectionAsync();
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <Image
-                                source={SPECIES_AVATARS[s.species]}
-                                style={styles.speciesAvatar}
-                            />
-                            <Text style={styles.speciesName}>{s.species}</Text>
-                            <Text style={styles.speciesDesc}>{s.desc}</Text>
-                        </TouchableOpacity>
-                    ))}
+                <View style={styles.transferCard}>
+                    <Text style={styles.transferEmoji}>📱 ← 💻</Text>
+                    <Text style={styles.transferTitle}>How to get your companion</Text>
+                    <Text style={styles.transferStep}>1. Open Fireside on your PC</Text>
+                    <Text style={styles.transferStep}>2. Create your companion there</Text>
+                    <Text style={styles.transferStep}>3. Go to Settings → Pair Phone</Text>
+                    <Text style={styles.transferStep}>4. Scan the QR code with this app</Text>
                 </View>
 
-                {/* Name input */}
-                <TextInput
-                    style={styles.nameInput}
-                    value={adoptName}
-                    onChangeText={setAdoptName}
-                    placeholder="Name your companion..."
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="words"
-                    maxLength={20}
-                />
-
-                {/* Adopt button */}
-                <TouchableOpacity
-                    style={[styles.adoptBtn, (!adoptName.trim() || adopting) && styles.adoptBtnDisabled]}
-                    onPress={handleAdopt}
-                    disabled={!adoptName.trim() || adopting}
-                    activeOpacity={0.7}
-                >
-                    <Text style={styles.adoptBtnText}>
-                        {adopting ? "Adopting..." : `Adopt ${adoptName.trim() || "companion"}`}
-                    </Text>
-                </TouchableOpacity>
+                <Text style={styles.transferNote}>
+                    Your companion's name, species, personality, skills, and level will all transfer from your PC. They're the same companion — just portable!
+                </Text>
             </ScrollView>
         );
     }
@@ -635,7 +600,7 @@ const styles = StyleSheet.create({
         fontSize: fontSize.tiny,
         color: colors.textDim,
     },
-    // Adoption flow styles
+    // Companion transfer styles (companion comes from PC)
     adoptContent: {
         paddingHorizontal: spacing.lg,
         paddingTop: 80,
@@ -655,67 +620,39 @@ const styles = StyleSheet.create({
         textAlign: "center",
         marginBottom: spacing.xxl,
     },
-    speciesGrid: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: spacing.sm,
-        marginBottom: spacing.xxl,
-    },
-    speciesCard: {
-        width: "31%",
+    transferCard: {
         backgroundColor: colors.bgCard,
-        borderRadius: borderRadius.md,
+        borderRadius: borderRadius.lg,
         borderWidth: 1,
-        borderColor: colors.glassBorder,
-        paddingVertical: spacing.md,
-        alignItems: "center",
+        borderColor: colors.neonBorder,
+        padding: spacing.xl,
+        marginBottom: spacing.xl,
+        ...shadows.card,
     },
-    speciesCardSelected: {
-        backgroundColor: colors.neonGlow,
-        borderColor: colors.neon,
+    transferEmoji: {
+        fontSize: 32,
+        textAlign: "center",
+        marginBottom: spacing.md,
     },
-    speciesAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        marginBottom: spacing.xs,
-    },
-    speciesName: {
-        fontFamily: "Inter_500Medium",
-        fontSize: fontSize.xs,
+    transferTitle: {
+        fontFamily: "Inter_600SemiBold",
+        fontSize: fontSize.md,
         color: colors.textPrimary,
-        textTransform: "capitalize",
+        textAlign: "center",
+        marginBottom: spacing.md,
     },
-    speciesDesc: {
+    transferStep: {
         fontFamily: "Inter_400Regular",
-        fontSize: fontSize.tiny,
+        fontSize: fontSize.sm,
+        color: colors.textSecondary,
+        lineHeight: 24,
+        paddingLeft: spacing.sm,
+    },
+    transferNote: {
+        fontFamily: "Inter_400Regular",
+        fontSize: fontSize.xs,
         color: colors.textDim,
         textAlign: "center",
-    },
-    nameInput: {
-        backgroundColor: colors.bgInput,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-        borderRadius: borderRadius.md,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.lg,
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.lg,
-        color: colors.textPrimary,
-        marginBottom: spacing.lg,
-    },
-    adoptBtn: {
-        backgroundColor: colors.neon,
-        borderRadius: borderRadius.md,
-        paddingVertical: spacing.lg,
-        alignItems: "center",
-    },
-    adoptBtnDisabled: {
-        opacity: 0.4,
-    },
-    adoptBtnText: {
-        fontFamily: "Inter_600SemiBold",
-        fontSize: fontSize.lg,
-        color: colors.bgPrimary,
+        lineHeight: 18,
     },
 });

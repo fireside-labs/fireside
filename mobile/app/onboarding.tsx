@@ -19,6 +19,7 @@ import {
     StyleSheet,
     Alert,
 } from "react-native";
+import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -33,11 +34,8 @@ export async function hasOnboarded(): Promise<boolean> {
 
 type OnboardingStep = "welcome" | "connect" | "waitlist_done" | "bridge" | "vpn_guide" | "mode" | "permissions" | "done";
 
-interface OnboardingV2Props {
-    onComplete: () => void;
-}
-
-export default function OnboardingV2({ onComplete }: OnboardingV2Props) {
+export default function OnboardingV2() {
+    const router = useRouter();
     const [step, setStep] = useState<OnboardingStep>("welcome");
     const [waitlistEmail, setWaitlistEmail] = useState("");
     const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
@@ -299,7 +297,7 @@ export default function OnboardingV2({ onComplete }: OnboardingV2Props) {
                 </Text>
                 <TouchableOpacity
                     style={styles.doneBtn}
-                    onPress={onComplete}
+                    onPress={() => router.replace("/(tabs)/care")}
                     activeOpacity={0.8}
                 >
                     <Text style={styles.doneBtnText}>Got it 🔥</Text>
@@ -407,7 +405,7 @@ export default function OnboardingV2({ onComplete }: OnboardingV2Props) {
                     ? "Your companion is waiting. Go say hello!"
                     : "Your AI assistant is ready. Try asking it something."}
             </Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={onComplete} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => router.replace("/(tabs)/care")} activeOpacity={0.8}>
                 <Text style={styles.primaryBtnText}>Let's go 🔥</Text>
             </TouchableOpacity>
         </View>

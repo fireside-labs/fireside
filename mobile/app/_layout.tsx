@@ -20,6 +20,7 @@ import { getHost } from "../src/api";
 import { hasOnboarded } from "./onboarding";
 import { registerForPushNotifications, getNotificationRoute } from "../src/notifications";
 import { ModeProvider } from "../src/ModeContext";
+import { AgentProvider } from "../src/AgentContext";
 import { colors } from "../src/theme";
 
 export default function RootLayout() {
@@ -87,10 +88,12 @@ export default function RootLayout() {
 
     return (
         <ModeProvider>
-            <View style={styles.container}>
-                <StatusBar style="light" />
-                <Slot />
-            </View>
+            <AgentProvider>
+                <View style={styles.container}>
+                    <StatusBar style="light" />
+                    <Slot />
+                </View>
+            </AgentProvider>
         </ModeProvider>
     );
 }

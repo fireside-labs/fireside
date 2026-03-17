@@ -71,7 +71,7 @@ async function baseUrl(): Promise<string> {
     const host = await getActiveHost();
     if (!host) throw new Error("No host configured");
     // Ensure port is included
-    const hostWithPort = host.includes(":") ? host : `${host}:8765`;
+    const hostWithPort = host.includes(":") ? host : `${host}:9099`;
     const h = hostWithPort.startsWith("http") ? hostWithPort : `http://${hostWithPort}`;
     return h.replace(/\/+$/, "");
 }
@@ -277,6 +277,64 @@ export const companionAPI = {
     networkStatus: () =>
         apiFetch<{ local_ip: string; tailscale_ip: string | null; bridge_active: boolean }>(
             "/api/v1/network/status"
+        ),
+
+    /** List available models from brain-installer registry. */
+    brainModels: () =>
+        apiFetch<{ models: Array<{ id: string; name: string; size: string; quantization: string; loaded: boolean; vram_required?: string }> }>(
+            "/api/v1/brain/models"
+        ),
+
+    /** Get currently active model. */
+    brainActive: () =>
+        apiFetch<{ model: string; backend: string; context_length?: number; gpu_layers?: number }>(
+            "/api/v1/brain/active"
+        ),
+
+    /** Switch the active model on PC. */
+    brainSwitch: (modelId: string) =>
+        apiFetch<{ ok: boolean; model: string; message?: string }>(
+            "/api/v1/brain/switch",
+            { method: "POST", body: JSON.stringify({ model_id: modelId }) }
+        ),
+
+    /** Get companion skills (RPG toggle cards). */
+    skills: () =>
+        apiFetch<{ skills: Array<{ id: string; name: string; description: string; emoji: string; enabled: boolean; level: number; xp_cost?: number }> }>(
+            "/api/v1/companion/skills"
+        ),
+
+    /** Toggle a skill on/off. */
+    skillToggle: (skillId: string, enabled: boolean) =>
+        apiFetch<{ ok: boolean; skill: { id: string; enabled: boolean } }>(
+            "/api/v1/companion/skills/toggle",
+            { method: "POST", body: JSON.stringify({ skill_id: skillId, enabled }) }
+        ),
+
+    /** Get personality traits (soul file). */
+    personality: () =>
+        apiFetch<{ traits: Record<string, string>; voice_style?: string; greeting?: string; bio?: string }>(
+            "/api/v1/companion/personality"
+        ),
+
+    /** Update personality trait. */
+    personalityUpdate: (traits: Record<string, string>) =>
+        apiFetch<{ ok: boolean; traits: Record<string, string> }>(
+            "/api/v1/companion/personality",
+            { method: "POST", body: JSON.stringify({ traits }) }
+        ),
+
+    /** Get companion pet state (mood/energy/hunger). */
+    petState: () =>
+        apiFetch<{ mood: number; energy: number; hunger: number; last_interaction?: string }>(
+            "/api/v1/companion/pet-state"
+        ),
+
+    /** Interact with companion (feed/walk/play). */
+    interact: (action: "feed" | "walk" | "play", item?: string) =>
+        apiFetch<{ ok: boolean; state: { mood: number; energy: number; hunger: number }; message: string }>(
+            "/api/v1/companion/interact",
+            { method: "POST", body: JSON.stringify({ action, item }) }
         ),
 };
 

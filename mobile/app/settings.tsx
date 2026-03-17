@@ -17,6 +17,7 @@ import {
     Switch,
     Alert,
 } from "react-native";
+import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMode } from "../src/ModeContext";
@@ -25,6 +26,7 @@ import { useAgent } from "../src/AgentContext";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../src/theme";
 
 export default function SettingsScreen() {
+    const router = useRouter();
     const { mode, setMode, isPetMode } = useMode();
     const { isOnline, companionData } = useConnection();
     const { agent } = useAgent();
@@ -55,9 +57,12 @@ export default function SettingsScreen() {
                     text: "Re-pair",
                     style: "destructive",
                     onPress: async () => {
-                        await AsyncStorage.removeItem("fireside_host");
+                        await AsyncStorage.removeItem("valhalla_host");
+                        await AsyncStorage.removeItem("valhalla_tailscale_ip");
+                        await AsyncStorage.removeItem("valhalla_conn_pref");
                         await AsyncStorage.removeItem("pairingToken");
-                        // In a full implementation, navigate to onboarding
+                        await AsyncStorage.removeItem("connectionMode");
+                        router.replace("/onboarding");
                     },
                 },
             ]

@@ -15,7 +15,8 @@ const NAV_SECTIONS: NavSection[] = [
     {
         title: "Your AI",
         items: [
-            { href: "/", label: "Chat", icon: "💬" },
+            { href: "/", label: "Hub", icon: "🔥" },
+            { href: "/chat", label: "Chat", icon: "💬" },
             { href: "/brains", label: "Brain", icon: "🧠" },
             { href: "/skills", label: "Skills", icon: "✦" },
             { href: "/personality", label: "Personality", icon: "🦊" },

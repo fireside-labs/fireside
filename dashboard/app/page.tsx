@@ -247,7 +247,8 @@ export default function CampfireHub() {
           {/* ── Conversation Sidebar ── */}
           <div className={`fs-convo-sidebar ${sidebarOpen ? "open" : "closed"}`}>
             <div className="fs-convo-header">
-              <span className="fs-convo-title">🔥 Conversations</span>
+              <button className="fs-back-hub" onClick={() => { setActiveView("hub"); playWhoosh(); }} title="Back to Hub">🔥 Hub</button>
+              <span className="fs-convo-title">Conversations</span>
               <button className="fs-new-chat" onClick={() => { setChatHistory([]); setActiveConvo(null); }} title="New chat">＋</button>
             </div>
 
@@ -645,6 +646,12 @@ const pageCSS = `
     transition: all 0.2s;
   }
   .fs-new-chat:hover { background: rgba(245,158,11,0.15); transform: scale(1.05); }
+  .fs-back-hub {
+    padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 800;
+    background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.12);
+    color: #C4A882; cursor: pointer; transition: all 0.2s; font-family: 'Outfit';
+  }
+  .fs-back-hub:hover { background: rgba(245,158,11,0.12); color: #F59E0B; border-color: rgba(245,158,11,0.25); }
 
   .fs-convo-search-wrap { padding: 10px 14px; }
   .fs-convo-search {
