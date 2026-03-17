@@ -9,7 +9,10 @@
  * Calls Thor's Tauri commands for actual system operations.
  * Designed for 1280×800 Tauri window. Fire amber palette.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import EmberParticles from "@/components/EmberParticles";
+import BrainSelectScreen from "@/components/BrainSelectScreen";
+import { playWhoosh, playPing, playTick, startFireLoop, playCrackle } from "@/components/FiresideSounds";
 
 // ---------- Types ----------------------------------------------------------
 
@@ -35,9 +38,11 @@ interface InstallerConfig {
   brainSize: string;
   brainModel: string;
   actualModel: string;
+  brainLabel: string;
+  brainDisplaySize: string;
 }
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 const SPECIES = [
   { id: "cat", emoji: "🐱", label: "Cat" },
@@ -55,6 +60,14 @@ const STYLES = [
   { id: "warm", emoji: "🌿", label: "Warm", desc: "Empathetic, supportive, reads the room" },
 ];
 
+const MODEL_LABELS: Record<string, string> = {
+    "llama-3.1-8b-q6": "⚡ Llama 3.1 8B (Q6_K)",
+    "mistral-v0.3-7b": "⚡ Mistral v0.3 7B",
+    "qwen-2.5-7b": "⚡ Qwen 2.5 7B",
+    "qwen-2.5-35b-q4": "🧠 Qwen 2.5 35B (Q4_K)",
+    "command-r-35b": "🧠 Command R (v01)",
+};
+
 // ---------- Tauri Helpers --------------------------------------------------
 
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -63,9 +76,12 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
   if (w.__TAURI__?.core?.invoke) {
     return w.__TAURI__.core.invoke(cmd, args) as Promise<T>;
   }
-  // Browser fallback — mock for development
+  // Browser fallback — mock for development (slower so you feel the fire build)
   console.log(`[mock] invoke(${cmd})`, args);
-  await new Promise((r) => setTimeout(r, 800));
+  const delay = (cmd === "check_python" || cmd === "check_node" || cmd === "clone_repo" || cmd === "install_deps" || cmd === "write_config")
+    ? 1500 + Math.random() * 1000  // Install steps: 1.5-2.5s each
+    : 800;
+  await new Promise((r) => setTimeout(r, delay));
   if (cmd === "get_system_info") return { os: "Windows 11", arch: "x86_64", ram_gb: 32, gpu: "NVIDIA RTX 4090", vram_gb: 24 } as T;
   if (cmd === "check_python") return "3.12.2" as T;
   if (cmd === "check_node") return "20.11.0" as T;
@@ -87,6 +103,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
     brainSize: "smart",
     brainModel: "7B",
     actualModel: "llama-3.1-8b-q6",
+    brainLabel: "Llama 3.1 8B",
+    brainDisplaySize: "~4.9 GB",
   });
   const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
   const [sysChecks, setSysChecks] = useState<SysCheck[]>([]);
@@ -95,14 +113,25 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   const [brainProgress, setBrainProgress] = useState(0);
   const [brainDownloading, setBrainDownloading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"pending" | "testing" | "success" | "fail">("pending");
+  const [installIntensity, setInstallIntensity] = useState(0);
+  const [sparkBurst, setSparkBurst] = useState(false);
+
+  const fireLoopRef = useRef<(() => void) | null>(null);
 
   const goTo = useCallback((s: Step) => {
+    playWhoosh();
     setAnimClass("installer-exit");
     setTimeout(() => {
       setStep(s);
       setAnimClass("installer-enter");
     }, 250);
   }, []);
+
+  // Fire crackling runs throughout the entire installer
+  useEffect(() => {
+    fireLoopRef.current = startFireLoop(step === 6 ? 0.7 : 0.2);
+    return () => { fireLoopRef.current?.(); };
+  }, [step]);
 
   // ── Step 1: System Check (auto-run) ──
   useEffect(() => {
@@ -124,20 +153,21 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         setSysChecks([...checks]);
       };
       await new Promise((r) => setTimeout(r, 400));
-      update(0, `${info.os} (${info.arch})`);
+      update(0, `${info.os} (${info.arch})`); playPing();
       await new Promise((r) => setTimeout(r, 400));
-      update(1, `${info.ram_gb}GB RAM`);
+      update(1, `${info.ram_gb}GB RAM`); playPing();
       await new Promise((r) => setTimeout(r, 400));
-      update(2, info.gpu || "No GPU detected");
+      update(2, info.gpu || "No GPU detected"); playPing();
       await new Promise((r) => setTimeout(r, 400));
-      update(3, info.vram_gb ? `${info.vram_gb}GB VRAM` : "Not detected");
-      // No auto-advance — let user review system info + pick model
+      update(3, info.vram_gb ? `${info.vram_gb}GB VRAM` : "Not detected"); playPing();
+      // Auto-advance to brain selection after a brief pause
+      await new Promise((r) => setTimeout(r, 800));
     })();
   }, [step, goTo]);
 
-  // ── Step 5: Installing ──
+  // ── Step 6: Installing ──
   useEffect(() => {
-    if (step !== 5) return;
+    if (step !== 6) return;
     const steps: InstallStep[] = [
       { label: "Checking Python", status: "pending" },
       { label: "Checking Node.js", status: "pending" },
@@ -148,9 +178,12 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
     setInstallSteps(steps);
 
     (async () => {
+      const totalSteps = steps.length;
       const run = async (i: number, fn: () => Promise<void>) => {
         steps[i] = { ...steps[i], status: "running" };
         setInstallSteps([...steps]);
+        // Ramp intensity as we progress through steps
+        setInstallIntensity(Math.round(((i + 0.5) / totalSteps) * 80));
         try {
           await fn();
           steps[i] = { ...steps[i], status: "done" };
@@ -158,6 +191,10 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
           steps[i] = { ...steps[i], status: "fail" };
         }
         setInstallSteps([...steps]);
+        // Spark burst on step completion!
+        setSparkBurst(true);
+        setTimeout(() => setSparkBurst(false), 150);
+        setInstallIntensity(Math.round(((i + 1) / totalSteps) * 80));
       };
 
       await run(0, async () => {
@@ -188,19 +225,21 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         });
       });
 
+      // Final ignition — max intensity
+      setInstallIntensity(100);
+      setSparkBurst(true);
+      setTimeout(() => setSparkBurst(false), 200);
+
       // Check results: config write (step 4) is critical, others are non-critical
       const hasCriticalFail = steps[4].status === "fail";
       const hasWarnings = steps.some((s, i) => i < 4 && s.status === "fail");
 
       if (hasCriticalFail) {
-        // Config write failed — can't proceed, stay on install screen
-        // User will see ❌ on the failed step
+        setInstallIntensity(10);
         return;
       }
 
       if (hasWarnings) {
-        // Non-critical failures (Python/Node/packages might already be installed)
-        // Mark them as warnings instead of hard failures
         steps.forEach((s, i) => {
           if (i < 4 && s.status === "fail") {
             steps[i] = { ...s, status: "done", label: `${s.label} (skipped — already set up)` };
@@ -209,13 +248,13 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         setInstallSteps([...steps]);
       }
 
-      setTimeout(() => goTo(6), 800);
+      setTimeout(() => goTo(7), 800);
     })();
   }, [step, config, goTo, sysInfo]);
 
-  // ── Step 6: Brain Download ──
+  // ── Step 7: Brain Download ──
   useEffect(() => {
-    if (step !== 6 || brainDownloading) return;
+    if (step !== 7 || brainDownloading) return;
     // Don't auto-start — user chooses to download or skip
   }, [step, brainDownloading]);
 
@@ -236,22 +275,22 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       clearInterval(progressInterval);
       setBrainProgress(100);
       localStorage.setItem("fireside_model", model);
-      setTimeout(() => goTo(7), 600);
+      setTimeout(() => goTo(8), 600);
     } catch {
       setBrainDownloading(false);
       setBrainProgress(0);
     }
   }, [config.actualModel, goTo]);
 
-  // ── Step 7: Connection Test ──
+  // ── Step 8: Connection Test ──
   useEffect(() => {
-    if (step !== 7) return;
+    if (step !== 8) return;
     setConnectionStatus("testing");
     (async () => {
       try {
         await tauriInvoke("test_connection");
         setConnectionStatus("success");
-        setTimeout(() => goTo(8), 1500);
+        setTimeout(() => goTo(9), 1500);
       } catch {
         setConnectionStatus("fail");
       }
@@ -259,11 +298,11 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   }, [step, goTo]);
 
   const speciesEmoji = SPECIES.find((s) => s.id === config.companionSpecies)?.emoji || "🦊";
-  const brainLabel = (sysInfo?.vram_gb || 0) >= 20 ? "Deep Thinker (35B)" : "Smart & Fast (8B)";
-  const brainSize = (sysInfo?.vram_gb || 0) >= 20 ? "~20 GB" : "~4.6 GB";
+  const brainLabel = config.brainLabel || "Llama 3.1 8B";
+  const brainSize = config.brainDisplaySize || "~4.9 GB";
 
   // ── Shared progress bar ──
-  const progress = ((step / 8) * 100);
+  const progress = ((step / 9) * 100);
 
   return (
     <div className="installer-root">
@@ -273,6 +312,13 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       <div className="installer-progress">
         <div className="installer-progress-fill" style={{ width: `${progress}%` }} />
       </div>
+
+      {/* Persistent ember background — the whole installer is fireside */}
+      <EmberParticles
+        intensity={step === 6 ? installIntensity : 12}
+        burst={step === 6 && sparkBurst}
+        style={{ position: 'fixed', inset: 0, zIndex: 1 }}
+      />
 
       <div className={`installer-content ${animClass}`}>
         {/* Step 0: Welcome */}
@@ -288,7 +334,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
           </div>
         )}
 
-        {/* Step 1: System Check */}
+        {/* Step 1: System Check — clean, auto-advances to brain select */}
         {step === 1 && (
           <div className="installer-center">
             <h2 className="installer-title">Checking your system...</h2>
@@ -304,73 +350,54 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               ))}
             </div>
             {sysInfo && (
-              <div className="installer-recommended">
-                <span>Recommended brain: </span>
-                <div className="mt-2">
-                  <strong className="block text-lg">
-                    {(sysInfo.vram_gb || 0) >= 20
-                      ? "🧠 Deep Thinker (35B Params)"
-                      : "⚡ Smart & Fast (8B Params)"}
-                  </strong>
-                  <p className="text-[10px] text-[var(--color-rune-dim)] mt-1">
-                    {(sysInfo.vram_gb || 0) >= 20
-                      ? "Requires 24GB+ VRAM for full speed"
-                      : "Optimized for your hardware"}
+              <>
+                <div className="installer-recommended">
+                  <span>System ready</span>
+                  <p style={{ fontSize: 12, color: '#7A6A5A', marginTop: 4 }}>
+                    {sysInfo.gpu || 'CPU'} · {sysInfo.vram_gb ? `${sysInfo.vram_gb}GB VRAM` : `${sysInfo.ram_gb}GB RAM`}
                   </p>
                 </div>
-
-                {/* F1: Advanced Model Picker */}
-                <div className="mt-6 pt-4 border-t border-[rgba(245,158,11,0.1)] text-left">
-                  <button
-                    onClick={() => setConfig(c => ({ ...c, showAdvanced: !((c as any).showAdvanced) }))}
-                    className="text-[10px] uppercase tracking-widest text-[var(--color-rune-dim)] hover:text-[var(--color-neon)] transition-colors"
-                  >
-                    {(config as any).showAdvanced ? "▾ Hide Advanced" : "▸ Advanced: Pick Model"}
-                  </button>
-
-                  {(config as any).showAdvanced && (
-                    <div className="mt-3 space-y-2 animate-enter">
-                      <select
-                        className="installer-input text-xs py-2"
-                        value={config.actualModel}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const isDeep = val.includes("35b") || val.includes("14b");
-                          setConfig(c => ({
-                            ...c,
-                            actualModel: val,
-                            brainSize: isDeep ? "deep" : "smart"
-                          }));
-                        }}
-                      >
-                        <optgroup label="Fast (8B - 10GB+ VRAM)">
-                          <option value="llama-3.1-8b-q6">Llama 3.1 8B (Q6_K)</option>
-                          <option value="mistral-v0.3-7b">Mistral v0.3 7B</option>
-                          <option value="qwen-2.5-7b">Qwen 2.5 7B</option>
-                        </optgroup>
-                        <optgroup label="Deep (35B+ - 24GB+ VRAM)">
-                          <option value="qwen-2.5-35b-q4">Qwen 2.5 35B (Q4_K)</option>
-                          <option value="command-r-35b">Command R (v01)</option>
-                        </optgroup>
-                      </select>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {sysInfo && (
-              <div className="installer-spacer" />
-            )}
-            {sysInfo && (
-              <button className="installer-btn-primary" onClick={() => goTo(2)}>
-                Continue →
-              </button>
+                <div className="installer-spacer" />
+                <button className="installer-btn-primary" onClick={() => goTo(2)}>
+                  Choose Your Brain →
+                </button>
+              </>
             )}
           </div>
         )}
 
-        {/* Step 2: Choose Companion */}
+        {/* Step 2: Brain Selection — premium tier picker */}
         {step === 2 && (
+          <BrainSelectScreen
+            selected={config.brainSize === "deep" ? "deep" : "fast"}
+            onSelect={(brainId) => {
+              const MODEL_MAP: Record<string, string> = {
+                fast: "llama-3.1-8b-q6",
+                deep: "qwen-2.5-14b-q4",
+                cloud: "kimi-k2",
+              };
+              const LABEL_MAP: Record<string, { label: string; size: string }> = {
+                fast: { label: "Llama 3.1 8B (Q4)", size: "~4.9 GB" },
+                deep: { label: "Qwen 2.5 14B (Q4)", size: "~9.0 GB" },
+                cloud: { label: "Cloud (API)", size: "No download" },
+              };
+              setConfig(c => ({
+                ...c,
+                brainSize: brainId,
+                actualModel: MODEL_MAP[brainId] || "llama-3.1-8b-q6",
+                brainLabel: LABEL_MAP[brainId]?.label || brainId,
+                brainDisplaySize: LABEL_MAP[brainId]?.size || "~5 GB",
+              }));
+              goTo(3);
+            }}
+            detectedVram={sysInfo?.vram_gb || 0}
+            onBack={() => goTo(1)}
+            fullscreen
+          />
+        )}
+
+        {/* Step 3: Choose Companion */}
+        {step === 3 && (
           <div className="installer-center">
             <h2 className="installer-title">Choose a companion for your journey</h2>
             <p className="installer-subtitle">Every journey starts with a friend.</p>
@@ -379,7 +406,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 <button
                   key={s.id}
                   className={`installer-species-card ${config.companionSpecies === s.id ? "selected" : ""}`}
-                  onClick={() => setConfig((c) => ({ ...c, companionSpecies: s.id }))}
+                  onClick={() => { playTick(); setConfig((c) => ({ ...c, companionSpecies: s.id })); }}
                 >
                   <span className="installer-species-emoji">{s.emoji}</span>
                   <span className="installer-species-label">{s.label}</span>
@@ -393,14 +420,14 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               placeholder="Name your companion..."
             />
             <div className="installer-nav">
-              <button className="installer-btn-back" onClick={() => goTo(1)}>← Back</button>
-              <button className="installer-btn-primary" onClick={() => goTo(3)}>Next →</button>
+              <button className="installer-btn-back" onClick={() => goTo(2)}>← Back</button>
+              <button className="installer-btn-primary" onClick={() => goTo(4)}>Next →</button>
             </div>
           </div>
         )}
 
-        {/* Step 3: Create AI */}
-        {step === 3 && (
+        {/* Step 4: Create AI */}
+        {step === 4 && (
           <div className="installer-center">
             <h2 className="installer-title">Every companion has someone at the fireside.</h2>
             <p className="installer-subtitle">
@@ -426,7 +453,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 <button
                   key={s.id}
                   className={`installer-style-card ${config.agentStyle === s.id ? "selected" : ""}`}
-                  onClick={() => setConfig((c) => ({ ...c, agentStyle: s.id }))}
+                  onClick={() => { playTick(); setConfig((c) => ({ ...c, agentStyle: s.id })); }}
                 >
                   <span className="installer-style-emoji">{s.emoji}</span>
                   <span className="installer-style-label">{s.label}</span>
@@ -435,14 +462,14 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               ))}
             </div>
             <div className="installer-nav">
-              <button className="installer-btn-back" onClick={() => goTo(2)}>← Back</button>
-              <button className="installer-btn-primary" onClick={() => goTo(4)}>Next →</button>
+              <button className="installer-btn-back" onClick={() => goTo(3)}>← Back</button>
+              <button className="installer-btn-primary" onClick={() => goTo(5)}>Next →</button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Confirmation */}
-        {step === 4 && (
+        {/* Step 5: Confirmation */}
+        {step === 5 && (
           <div className="installer-center">
             <h2 className="installer-title">Ready to install.</h2>
             <div className="installer-confirm-card">
@@ -468,91 +495,111 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               <div className="installer-confirm-row">
                 <span className="installer-confirm-label">Brain</span>
                 <span className="installer-confirm-value">
-                  {sysInfo && (sysInfo.vram_gb || 0) >= 20
-                    ? "🧠 Deep Thinker (35B Params)"
-                    : "⚡ Smart & Fast (8B Params)"}
+                  {MODEL_LABELS[config.actualModel] || config.actualModel}
                 </span>
               </div>
             </div>
             <div className="installer-nav">
-              <button className="installer-btn-back" onClick={() => goTo(3)}>← Back</button>
-              <button className="installer-btn-install" onClick={() => goTo(5)}>
+              <button className="installer-btn-back" onClick={() => goTo(4)}>← Back</button>
+              <button className="installer-btn-install" onClick={() => goTo(6)}>
                 Install Fireside →
               </button>
             </div>
           </div>
         )}
 
-        {/* Step 5: Installing */}
-        {step === 5 && (
-          <div className="installer-center">
-            <h2 className="installer-title">
-              {config.agentName || "Atlas"} and {config.companionName || "Ember"} are getting ready...
-            </h2>
-            <div className="installer-install-steps">
-              {installSteps.map((s, i) => (
-                <div key={i} className={`installer-install-row ${s.status}`}>
-                  <span className="installer-install-icon">
-                    {s.status === "pending" ? "○" : s.status === "running" ? "⏳" : s.status === "done" ? "✔" : "❌"}
-                  </span>
-                  <span className="installer-install-label">{s.label}</span>
-                </div>
-              ))}
-            </div>
-            <div className="installer-install-companion">
-              {speciesEmoji}
-            </div>
-          </div>
-        )}
-
-        {/* Step 6: Brain Download */}
+        {/* Step 6: Installing — with ember fire crackling */}
         {step === 6 && (
-          <div className="installer-center">
-            <span style={{ fontSize: 48, display: 'block', marginBottom: 16, animation: 'float 3s ease-in-out infinite' }}>🧠</span>
-            <h2 className="installer-title">Download your AI brain</h2>
-            <p className="installer-subtitle" style={{ marginBottom: 24 }}>
-              {brainLabel} — {brainSize}
-            </p>
+          <div className="installer-center" style={{ position: 'relative' }}>
+            {/* Ember particle system — intensifies with install progress */}
+            <EmberParticles
+              intensity={installIntensity}
+              burst={sparkBurst}
+              style={{ position: 'fixed', inset: 0, zIndex: 0 }}
+            />
 
-            {!brainDownloading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-                <button className="installer-btn-primary" onClick={startBrainDownload}>
-                  Download Brain →
-                </button>
-                <button
-                  className="installer-btn-secondary"
-                  onClick={() => goTo(8)}
-                  style={{ opacity: 0.6, fontSize: 13 }}
-                >
-                  Download Later (power users)
-                </button>
-              </div>
-            ) : (
-              <div style={{ width: '100%', maxWidth: 400 }}>
-                <div style={{ width: '100%', height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginBottom: 12 }}>
-                  <div style={{
-                    width: `${Math.min(brainProgress, 100)}%`,
-                    height: '100%',
-                    borderRadius: 4,
-                    background: 'linear-gradient(90deg, #F59E0B, #D97706)',
-                    boxShadow: '0 0 12px rgba(245,158,11,0.5)',
-                    transition: 'width 0.3s ease',
-                  }} />
-                </div>
-                <p style={{ textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
-                  {brainProgress < 100 ? `Downloading... ${Math.round(brainProgress)}%` : '✔ Download complete!'}
-                </p>
-              </div>
-            )}
+            <div style={{ position: 'relative', zIndex: 2 }}>
+              <h2 className="installer-title">
+                {config.agentName || "Atlas"} and {config.companionName || "Ember"} are getting ready...
+              </h2>
 
-            <div className="installer-install-companion" style={{ marginTop: 32 }}>
-              {speciesEmoji}
+              {/* Fire-intensity bar */}
+              <div className="installer-fire-bar">
+                <div
+                  className="installer-fire-bar-fill"
+                  style={{ width: `${installIntensity}%` }}
+                />
+              </div>
+
+              <div className="installer-install-steps">
+                {installSteps.map((s, i) => (
+                  <div key={i} className={`installer-install-row ${s.status}`}>
+                    <span className="installer-install-icon">
+                      {s.status === "pending" ? "○" : s.status === "running" ? "⏳" : s.status === "done" ? "✔" : "❌"}
+                    </span>
+                    <span className="installer-install-label">{s.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className={`installer-install-companion ${installIntensity > 60 ? 'installer-companion-hot' : ''}`}>
+                {speciesEmoji}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Step 7: Connection Test */}
+        {/* Step 7: Brain Download — with ambient embers */}
         {step === 7 && (
+          <div className="installer-center" style={{ position: 'relative' }}>
+            <EmberParticles
+              intensity={brainDownloading ? Math.min(brainProgress * 0.8, 80) : 20}
+              burst={brainProgress >= 100}
+              style={{ position: 'fixed', inset: 0, zIndex: 0 }}
+            />
+            <div style={{ position: 'relative', zIndex: 2 }}>
+              <span style={{ fontSize: 48, display: 'block', marginBottom: 16, animation: 'float 3s ease-in-out infinite' }}>🧠</span>
+              <h2 className="installer-title">Download your AI brain</h2>
+              <p className="installer-subtitle" style={{ marginBottom: 24 }}>
+                {brainLabel} — {brainSize}
+              </p>
+
+              {!brainDownloading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+                  <button className="installer-btn-primary" onClick={startBrainDownload}>
+                    Download Brain →
+                  </button>
+                  <button
+                    className="installer-btn-secondary"
+                    onClick={() => goTo(9)}
+                    style={{ opacity: 0.6, fontSize: 13 }}
+                  >
+                    Download Later (power users)
+                  </button>
+                </div>
+              ) : (
+                <div style={{ width: '100%', maxWidth: 400 }}>
+                  {/* Fire-trail progress bar */}
+                  <div className="installer-fire-bar" style={{ marginBottom: 12 }}>
+                    <div
+                      className="installer-fire-bar-fill"
+                      style={{ width: `${Math.min(brainProgress, 100)}%` }}
+                    />
+                  </div>
+                  <p style={{ textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+                    {brainProgress < 100 ? `Downloading... ${Math.round(brainProgress)}%` : '✔ Download complete!'}
+                  </p>
+                </div>
+              )}
+
+              <div className="installer-install-companion" style={{ marginTop: 32 }}>
+                {speciesEmoji}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 8: Connection Test */}
+        {step === 8 && (
           <div className="installer-center">
             <span style={{ fontSize: 48, display: 'block', marginBottom: 16, animation: connectionStatus === 'testing' ? 'pulse 1.5s ease-in-out infinite' : 'none' }}>
               {connectionStatus === 'success' ? '✅' : connectionStatus === 'fail' ? '❌' : '⚡'}
@@ -568,15 +615,24 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               {connectionStatus === 'fail' && 'Don\'t worry — you can configure this in Settings.'}
             </p>
             {connectionStatus === 'fail' && (
-              <button className="installer-btn-primary" style={{ marginTop: 16 }} onClick={() => goTo(8)}>
+              <button className="installer-btn-primary" style={{ marginTop: 16 }} onClick={() => goTo(9)}>
                 Continue Anyway →
+              </button>
+            )}
+            {connectionStatus === 'testing' && (
+              <button
+                className="installer-btn-secondary"
+                style={{ marginTop: 16, opacity: 0.6, fontSize: 13 }}
+                onClick={() => goTo(9)}
+              >
+                Skip →
               </button>
             )}
           </div>
         )}
 
-        {/* Step 8: Success */}
-        {step === 8 && (
+        {/* Step 9: Success */}
+        {step === 9 && (
           <div className="installer-center">
             <div className="installer-success-fire">🔥</div>
             <h2 className="installer-success-title">Fireside is live.</h2>
@@ -907,6 +963,42 @@ const installerCSS = `
     0%, 100% { transform: translateY(0) rotate(-2deg); }
     33% { transform: translateY(-12px) rotate(1deg); }
     66% { transform: translateY(-6px) rotate(-1deg); }
+  }
+
+  /* ── Fire-trail progress bar ── */
+  .installer-fire-bar {
+    width: 100%; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.06); overflow: hidden;
+    margin: 16px 0 24px;
+    position: relative;
+  }
+  .installer-fire-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #92400E, #D97706, #F59E0B, #FBBF24);
+    box-shadow: 0 0 16px rgba(245,158,11,0.5), 0 0 40px rgba(245,158,11,0.2);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .installer-fire-bar-fill::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+    animation: fireBarShimmer 1.5s ease-in-out infinite;
+  }
+  @keyframes fireBarShimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+
+  /* Companion glows hot when install progresses past 60% */
+  .installer-companion-hot {
+    filter: drop-shadow(0 0 30px rgba(245,158,11,0.6)) drop-shadow(0 8px 24px rgba(0,0,0,0.4));
+    animation: companionHotFloat 2s ease-in-out infinite;
+  }
+  @keyframes companionHotFloat {
+    0%, 100% { transform: translateY(0) rotate(-2deg) scale(1); }
+    33% { transform: translateY(-14px) rotate(2deg) scale(1.05); }
+    66% { transform: translateY(-8px) rotate(-1deg) scale(1.02); }
   }
 
   /* ── Success — celebration ── */

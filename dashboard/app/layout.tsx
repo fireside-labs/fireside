@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
 import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeToggle";
 import OnboardingGate from "@/components/OnboardingGate";
@@ -38,9 +37,11 @@ export default function RootLayout({
                         <TourProvider>
                             <OnboardingGate>
                                 <OfflineBanner />
-                                <div className="flex min-h-screen">
-                                    <Sidebar />
-                                    <main className="main-content flex-1 ml-64 p-8">{children}</main>
+                                <div className="fireside-world">
+                                    {/* Persistent fireside atmosphere */}
+                                    <div className="fireside-atmosphere" />
+                                    <div className="fireside-embers" />
+                                    <main className="fireside-main">{children}</main>
                                 </div>
                                 <TourOverlay />
                             </OnboardingGate>

@@ -2,518 +2,619 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import SpriteCharacter, { COMPANION_SHEETS } from "@/components/SpriteCharacter";
+import EmberParticles from "@/components/EmberParticles";
+import { playWhoosh, playTick } from "@/components/FiresideSounds";
 
-interface CompanionState {
-    species: string;
-    name: string;
-    owner: string;
-}
+/* ═══════════════════════════════════════════════════════════════════
+   Campfire Hub — Pixel Art Scene v2
+   Uses standalone companion images + CSS campfire
+   ═══════════════════════════════════════════════════════════════════ */
 
 const SPECIES_EMOJI: Record<string, string> = {
-    cat: "🐱", dog: "🐶", penguin: "🐧", fox: "🦊", owl: "🦉", dragon: "🐉",
+  cat: "🐱", dog: "🐶", penguin: "🐧", fox: "🦊", owl: "🦉", dragon: "🐉",
 };
 
-const SUGGESTED_PROMPTS = [
-    { text: "Take me for a walk", icon: "🌿" },
-    { text: "Remember: I like my coffee black", icon: "☕" },
-    { text: "Translate 'good morning' to Japanese", icon: "🌸" },
+const NAV_ITEMS = [
+  { id: "chat",      icon: "📖", label: "Chat",      href: null },
+  { id: "brains",    icon: "🧠", label: "Brains",    href: "/brains" },
+  { id: "settings",  icon: "⚙️", label: "Settings",  href: "/config" },
+  { id: "companion", icon: "🔮", label: "Companion", href: "/companion" },
 ];
 
-export default function ChatHomePage() {
-    const [message, setMessage] = useState("");
-    const [userName, setUserName] = useState("");
-    const [agentName, setAgentName] = useState("Atlas");
-    const [companion, setCompanion] = useState<CompanionState | null>(null);
-    const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
-    const [hasBrain, setHasBrain] = useState(true);
-    const [isTyping, setIsTyping] = useState(false);
-    const chatEndRef = useRef<HTMLDivElement>(null);
+const GREETINGS = [
+  "What should we talk about?",
+  "I'm ready when you are!",
+  "The fire's warm tonight...",
+  "Got any questions for me?",
+  "Pull up a log and let's chat!",
+];
 
-    useEffect(() => {
-        const name = localStorage.getItem("fireside_user_name") || "";
-        const agent = localStorage.getItem("fireside_agent_name") || "Atlas";
-        setUserName(name);
-        setAgentName(agent);
-        try {
-            const stored = localStorage.getItem("fireside_companion");
-            if (stored) setCompanion(JSON.parse(stored));
-        } catch { /* no companion yet */ }
-        const model = localStorage.getItem("fireside_model");
-        setHasBrain(!!model);
-    }, []);
+export default function CampfireHub() {
+  const [message, setMessage] = useState("");
+  const [userName, setUserName] = useState("");
+  const [agentName, setAgentName] = useState("Atlas");
+  const [species, setSpecies] = useState("fox");
+  const [companionName, setCompanionName] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ role: string; content: string }[]>([]);
+  const [hasBrain, setHasBrain] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
+  const [activeView, setActiveView] = useState<"hub" | "chat">("hub");
+  const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+  const [showBubble, setShowBubble] = useState(true);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [chatHistory]);
+  useEffect(() => {
+    const name = localStorage.getItem("fireside_user_name") || "";
+    const agent = localStorage.getItem("fireside_agent_name") || "Atlas";
+    setUserName(name);
+    setAgentName(agent);
+    try {
+      const stored = localStorage.getItem("fireside_companion");
+      if (stored) {
+        const c = JSON.parse(stored);
+        setSpecies(c.species || "fox");
+        setCompanionName(c.name || "");
+      }
+    } catch { /* no companion yet */ }
+    const model = localStorage.getItem("fireside_model");
+    setHasBrain(!!model);
+  }, []);
 
-    const handleSend = async () => {
-        if (!message.trim() || !hasBrain) return;
-        const userMessage = message.trim();
-        setChatHistory(prev => [...prev, { role: "user", content: userMessage }]);
-        setMessage("");
-        setIsTyping(true);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory]);
 
-        try {
-            const res = await fetch("http://127.0.0.1:8765/api/v1/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: userMessage, stream: false }),
-            });
-            if (!res.ok) throw new Error(`API error: ${res.status}`);
-            const data = await res.json();
-            setChatHistory(prev => [...prev, {
-                role: "assistant",
-                content: data.response || data.content || "I received your message but couldn't generate a response.",
-            }]);
-        } catch {
-            setChatHistory(prev => [...prev, {
-                role: "assistant",
-                content: "I'm not connected right now. Check that your brain is running in Settings.",
-            }]);
-        } finally {
-            setIsTyping(false);
-        }
-    };
+  const handleSend = async () => {
+    if (!message.trim()) return;
+    const userMessage = message.trim();
+    setChatHistory(prev => [...prev, { role: "user", content: userMessage }]);
+    setMessage("");
+    setIsTyping(true);
+    setShowBubble(false);
 
-    const companionSheet = companion ? (COMPANION_SHEETS[companion.species] || COMPANION_SHEETS.fox) : null;
-    const companionEmoji = companion ? (SPECIES_EMOJI[companion.species] || "🦊") : "🔥";
-    const hasHistory = chatHistory.length > 0;
+    if (activeView !== "chat") {
+      setActiveView("chat");
+      playWhoosh();
+    }
 
-    return (
-        <div className="fireside-dashboard">
-            <style>{dashboardCSS}</style>
+    try {
+      const res = await fetch("http://127.0.0.1:8765/api/v1/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMessage, stream: false }),
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      setChatHistory(prev => [...prev, {
+        role: "assistant",
+        content: data.response || data.content || "I received your message.",
+      }]);
+    } catch {
+      setChatHistory(prev => [...prev, {
+        role: "assistant",
+        content: "I'm not connected right now. Check that your brain is running.",
+      }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
-            {/* ── Ambient atmosphere (ported from installer) ── */}
-            <div className="fireside-ambient" />
-            <div className="fireside-particles" />
-            <div className="fireside-vignette" />
+  const companionImg = `/companions/${species}_happy.png`;
+  const displayName = companionName || agentName;
 
-            {/* ══════════════════════════════════════════════════════ */}
-            {/* HERO STATE — no chat history                          */}
-            {/* ══════════════════════════════════════════════════════ */}
-            {!hasHistory && (
-                <div className="fireside-hero">
-                    {/* Companion — center stage */}
-                    <div className="fireside-hero-companion">
-                        {companionSheet ? (
-                            <SpriteCharacter sheet={companionSheet} action="idle" scale={5} />
-                        ) : (
-                            <span className="fireside-hero-emoji">{companionEmoji}</span>
-                        )}
-                        {companion && (
-                            <p className="fireside-companion-name">{companion.name}</p>
-                        )}
-                    </div>
+  return (
+    <div className="cfh-root">
+      <style>{hubCSS}</style>
+      <EmberParticles intensity={25} className="cfh-embers" />
 
-                    {/* Greeting */}
-                    <h1 className="fireside-greeting">
-                        Hi{userName ? ` ${userName}` : " there"} <span className="fireside-fire">🔥</span>
-                    </h1>
-                    <p className="fireside-status">
-                        {hasBrain
-                            ? `${agentName} is at the fireside`
-                            : "Almost there — download a brain to begin"
-                        }
-                    </p>
+      {/* ═══════ HUB SCENE ═══════ */}
+      {activeView === "hub" && (
+        <div className="cfh-scene">
+          {/* Stars */}
+          <div className="cfh-stars">
+            {Array.from({ length: 40 }).map((_, i) => (
+              <div key={i} className="cfh-star" style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 65}%`,
+                animationDelay: `${Math.random() * 5}s`,
+                animationDuration: `${2 + Math.random() * 3}s`,
+              }} />
+            ))}
+          </div>
 
-                    {/* No brain → download button */}
-                    {!hasBrain && (
-                        <Link href="/brains">
-                            <button className="fireside-btn-primary">
-                                Download Brain →
-                            </button>
-                        </Link>
-                    )}
+          {/* Nav icons arranged in semi-circle */}
+          <div className="cfh-nav-ring">
+            {NAV_ITEMS.map((item, i) => {
+              const btn = (
+                <button
+                  className="cfh-nav-btn"
+                  onClick={() => {
+                    playTick();
+                    if (item.id === "chat") inputRef.current?.focus();
+                  }}
+                  style={{ animationDelay: `${0.3 + i * 0.12}s` }}
+                >
+                  <div className="cfh-nav-orb">
+                    <span className="cfh-nav-icon">{item.icon}</span>
+                  </div>
+                  <span className="cfh-nav-label">{item.label}</span>
+                </button>
+              );
+              if (item.href) {
+                return (
+                  <Link key={item.id} href={item.href} onClick={() => playWhoosh()}>
+                    {btn}
+                  </Link>
+                );
+              }
+              return <div key={item.id}>{btn}</div>;
+            })}
+          </div>
 
-                    {/* Has brain → input + suggestions */}
-                    {hasBrain && (
-                        <div className="fireside-hero-input-area">
-                            {/* Suggested prompts as floating pills */}
-                            <div className="fireside-pills">
-                                {SUGGESTED_PROMPTS.map((p) => (
-                                    <button
-                                        key={p.text}
-                                        className="fireside-pill"
-                                        onClick={() => { setMessage(p.text); }}
-                                    >
-                                        <span>{p.icon}</span> {p.text}
-                                    </button>
-                                ))}
-                            </div>
+          {/* Campfire + Companion scene */}
+          <div className="cfh-scene-center">
+            {/* CSS Campfire */}
+            <div className="cfh-fire-container">
+              <div className="cfh-fire">
+                <div className="cfh-flame cfh-flame-1" />
+                <div className="cfh-flame cfh-flame-2" />
+                <div className="cfh-flame cfh-flame-3" />
+                <div className="cfh-flame cfh-flame-4" />
+                <div className="cfh-flame cfh-flame-5" />
+              </div>
+              <div className="cfh-logs">
+                <div className="cfh-log cfh-log-1" />
+                <div className="cfh-log cfh-log-2" />
+              </div>
+              <div className="cfh-fire-glow" />
+            </div>
 
-                            {/* Glowing input */}
-                            <div className="fireside-input-wrap">
-                                <input
-                                    value={message}
-                                    onChange={(e) => setMessage(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                                    placeholder={`Say something to ${agentName}...`}
-                                    className="fireside-input"
-                                    autoFocus
-                                />
-                                <button
-                                    onClick={handleSend}
-                                    disabled={!message.trim()}
-                                    className="fireside-send"
-                                >
-                                    ↑
-                                </button>
-                            </div>
-                        </div>
-                    )}
+            {/* Companion image */}
+            <div className="cfh-companion-area">
+              <img
+                src={companionImg}
+                alt={species}
+                className="cfh-companion-img"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              {/* Speech bubble */}
+              {showBubble && (
+                <div className="cfh-bubble">
+                  <p className="cfh-bubble-text">
+                    Hey{userName ? ` ${userName}` : ""}! {greeting}
+                  </p>
                 </div>
-            )}
+              )}
+            </div>
+          </div>
 
-            {/* ══════════════════════════════════════════════════════ */}
-            {/* CHAT STATE — has messages                             */}
-            {/* ══════════════════════════════════════════════════════ */}
-            {hasHistory && (
-                <div className="fireside-chat">
-                    {/* Compact header */}
-                    <div className="fireside-chat-header">
-                        <div className="fireside-chat-companion-small">
-                            {companionSheet ? (
-                                <SpriteCharacter sheet={companionSheet} action="idle" scale={2} />
-                            ) : (
-                                <span style={{ fontSize: 28 }}>{companionEmoji}</span>
-                            )}
-                        </div>
-                        <div>
-                            <p className="fireside-chat-title">{agentName}</p>
-                            <p className="fireside-chat-subtitle">{companion ? `${companion.name} is listening` : "at the fireside"}</p>
-                        </div>
-                    </div>
+          {/* No brain warning */}
+          {!hasBrain && (
+            <div className="cfh-no-brain">
+              <Link href="/brains">
+                <button className="cfh-btn-gold" onClick={() => playWhoosh()}>
+                  Set Up Brain →
+                </button>
+              </Link>
+            </div>
+          )}
 
-                    {/* Messages */}
-                    <div className="fireside-messages">
-                        {chatHistory.map((msg, i) => (
-                            <div
-                                key={i}
-                                className={`fireside-msg ${msg.role === "user" ? "fireside-msg-user" : "fireside-msg-ai"}`}
-                                style={{ animationDelay: `${Math.min(i * 0.05, 0.3)}s` }}
-                            >
-                                {msg.role === "assistant" && (
-                                    <span className="fireside-msg-avatar">{companionEmoji}</span>
-                                )}
-                                <div className={`fireside-bubble ${msg.role === "user" ? "fireside-bubble-user" : "fireside-bubble-ai"}`}>
-                                    {msg.content}
-                                </div>
-                            </div>
-                        ))}
-                        {isTyping && (
-                            <div className="fireside-msg fireside-msg-ai">
-                                <span className="fireside-msg-avatar">{companionEmoji}</span>
-                                <div className="fireside-bubble fireside-bubble-ai fireside-typing">
-                                    <span className="fireside-dot" /><span className="fireside-dot" /><span className="fireside-dot" />
-                                </div>
-                            </div>
-                        )}
-                        <div ref={chatEndRef} />
-                    </div>
-
-                    {/* Chat input — pinned bottom */}
-                    <div className="fireside-chat-input-bar">
-                        <div className="fireside-input-wrap">
-                            <input
-                                value={message}
-                                onChange={(e) => setMessage(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                                placeholder={`Message ${agentName}...`}
-                                className="fireside-input"
-                                autoFocus
-                            />
-                            <button
-                                onClick={handleSend}
-                                disabled={!message.trim()}
-                                className="fireside-send"
-                            >
-                                ↑
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+          {/* Chat input */}
+          <div className="cfh-input-area">
+            <div className="cfh-input-wrap">
+              <input
+                ref={inputRef}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                placeholder="Message your companion..."
+                className="cfh-input"
+                onFocus={() => setShowBubble(false)}
+              />
+              <button onClick={handleSend} disabled={!message.trim()} className="cfh-send">
+                ▶
+              </button>
+            </div>
+          </div>
         </div>
-    );
+      )}
+
+      {/* ═══════ CHAT SCENE ═══════ */}
+      {activeView === "chat" && (
+        <div className="cfh-chat">
+          <div className="cfh-chat-header">
+            <button className="cfh-chat-back" onClick={() => { playWhoosh(); setActiveView("hub"); }}>
+              ← Hub
+            </button>
+            <img src={companionImg} alt={species} className="cfh-chat-avatar"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <div>
+              <p className="cfh-chat-name">{displayName}</p>
+              <p className="cfh-chat-status">{isTyping ? "thinking..." : "at the fireside"}</p>
+            </div>
+          </div>
+
+          <div className="cfh-messages">
+            {chatHistory.map((msg, i) => (
+              <div key={i} className={`cfh-msg ${msg.role === "user" ? "cfh-msg-user" : "cfh-msg-ai"}`}>
+                {msg.role === "assistant" && (
+                  <img src={companionImg} alt="" className="cfh-msg-av"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                )}
+                <div className={`cfh-bbl ${msg.role === "user" ? "cfh-bbl-user" : "cfh-bbl-ai"}`}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {isTyping && (
+              <div className="cfh-msg cfh-msg-ai">
+                <img src={companionImg} alt="" className="cfh-msg-av" />
+                <div className="cfh-bbl cfh-bbl-ai cfh-typing">
+                  <span className="cfh-dot" /><span className="cfh-dot" /><span className="cfh-dot" />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className="cfh-chat-input-bar">
+            <div className="cfh-input-wrap">
+              <input
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                placeholder={`Message ${displayName}...`}
+                className="cfh-input"
+                autoFocus
+              />
+              <button onClick={handleSend} disabled={!message.trim()} className="cfh-send">▶</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-// ─── Embedded CSS — fireside design language ─────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+// CSS
+// ════════════════════════════════════════════════════════════════════
 
-const dashboardCSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-
-  .fireside-dashboard {
-    position: relative;
-    min-height: calc(100vh - 60px);
-    display: flex;
-    flex-direction: column;
-    font-family: 'Inter', var(--font-family-body), sans-serif;
-    overflow: hidden;
-  }
-
-  /* ── Ambient glow (from installer) ── */
-  .fireside-ambient {
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background:
-      radial-gradient(ellipse 600px 400px at 50% 80%, rgba(217,119,6,0.10) 0%, transparent 70%),
-      radial-gradient(ellipse 300px 300px at 30% 20%, rgba(245,158,11,0.05) 0%, transparent 60%),
-      radial-gradient(ellipse 200px 200px at 75% 30%, rgba(146,64,14,0.06) 0%, transparent 60%);
-    animation: ambientPulse 8s ease-in-out infinite alternate;
-  }
-  @keyframes ambientPulse {
-    0% { opacity: 0.6; transform: scale(1); }
-    100% { opacity: 1; transform: scale(1.05); }
-  }
-
-  /* ── Fire particles ── */
-  .fireside-particles {
-    position: fixed; bottom: 0; left: 0; right: 0; height: 300px;
-    pointer-events: none; z-index: 0; opacity: 0.25;
-    background:
-      radial-gradient(2px 2px at 20% 90%, #F59E0B, transparent),
-      radial-gradient(2px 2px at 40% 85%, #D97706, transparent),
-      radial-gradient(2px 2px at 60% 92%, #F59E0B, transparent),
-      radial-gradient(2px 2px at 80% 88%, #D97706, transparent),
-      radial-gradient(3px 3px at 10% 95%, #F59E0B, transparent),
-      radial-gradient(3px 3px at 50% 80%, #92400E, transparent),
-      radial-gradient(2px 2px at 70% 93%, #F59E0B, transparent),
-      radial-gradient(1px 1px at 25% 75%, #F59E0B, transparent),
-      radial-gradient(1px 1px at 55% 70%, #D97706, transparent),
-      radial-gradient(1px 1px at 85% 78%, #F59E0B, transparent);
-    background-size: 100% 100%;
-    animation: particleRise 4s ease-in-out infinite;
-  }
-  @keyframes particleRise {
-    0% { transform: translateY(0) scaleY(1); opacity: 0.25; }
-    50% { transform: translateY(-30px) scaleY(1.1); opacity: 0.4; }
-    100% { transform: translateY(0) scaleY(1); opacity: 0.25; }
-  }
-
-  /* ── Vignette ── */
-  .fireside-vignette {
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%);
-  }
-
-  /* ═══════════════════════════════════ */
-  /* HERO STATE                          */
-  /* ═══════════════════════════════════ */
-  .fireside-hero {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 40px 24px 32px;
-    position: relative; z-index: 5;
-    animation: heroEnter 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-  @keyframes heroEnter {
-    from { opacity: 0; transform: translateY(30px) scale(0.97); filter: blur(6px); }
-    to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-  }
-
-  .fireside-hero-companion {
-    margin-bottom: 24px;
-    animation: companionFloat 4s ease-in-out infinite;
-    filter: drop-shadow(0 8px 32px rgba(245,158,11,0.2));
-  }
-  @keyframes companionFloat {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
-  }
-  .fireside-hero-emoji {
-    font-size: 96px; display: block;
-    filter: drop-shadow(0 0 40px rgba(245,158,11,0.4));
-  }
-  .fireside-companion-name {
-    text-align: center; font-size: 12px; font-weight: 600;
-    color: #7A6A5A; letter-spacing: 2px; text-transform: uppercase;
-    margin-top: 8px;
-  }
-
-  .fireside-greeting {
-    font-size: 42px; font-weight: 900; color: #F0DCC8;
-    text-align: center; margin-bottom: 8px; letter-spacing: -0.5px;
-    text-shadow: 0 2px 20px rgba(245,158,11,0.15);
-  }
-  .fireside-fire {
-    display: inline-block;
-    animation: fireGlow 2s ease-in-out infinite;
-  }
-  @keyframes fireGlow {
-    0%, 100% { filter: drop-shadow(0 0 8px rgba(245,158,11,0.5)); transform: scale(1); }
-    50% { filter: drop-shadow(0 0 16px rgba(245,158,11,0.8)); transform: scale(1.1); }
-  }
-  .fireside-status {
-    font-size: 14px; color: #7A6A5A; text-align: center;
-    letter-spacing: 1px; text-transform: uppercase; font-weight: 500;
-    margin-bottom: 32px;
-  }
-
-  /* Primary button (from installer) */
-  .fireside-btn-primary {
-    padding: 16px 48px; border-radius: 14px; border: none; cursor: pointer;
-    background: linear-gradient(135deg, #D97706, #F59E0B);
-    color: #0A0A0A; font-size: 16px; font-weight: 800; letter-spacing: 1px;
-    text-transform: uppercase;
-    box-shadow: 0 4px 24px rgba(245,158,11,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+const hubCSS = `
+  .cfh-root {
+    min-height: 100vh; width: 100%;
+    background: #080810;
+    font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+    color: #F0DCC8;
     position: relative; overflow: hidden;
   }
-  .fireside-btn-primary:hover {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 8px 32px rgba(245,158,11,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+  .cfh-embers { position: fixed !important; inset: 0 !important; z-index: 1 !important; }
+
+  /* ── Stars ── */
+  .cfh-stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .cfh-star {
+    position: absolute; width: 2px; height: 2px;
+    background: #FFF; border-radius: 50%;
+    animation: twinkle ease-in-out infinite alternate;
+    opacity: 0.3;
+  }
+  @keyframes twinkle {
+    0% { opacity: 0.1; transform: scale(0.5); }
+    100% { opacity: 0.6; transform: scale(1.3); }
   }
 
-  /* ── Suggested prompts — floating glass pills ── */
-  .fireside-hero-input-area {
-    width: 100%; max-width: 560px;
-    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  /* ══ HUB SCENE ══ */
+  .cfh-scene {
+    min-height: 100vh; width: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+    position: relative; z-index: 5;
+    padding-bottom: 28px;
+    animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
-  .fireside-pills {
-    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-  .fireside-pill {
-    display: flex; align-items: center; gap: 6px;
-    padding: 10px 18px; border-radius: 100px;
-    background: rgba(26,26,26,0.6);
+
+  /* ── Nav ring ── */
+  .cfh-nav-ring {
+    display: flex; gap: 40px;
+    justify-content: center;
+    margin-bottom: 20px;
+    z-index: 10;
+  }
+  .cfh-nav-ring a { text-decoration: none; }
+  .cfh-nav-btn {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 8px;
+    background: none; border: none; cursor: pointer;
+    animation: navPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    transition: transform 0.3s, filter 0.3s;
+  }
+  .cfh-nav-btn:hover {
+    transform: translateY(-8px) scale(1.08);
+    filter: brightness(1.3);
+  }
+  @keyframes navPop {
+    from { opacity: 0; transform: translateY(30px) scale(0.5); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .cfh-nav-orb {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%,
+      rgba(251,191,36,0.15) 0%,
+      rgba(217,119,6,0.06) 50%,
+      rgba(10,10,15,0.8) 100%);
+    border: 1.5px solid rgba(251,191,36,0.15);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow:
+      0 0 30px rgba(251,191,36,0.08),
+      inset 0 0 20px rgba(251,191,36,0.05);
+    transition: all 0.3s;
+    animation: orbFloat 5s ease-in-out infinite;
+  }
+  .cfh-nav-btn:nth-child(1) .cfh-nav-orb { animation-delay: 0s; }
+  .cfh-nav-btn:nth-child(2) .cfh-nav-orb { animation-delay: 1.2s; }
+  .cfh-nav-btn:nth-child(3) .cfh-nav-orb { animation-delay: 2.5s; }
+  .cfh-nav-btn:nth-child(4) .cfh-nav-orb { animation-delay: 3.8s; }
+  @keyframes orbFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  .cfh-nav-btn:hover .cfh-nav-orb {
+    border-color: rgba(251,191,36,0.4);
+    box-shadow: 0 0 40px rgba(251,191,36,0.2), inset 0 0 30px rgba(251,191,36,0.1);
+  }
+  .cfh-nav-icon { font-size: 30px; }
+  .cfh-nav-label {
+    font-size: 11px; font-weight: 700; color: #7A6A5A;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    transition: color 0.2s;
+  }
+  .cfh-nav-btn:hover .cfh-nav-label { color: #FBBF24; }
+
+  /* ── Fire + Companion scene center ── */
+  .cfh-scene-center {
+    display: flex; align-items: flex-end; justify-content: center;
+    gap: 0; position: relative;
+    margin-bottom: 24px; z-index: 5;
+  }
+
+  /* CSS Campfire */
+  .cfh-fire-container {
+    position: relative;
+    width: 120px; height: 150px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+  }
+  .cfh-fire {
+    position: relative; width: 80px; height: 90px;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .cfh-flame {
+    position: absolute; bottom: 0;
+    border-radius: 50% 50% 30% 30%;
+    animation: flame ease-in-out infinite;
+  }
+  .cfh-flame-1 {
+    width: 20px; height: 60px; left: 30px;
+    background: linear-gradient(to top, #D97706, #F59E0B, #FBBF24, transparent);
+    animation-duration: 0.4s;
+  }
+  .cfh-flame-2 {
+    width: 16px; height: 50px; left: 22px;
+    background: linear-gradient(to top, #B45309, #D97706, #F59E0B, transparent);
+    animation-duration: 0.5s; animation-delay: 0.1s;
+  }
+  .cfh-flame-3 {
+    width: 14px; height: 45px; left: 40px;
+    background: linear-gradient(to top, #D97706, #FBBF24, transparent);
+    animation-duration: 0.35s; animation-delay: 0.2s;
+  }
+  .cfh-flame-4 {
+    width: 24px; height: 70px; left: 28px;
+    background: linear-gradient(to top, #92400E, #B45309, #D97706, #FBBF24, transparent);
+    animation-duration: 0.6s;
+  }
+  .cfh-flame-5 {
+    width: 10px; height: 35px; left: 36px;
+    background: linear-gradient(to top, #FBBF24, #FDE68A, transparent);
+    animation-duration: 0.3s; animation-delay: 0.15s;
+  }
+  @keyframes flame {
+    0%, 100% { transform: scaleY(1) scaleX(1) translateY(0); opacity: 0.9; }
+    25% { transform: scaleY(1.1) scaleX(0.9) translateY(-3px); opacity: 1; }
+    50% { transform: scaleY(0.9) scaleX(1.05) translateY(-1px); opacity: 0.85; }
+    75% { transform: scaleY(1.05) scaleX(0.95) translateY(-4px); opacity: 1; }
+  }
+  .cfh-logs {
+    position: relative; width: 90px; height: 16px;
+    display: flex; justify-content: center;
+  }
+  .cfh-log {
+    position: absolute; border-radius: 4px;
+    background: linear-gradient(90deg, #5C3A1E, #7C4A2E, #5C3A1E);
+    border: 1px solid rgba(0,0,0,0.3);
+  }
+  .cfh-log-1 {
+    width: 70px; height: 12px; bottom: 0;
+    transform: rotate(-8deg);
+  }
+  .cfh-log-2 {
+    width: 65px; height: 11px; bottom: 2px;
+    transform: rotate(10deg);
+  }
+  .cfh-fire-glow {
+    position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
+    width: 250px; height: 120px;
+    background: radial-gradient(ellipse,
+      rgba(251,191,36,0.12) 0%,
+      rgba(217,119,6,0.05) 40%,
+      transparent 70%);
+    pointer-events: none;
+    animation: glowPulse 3s ease-in-out infinite alternate;
+  }
+  @keyframes glowPulse {
+    0% { opacity: 0.7; } 100% { opacity: 1; }
+  }
+
+  /* Companion */
+  .cfh-companion-area {
+    position: relative;
+    display: flex; flex-direction: column;
+    align-items: center;
+    margin-left: -10px;
+  }
+  .cfh-companion-img {
+    width: 130px; height: 130px;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: drop-shadow(0 0 20px rgba(251,191,36,0.15));
+    animation: companionBob 4s ease-in-out infinite;
+  }
+  @keyframes companionBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  /* Speech bubble */
+  .cfh-bubble {
+    position: absolute; top: -50px; right: -100px;
+    background: rgba(18,18,26,0.92);
+    backdrop-filter: blur(16px);
+    border: 1.5px solid rgba(251,191,36,0.2);
+    border-radius: 14px;
+    padding: 10px 14px;
+    max-width: 200px;
+    z-index: 15;
+    animation: bubIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1s both;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .cfh-bubble::after {
+    content: ''; position: absolute; bottom: 8px; left: -6px;
+    width: 10px; height: 10px;
+    background: rgba(18,18,26,0.92);
+    border-left: 1.5px solid rgba(251,191,36,0.2);
+    border-bottom: 1.5px solid rgba(251,191,36,0.2);
+    transform: rotate(45deg);
+  }
+  @keyframes bubIn {
+    from { opacity: 0; transform: scale(0.6) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .cfh-bubble-text { font-size: 12px; color: #D0C0A8; margin: 0; line-height: 1.4; }
+
+  /* No brain */
+  .cfh-no-brain { margin-bottom: 12px; z-index: 10; }
+  .cfh-btn-gold {
+    padding: 12px 36px; border-radius: 12px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #D97706, #F59E0B);
+    color: #0A0A0A; font-size: 14px; font-weight: 800;
+    box-shadow: 0 4px 24px rgba(245,158,11,0.25);
+    transition: all 0.3s;
+  }
+  .cfh-btn-gold:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(245,158,11,0.4); }
+
+  /* Input */
+  .cfh-input-area { width: 100%; max-width: 480px; padding: 0 24px; z-index: 10; }
+  .cfh-input-wrap { width: 100%; position: relative; }
+  .cfh-input {
+    width: 100%; padding: 14px 48px 14px 18px;
+    border-radius: 14px;
+    background: rgba(18,18,26,0.7);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.06);
-    color: #A09080; font-size: 13px; font-weight: 500;
-    cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    white-space: nowrap;
+    border: 1.5px solid rgba(255,255,255,0.06);
+    color: #F0DCC8; font-size: 14px; font-weight: 500; outline: none;
+    transition: all 0.3s;
   }
-  .fireside-pill:hover {
+  .cfh-input:focus {
     border-color: rgba(217,119,6,0.3);
-    color: #F0DCC8;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    box-shadow: 0 0 20px rgba(245,158,11,0.08);
   }
-
-  /* ── Input (from installer) ── */
-  .fireside-input-wrap {
-    width: 100%; position: relative;
-  }
-  .fireside-input {
-    width: 100%; padding: 16px 52px 16px 20px;
-    border-radius: 16px;
-    background: rgba(26,26,26,0.7);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.06);
-    color: #F0DCC8; font-size: 15px; font-weight: 500;
-    outline: none;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .fireside-input:focus {
-    border-color: rgba(217,119,6,0.4);
-    box-shadow: 0 0 24px rgba(245,158,11,0.12), inset 0 0 20px rgba(217,119,6,0.03);
-  }
-  .fireside-input::placeholder { color: #3A3028; }
-  .fireside-send {
-    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
-    width: 36px; height: 36px; border-radius: 10px;
+  .cfh-input::placeholder { color: rgba(240,220,200,0.2); }
+  .cfh-send {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    width: 34px; height: 34px; border-radius: 10px;
     background: linear-gradient(135deg, #D97706, #F59E0B);
     border: none; cursor: pointer;
-    color: #0A0A0A; font-size: 18px; font-weight: 900;
+    color: #0A0A0A; font-size: 14px; font-weight: 900;
     display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s;
-    opacity: 0.8;
+    transition: all 0.2s; opacity: 0.7;
   }
-  .fireside-send:hover:not(:disabled) { opacity: 1; transform: translateY(-50%) scale(1.05); }
-  .fireside-send:disabled { opacity: 0.2; cursor: default; }
+  .cfh-send:hover:not(:disabled) { opacity: 1; transform: translateY(-50%) scale(1.05); }
+  .cfh-send:disabled { opacity: 0.15; cursor: default; }
 
-  /* ═══════════════════════════════════ */
-  /* CHAT STATE                          */
-  /* ═══════════════════════════════════ */
-  .fireside-chat {
-    flex: 1; display: flex; flex-direction: column;
+  /* ══ CHAT SCENE ══ */
+  .cfh-chat {
+    min-height: 100vh; width: 100%;
+    display: flex; flex-direction: column;
+    max-width: 640px; margin: 0 auto; padding: 0 16px;
     position: relative; z-index: 5;
-    max-width: 680px; width: 100%; margin: 0 auto;
-    padding: 0 16px;
-    animation: heroEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fadeUp 0.5s ease forwards;
   }
-
-  .fireside-chat-header {
+  .cfh-chat-header {
     display: flex; align-items: center; gap: 12px;
     padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
   }
-  .fireside-chat-companion-small {
-    filter: drop-shadow(0 2px 8px rgba(245,158,11,0.2));
+  .cfh-chat-back {
+    background: none; border: 1px solid rgba(255,255,255,0.06);
+    color: #7A6A5A; font-size: 12px; font-weight: 600; cursor: pointer;
+    padding: 6px 14px; border-radius: 8px; transition: all 0.2s;
   }
-  .fireside-chat-title {
-    font-size: 16px; font-weight: 700; color: #F0DCC8; margin: 0;
+  .cfh-chat-back:hover { color: #F0DCC8; border-color: rgba(217,119,6,0.3); }
+  .cfh-chat-avatar {
+    width: 36px; height: 36px; border-radius: 10px;
+    image-rendering: pixelated; object-fit: contain;
+    background: rgba(251,191,36,0.06);
   }
-  .fireside-chat-subtitle {
-    font-size: 11px; color: #7A6A5A; margin: 0; letter-spacing: 0.5px;
-  }
+  .cfh-chat-name { font-size: 15px; font-weight: 700; color: #F0DCC8; margin: 0; }
+  .cfh-chat-status { font-size: 10px; color: #5A4D40; margin: 0; }
 
-  /* ── Messages ── */
-  .fireside-messages {
+  .cfh-messages {
     flex: 1; overflow-y: auto; padding: 20px 0;
     display: flex; flex-direction: column; gap: 12px;
-    max-height: calc(100vh - 220px);
+    max-height: calc(100vh - 160px);
   }
+  .cfh-messages::-webkit-scrollbar { width: 3px; }
+  .cfh-messages::-webkit-scrollbar-thumb { background: rgba(245,158,11,0.15); border-radius: 2px; }
 
-  .fireside-msg {
+  .cfh-msg {
     display: flex; gap: 10px;
-    animation: msgSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: msgSlide 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-  @keyframes msgSlideIn {
-    from { opacity: 0; transform: translateY(12px); filter: blur(2px); }
-    to { opacity: 1; transform: translateY(0); filter: blur(0); }
+  @keyframes msgSlide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .cfh-msg-user { justify-content: flex-end; }
+  .cfh-msg-ai { justify-content: flex-start; align-items: flex-start; }
+  .cfh-msg-av {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    image-rendering: pixelated; object-fit: contain;
+    background: rgba(245,158,11,0.06); margin-top: 2px;
   }
-  .fireside-msg-user { justify-content: flex-end; }
-  .fireside-msg-ai { justify-content: flex-start; align-items: flex-start; }
-  .fireside-msg-avatar {
-    font-size: 20px; flex-shrink: 0;
-    width: 32px; height: 32px;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(245,158,11,0.08);
-    border-radius: 10px; margin-top: 2px;
+  .cfh-bbl {
+    max-width: 75%; padding: 10px 14px;
+    border-radius: 14px; font-size: 13px; line-height: 1.5;
   }
-
-  .fireside-bubble {
-    max-width: 75%; padding: 12px 16px;
-    border-radius: 18px; font-size: 14px; line-height: 1.5;
+  .cfh-bbl-user {
+    background: rgba(217,119,6,0.1); border: 1px solid rgba(245,158,11,0.1);
+    color: #F0DCC8; border-bottom-right-radius: 4px;
   }
-  .fireside-bubble-user {
-    background: rgba(217,119,6,0.12);
-    border: 1px solid rgba(245,158,11,0.15);
-    color: #F0DCC8;
-    border-bottom-right-radius: 6px;
+  .cfh-bbl-ai {
+    background: rgba(18,18,26,0.6); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.03);
+    color: #B0A090; border-bottom-left-radius: 4px;
   }
-  .fireside-bubble-ai {
-    background: rgba(26,26,26,0.6);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.04);
-    color: #C0B0A0;
-    border-bottom-left-radius: 6px;
+  .cfh-typing { display: flex; gap: 4px; align-items: center; padding: 14px 18px; }
+  .cfh-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #5A4D40;
+    animation: dotPulse 1.4s ease-in-out infinite;
   }
-
-  /* Typing indicator */
-  .fireside-typing {
-    display: flex; gap: 4px; align-items: center;
-    padding: 14px 18px;
-  }
-  .fireside-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: #7A6A5A;
-    animation: typingBounce 1.4s ease-in-out infinite;
-  }
-  .fireside-dot:nth-child(2) { animation-delay: 0.2s; }
-  .fireside-dot:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes typingBounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-4px); opacity: 1; }
-  }
-
-  /* ── Chat input bar ── */
-  .fireside-chat-input-bar {
-    padding: 12px 0 20px;
-    border-top: 1px solid rgba(255,255,255,0.04);
-  }
-
-  /* ── Scrollbar ── */
-  .fireside-messages::-webkit-scrollbar { width: 4px; }
-  .fireside-messages::-webkit-scrollbar-track { background: transparent; }
-  .fireside-messages::-webkit-scrollbar-thumb { background: rgba(245,158,11,0.15); border-radius: 2px; }
+  .cfh-dot:nth-child(2) { animation-delay: 0.2s; }
+  .cfh-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotPulse { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-3px); opacity: 1; } }
+  .cfh-chat-input-bar { padding: 12px 0 20px; border-top: 1px solid rgba(255,255,255,0.04); }
 `;
