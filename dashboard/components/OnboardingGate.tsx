@@ -23,6 +23,24 @@ export default function OnboardingGate({ children }: { children: React.ReactNode
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Dev mode: ?dev=1 bypasses onboarding and seeds demo data
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get("dev") === "1" && !localStorage.getItem("fireside_onboarded")) {
+                localStorage.setItem("fireside_onboarded", "1");
+                localStorage.setItem("fireside_user_name", "Developer");
+                localStorage.setItem("fireside_agent_name", "Atlas");
+                localStorage.setItem("fireside_agent_style", "analytical");
+                localStorage.setItem("fireside_companion_species", "fox");
+                localStorage.setItem("fireside_companion_name", "Ember");
+                localStorage.setItem("fireside_companion", JSON.stringify({ name: "Ember", species: "fox" }));
+                localStorage.setItem("fireside_brain", "fast");
+                localStorage.setItem("fireside_model", "llama-3.1-8b-q6");
+                setLoading(false);
+                return;
+            }
+        }
+
         // Fast path: already onboarded
         const onboarded = localStorage.getItem("fireside_onboarded");
         if (onboarded) {

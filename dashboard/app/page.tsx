@@ -375,36 +375,51 @@ const hubCSS = `
   /* Campfire art image */
   .cfh-fire-container {
     position: relative;
-    width: 180px; height: 180px;
+    width: 220px; height: 220px;
     display: flex; align-items: center; justify-content: center;
   }
   .cfh-campfire-img {
-    width: 160px; height: 160px;
+    width: 200px; height: 200px;
     object-fit: contain;
-    animation: fireBreath 3s ease-in-out infinite;
-    filter: drop-shadow(0 0 30px rgba(251,191,36,0.3));
+    animation: fireBreath 2.5s ease-in-out infinite;
+    filter:
+      drop-shadow(0 0 40px rgba(251,191,36,0.4))
+      drop-shadow(0 0 80px rgba(217,119,6,0.2));
+    position: relative; z-index: 2;
   }
   @keyframes fireBreath {
-    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 30px rgba(251,191,36,0.3)); }
-    50% { transform: scale(1.03); filter: drop-shadow(0 0 40px rgba(251,191,36,0.45)); }
+    0%, 100% {
+      transform: scale(1);
+      filter: drop-shadow(0 0 40px rgba(251,191,36,0.4)) drop-shadow(0 0 80px rgba(217,119,6,0.2));
+    }
+    50% {
+      transform: scale(1.04);
+      filter: drop-shadow(0 0 60px rgba(251,191,36,0.5)) drop-shadow(0 0 100px rgba(217,119,6,0.3));
+    }
   }
   .cfh-fire-glow {
-    position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
-    width: 300px; height: 150px;
+    position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+    width: 400px; height: 200px;
     background: radial-gradient(ellipse,
-      rgba(251,191,36,0.12) 0%,
-      rgba(217,119,6,0.05) 40%,
+      rgba(251,191,36,0.15) 0%,
+      rgba(217,119,6,0.06) 30%,
+      rgba(180,83,9,0.02) 50%,
       transparent 70%);
-    pointer-events: none;
-    animation: glowPulse 3s ease-in-out infinite alternate;
+    pointer-events: none; z-index: 1;
+    animation: glowPulse 2.5s ease-in-out infinite alternate;
   }
   @keyframes glowPulse {
-    0% { opacity: 0.7; } 100% { opacity: 1; }
+    0% { opacity: 0.6; transform: translateX(-50%) scale(0.95); }
+    100% { opacity: 1; transform: translateX(-50%) scale(1.05); }
   }
   .cfh-nav-icon-img {
-    width: 40px; height: 40px;
+    width: 48px; height: 48px;
     object-fit: contain;
-    filter: drop-shadow(0 0 8px rgba(251,191,36,0.15));
+    filter: drop-shadow(0 0 12px rgba(251,191,36,0.2));
+    transition: filter 0.3s;
+  }
+  .cfh-nav-btn:hover .cfh-nav-icon-img {
+    filter: drop-shadow(0 0 20px rgba(251,191,36,0.4));
   }
 
   /* Companion */
@@ -415,15 +430,17 @@ const hubCSS = `
     margin-left: -10px;
   }
   .cfh-companion-img {
-    width: 130px; height: 130px;
-    image-rendering: pixelated;
+    width: 160px; height: 160px;
     object-fit: contain;
-    filter: drop-shadow(0 0 20px rgba(251,191,36,0.15));
+    filter:
+      drop-shadow(0 0 30px rgba(251,191,36,0.2))
+      drop-shadow(0 -5px 50px rgba(217,119,6,0.1));
     animation: companionBob 4s ease-in-out infinite;
+    position: relative; z-index: 2;
   }
   @keyframes companionBob {
     0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
+    50% { transform: translateY(-6px); }
   }
 
   /* Speech bubble */

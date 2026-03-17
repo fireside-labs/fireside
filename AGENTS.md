@@ -5,8 +5,9 @@
 **Working directory:** `C:\Users\Jorda\OneDrive\Documents\Analytics Trends\valhalla-mesh-github`
 
 > [!IMPORTANT]
-> **Read `FEATURE_INVENTORY.md` (repo root) to understand the FULL platform.**
-> The mobile app only surfaces a fraction of the existing features. Many backend APIs and dashboard components exist but are NOT yet in mobile.
+> **START HERE: Read `HANDOFF.md` (repo root) FIRST.**
+> It describes the current state of the app, what works, what's broken, and what to fix.
+> Do NOT rely on old sprint files or chat history — they are contradictory and outdated.
 
 ---
 
@@ -16,6 +17,7 @@
 |---|---|
 | **Thor** | Backend engineer — Python, FastAPI, `api/v1.py`, `plugins/` |
 | **Freya** | Frontend engineer — React Native (`mobile/`), Next.js (`dashboard/`) |
+| **Sif** | UX craft engineer — reviews and REFINES visual quality in `dashboard/`, touches CSS/TSX directly. Focuses on micro-animations, spacing, color contrast, hierarchy, and "feel". Has the instinct for premium. |
 | **Heimdall** | Security auditor — reads code, writes `sprints/current/gates/audit_heimdall.md`, drops no code |
 | **Valkyrie** | UX & Business Analyst — writes `sprints/current/gates/review_valkyrie.md`, drops no code |
 | **Odin** | Orchestrator — plans sprints, reads all reports, drives next sprint |

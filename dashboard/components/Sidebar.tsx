@@ -39,7 +39,7 @@ export function Sidebar() {
     const pathname = usePathname();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [aiName, setAiName] = useState("My AI");
-    const { isLocked } = useTour();
+    const { tour, isRecommended, isVisited } = useTour();
 
     // Close sidebar on nav + load name
     useEffect(() => {
@@ -106,20 +106,8 @@ export function Sidebar() {
                                     const isActive =
                                         (item.href === "/" && pathname === "/") ||
                                         (item.href !== "/" && pathname?.startsWith(item.href));
-                                    const locked = isLocked(item.href);
-
-                                    if (locked) {
-                                        return (
-                                            <div
-                                                key={item.href}
-                                                className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-rune-dim)] opacity-40 cursor-not-allowed"
-                                                title="Complete the tour to unlock"
-                                            >
-                                                <span className="text-lg w-6 text-center">🔒</span>
-                                                {item.label}
-                                            </div>
-                                        );
-                                    }
+                                    const recommended = isRecommended(item.href);
+                                    const showNewBadge = tour.active && !isVisited(item.href) && !isActive;
 
                                     return (
                                         <Link
@@ -129,13 +117,16 @@ export function Sidebar() {
                                                 flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium
                                                 transition-all duration-200
                                                 ${isActive
-                                                    ? "bg-[var(--color-neon-glow)] text-[var(--color-neon)] border border-[rgba(245,158,11,0.15)]"
-                                                    : "text-[var(--color-rune)] hover:text-white hover:bg-[var(--color-glass-hover)]"
+                                                    ? "sidebar-item-active"
+                                                    : recommended
+                                                        ? "sidebar-item-recommend text-[var(--color-neon)]"
+                                                        : "text-[var(--color-rune)] hover:text-white hover:bg-[var(--color-glass-hover)]"
                                                 }
                                             `}
                                         >
                                             <span className="text-lg w-6 text-center">{item.icon}</span>
                                             {item.label}
+                                            {showNewBadge && <span className="tour-new-badge">NEW</span>}
                                         </Link>
                                     );
                                 })}

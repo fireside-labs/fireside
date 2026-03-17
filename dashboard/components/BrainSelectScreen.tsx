@@ -198,6 +198,8 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
                   animationDelay: `${i * 0.1}s`,
                 } as React.CSSProperties}
               >
+                <div className="bss2-cat-glow" />
+                <div className="bss2-cat-shimmer" />
                 <span className="bss2-cat-icon">{cat.icon}</span>
                 <span className="bss2-cat-label">{cat.label}</span>
                 <span className="bss2-cat-sub">{cat.subtitle}</span>
@@ -410,35 +412,87 @@ const css = `
   }
   .bss2-cat-grid {
     display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 20px; max-width: 720px; width: 100%;
+    gap: 24px; max-width: 760px; width: 100%;
   }
   .bss2-cat-card {
+    position: relative; overflow: visible;
     display: flex; flex-direction: column;
-    align-items: center; gap: 12px;
-    padding: 36px 24px;
-    border-radius: 20px;
-    background: var(--cat-bg);
+    align-items: center; gap: 14px;
+    padding: 48px 28px 36px;
+    border-radius: 24px;
+    aspect-ratio: 3 / 4;
+    justify-content: center;
+    background: radial-gradient(ellipse at 50% 30%,
+      color-mix(in srgb, var(--cat-color) 10%, transparent) 0%,
+      rgba(10,10,16,0.97) 60%);
     border: 1.5px solid color-mix(in srgb, var(--cat-color) 15%, transparent);
     cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    animation: cardPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
   @keyframes cardPop {
-    from { opacity: 0; transform: translateY(30px) scale(0.9); }
+    from { opacity: 0; transform: translateY(40px) scale(0.85); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
-  .bss2-cat-card:hover {
-    transform: translateY(-6px) scale(1.03);
-    border-color: var(--cat-color);
-    box-shadow: 0 12px 40px color-mix(in srgb, var(--cat-color) 20%, transparent);
+  /* Radial glow that BLEEDS outside the card */
+  .bss2-cat-glow {
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+    width: 200px; height: 200px; border-radius: 50%;
+    background: radial-gradient(circle,
+      color-mix(in srgb, var(--cat-color) 20%, transparent) 0%,
+      color-mix(in srgb, var(--cat-color) 8%, transparent) 40%,
+      transparent 70%);
+    pointer-events: none;
+    animation: glowPulse 3s ease-in-out infinite alternate;
+    z-index: 0;
   }
-  .bss2-cat-icon { font-size: 48px; }
+  @keyframes glowPulse { 0% { opacity: 0.4; transform: translateX(-50%) scale(0.9); } 100% { opacity: 1; transform: translateX(-50%) scale(1.1); } }
+  /* Diagonal shimmer sweep */
+  .bss2-cat-shimmer {
+    position: absolute; inset: -2px;
+    border-radius: 24px;
+    background: linear-gradient(
+      105deg,
+      transparent 30%,
+      color-mix(in srgb, var(--cat-color) 6%, transparent) 45%,
+      transparent 60%
+    );
+    pointer-events: none;
+    animation: shimmerSweep 5s ease-in-out infinite;
+  }
+  @keyframes shimmerSweep {
+    0% { transform: translateX(-150%); }
+    40%, 100% { transform: translateX(250%); }
+  }
+  .bss2-cat-card:hover {
+    transform: translateY(-10px) scale(1.05);
+    border-color: color-mix(in srgb, var(--cat-color) 60%, transparent);
+    box-shadow:
+      0 24px 60px color-mix(in srgb, var(--cat-color) 20%, transparent),
+      0 0 100px color-mix(in srgb, var(--cat-color) 10%, transparent);
+  }
+  .bss2-cat-card:hover .bss2-cat-glow {
+    opacity: 1.3;
+    width: 240px; height: 240px;
+  }
+  .bss2-cat-icon {
+    font-size: 64px; position: relative; z-index: 2;
+    filter: drop-shadow(0 0 25px color-mix(in srgb, var(--cat-color) 50%, transparent));
+    animation: iconFloat 5s ease-in-out infinite;
+  }
+  @keyframes iconFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
   .bss2-cat-label {
-    font-size: 18px; font-weight: 800; color: var(--cat-color);
-    text-transform: uppercase; letter-spacing: 2px;
+    font-size: 20px; font-weight: 800; color: var(--cat-color);
+    text-transform: uppercase; letter-spacing: 3px;
+    position: relative; z-index: 2;
+    text-shadow: 0 0 25px color-mix(in srgb, var(--cat-color) 35%, transparent);
   }
   .bss2-cat-sub {
     font-size: 12px; color: #5A4D40; text-align: center; line-height: 1.4;
+    position: relative; z-index: 2;
   }
   .bss2-cat-count {
     font-size: 10px; color: #3A3530; font-weight: 600;

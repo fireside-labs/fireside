@@ -2,15 +2,25 @@
 
 import { useState, useEffect } from "react";
 import CompanionPicker from "@/components/CompanionPicker";
-import CompanionSim from "@/components/CompanionSim";
 import CompanionChat from "@/components/CompanionChat";
 import TaskQueue from "@/components/TaskQueue";
-import AvatarSprite from "@/components/AvatarSprite";
 import MorningBriefing from "@/components/MorningBriefing";
 import DailyGift from "@/components/DailyGift";
 import TeachMe from "@/components/TeachMe";
-import InventoryGrid from "@/components/InventoryGrid";
-import type { PetState, PetSpecies } from "@/components/CompanionSim";
+import type { PetSpecies } from "@/components/CompanionSim";
+
+interface PetState {
+    name: string;
+    species: PetSpecies;
+    happiness: number;
+    xp: number;
+    level: number;
+    streak: number;
+}
+
+const SPECIES_EMOJI: Record<string, string> = {
+    cat: "🐱", dog: "🐶", penguin: "🐧", fox: "🦊", owl: "🦉", dragon: "🐉",
+};
 
 const STORAGE_KEY = "fireside_companion";
 
@@ -28,7 +38,7 @@ function saveCompanion(state: PetState) {
 export default function CompanionPage() {
     const [companion, setCompanion] = useState<PetState | null>(null);
     const [loaded, setLoaded] = useState(false);
-    const [tab, setTab] = useState<"chat" | "care" | "bag" | "tasks">("chat");
+    const [tab, setTab] = useState<"chat" | "tasks">("chat");
 
     useEffect(() => {
         setCompanion(loadCompanion());
@@ -84,15 +94,13 @@ export default function CompanionPage() {
 
             {/* Companion header */}
             <div className="flex items-center gap-4 mb-5 pt-2">
-                <AvatarSprite
-                    config={{ style: "pixel", hairStyle: 0, hairColor: "#333", skinTone: "#fad7a0", outfit: companion.species, accessory: "none" }}
-                    size={64}
-                    status={companion.happiness <= 0 ? "hurt" : companion.happiness < 30 ? "busy" : "online"}
-                />
+                <div className="w-16 h-16 rounded-xl bg-[var(--color-neon-glow)] flex items-center justify-center text-3xl border border-[var(--color-neon)]/20">
+                    {SPECIES_EMOJI[companion.species] || "🦊"}
+                </div>
                 <div>
                     <h1 className="text-xl font-bold text-white">{companion.name}</h1>
                     <p className="text-xs text-[var(--color-rune-dim)]">
-                        Level {companion.level} {companion.species} · {companion.happiness > 70 ? "Happy 😊" : companion.happiness > 30 ? "Content 😐" : companion.happiness > 0 ? "Needs attention 😢" : "Wandered off 🌫️"}
+                        Your companion · {companion.happiness > 70 ? "Happy 😊" : "At the fireside 🔥"}
                     </p>
                 </div>
             </div>
@@ -101,8 +109,6 @@ export default function CompanionPage() {
             <div className="flex gap-1 mb-4 bg-[var(--color-glass)] rounded-lg p-1">
                 {[
                     { id: "chat" as const, label: "💬 Chat" },
-                    { id: "care" as const, label: "🐾 Care" },
-                    { id: "bag" as const, label: "🎒 Bag" },
                     { id: "tasks" as const, label: "📋 Tasks" },
                 ].map((t) => (
                     <button
@@ -125,24 +131,6 @@ export default function CompanionPage() {
                     <CompanionChat species={companion.species} petName={companion.name} mood={companion.happiness} />
                     <TeachMe petName={companion.name} species={companion.species} />
                 </div>
-            )}
-
-            {tab === "care" && (
-                <div className="space-y-4">
-                    <CompanionSim petState={companion} onStateChange={handleStateChange} />
-
-                    {/* Reset companion */}
-                    <button
-                        onClick={() => { localStorage.removeItem(STORAGE_KEY); setCompanion(null); }}
-                        className="w-full text-center text-[10px] text-[var(--color-rune-dim)] hover:text-[var(--color-danger)] transition-colors py-2"
-                    >
-                        Release {companion.name} into the wild (reset)
-                    </button>
-                </div>
-            )}
-
-            {tab === "bag" && (
-                <InventoryGrid petName={companion.name} />
             )}
 
             {tab === "tasks" && <TaskQueue />}

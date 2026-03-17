@@ -123,6 +123,8 @@ const KEYFRAMES = `
 // Component
 // ---------------------------------------------------------------------------
 
+import { useState } from "react";
+
 export default function SpriteCharacter({
     sheet,
     action = "idle",
@@ -131,6 +133,7 @@ export default function SpriteCharacter({
     className = "",
     onClick,
 }: SpriteCharacterProps) {
+    const [imgError, setImgError] = useState(false);
     const displayWidth = sheet.frameWidth * scale;
     const displayHeight = sheet.frameHeight * scale;
     const anim = ACTION_ANIMATION[action] || ACTION_ANIMATION.idle;
@@ -147,23 +150,36 @@ export default function SpriteCharacter({
             }}
         >
             <style>{KEYFRAMES}</style>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-                src={sheet.src}
-                alt="character"
-                draggable={false}
-                style={{
+            {!imgError ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                    src={sheet.src}
+                    alt="character"
+                    draggable={false}
+                    onError={() => setImgError(true)}
+                    style={{
+                        width: displayWidth,
+                        height: displayHeight,
+                        objectFit: "contain",
+                        imageRendering: "pixelated",
+                        transform: flipX ? "scaleX(-1)" : undefined,
+                        animation: anim,
+                        filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.6))",
+                    }}
+                />
+            ) : (
+                <div style={{
                     width: displayWidth,
                     height: displayHeight,
-                    objectFit: "contain",
-                    imageRendering: "pixelated",
-                    transform: flipX ? "scaleX(-1)" : undefined,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: displayWidth * 0.6,
                     animation: anim,
-                    filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.6))",
-                    // Blend out checkered backgrounds on dark scenes
-                    mixBlendMode: "lighten",
-                }}
-            />
+                }}>
+                    🔥
+                </div>
+            )}
         </div>
     );
 }
