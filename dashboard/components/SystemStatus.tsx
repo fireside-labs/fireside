@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 
 interface SystemStatusProps {
     className?: string;
@@ -24,7 +25,7 @@ export default function SystemStatus({ className }: SystemStatusProps) {
         let mounted = true;
         const poll = async () => {
             try {
-                const res = await fetch("http://127.0.0.1:8765/api/v1/status");
+                const res = await fetch(`${API_BASE}/api/v1/status`);
                 if (res.ok && mounted) {
                     const data = await res.json();
                     setStatus({
@@ -45,7 +46,7 @@ export default function SystemStatus({ className }: SystemStatusProps) {
     const handleRestart = async () => {
         setStatus((prev) => ({ ...prev, inference: "starting" }));
         try {
-            await fetch("http://127.0.0.1:8765/api/v1/restart", { method: "POST" });
+            await fetch(`${API_BASE}/api/v1/restart`, { method: "POST" });
         } catch {
             // Backend will restart — poll will pick up the new state
         }

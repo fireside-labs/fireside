@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_BASE } from "../../lib/api";
 import StoreTabs from "@/components/StoreTabs";
 import ItemCard from "@/components/ItemCard";
 import PurchaseHistory from "@/components/PurchaseHistory";
@@ -37,7 +38,7 @@ export default function StorePage() {
 
     // F4 / F1: Load from real backend.
     useEffect(() => {
-        fetch("http://127.0.0.1:8765/api/v1/store/plugins")
+        fetch(`${API_BASE}/api/v1/store/plugins`)
             .then(res => res.ok ? res.json() : { plugins: [] })
             .then(data => {
                 const grouped: Record<string, StoreItem[]> = {};

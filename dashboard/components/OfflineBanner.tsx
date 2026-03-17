@@ -7,7 +7,7 @@
  * because the backend is unreachable. Prevents user confusion about what's real.
  */
 import { useState, useEffect } from "react";
-import { wasLastCallMock } from "@/lib/api";
+import { wasLastCallMock, API_BASE } from "@/lib/api";
 
 export default function OfflineBanner() {
     const [offline, setOffline] = useState(false);
@@ -15,7 +15,7 @@ export default function OfflineBanner() {
     useEffect(() => {
         const check = async () => {
             try {
-                const res = await fetch("http://127.0.0.1:8765/api/v1/status", { signal: AbortSignal.timeout(3000) });
+                const res = await fetch(`${API_BASE}/api/v1/status`, { signal: AbortSignal.timeout(3000) });
                 setOffline(!res.ok);
             } catch {
                 setOffline(true);

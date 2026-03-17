@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { API_BASE } from "../lib/api";
 import GuildHallAgent from "@/components/GuildHallAgent";
 import type { Activity } from "@/components/GuildHallAgent";
 import { useRouter } from "next/navigation";
@@ -220,7 +221,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
         if (local.length > 0) setAgents(local);
         (async () => {
             try {
-                const res = await fetch("http://127.0.0.1:8765/api/v1/guildhall/agents");
+                const res = await fetch(`${API_BASE}/api/v1/guildhall/agents`);
                 if (res.ok) {
                     const data = await res.json();
                     const mapped = (data.agents || []).map((a: GuildHallAgentData) => {
@@ -248,7 +249,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
     useEffect(() => {
         const poll = async () => {
             try {
-                const res = await fetch("http://127.0.0.1:8765/api/v1/status/agent");
+                const res = await fetch(`${API_BASE}/api/v1/status/agent`);
                 if (res.ok) {
                     const data = await res.json();
                     // Update agent activities from backend

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 
 interface NetworkStatus {
     local_ip: string;
@@ -16,7 +17,7 @@ export default function NetworkSettings() {
     useEffect(() => {
         (async () => {
             try {
-                const res = await fetch("http://127.0.0.1:8765/api/v1/network/status");
+                const res = await fetch(`${API_BASE}/api/v1/network/status`);
                 if (res.ok) {
                     setStatus(await res.json());
                 } else {

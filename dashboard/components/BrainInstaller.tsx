@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { API_BASE } from "../lib/api";
 import DownloadProgress from "@/components/DownloadProgress";
 
 interface BrainInstallerProps {
@@ -27,7 +28,7 @@ export default function BrainInstaller({ brainLabel, brainId, onComplete, onCanc
 
         try {
             // Call real brain install API
-            const res = await fetch("http://127.0.0.1:8765/api/v1/brains/install", {
+            const res = await fetch(`${API_BASE}/api/v1/brains/install`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ model_id: brainId, port: 8080 }),

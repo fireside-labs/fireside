@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { API_BASE } from "../lib/api";
 
 interface ItemCardProps {
     id: string;
@@ -38,7 +39,7 @@ export default function ItemCard({
         if (price === 0) {
             // Free items: try API, fall back to instant install
             try {
-                await fetch("http://127.0.0.1:8765/api/v1/store/purchase", {
+                await fetch(`${API_BASE}/api/v1/store/purchase`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ plugin_id: id, name, auth_token: token }),
@@ -50,7 +51,7 @@ export default function ItemCard({
         }
         setBuying(true);
         try {
-            const res = await fetch("http://127.0.0.1:8765/api/v1/store/purchase", {
+            const res = await fetch(`${API_BASE}/api/v1/store/purchase`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ plugin_id: id, name, price, auth_token: token }),

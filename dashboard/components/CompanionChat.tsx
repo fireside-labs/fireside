@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { API_BASE } from "../lib/api";
 import AvatarSprite from "@/components/AvatarSprite";
 import CompanionConnectionAnim from "@/components/CompanionConnectionAnim";
 import type { PetSpecies } from "@/components/CompanionSim";
@@ -123,7 +124,7 @@ export default function CompanionChat({ species, petName, mood }: CompanionChatP
 
         try {
             // Try real backend first
-            const res = await fetch("http://127.0.0.1:8765/api/v1/chat", {
+            const res = await fetch(`${API_BASE}/api/v1/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: userMsg, species, mood }),

@@ -8,6 +8,7 @@
  *   • Browser → OnboardingWizard (connect-to-existing-PC flow)
  */
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 import dynamic from "next/dynamic";
 
 const OnboardingWizard = dynamic(() => import("./OnboardingWizard"), { ssr: false });
@@ -69,7 +70,7 @@ export default function OnboardingGate({ children }: { children: React.ReactNode
             // After 2s, Tauri is definitely not available — try backend, then browser wizard
             (async () => {
                 try {
-                    const res = await fetch("http://127.0.0.1:8765/api/v1/system/onboarding");
+                    const res = await fetch(`${API_BASE}/api/v1/system/onboarding`);
                     if (res.ok) {
                         const data = await res.json();
                         if (data.onboarded) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 
 const PERSONALITY_OPTIONS = [
     { id: "friendly", emoji: "😊", label: "Friendly", desc: "Warm, chatty, uses emoji" },
@@ -65,7 +66,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
 
             // 2. Try backend API
             try {
-                const res = await fetch("http://127.0.0.1:8765/api/v1/brains/available");
+                const res = await fetch(`${API_BASE}/api/v1/brains/available`);
                 if (res.ok) {
                     const data = await res.json();
                     const vram = data.vram_gb || 0;

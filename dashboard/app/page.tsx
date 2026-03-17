@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { API_BASE } from "../lib/api";
 import Link from "next/link";
 import EmberParticles from "@/components/EmberParticles";
 import { playWhoosh, playTick } from "@/components/FiresideSounds";
@@ -90,7 +91,7 @@ export default function CampfireHub() {
     }
 
     try {
-      const res = await fetch("http://127.0.0.1:8765/api/v1/chat", {
+      const res = await fetch(`${API_BASE}/api/v1/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMessage, stream: false }),

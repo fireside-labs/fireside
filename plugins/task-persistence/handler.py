@@ -373,6 +373,11 @@ class ChatMessageRequest(BaseModel):
     timestamp: float = 0.0
     metadata: Optional[dict] = None
 
+# Rebuild Pydantic models for dynamic loading compatibility
+TaskCreateRequest.model_rebuild()
+CheckpointRequest.model_rebuild()
+ChatMessageRequest.model_rebuild()
+
 
 # ===========================================================================
 # On startup: scan for interrupted tasks
@@ -448,6 +453,8 @@ def register_routes(app, config: dict) -> None:
     @router.post("/api/v1/chat/history")
     async def api_save_chat(req: ChatMessageRequest):
         """Save a chat message to persistent SQLite history."""
+        if _chat_db is None:
+            raise HTTPException(503, "Chat database not initialized")
         if req.role not in ("user", "assistant", "system", "companion"):
             raise HTTPException(400, "role must be 'user', 'assistant', 'system', or 'companion'")
         if not req.content or not isinstance(req.content, str):
@@ -455,14 +462,18 @@ def register_routes(app, config: dict) -> None:
         if len(req.content) > 10000:
             raise HTTPException(400, "content too long (max 10000 chars)")
 
-        session_id = req.session_id or str(uuid.uuid4())[:8]
-        msg = _chat_db.save_message(
-            session_id=session_id,
-            role=req.role,
-            content=req.content,
-            timestamp=req.timestamp,
-            metadata=req.metadata,
-        )
+        try:
+            session_id = req.session_id or str(uuid.uuid4())[:8]
+            msg = _chat_db.save_message(
+                session_id=session_id,
+                role=req.role,
+                content=req.content,
+                timestamp=req.timestamp,
+                metadata=req.metadata,
+            )
+        except Exception as e:
+            log.error("[chat] save_message failed: %s", e)
+            raise HTTPException(500, f"Chat save failed: {e}")
 
         _publish("chat.saved", {"session_id": session_id, "role": req.role})
 

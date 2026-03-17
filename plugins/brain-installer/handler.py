@@ -153,6 +153,18 @@ def register_routes(app, config: dict) -> None:
             "vram_gb": vram,
         }
 
+    @router.get("/api/v1/brains/status")
+    async def api_brain_status():
+        """Current brain installation status."""
+        runtime = _detect_runtime()
+        return {
+            "installed": _installed_brains,
+            "active": _active_brain,
+            "count": len(_installed_brains),
+            "runtime": runtime,
+            "vram_gb": _get_vram(),
+        }
+
     @router.get("/api/v1/brains/installed")
     async def api_installed():
         """Currently installed brains."""

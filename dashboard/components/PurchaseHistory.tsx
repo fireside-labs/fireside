@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 
 interface Purchase {
     plugin_id: string;
@@ -15,7 +16,7 @@ export default function PurchaseHistory() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch("http://127.0.0.1:8765/api/v1/store/purchases")
+        fetch(`${API_BASE}/api/v1/store/purchases`)
             .then(res => res.ok ? res.json() : { purchases: [] })
             .then(data => {
                 const items = data.purchases || data || [];

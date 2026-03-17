@@ -201,6 +201,24 @@ async def get_status():
     }
 
 
+@router.get("/models")
+async def get_models():
+    """Available models and current default.
+
+    Returns provider configuration and the currently selected model.
+    """
+    models_cfg = _config.get("models", {})
+    default = models_cfg.get("default", "unknown")
+    providers = models_cfg.get("providers", {})
+    aliases = models_cfg.get("aliases", {})
+
+    return {
+        "default": default,
+        "providers": {k: {"url": v.get("url", ""), "type": k} for k, v in providers.items()},
+        "aliases": aliases,
+    }
+
+
 @router.get("/system/onboarding")
 async def get_onboarding():
     """Check if install.sh already completed onboarding.

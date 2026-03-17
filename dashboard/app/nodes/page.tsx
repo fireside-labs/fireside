@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getNodes, MeshNode } from "@/lib/api";
+import { getNodes, MeshNode, API_BASE } from "@/lib/api";
 
 // Derive a friendly name from the node's properties or just capitalise the node name
 function getFriendlyName(node: MeshNode): string {
@@ -127,7 +127,7 @@ export default function ConnectedDevicesPage() {
                         style={{ borderStyle: "dashed" }}
                         onClick={async () => {
                             try {
-                                const res = await fetch("http://127.0.0.1:8765/mesh/join-token", { method: "POST" });
+                                const res = await fetch(`${API_BASE}/mesh/join-token`, { method: "POST" });
                                 if (res.ok) {
                                     const data = await res.json();
                                     const token = data.token || data.join_token || "N/A";

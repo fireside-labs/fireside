@@ -421,6 +421,11 @@ def register_routes(app, config: dict) -> None:
         """Current working memory items and stats."""
         return _wm.status()
 
+    @router.get("/api/v1/working-memory/status")
+    async def get_wm_status_alias():
+        """Alias for /api/v1/working-memory — frontend compatibility."""
+        return _wm.status()
+
     @router.post("/api/v1/working-memory/observe")
     async def wm_observe(req: ObserveRequest):
         """Add an observation to working memory."""
