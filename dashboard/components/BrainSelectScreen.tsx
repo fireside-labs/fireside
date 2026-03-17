@@ -383,12 +383,12 @@ const css = `
     width: 100%; min-height: 100%;
     font-family: 'Outfit', 'Inter', system-ui, sans-serif;
     color: #F0DCC8;
+    background: #080810;
   }
   .bss2-fullscreen {
     position: fixed; inset: 0; z-index: 100;
     background: #080810;
     overflow-y: auto;
-    display: flex; align-items: center; justify-content: center;
   }
 
   /* ═══ SCREEN 1: CATEGORIES ═══ */
@@ -415,7 +415,7 @@ const css = `
     gap: 24px; max-width: 760px; width: 100%;
   }
   .bss2-cat-card {
-    position: relative; overflow: visible;
+    position: relative;
     display: flex; flex-direction: column;
     align-items: center; gap: 14px;
     padding: 48px 28px 36px;
@@ -449,15 +449,19 @@ const css = `
   @keyframes glowPulse { 0% { opacity: 0.4; transform: translateX(-50%) scale(0.9); } 100% { opacity: 1; transform: translateX(-50%) scale(1.1); } }
   /* Diagonal shimmer sweep */
   .bss2-cat-shimmer {
-    position: absolute; inset: -2px;
+    position: absolute; inset: 0;
     border-radius: 24px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .bss2-cat-shimmer::after {
+    content: ''; position: absolute; inset: -50% -50%;
     background: linear-gradient(
       105deg,
       transparent 30%,
-      color-mix(in srgb, var(--cat-color) 6%, transparent) 45%,
-      transparent 60%
+      color-mix(in srgb, var(--cat-color) 5%, transparent) 45%,
+      transparent 55%
     );
-    pointer-events: none;
     animation: shimmerSweep 5s ease-in-out infinite;
   }
   @keyframes shimmerSweep {
@@ -509,8 +513,10 @@ const css = `
   /* ═══ SCREEN 2: MODELS ═══ */
   .bss2-models {
     width: 100%; max-width: 640px;
+    min-height: 100vh;
     padding: 24px;
     margin: 0 auto;
+    background: #080810;
     animation: fadeUp 0.4s ease forwards;
   }
   .bss2-models-header {
