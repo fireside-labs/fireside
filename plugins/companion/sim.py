@@ -327,17 +327,18 @@ def get_status(state: dict) -> dict:
     else:
         status_msg = f"{name} is doing okay."
 
+    level = state.get("level", 1)
     return {
         "name": name,
-        "species": state["species"],
+        "species": state.get("species", "cat"),
         "owner": owner,
         "happiness": round(happiness),
-        "xp": state["xp"],
-        "level": state["level"],
-        "xp_to_next": state["xp_to_next"],
-        "walk_count": state["walk_count"],
-        "feed_count": state["feed_count"],
-        "streak_days": state["streak_days"],
+        "xp": state.get("xp", 0),
+        "level": level,
+        "xp_to_next": state.get("xp_to_next", level * 20),
+        "walk_count": state.get("walk_count", 0),
+        "feed_count": state.get("feed_count", 0),
+        "streak_days": state.get("streak_days", 0),
         "wandered_off": state.get("wandered_off", False),
         "mood_prefix": get_mood_prefix(state),
         "status_message": status_msg,

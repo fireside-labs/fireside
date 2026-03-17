@@ -35,6 +35,11 @@ class SwitchResponse(BaseModel):
     previous: str
 
 
+# Rebuild models to resolve forward references from `from __future__ import annotations`
+SwitchRequest.model_rebuild()
+SwitchResponse.model_rebuild()
+
+
 def _do_switch(model_id: str) -> None:
     """Background: set openclaw config + restart gateway."""
     try:
