@@ -366,27 +366,17 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
           </div>
         )}
 
-        {/* Step 2: Brain Selection — premium tier picker */}
+        {/* Step 2: Brain Selection — two-screen RPG picker */}
         {step === 2 && (
           <BrainSelectScreen
-            selected={config.brainSize === "deep" ? "deep" : "fast"}
-            onSelect={(brainId) => {
-              const MODEL_MAP: Record<string, string> = {
-                fast: "llama-3.1-8b-q6",
-                deep: "qwen-2.5-14b-q4",
-                cloud: "kimi-k2",
-              };
-              const LABEL_MAP: Record<string, { label: string; size: string }> = {
-                fast: { label: "Llama 3.1 8B (Q4)", size: "~4.9 GB" },
-                deep: { label: "Qwen 2.5 14B (Q4)", size: "~9.0 GB" },
-                cloud: { label: "Cloud (API)", size: "No download" },
-              };
+            onSelect={(modelId, label, size, quant) => {
               setConfig(c => ({
                 ...c,
-                brainSize: brainId,
-                actualModel: MODEL_MAP[brainId] || "llama-3.1-8b-q6",
-                brainLabel: LABEL_MAP[brainId]?.label || brainId,
-                brainDisplaySize: LABEL_MAP[brainId]?.size || "~5 GB",
+                brainSize: modelId,
+                actualModel: modelId,
+                brainLabel: label,
+                brainDisplaySize: size,
+                brainModel: quant,
               }));
               goTo(3);
             }}
@@ -495,7 +485,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               <div className="installer-confirm-row">
                 <span className="installer-confirm-label">Brain</span>
                 <span className="installer-confirm-value">
-                  {MODEL_LABELS[config.actualModel] || config.actualModel}
+                  {config.brainLabel || config.actualModel}
                 </span>
               </div>
             </div>

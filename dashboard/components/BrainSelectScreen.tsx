@@ -1,548 +1,373 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import EmberParticles from "@/components/EmberParticles";
-import { playTick, playConfirm, playWhoosh } from "@/components/FiresideSounds";
+import { useState, useMemo } from "react";
 
-/**
- * 🧠 BrainSelectScreen — RPG-style brain selection.
- *
- * Default: "Use Recommended" auto-picks based on VRAM.
- * Manual: Two-panel layout — archetypes left, models+quant right.
- */
+/* ═══════════════════════════════════════════════════════════════════
+   Brain Select — Two-Screen RPG Flow
+   Screen 1: Three category boxes (Speed / Power / Specialist)
+   Screen 2: Filterable model list + expandable cards + inline quant + stat bars
+   ═══════════════════════════════════════════════════════════════════ */
 
-// ── Data ────────────────────────────────────────────────────────────
+// ── Data ──
 
-interface ModelEntry {
+interface ModelDef {
   id: string;
   label: string;
   family: string;
   params: string;
-  quants: string[];
-  defaultQuant: string;
-  sizes: Record<string, string>;   // quant → filesize
-  vrams: Record<string, number>;   // quant → VRAM needed
+  paramNum: number;
   speed: string;
+  speedNum: number;
+  category: "speed" | "power" | "specialist";
+  tags: string[];
+  quants: string[];
+  sizes: Record<string, string>;
+  vrams: Record<string, number>;
 }
 
-interface Archetype {
-  id: string;
-  emoji: string;
-  label: string;
-  tagline: string;
-  desc: string;
-  badge: "FREE" | "PAID";
-  models: ModelEntry[];
-}
+const QUANT_META: Record<string, { label: string; bits: string; quality: number }> = {
+  Q2_K:   { label: "Tiny",   bits: "2-bit", quality: 15 },
+  Q4_K_M: { label: "Low",    bits: "4-bit", quality: 35 },
+  Q6_K:   { label: "Medium", bits: "6-bit", quality: 60 },
+  Q8_0:   { label: "High",   bits: "8-bit", quality: 80 },
+  FP16:   { label: "Ultra",  bits: "16-bit", quality: 100 },
+  API:    { label: "Cloud",  bits: "API",   quality: 95 },
+};
 
-const ARCHETYPES: Archetype[] = [
+const MODELS: ModelDef[] = [
+  // ── Speed ──
   {
-    id: "fast",
-    emoji: "⚡",
-    label: "Fast",
-    tagline: "Quick & capable",
-    desc: "Runs on most hardware. Great for everyday use.",
-    badge: "FREE",
-    models: [
-      {
-        id: "llama-3.1-8b", label: "Llama 3.1 8B", family: "Meta", params: "8B",
-        quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "4.9 GB", "Q6_K": "6.6 GB", "Q8_0": "8.5 GB", "FP16": "16.1 GB" },
-        vrams: { "Q4_K_M": 8, "Q6_K": 10, "Q8_0": 12, "FP16": 20 },
-        speed: "~45 tok/s",
-      },
-      {
-        id: "qwen-2.5-7b", label: "Qwen 2.5 7B", family: "Alibaba", params: "7B",
-        quants: ["Q4_K_M", "Q6_K", "FP16"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "4.7 GB", "Q6_K": "6.3 GB", "FP16": "14.2 GB" },
-        vrams: { "Q4_K_M": 8, "Q6_K": 10, "FP16": 18 },
-        speed: "~42 tok/s",
-      },
-      {
-        id: "mistral-7b", label: "Mistral v0.3 7B", family: "Mistral", params: "7B",
-        quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "4.4 GB", "Q6_K": "5.9 GB", "Q8_0": "7.7 GB", "FP16": "14.5 GB" },
-        vrams: { "Q4_K_M": 8, "Q6_K": 10, "Q8_0": 12, "FP16": 18 },
-        speed: "~40 tok/s",
-      },
-      {
-        id: "gemma-2-9b", label: "Gemma 2 9B", family: "Google", params: "9B",
-        quants: ["Q4_K_M", "Q6_K"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "5.8 GB", "Q6_K": "7.8 GB" },
-        vrams: { "Q4_K_M": 8, "Q6_K": 10 },
-        speed: "~38 tok/s",
-      },
-      {
-        id: "phi-3-mini", label: "Phi-3 Mini 3.8B", family: "Microsoft", params: "3.8B",
-        quants: ["Q4_K_M", "Q6_K"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "2.4 GB", "Q6_K": "3.1 GB" },
-        vrams: { "Q4_K_M": 4, "Q6_K": 6 },
-        speed: "~55 tok/s",
-      },
-      {
-        id: "gemma-2-2b", label: "Gemma 2 2B", family: "Google", params: "2B",
-        quants: ["Q6_K"], defaultQuant: "Q6_K",
-        sizes: { "Q6_K": "2.1 GB" },
-        vrams: { "Q6_K": 4 },
-        speed: "~65 tok/s",
-      },
-    ],
+    id: "phi-3-mini", label: "Phi-3 Mini", family: "Microsoft",
+    params: "3.8B", paramNum: 3.8, speed: "~80 tok/s", speedNum: 80,
+    category: "speed", tags: ["compact", "efficient"],
+    quants: ["Q4_K_M", "Q6_K", "Q8_0"],
+    sizes: { Q4_K_M: "2.2 GB", Q6_K: "2.9 GB", Q8_0: "3.8 GB" },
+    vrams: { Q4_K_M: 4, Q6_K: 5, Q8_0: 6 },
   },
   {
-    id: "deep",
-    emoji: "🧠",
-    label: "Deep",
-    tagline: "Powerful reasoning",
-    desc: "Advanced analysis. Needs more GPU power.",
-    badge: "FREE",
-    models: [
-      {
-        id: "qwen-2.5-14b", label: "Qwen 2.5 14B", family: "Alibaba", params: "14B",
-        quants: ["Q4_K_M", "Q6_K"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "9.0 GB", "Q6_K": "12.1 GB" },
-        vrams: { "Q4_K_M": 12, "Q6_K": 16 },
-        speed: "~25 tok/s",
-      },
-      {
-        id: "mistral-small-22b", label: "Mistral Small 22B", family: "Mistral", params: "22B",
-        quants: ["Q4_K_M"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "14 GB" },
-        vrams: { "Q4_K_M": 18 },
-        speed: "~18 tok/s",
-      },
-      {
-        id: "gemma-2-27b", label: "Gemma 2 27B", family: "Google", params: "27B",
-        quants: ["Q4_K_M"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "17 GB" },
-        vrams: { "Q4_K_M": 20 },
-        speed: "~15 tok/s",
-      },
-      {
-        id: "qwen-2.5-32b", label: "Qwen 2.5 32B", family: "Alibaba", params: "32B",
-        quants: ["Q4_K_M"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "20 GB" },
-        vrams: { "Q4_K_M": 24 },
-        speed: "~12 tok/s",
-      },
-      {
-        id: "qwen-2.5-72b", label: "Qwen 2.5 72B", family: "Alibaba", params: "72B",
-        quants: ["Q4_K_M"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "44 GB" },
-        vrams: { "Q4_K_M": 48 },
-        speed: "~6 tok/s",
-      },
-      {
-        id: "llama-3.1-70b", label: "Llama 3.1 70B", family: "Meta", params: "70B",
-        quants: ["Q4_K_M"], defaultQuant: "Q4_K_M",
-        sizes: { "Q4_K_M": "42 GB" },
-        vrams: { "Q4_K_M": 48 },
-        speed: "~5 tok/s",
-      },
-    ],
+    id: "llama-3.1-8b", label: "Llama 3.1 8B", family: "Meta",
+    params: "8B", paramNum: 8, speed: "~45 tok/s", speedNum: 45,
+    category: "speed", tags: ["general", "reliable"],
+    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
+    sizes: { Q4_K_M: "4.9 GB", Q6_K: "6.6 GB", Q8_0: "8.5 GB", FP16: "16 GB" },
+    vrams: { Q4_K_M: 7, Q6_K: 9, Q8_0: 11, FP16: 18 },
   },
   {
-    id: "cloud",
-    emoji: "☁️",
-    label: "Cloud",
-    tagline: "Unlimited power",
-    desc: "No hardware needed. Requires API key.",
-    badge: "PAID",
-    models: [
-      {
-        id: "kimi-k2", label: "Kimi K2", family: "Moonshot", params: "MoE",
-        quants: ["API"], defaultQuant: "API",
-        sizes: { "API": "Cloud" }, vrams: { "API": 0 },
-        speed: "~120 tok/s",
-      },
-      {
-        id: "gpt-4o", label: "GPT-4o", family: "OpenAI", params: "—",
-        quants: ["API"], defaultQuant: "API",
-        sizes: { "API": "Cloud" }, vrams: { "API": 0 },
-        speed: "~90 tok/s",
-      },
-      {
-        id: "claude-3.5-sonnet", label: "Claude 3.5 Sonnet", family: "Anthropic", params: "—",
-        quants: ["API"], defaultQuant: "API",
-        sizes: { "API": "Cloud" }, vrams: { "API": 0 },
-        speed: "~80 tok/s",
-      },
-      {
-        id: "gemini-2-flash", label: "Gemini 2.0 Flash", family: "Google", params: "—",
-        quants: ["API"], defaultQuant: "API",
-        sizes: { "API": "Cloud" }, vrams: { "API": 0 },
-        speed: "~100 tok/s",
-      },
-    ],
+    id: "qwen-3.5-7b", label: "Qwen 3.5 7B", family: "Alibaba",
+    params: "7B", paramNum: 7, speed: "~50 tok/s", speedNum: 50,
+    category: "speed", tags: ["general", "multilingual"],
+    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
+    sizes: { Q4_K_M: "4.4 GB", Q6_K: "5.9 GB", Q8_0: "7.6 GB", FP16: "14 GB" },
+    vrams: { Q4_K_M: 6, Q6_K: 8, Q8_0: 10, FP16: 16 },
+  },
+  {
+    id: "mistral-7b", label: "Mistral 7B", family: "Mistral AI",
+    params: "7B", paramNum: 7, speed: "~50 tok/s", speedNum: 50,
+    category: "speed", tags: ["general", "creative"],
+    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
+    sizes: { Q4_K_M: "4.4 GB", Q6_K: "5.9 GB", Q8_0: "7.6 GB", FP16: "14.5 GB" },
+    vrams: { Q4_K_M: 6, Q6_K: 8, Q8_0: 10, FP16: 17 },
+  },
+  // ── Power ──
+  {
+    id: "qwen-2.5-14b", label: "Qwen 2.5 14B", family: "Alibaba",
+    params: "14B", paramNum: 14, speed: "~25 tok/s", speedNum: 25,
+    category: "power", tags: ["deep", "reasoning"],
+    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
+    sizes: { Q4_K_M: "9.0 GB", Q6_K: "12 GB", Q8_0: "15 GB", FP16: "28 GB" },
+    vrams: { Q4_K_M: 12, Q6_K: 14, Q8_0: 18, FP16: 30 },
+  },
+  {
+    id: "llama-3.1-70b", label: "Llama 3.1 70B", family: "Meta",
+    params: "70B", paramNum: 70, speed: "~8 tok/s", speedNum: 8,
+    category: "power", tags: ["flagship", "deep"],
+    quants: ["Q2_K", "Q4_K_M", "Q6_K"],
+    sizes: { Q2_K: "26 GB", Q4_K_M: "40 GB", Q6_K: "54 GB" },
+    vrams: { Q2_K: 28, Q4_K_M: 44, Q6_K: 58 },
+  },
+  {
+    id: "command-r-35b", label: "Command R 35B", family: "Cohere",
+    params: "35B", paramNum: 35, speed: "~15 tok/s", speedNum: 15,
+    category: "power", tags: ["agents", "tools"],
+    quants: ["Q4_K_M", "Q6_K"],
+    sizes: { Q4_K_M: "20 GB", Q6_K: "27 GB" },
+    vrams: { Q4_K_M: 22, Q6_K: 30 },
+  },
+  // ── Specialist ──
+  {
+    id: "qwen-2.5-coder-7b", label: "Qwen 2.5 Coder 7B", family: "Alibaba",
+    params: "7B", paramNum: 7, speed: "~50 tok/s", speedNum: 50,
+    category: "specialist", tags: ["code", "programming"],
+    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
+    sizes: { Q4_K_M: "4.4 GB", Q6_K: "5.9 GB", Q8_0: "7.6 GB", FP16: "14 GB" },
+    vrams: { Q4_K_M: 6, Q6_K: 8, Q8_0: 10, FP16: 16 },
+  },
+  {
+    id: "deepseek-coder-v2", label: "DeepSeek Coder V2", family: "DeepSeek",
+    params: "16B", paramNum: 16, speed: "~22 tok/s", speedNum: 22,
+    category: "specialist", tags: ["code", "math"],
+    quants: ["Q4_K_M", "Q6_K", "Q8_0"],
+    sizes: { Q4_K_M: "9.5 GB", Q6_K: "12.8 GB", Q8_0: "16.5 GB" },
+    vrams: { Q4_K_M: 12, Q6_K: 15, Q8_0: 19 },
+  },
+  // ── Cloud ──
+  {
+    id: "cloud-gpt4", label: "GPT-4o (Cloud)", family: "OpenAI",
+    params: "~200B+", paramNum: 200, speed: "~60 tok/s", speedNum: 60,
+    category: "power", tags: ["cloud", "api"],
+    quants: ["API"],
+    sizes: { API: "0 GB" },
+    vrams: { API: 0 },
   },
 ];
 
-// Friendly quality labels for quant levels
-const QUANT_LABELS: Record<string, { name: string; desc: string }> = {
-  "Q4_K_M": { name: "Low", desc: "Smallest · fastest" },
-  "Q6_K":   { name: "Medium", desc: "Balanced" },
-  "Q8_0":   { name: "High", desc: "Near-lossless" },
-  "FP16":   { name: "Ultra", desc: "Full precision · largest" },
-  "API":    { name: "Cloud", desc: "No download" },
-};
+const CATEGORIES = [
+  { id: "speed" as const, icon: "⚡", label: "Speed", color: "#F59E0B", subtitle: "Fast responses, lighter models", bg: "rgba(245,158,11,0.06)" },
+  { id: "power" as const, icon: "🧠", label: "Power", color: "#A78BFA", subtitle: "Deep intelligence, larger models", bg: "rgba(167,139,250,0.06)" },
+  { id: "specialist" as const, icon: "🔧", label: "Specialist", color: "#34D399", subtitle: "Code, math, creative", bg: "rgba(52,211,153,0.06)" },
+];
 
-// Intelligence presets — like game difficulty settings
-interface Preset {
-  id: string;
-  emoji: string;
-  label: string;
-  desc: string;
-  model: ModelEntry;
-  archetype: string;
-  quant: string;
-  compatible: boolean;
-}
+// ── Component ──
 
-function getPresets(vram: number): { presets: Preset[]; recommendedId: string } {
-  const low: Preset = {
-    id: "low", emoji: "🟢", label: "Low",
-    desc: "Fast & lightweight. Runs on anything.",
-    model: ARCHETYPES[0].models[4], // Phi-3 Mini 3.8B
-    archetype: "fast", quant: "Q4_K_M",
-    compatible: vram >= 4 || vram === 0,
-  };
-  const med: Preset = {
-    id: "medium", emoji: "🟡", label: "Medium",
-    desc: "Balanced smarts and speed. Great all-rounder.",
-    model: ARCHETYPES[0].models[0], // Llama 3.1 8B
-    archetype: "fast", quant: "Q4_K_M",
-    compatible: vram >= 8 || vram === 0,
-  };
-  const high: Preset = {
-    id: "high", emoji: "🔴", label: "High",
-    desc: "Maximum intelligence. Needs strong GPU.",
-    model: vram >= 24 ? ARCHETYPES[1].models[3] : ARCHETYPES[1].models[0], // 32B or 14B
-    archetype: "deep", quant: "Q4_K_M",
-    compatible: vram >= 12,
-  };
-
-  const presets = [low, med, high];
-  const recommendedId = vram >= 24 ? "high" : vram >= 12 ? "high" : vram >= 8 ? "medium" : vram >= 4 ? "low" : "medium";
-  return { presets, recommendedId };
-}
-
-// ── Exported types for backward compat ──
-
-export interface BrainOption {
-  id: string; emoji: string; label: string; model: string;
-  headline: string; features: string[]; sizeLabel: string;
-  speedLabel: string; badge: "FREE" | "PAID"; vramNeeded: number;
-}
-
-export const BRAIN_OPTIONS: BrainOption[] = ARCHETYPES.map(a => ({
-  id: a.id, emoji: a.emoji, label: a.label,
-  model: a.models[0]?.label || "Cloud",
-  headline: a.desc,
-  features: a.models.slice(0, 3).map(m => m.label),
-  sizeLabel: a.models[0]?.sizes[a.models[0].defaultQuant] || "Cloud",
-  speedLabel: a.models[0]?.speed || "—",
-  badge: a.badge,
-  vramNeeded: a.models[0]?.vrams[a.models[0].defaultQuant] || 0,
-}));
-
-// ── Component ───────────────────────────────────────────────────────
-
-interface BrainSelectScreenProps {
+interface Props {
   selected?: string;
-  onSelect: (brainId: string) => void;
+  onSelect: (modelId: string, label: string, size: string, quant: string) => void;
   detectedVram?: number;
   onBack?: () => void;
   fullscreen?: boolean;
-  installed?: string[];
-  activeBrain?: string;
-  onInstall?: (brainId: string) => void;
-  onSwitch?: (brainId: string) => void;
 }
 
-export default function BrainSelectScreen({
-  selected: initialSelected,
-  onSelect,
-  detectedVram = 0,
-  onBack,
-  fullscreen = true,
-}: BrainSelectScreenProps) {
-  const { presets, recommendedId } = getPresets(detectedVram);
-  const rec = presets.find(p => p.id === recommendedId)!;
+export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, fullscreen }: Props) {
+  const [screen, setScreen] = useState<"categories" | "models">("categories");
+  const [category, setCategory] = useState<"speed" | "power" | "specialist">("speed");
+  const [expandedModel, setExpandedModel] = useState<string | null>(null);
+  const [selectedQuants, setSelectedQuants] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
 
-  const [mode, setMode] = useState<"recommended" | "manual">("recommended");
-  const [selectedPreset, setSelectedPreset] = useState(recommendedId);
-  const [selectedArchetype, setSelectedArchetype] = useState(rec.archetype);
-  const [selectedModel, setSelectedModel] = useState<string>(rec.model.id);
-  const [selectedQuant, setSelectedQuant] = useState<string>(rec.quant);
-  const [confirming, setConfirming] = useState(false);
-  const [flashClass, setFlashClass] = useState("");
-
-  const archetype = ARCHETYPES.find(a => a.id === selectedArchetype)!;
-  const model = archetype.models.find(m => m.id === selectedModel) || archetype.models[0];
-
-  const handleConfirm = () => {
-    if (confirming) return;
-    setConfirming(true);
-    playConfirm();
-    setFlashClass("bss-flash");
-    setTimeout(() => {
-      onSelect(selectedArchetype);
-      setConfirming(false);
-      setFlashClass("");
-    }, 600);
+  const pickCategory = (cat: typeof category) => {
+    setCategory(cat);
+    setScreen("models");
+    setExpandedModel(null);
+    setSearch("");
   };
 
-  const selectArchetype = (id: string) => {
-    playTick();
-    setSelectedArchetype(id);
-    const arch = ARCHETYPES.find(a => a.id === id)!;
-    setSelectedModel(arch.models[0].id);
-    setSelectedQuant(arch.models[0].defaultQuant);
+  const getQuant = (modelId: string, model: ModelDef) =>
+    selectedQuants[modelId] || model.quants[0];
+
+  const filteredModels = useMemo(() => {
+    let list = MODELS.filter(m => m.category === category);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(m =>
+        m.label.toLowerCase().includes(q) ||
+        m.family.toLowerCase().includes(q) ||
+        m.tags.some(t => t.includes(q))
+      );
+    }
+    return list;
+  }, [category, search]);
+
+  const confirmModel = (model: ModelDef) => {
+    const q = getQuant(model.id, model);
+    const size = model.sizes[q] || "?";
+    const qm = QUANT_META[q];
+    const label = `${model.label} (${qm?.bits || q})`;
+    onSelect(model.id, label, size, q);
   };
 
-  const selectModel = (m: ModelEntry) => {
-    playTick();
-    setSelectedModel(m.id);
-    setSelectedQuant(m.defaultQuant);
-  };
-
-  const selectQuant = (q: string) => {
-    playTick();
-    setSelectedQuant(q);
-  };
-
-  const currentSize = model.sizes[selectedQuant] || "—";
-  const currentVram = model.vrams[selectedQuant] || 0;
-  const compatible = currentVram === 0 || detectedVram >= currentVram;
-
-  const rootClass = fullscreen ? "bss-root bss-fullscreen" : "bss-root bss-inline";
+  const catColor = CATEGORIES.find(c => c.id === category)?.color || "#F59E0B";
 
   return (
-    <div className={rootClass}>
-      <style>{brainSelectCSS}</style>
-      {flashClass && <div className={flashClass} />}
-      <EmberParticles intensity={15} className="bss-embers" />
+    <div className={`bss2-root ${fullscreen ? "bss2-fullscreen" : ""}`}>
+      <style>{css}</style>
 
-      <div className="bss-container">
-        {/* Header */}
-        <div className="bss-header">
-          <p className="bss-eyebrow">Choose your brain</p>
-          <h2 className="bss-title">How powerful should your AI be?</h2>
-        </div>
-
-        {/* ══ RECOMMENDED — 3 presets ══ */}
-        {mode === "recommended" && (
-          <div className="bss-rec-area">
-            <p className="bss-rec-subtitle">
-              {detectedVram > 0 ? `Detected ${detectedVram}GB VRAM` : "Select your AI intelligence level"}
-            </p>
-
-            <div className="bss-presets">
-              {presets.map((p) => {
-                const isSelected = p.id === selectedPreset;
-                const isRec = p.id === recommendedId;
-                return (
-                  <button
-                    key={p.id}
-                    className={`bss-preset ${isSelected ? 'bss-preset-active' : ''} ${!p.compatible ? 'bss-preset-dim' : ''}`}
-                    onClick={() => {
-                      playTick();
-                      setSelectedPreset(p.id);
-                      setSelectedArchetype(p.archetype);
-                      setSelectedModel(p.model.id);
-                      setSelectedQuant(p.quant);
-                    }}
-                  >
-                    {isRec && <div className="bss-preset-rec">✨ Best for you</div>}
-                    <span className="bss-preset-emoji">{p.emoji}</span>
-                    <span className="bss-preset-label">{p.label}</span>
-                    <span className="bss-preset-desc">{p.desc}</span>
-                    <div className="bss-preset-model">
-                      <span>{p.model.label}</span>
-                      <span className="bss-preset-size">{p.model.sizes[p.quant]}</span>
-                    </div>
-                    {!p.compatible && <span className="bss-preset-warn">⚠ Not enough VRAM</span>}
-                    <div className={`bss-radio ${isSelected ? 'bss-radio-on' : ''}`}>
-                      {isSelected && <div className="bss-radio-dot" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="bss-rec-actions">
+      {/* ═══ SCREEN 1: CATEGORIES ═══ */}
+      {screen === "categories" && (
+        <div className="bss2-categories">
+          <h2 className="bss2-title">Choose your path</h2>
+          <p className="bss2-sub">What matters most to you?</p>
+          <div className="bss2-cat-grid">
+            {CATEGORIES.map((cat, i) => (
               <button
-                className={`bss-btn-confirm ${confirming ? "bss-btn-pulse" : ""}`}
-                onClick={handleConfirm}
-                disabled={confirming}
+                key={cat.id}
+                className="bss2-cat-card"
+                onClick={() => pickCategory(cat.id)}
+                style={{
+                  "--cat-color": cat.color,
+                  "--cat-bg": cat.bg,
+                  animationDelay: `${i * 0.1}s`,
+                } as React.CSSProperties}
               >
-                {confirming ? "Setting up..." : `Continue with ${presets.find(p => p.id === selectedPreset)!.label} →`}
+                <span className="bss2-cat-icon">{cat.icon}</span>
+                <span className="bss2-cat-label">{cat.label}</span>
+                <span className="bss2-cat-sub">{cat.subtitle}</span>
+                <span className="bss2-cat-count">
+                  {MODELS.filter(m => m.category === cat.id).length} models
+                </span>
               </button>
-              <button className="bss-btn-manual" onClick={() => { playTick(); setMode("manual"); }}>
-                I know what I want — choose model &amp; bits
-              </button>
+            ))}
+          </div>
+          {onBack && (
+            <button className="bss2-back-link" onClick={onBack}>
+              ← Back to recommended
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ═══ SCREEN 2: MODEL LIST ═══ */}
+      {screen === "models" && (
+        <div className="bss2-models">
+          {/* Header */}
+          <div className="bss2-models-header">
+            <button className="bss2-back-btn" onClick={() => setScreen("categories")}>
+              ← Back
+            </button>
+            <div className="bss2-models-title-area">
+              <span className="bss2-cat-badge" style={{ background: catColor }}>
+                {CATEGORIES.find(c => c.id === category)?.icon} {CATEGORIES.find(c => c.id === category)?.label}
+              </span>
+              {detectedVram > 0 && (
+                <span className="bss2-vram-badge">💾 {detectedVram} GB VRAM</span>
+              )}
             </div>
           </div>
-        )}
 
-        {/* ══ MANUAL — Two Panel ══ */}
-        {mode === "manual" && (
-          <div className="bss-manual">
-            {/* Left: Archetypes */}
-            <div className="bss-archetypes">
-              {ARCHETYPES.map((a) => (
-                <button
-                  key={a.id}
-                  className={`bss-arch-card ${a.id === selectedArchetype ? "bss-arch-active" : ""}`}
-                  onClick={() => selectArchetype(a.id)}
+          {/* Search */}
+          <div className="bss2-search-wrap">
+            <span className="bss2-search-icon">🔍</span>
+            <input
+              className="bss2-search"
+              placeholder="Search models..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Model list */}
+          <div className="bss2-model-list">
+            {filteredModels.length === 0 && (
+              <p className="bss2-empty">No models found. Try a different search.</p>
+            )}
+            {filteredModels.map(model => {
+              const isExpanded = expandedModel === model.id;
+              const q = getQuant(model.id, model);
+              const qm = QUANT_META[q] || { label: q, bits: q, quality: 50 };
+              const compatible = detectedVram >= (model.vrams[q] || 0);
+              const intel = Math.min(100, Math.round((model.paramNum / 72) * 100));
+              const spd = Math.min(100, Math.round((model.speedNum / 100) * 100));
+              const sizeNum = parseFloat((model.sizes[q] || "0").replace(/[^0-9.]/g, ""));
+              const siz = Math.min(100, Math.round((sizeNum / 60) * 100));
+
+              return (
+                <div
+                  key={model.id}
+                  className={`bss2-model-card ${isExpanded ? "bss2-expanded" : ""} ${!compatible && detectedVram > 0 ? "bss2-dim" : ""}`}
+                  style={{ "--cat-color": catColor } as React.CSSProperties}
                 >
-                  <span className="bss-arch-emoji">{a.emoji}</span>
-                  <div className="bss-arch-text">
-                    <span className="bss-arch-label">{a.label}</span>
-                    <span className="bss-arch-tag">{a.tagline}</span>
-                  </div>
-                  <span className={`bss-arch-badge bss-arch-badge-${a.badge.toLowerCase()}`}>{a.badge}</span>
-                </button>
-              ))}
-              <button className="bss-btn-rec-back" onClick={() => { playTick(); setMode("recommended"); }}>
-                ← Use Recommended
-              </button>
-            </div>
+                  {/* Collapsed header */}
+                  <button
+                    className="bss2-model-header"
+                    onClick={() => setExpandedModel(isExpanded ? null : model.id)}
+                  >
+                    <div className="bss2-model-info">
+                      <span className="bss2-model-name">{model.label}</span>
+                      <span className="bss2-model-family">{model.family}</span>
+                    </div>
+                    <div className="bss2-model-badges">
+                      <span className="bss2-param-badge">{model.params}</span>
+                      <span className="bss2-speed-badge">{model.speed}</span>
+                    </div>
+                    <span className="bss2-chevron">{isExpanded ? "▾" : "▸"}</span>
+                  </button>
 
-            {/* Right: Models for selected archetype */}
-            <div className="bss-models-panel">
-              <h4 className="bss-models-title">{archetype.emoji} {archetype.label} Models</h4>
-
-              <div className="bss-models-list">
-                {archetype.models.map((m) => {
-                  const isActive = m.id === selectedModel;
-                  const mVram = m.vrams[m.defaultQuant];
-                  const mCompat = mVram === 0 || detectedVram >= mVram;
-                  return (
-                    <button
-                      key={m.id}
-                      className={`bss-model-card ${isActive ? "bss-model-card-active" : ""} ${!mCompat ? "bss-model-card-dim" : ""}`}
-                      onClick={() => selectModel(m)}
-                    >
-                      <div className="bss-model-top">
-                        <span className="bss-model-name">{m.label}</span>
-                        <span className="bss-model-family">{m.family}</span>
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div className="bss2-model-body">
+                      {/* Tags */}
+                      <div className="bss2-tags">
+                        {model.tags.map(t => (
+                          <span key={t} className="bss2-tag">{t}</span>
+                        ))}
                       </div>
-                      <div className="bss-model-bottom">
-                        <span className="bss-model-params">{m.params}</span>
-                        <span className="bss-model-speed">{m.speed}</span>
-                        <span className="bss-model-size">{m.sizes[m.defaultQuant]}</span>
-                        {!mCompat && <span className="bss-model-warn">⚠ {mVram}GB</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
 
-              {/* Quant selector */}
-              {model.quants.length > 1 && (
-                <div className="bss-quant-area">
-                  <span className="bss-quant-label">Quality</span>
-                  <div className="bss-quant-pills">
-                    {model.quants.map(q => {
-                      const ql = QUANT_LABELS[q] || { name: q, desc: "" };
-                      return (
-                        <button
-                          key={q}
-                          className={`bss-quant-pill ${q === selectedQuant ? "bss-quant-active" : ""}`}
-                          onClick={() => selectQuant(q)}
-                        >
-                          <span className="bss-quant-name">{ql.name}</span>
-                          <span className="bss-quant-tech">{q}</span>
-                          <span className="bss-quant-size">{model.sizes[q]}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {!compatible && (
-                    <p className="bss-quant-warn">⚠ This config needs {currentVram}GB VRAM (you have {detectedVram}GB)</p>
+                      {/* Quant pills */}
+                      <div className="bss2-quant-area">
+                        <span className="bss2-quant-label">Quality</span>
+                        <div className="bss2-quant-pills">
+                          {model.quants.map(qOpt => {
+                            const qInfo = QUANT_META[qOpt] || { label: qOpt, bits: qOpt };
+                            return (
+                              <button
+                                key={qOpt}
+                                className={`bss2-qpill ${qOpt === q ? "bss2-qpill-active" : ""}`}
+                                onClick={() =>
+                                  setSelectedQuants(prev => ({ ...prev, [model.id]: qOpt }))
+                                }
+                              >
+                                <span className="bss2-qpill-name">{qInfo.label}</span>
+                                <span className="bss2-qpill-bits">{qInfo.bits}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Stat bars */}
+                      <div className="bss2-stats">
+                        <div className="bss2-stat">
+                          <span className="bss2-stat-icon">🧠</span>
+                          <span className="bss2-stat-name">Intelligence</span>
+                          <div className="bss2-stat-bar">
+                            <div className="bss2-stat-fill bss2-fill-intel" style={{ width: `${intel}%` }} />
+                          </div>
+                          <span className="bss2-stat-val">{model.params}</span>
+                        </div>
+                        <div className="bss2-stat">
+                          <span className="bss2-stat-icon">⚡</span>
+                          <span className="bss2-stat-name">Speed</span>
+                          <div className="bss2-stat-bar">
+                            <div className="bss2-stat-fill bss2-fill-speed" style={{ width: `${spd}%` }} />
+                          </div>
+                          <span className="bss2-stat-val">{model.speed}</span>
+                        </div>
+                        <div className="bss2-stat">
+                          <span className="bss2-stat-icon">💎</span>
+                          <span className="bss2-stat-name">Quality</span>
+                          <div className="bss2-stat-bar">
+                            <div className="bss2-stat-fill bss2-fill-qual" style={{ width: `${qm.quality}%` }} />
+                          </div>
+                          <span className="bss2-stat-val">{qm.bits}</span>
+                        </div>
+                        <div className="bss2-stat">
+                          <span className="bss2-stat-icon">💾</span>
+                          <span className="bss2-stat-name">Download</span>
+                          <div className="bss2-stat-bar">
+                            <div className="bss2-stat-fill bss2-fill-size" style={{ width: `${siz}%` }} />
+                          </div>
+                          <span className="bss2-stat-val">{model.sizes[q]}</span>
+                        </div>
+                      </div>
+
+                      {/* VRAM warning */}
+                      {!compatible && detectedVram > 0 && (
+                        <p className="bss2-vram-warn">
+                          ⚠ Needs ~{model.vrams[q]} GB VRAM (you have {detectedVram} GB)
+                        </p>
+                      )}
+
+                      {/* Confirm */}
+                      <button className="bss2-confirm" onClick={() => confirmModel(model)}>
+                        Select {model.label} ({qm.bits}) →
+                      </button>
+                    </div>
                   )}
                 </div>
-              )}
-
-              {/* RPG Stat Bars */}
-              <div className="bss-stats">
-                {(() => {
-                  // Calculate stats from model + quant
-                  const paramNum = parseFloat(model.params) || 0;
-                  const intell = Math.min(100, Math.round((paramNum / 72) * 100));
-                  const speedNum = parseFloat(model.speed.replace(/[^0-9.]/g, '')) || 0;
-                  const spd = Math.min(100, Math.round((speedNum / 120) * 100));
-                  const sizeStr = currentSize.replace(/[^0-9.]/g, '');
-                  const sizeNum = parseFloat(sizeStr) || 0;
-                  const siz = Math.min(100, Math.round((sizeNum / 50) * 100));
-                  const qualIdx = ["Q4_K_M", "Q6_K", "Q8_0", "FP16", "API"].indexOf(selectedQuant);
-                  const qual = selectedQuant === "API" ? 95 : Math.round(((qualIdx + 1) / 4) * 100);
-
-                  return (
-                    <>
-                      <div className="bss-stat-row">
-                        <span className="bss-stat-icon">🧠</span>
-                        <span className="bss-stat-name">Intelligence</span>
-                        <div className="bss-stat-bar">
-                          <div className="bss-stat-fill bss-stat-intel" style={{ width: `${intell}%` }} />
-                        </div>
-                        <span className="bss-stat-val">{model.params}</span>
-                      </div>
-                      <div className="bss-stat-row">
-                        <span className="bss-stat-icon">⚡</span>
-                        <span className="bss-stat-name">Speed</span>
-                        <div className="bss-stat-bar">
-                          <div className="bss-stat-fill bss-stat-speed" style={{ width: `${spd}%` }} />
-                        </div>
-                        <span className="bss-stat-val">{model.speed}</span>
-                      </div>
-                      <div className="bss-stat-row">
-                        <span className="bss-stat-icon">💎</span>
-                        <span className="bss-stat-name">Quality</span>
-                        <div className="bss-stat-bar">
-                          <div className="bss-stat-fill bss-stat-qual" style={{ width: `${qual}%` }} />
-                        </div>
-                        <span className="bss-stat-val">{selectedQuant}</span>
-                      </div>
-                      <div className="bss-stat-row">
-                        <span className="bss-stat-icon">💾</span>
-                        <span className="bss-stat-name">Download</span>
-                        <div className="bss-stat-bar">
-                          <div className="bss-stat-fill bss-stat-size" style={{ width: `${siz}%` }} />
-                        </div>
-                        <span className="bss-stat-val">{currentSize}</span>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
+              );
+            })}
           </div>
-        )}
-
-        {/* Action bar (manual mode) */}
-        {mode === "manual" && (
-          <div className="bss-actions">
-            {onBack && (
-              <button className="bss-btn-back" onClick={() => { playWhoosh(); onBack(); }}>← Back</button>
-            )}
-            <button
-              className={`bss-btn-confirm ${confirming ? "bss-btn-pulse" : ""}`}
-              onClick={handleConfirm}
-              disabled={confirming}
-            >
-              {confirming ? "Setting up..." : `Continue with ${model.label} →`}
-            </button>
-          </div>
-        )}
-
-        {/* Back button (recommended mode) */}
-        {mode === "recommended" && onBack && (
-          <div className="bss-actions" style={{ marginTop: 8 }}>
-            <button className="bss-btn-back" onClick={() => { playWhoosh(); onBack(); }}>← Back</button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -551,357 +376,282 @@ export default function BrainSelectScreen({
 // CSS
 // ════════════════════════════════════════════════════════════════════
 
-const brainSelectCSS = `
-  .bss-root {
+const css = `
+  .bss2-root {
+    width: 100%; min-height: 100%;
     font-family: 'Outfit', 'Inter', system-ui, sans-serif;
     color: #F0DCC8;
-    position: relative; overflow: hidden;
   }
-  .bss-fullscreen {
-    position: fixed; inset: 0; z-index: 9998;
-    background: #0a0a0f;
+  .bss2-fullscreen {
+    position: fixed; inset: 0; z-index: 100;
+    background: #080810;
+    overflow-y: auto;
     display: flex; align-items: center; justify-content: center;
   }
-  .bss-inline {
-    width: 100%; min-height: 480px;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .bss-embers { position: fixed !important; inset: 0 !important; z-index: 0 !important; }
 
-  .bss-root::before {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background:
-      radial-gradient(ellipse 700px 400px at 50% 90%, rgba(217,119,6,0.06) 0%, transparent 70%),
-      radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
-    z-index: 1;
+  /* ═══ SCREEN 1: CATEGORIES ═══ */
+  .bss2-categories {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 24px; min-height: 100vh; width: 100%;
+    animation: fadeUp 0.5s ease forwards;
   }
-
-  .bss-container {
-    position: relative; z-index: 5;
-    max-width: 960px; width: 100%; padding: 32px 24px;
-    display: flex; flex-direction: column; align-items: center;
-    animation: bssEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-  @keyframes bssEnter {
-    from { opacity: 0; transform: translateY(24px); filter: blur(4px); }
-    to { opacity: 1; transform: translateY(0); filter: blur(0); }
+  .bss2-title {
+    font-size: 28px; font-weight: 800; margin: 0 0 8px;
+    background: linear-gradient(135deg, #F0DCC8, #FBBF24);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
-
-  .bss-header { text-align: center; margin-bottom: 28px; }
-  .bss-eyebrow {
-    font-size: 11px; font-weight: 700; color: var(--color-neon, #FBBF24);
-    letter-spacing: 3px; text-transform: uppercase; margin-bottom: 8px;
+  .bss2-sub {
+    font-size: 14px; color: #5A4D40; margin: 0 0 40px;
   }
-  .bss-title {
-    font-size: 30px; font-weight: 800; color: #FFFFFF;
-    letter-spacing: -0.5px; margin-bottom: 4px;
-  }
-
-  /* ═══ RECOMMENDED MODE ═══ */
-  .bss-rec-area {
-    display: flex; flex-direction: column; align-items: center;
-    width: 100%; max-width: 640px;
-    animation: bssEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  .bss-rec-subtitle {
-    font-size: 12px; color: #5A4D40; margin: 0 0 20px;
-    letter-spacing: 1px; text-transform: uppercase; font-weight: 600;
-  }
-
-  .bss-presets {
+  .bss2-cat-grid {
     display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 12px; width: 100%; margin-bottom: 24px;
+    gap: 20px; max-width: 720px; width: 100%;
   }
-  .bss-preset {
-    position: relative; padding: 28px 18px 20px;
-    border-radius: 18px;
-    background: rgba(18,18,26,0.75);
-    backdrop-filter: blur(16px);
-    border: 1.5px solid rgba(255,255,255,0.05);
-    cursor: pointer; text-align: center;
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    animation: bssEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  .bss2-cat-card {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 12px;
+    padding: 36px 24px;
+    border-radius: 20px;
+    background: var(--cat-bg);
+    border: 1.5px solid color-mix(in srgb, var(--cat-color) 15%, transparent);
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: cardPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
-  .bss-preset:hover {
-    border-color: rgba(217,119,6,0.25);
-    transform: translateY(-4px);
-    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  @keyframes cardPop {
+    from { opacity: 0; transform: translateY(30px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
-  .bss-preset-active {
-    border-color: var(--color-neon, #FBBF24) !important;
-    box-shadow: 0 0 0 1px var(--color-neon, #FBBF24), 0 8px 40px rgba(251,191,36,0.12) !important;
-    transform: translateY(-4px) !important;
+  .bss2-cat-card:hover {
+    transform: translateY(-6px) scale(1.03);
+    border-color: var(--cat-color);
+    box-shadow: 0 12px 40px color-mix(in srgb, var(--cat-color) 20%, transparent);
   }
-  .bss-preset-dim { opacity: 0.35; }
-
-  .bss-preset-rec {
-    position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
-    font-size: 9px; font-weight: 800; color: #0A0A0A;
-    background: linear-gradient(135deg, #FBBF24, #F59E0B);
-    padding: 4px 14px; border-radius: 0 0 10px 10px;
-    z-index: 5; letter-spacing: 0.3px; white-space: nowrap;
+  .bss2-cat-icon { font-size: 48px; }
+  .bss2-cat-label {
+    font-size: 18px; font-weight: 800; color: var(--cat-color);
+    text-transform: uppercase; letter-spacing: 2px;
   }
-  .bss-preset-emoji { font-size: 36px; margin-top: 4px; }
-  .bss-preset-label { font-size: 18px; font-weight: 800; color: #F0DCC8; }
-  .bss-preset-desc { font-size: 11px; color: #7A6A5A; line-height: 1.4; min-height: 30px; }
-  .bss-preset-model {
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.04);
-    width: 100%; font-size: 11px; color: #5A4D40;
-    font-family: 'SF Mono', 'JetBrains Mono', monospace;
+  .bss2-cat-sub {
+    font-size: 12px; color: #5A4D40; text-align: center; line-height: 1.4;
   }
-  .bss-preset-size { font-size: 10px; color: #7A6A5A; }
-  .bss-preset-warn { font-size: 9px; color: #F59E0B; font-weight: 600; margin-top: 4px; }
-
-  /* Radio indicator */
-  .bss-radio {
-    position: absolute; top: 12px; right: 12px;
-    width: 18px; height: 18px; border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.08);
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.25s ease; z-index: 5;
+  .bss2-cat-count {
+    font-size: 10px; color: #3A3530; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px;
   }
-  .bss-radio-on { border-color: var(--color-neon, #FBBF24); }
-  .bss-radio-dot {
-    width: 9px; height: 9px; border-radius: 50%;
-    background: var(--color-neon, #FBBF24);
-    box-shadow: 0 0 8px rgba(251,191,36,0.5);
-    animation: radioPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  @keyframes radioPop { from { transform: scale(0); } to { transform: scale(1); } }
-
-  .bss-rec-desc { font-size: 13px; color: #A09080; margin: 0; line-height: 1.4; }
-
-  .bss-rec-actions {
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-  }
-  .bss-btn-manual {
+  .bss2-back-link {
+    margin-top: 32px;
     background: none; border: none; cursor: pointer;
-    color: #5A4D40; font-size: 12px; font-weight: 600;
-    letter-spacing: 1px; text-transform: uppercase;
-    padding: 6px 0; transition: color 0.2s;
+    color: #5A4D40; font-size: 12px;
+    transition: color 0.2s;
   }
-  .bss-btn-manual:hover { color: var(--color-neon, #FBBF24); }
+  .bss2-back-link:hover { color: #F0DCC8; }
 
-  /* ═══ MANUAL MODE — Two Panel ═══ */
-  .bss-manual {
-    display: grid; grid-template-columns: 200px 1fr;
-    gap: 16px; width: 100%;
-    animation: bssEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
-    margin-bottom: 20px;
+  /* ═══ SCREEN 2: MODELS ═══ */
+  .bss2-models {
+    width: 100%; max-width: 640px;
+    padding: 24px;
+    margin: 0 auto;
+    animation: fadeUp 0.4s ease forwards;
   }
-
-  /* Left: Archetypes */
-  .bss-archetypes {
-    display: flex; flex-direction: column; gap: 6px;
+  .bss2-models-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px;
   }
-  .bss-arch-card {
-    display: flex; align-items: center; gap: 10px;
-    padding: 14px 12px; border-radius: 12px;
-    background: rgba(18,18,26,0.6);
-    border: 1.5px solid rgba(255,255,255,0.04);
-    cursor: pointer; transition: all 0.25s ease;
-    text-align: left;
+  .bss2-back-btn {
+    background: none; border: 1px solid rgba(255,255,255,0.06);
+    color: #7A6A5A; font-size: 12px; font-weight: 600; cursor: pointer;
+    padding: 6px 14px; border-radius: 8px; transition: all 0.2s;
+    flex-shrink: 0;
   }
-  .bss-arch-card:hover {
-    border-color: rgba(217,119,6,0.2);
-    background: rgba(26,26,36,0.7);
+  .bss2-back-btn:hover { color: #F0DCC8; border-color: rgba(217,119,6,0.3); }
+  .bss2-models-title-area {
+    display: flex; align-items: center; gap: 10px; flex: 1;
   }
-  .bss-arch-active {
-    border-color: var(--color-neon, #FBBF24) !important;
-    background: rgba(251,191,36,0.06) !important;
-    box-shadow: 0 0 20px rgba(251,191,36,0.08);
+  .bss2-cat-badge {
+    font-size: 11px; font-weight: 700; color: #0A0A0A;
+    padding: 4px 12px; border-radius: 6px;
+    text-transform: uppercase; letter-spacing: 1px;
   }
-  .bss-arch-emoji { font-size: 24px; flex-shrink: 0; }
-  .bss-arch-text { flex: 1; display: flex; flex-direction: column; }
-  .bss-arch-label { font-size: 14px; font-weight: 700; color: #F0DCC8; }
-  .bss-arch-tag { font-size: 10px; color: #5A4D40; }
-  .bss-arch-badge {
-    font-size: 8px; font-weight: 800; letter-spacing: 0.8px;
-    padding: 2px 8px; border-radius: 10px;
-  }
-  .bss-arch-badge-free { background: rgba(52,211,153,0.12); color: #34D399; }
-  .bss-arch-badge-paid { background: rgba(168,85,247,0.12); color: #A78BFA; }
-  .bss-btn-rec-back {
-    background: none; border: none; cursor: pointer;
-    color: #5A4D40; font-size: 11px; font-weight: 600;
-    text-align: left; padding: 8px 12px;
-    transition: color 0.2s; margin-top: 4px;
-  }
-  .bss-btn-rec-back:hover { color: var(--color-neon, #FBBF24); }
-
-  /* Right: Models panel */
-  .bss-models-panel {
-    background: rgba(12,12,20,0.6);
-    backdrop-filter: blur(12px);
+  .bss2-vram-badge {
+    font-size: 10px; color: #5A4D40; font-weight: 600;
+    padding: 4px 10px; border-radius: 6px;
+    background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.04);
-    border-radius: 16px; padding: 18px;
-    display: flex; flex-direction: column; gap: 12px;
-  }
-  .bss-models-title {
-    font-size: 13px; font-weight: 700; color: #F0DCC8;
-    margin: 0; letter-spacing: 0.5px;
   }
 
-  .bss-models-list {
-    display: flex; flex-direction: column; gap: 4px;
-    max-height: 260px; overflow-y: auto;
+  /* Search */
+  .bss2-search-wrap {
+    position: relative; margin-bottom: 16px;
   }
-  .bss-models-list::-webkit-scrollbar { width: 3px; }
-  .bss-models-list::-webkit-scrollbar-thumb { background: rgba(251,191,36,0.15); border-radius: 2px; }
+  .bss2-search-icon {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    font-size: 14px; pointer-events: none;
+  }
+  .bss2-search {
+    width: 100%; padding: 12px 14px 12px 40px;
+    border-radius: 12px;
+    background: rgba(18,18,26,0.6);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #F0DCC8; font-size: 13px; outline: none;
+    transition: all 0.3s;
+  }
+  .bss2-search:focus {
+    border-color: rgba(217,119,6,0.3);
+    box-shadow: 0 0 20px rgba(245,158,11,0.06);
+  }
+  .bss2-search::placeholder { color: rgba(240,220,200,0.2); }
 
-  .bss-model-card {
-    display: flex; flex-direction: column; gap: 3px;
-    padding: 10px 12px; border-radius: 10px;
-    background: transparent;
-    border: 1px solid transparent;
-    cursor: pointer; transition: all 0.2s ease;
-    text-align: left;
+  /* Model list */
+  .bss2-model-list {
+    display: flex; flex-direction: column; gap: 8px;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    padding-right: 4px;
   }
-  .bss-model-card:hover {
-    background: rgba(251,191,36,0.03);
-    border-color: rgba(251,191,36,0.12);
-  }
-  .bss-model-card-active {
-    background: rgba(251,191,36,0.06) !important;
-    border-color: var(--color-neon, #FBBF24) !important;
-  }
-  .bss-model-card-dim { opacity: 0.4; }
+  .bss2-model-list::-webkit-scrollbar { width: 3px; }
+  .bss2-model-list::-webkit-scrollbar-thumb { background: rgba(245,158,11,0.15); border-radius: 2px; }
 
-  .bss-model-top { display: flex; align-items: baseline; gap: 8px; }
-  .bss-model-name { font-size: 13px; font-weight: 600; color: #F0DCC8; }
-  .bss-model-family { font-size: 10px; color: #5A4D40; font-weight: 500; }
+  .bss2-empty { color: #3A3530; text-align: center; font-size: 13px; padding: 40px 0; }
 
-  .bss-model-bottom {
-    display: flex; gap: 10px; align-items: center;
-    font-size: 10px; color: #7A6A5A;
+  /* Model card */
+  .bss2-model-card {
+    border-radius: 14px;
+    background: rgba(18,18,26,0.4);
+    border: 1px solid rgba(255,255,255,0.04);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .bss2-model-card:hover {
+    border-color: rgba(255,255,255,0.08);
+  }
+  .bss2-expanded {
+    border-color: color-mix(in srgb, var(--cat-color) 25%, transparent);
+    box-shadow: 0 8px 32px color-mix(in srgb, var(--cat-color) 8%, transparent);
+  }
+  .bss2-dim { opacity: 0.35; }
+
+  .bss2-model-header {
+    width: 100%; padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    background: none; border: none; cursor: pointer;
+    color: #F0DCC8; text-align: left;
+  }
+  .bss2-model-info { flex: 1; }
+  .bss2-model-name { font-size: 14px; font-weight: 700; display: block; }
+  .bss2-model-family { font-size: 10px; color: #5A4D40; }
+  .bss2-model-badges { display: flex; gap: 6px; }
+  .bss2-param-badge, .bss2-speed-badge {
+    font-size: 10px; font-weight: 600; padding: 2px 8px;
+    border-radius: 4px; background: rgba(255,255,255,0.04);
+    color: #7A6A5A;
     font-family: 'SF Mono', 'JetBrains Mono', monospace;
   }
-  .bss-model-warn { color: #F59E0B; font-weight: 600; }
+  .bss2-chevron { font-size: 12px; color: #3A3530; flex-shrink: 0; }
+
+  /* Expanded body */
+  .bss2-model-body {
+    padding: 0 16px 16px;
+    animation: bodyIn 0.3s ease forwards;
+  }
+  @keyframes bodyIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* Tags */
+  .bss2-tags { display: flex; gap: 6px; margin-bottom: 12px; }
+  .bss2-tag {
+    font-size: 9px; font-weight: 600; color: #5A4D40;
+    padding: 2px 8px; border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
 
   /* Quant pills */
-  .bss-quant-area {
-    display: flex; flex-direction: column; gap: 6px;
-    padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.04);
+  .bss2-quant-area { margin-bottom: 12px; }
+  .bss2-quant-label {
+    font-size: 10px; font-weight: 600; color: #3A3530;
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 6px; display: block;
   }
-  .bss-quant-label {
-    font-size: 10px; font-weight: 700; color: #5A4D40;
-    text-transform: uppercase; letter-spacing: 1.5px;
-  }
-  .bss-quant-pills { display: flex; gap: 6px; }
-  .bss-quant-pill {
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
-    padding: 8px 14px; border-radius: 10px;
-    background: rgba(18,18,26,0.6);
+  .bss2-quant-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .bss2-qpill {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.04);
-    cursor: pointer; transition: all 0.2s;
-    font-size: 12px; font-weight: 600; color: #7A6A5A;
-    font-family: 'SF Mono', 'JetBrains Mono', monospace;
+    transition: all 0.2s;
   }
-  .bss-quant-pill:hover { border-color: rgba(217,119,6,0.2); color: #F0DCC8; }
-  .bss-quant-active {
-    border-color: var(--color-neon, #FBBF24) !important;
-    background: rgba(251,191,36,0.06) !important;
-    color: #FBBF24 !important;
+  .bss2-qpill:hover { border-color: rgba(255,255,255,0.1); }
+  .bss2-qpill-active {
+    background: rgba(245,158,11,0.1);
+    border-color: rgba(245,158,11,0.3);
   }
-  .bss-quant-size { font-size: 9px; color: #5A4D40; font-weight: 400; }
-  .bss-quant-name { font-size: 13px; font-weight: 700; color: inherit; }
-  .bss-quant-tech { font-size: 8px; color: #5A4D40; font-family: 'SF Mono', monospace; letter-spacing: 0.5px; }
-  .bss-quant-warn {
-    font-size: 10px; color: #F59E0B; font-weight: 600; margin: 0;
-  }
+  .bss2-qpill-name { font-size: 11px; font-weight: 700; color: #F0DCC8; }
+  .bss2-qpill-bits { font-size: 9px; color: #5A4D40; }
 
-  /* RPG Stat Bars */
-  .bss-stats {
-    display: flex; flex-direction: column; gap: 6px;
-    padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.04);
+  /* Stat bars */
+  .bss2-stats {
+    display: flex; flex-direction: column; gap: 5px;
+    margin-bottom: 12px;
   }
-  .bss-stat-row {
-    display: flex; align-items: center; gap: 8px;
+  .bss2-stat { display: flex; align-items: center; gap: 8px; }
+  .bss2-stat-icon { font-size: 11px; width: 14px; text-align: center; }
+  .bss2-stat-name {
+    font-size: 9px; font-weight: 600; color: #3A3530;
+    width: 70px; flex-shrink: 0;
+    text-transform: uppercase; letter-spacing: 0.5px;
   }
-  .bss-stat-icon { font-size: 12px; width: 16px; text-align: center; }
-  .bss-stat-name {
-    font-size: 10px; font-weight: 600; color: #5A4D40;
-    width: 75px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .bss-stat-bar {
-    flex: 1; height: 8px; border-radius: 4px;
+  .bss2-stat-bar {
+    flex: 1; height: 6px; border-radius: 3px;
     background: rgba(255,255,255,0.04); overflow: hidden;
-    position: relative;
   }
-  .bss-stat-fill {
-    height: 100%; border-radius: 4px;
+  .bss2-stat-fill {
+    height: 100%; border-radius: 3px;
     transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    position: relative;
   }
-  .bss-stat-fill::after {
-    content: ''; position: absolute; inset: 0;
+  .bss2-stat-fill::after {
+    content: ''; display: block; width: 100%; height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15));
     border-radius: inherit;
   }
-  .bss-stat-intel { background: linear-gradient(90deg, #92400E, #FBBF24); }
-  .bss-stat-speed { background: linear-gradient(90deg, #065F46, #34D399); }
-  .bss-stat-qual  { background: linear-gradient(90deg, #5B21B6, #A78BFA); }
-  .bss-stat-size  { background: linear-gradient(90deg, #1E3A5F, #60A5FA); }
-  .bss-stat-val {
-    font-size: 10px; font-weight: 600; color: #7A6A5A;
-    width: 55px; text-align: right; flex-shrink: 0;
+  .bss2-fill-intel { background: linear-gradient(90deg, #92400E, #FBBF24); }
+  .bss2-fill-speed { background: linear-gradient(90deg, #065F46, #34D399); }
+  .bss2-fill-qual  { background: linear-gradient(90deg, #5B21B6, #A78BFA); }
+  .bss2-fill-size  { background: linear-gradient(90deg, #1E3A5F, #60A5FA); }
+  .bss2-stat-val {
+    font-size: 9px; font-weight: 600; color: #5A4D40;
+    width: 50px; text-align: right; flex-shrink: 0;
     font-family: 'SF Mono', 'JetBrains Mono', monospace;
   }
 
-  /* ═══ SHARED ═══ */
-  .bss-actions {
-    display: flex; align-items: center; justify-content: center;
-    gap: 16px; width: 100%;
+  /* VRAM warning */
+  .bss2-vram-warn {
+    font-size: 10px; color: #F59E0B; font-weight: 600;
+    margin: 0 0 8px; padding: 6px 10px;
+    border-radius: 6px; background: rgba(245,158,11,0.06);
   }
-  .bss-btn-back {
-    background: none; border: 1px solid rgba(255,255,255,0.06);
-    color: #7A6A5A; font-size: 14px; cursor: pointer;
-    padding: 14px 28px; border-radius: 12px;
-    transition: all 0.2s; font-weight: 600;
-  }
-  .bss-btn-back:hover { color: #F0DCC8; border-color: rgba(255,255,255,0.15); }
 
-  .bss-btn-confirm {
-    padding: 16px 48px; border-radius: 14px; border: none; cursor: pointer;
+  /* Confirm */
+  .bss2-confirm {
+    width: 100%; padding: 12px;
+    border-radius: 12px; border: none; cursor: pointer;
     background: linear-gradient(135deg, #D97706, #F59E0B);
-    color: #0A0A0A; font-size: 15px; font-weight: 800; letter-spacing: 0.5px;
-    box-shadow: 0 4px 24px rgba(245,158,11,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative; overflow: hidden;
+    color: #0A0A0A; font-size: 13px; font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 20px rgba(245,158,11,0.2);
+    transition: all 0.3s;
   }
-  .bss-btn-confirm::before {
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-    transform: translateX(-100%); transition: transform 0.6s ease;
-  }
-  .bss-btn-confirm:hover {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 8px 32px rgba(245,158,11,0.5);
-  }
-  .bss-btn-confirm:hover::before { transform: translateX(100%); }
-  .bss-btn-pulse { animation: bssPulse 0.4s ease-in-out; }
-  @keyframes bssPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.04); box-shadow: 0 0 50px rgba(245,158,11,0.5); }
-    100% { transform: scale(1); }
+  .bss2-confirm:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(245,158,11,0.35);
   }
 
-  .bss-flash {
-    position: fixed; inset: 0; z-index: 9999;
-    background: rgba(251,191,36,0.2);
-    animation: bssFlash 0.6s ease-out forwards;
-    pointer-events: none;
-  }
-  @keyframes bssFlash {
-    0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; }
-  }
-
-  @media (max-width: 768px) {
-    .bss-manual { grid-template-columns: 1fr; }
-    .bss-archetypes { flex-direction: row; overflow-x: auto; }
-    .bss-arch-card { min-width: 140px; }
-    .bss-title { font-size: 24px; }
+  /* Responsive */
+  @media (max-width: 600px) {
+    .bss2-cat-grid { grid-template-columns: 1fr; max-width: 320px; }
   }
 `;

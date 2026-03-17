@@ -15,10 +15,10 @@ const SPECIES_EMOJI: Record<string, string> = {
 };
 
 const NAV_ITEMS = [
-  { id: "chat",      icon: "📖", label: "Chat",      href: null },
-  { id: "brains",    icon: "🧠", label: "Brains",    href: "/brains" },
-  { id: "settings",  icon: "⚙️", label: "Settings",  href: "/config" },
-  { id: "companion", icon: "🔮", label: "Companion", href: "/companion" },
+  { id: "chat",      icon: "/hub/icon_chat.png", label: "Chat",      href: null },
+  { id: "brains",    icon: "/hub/icon_brain.png", label: "Brains",    href: "/brains" },
+  { id: "settings",  icon: "/hub/icon_settings.png", label: "Settings",  href: "/config" },
+  { id: "companion", icon: "/hub/icon_companion.png", label: "Companion", href: "/companion" },
 ];
 
 const GREETINGS = [
@@ -136,7 +136,7 @@ export default function CampfireHub() {
                   style={{ animationDelay: `${0.3 + i * 0.12}s` }}
                 >
                   <div className="cfh-nav-orb">
-                    <span className="cfh-nav-icon">{item.icon}</span>
+                    <img src={item.icon} alt={item.label} className="cfh-nav-icon-img" />
                   </div>
                   <span className="cfh-nav-label">{item.label}</span>
                 </button>
@@ -154,31 +154,18 @@ export default function CampfireHub() {
 
           {/* Campfire + Companion scene */}
           <div className="cfh-scene-center">
-            {/* CSS Campfire */}
+            {/* Campfire art */}
             <div className="cfh-fire-container">
-              <div className="cfh-fire">
-                <div className="cfh-flame cfh-flame-1" />
-                <div className="cfh-flame cfh-flame-2" />
-                <div className="cfh-flame cfh-flame-3" />
-                <div className="cfh-flame cfh-flame-4" />
-                <div className="cfh-flame cfh-flame-5" />
-              </div>
-              <div className="cfh-logs">
-                <div className="cfh-log cfh-log-1" />
-                <div className="cfh-log cfh-log-2" />
-              </div>
+              <img src="/hub/campfire.png" alt="Campfire" className="cfh-campfire-img" />
               <div className="cfh-fire-glow" />
             </div>
 
             {/* Companion image */}
             <div className="cfh-companion-area">
               <img
-                src={companionImg}
+                src="/hub/fox.png"
                 alt={species}
                 className="cfh-companion-img"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
               />
               {/* Speech bubble */}
               {showBubble && (
@@ -370,7 +357,7 @@ const hubCSS = `
     border-color: rgba(251,191,36,0.4);
     box-shadow: 0 0 40px rgba(251,191,36,0.2), inset 0 0 30px rgba(251,191,36,0.1);
   }
-  .cfh-nav-icon { font-size: 30px; }
+
   .cfh-nav-label {
     font-size: 11px; font-weight: 700; color: #7A6A5A;
     text-transform: uppercase; letter-spacing: 1.5px;
@@ -385,73 +372,25 @@ const hubCSS = `
     margin-bottom: 24px; z-index: 5;
   }
 
-  /* CSS Campfire */
+  /* Campfire art image */
   .cfh-fire-container {
     position: relative;
-    width: 120px; height: 150px;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: flex-end;
+    width: 180px; height: 180px;
+    display: flex; align-items: center; justify-content: center;
   }
-  .cfh-fire {
-    position: relative; width: 80px; height: 90px;
-    display: flex; align-items: flex-end; justify-content: center;
+  .cfh-campfire-img {
+    width: 160px; height: 160px;
+    object-fit: contain;
+    animation: fireBreath 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 30px rgba(251,191,36,0.3));
   }
-  .cfh-flame {
-    position: absolute; bottom: 0;
-    border-radius: 50% 50% 30% 30%;
-    animation: flame ease-in-out infinite;
-  }
-  .cfh-flame-1 {
-    width: 20px; height: 60px; left: 30px;
-    background: linear-gradient(to top, #D97706, #F59E0B, #FBBF24, transparent);
-    animation-duration: 0.4s;
-  }
-  .cfh-flame-2 {
-    width: 16px; height: 50px; left: 22px;
-    background: linear-gradient(to top, #B45309, #D97706, #F59E0B, transparent);
-    animation-duration: 0.5s; animation-delay: 0.1s;
-  }
-  .cfh-flame-3 {
-    width: 14px; height: 45px; left: 40px;
-    background: linear-gradient(to top, #D97706, #FBBF24, transparent);
-    animation-duration: 0.35s; animation-delay: 0.2s;
-  }
-  .cfh-flame-4 {
-    width: 24px; height: 70px; left: 28px;
-    background: linear-gradient(to top, #92400E, #B45309, #D97706, #FBBF24, transparent);
-    animation-duration: 0.6s;
-  }
-  .cfh-flame-5 {
-    width: 10px; height: 35px; left: 36px;
-    background: linear-gradient(to top, #FBBF24, #FDE68A, transparent);
-    animation-duration: 0.3s; animation-delay: 0.15s;
-  }
-  @keyframes flame {
-    0%, 100% { transform: scaleY(1) scaleX(1) translateY(0); opacity: 0.9; }
-    25% { transform: scaleY(1.1) scaleX(0.9) translateY(-3px); opacity: 1; }
-    50% { transform: scaleY(0.9) scaleX(1.05) translateY(-1px); opacity: 0.85; }
-    75% { transform: scaleY(1.05) scaleX(0.95) translateY(-4px); opacity: 1; }
-  }
-  .cfh-logs {
-    position: relative; width: 90px; height: 16px;
-    display: flex; justify-content: center;
-  }
-  .cfh-log {
-    position: absolute; border-radius: 4px;
-    background: linear-gradient(90deg, #5C3A1E, #7C4A2E, #5C3A1E);
-    border: 1px solid rgba(0,0,0,0.3);
-  }
-  .cfh-log-1 {
-    width: 70px; height: 12px; bottom: 0;
-    transform: rotate(-8deg);
-  }
-  .cfh-log-2 {
-    width: 65px; height: 11px; bottom: 2px;
-    transform: rotate(10deg);
+  @keyframes fireBreath {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 30px rgba(251,191,36,0.3)); }
+    50% { transform: scale(1.03); filter: drop-shadow(0 0 40px rgba(251,191,36,0.45)); }
   }
   .cfh-fire-glow {
-    position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%);
-    width: 250px; height: 120px;
+    position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+    width: 300px; height: 150px;
     background: radial-gradient(ellipse,
       rgba(251,191,36,0.12) 0%,
       rgba(217,119,6,0.05) 40%,
@@ -461,6 +400,11 @@ const hubCSS = `
   }
   @keyframes glowPulse {
     0% { opacity: 0.7; } 100% { opacity: 1; }
+  }
+  .cfh-nav-icon-img {
+    width: 40px; height: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 8px rgba(251,191,36,0.15));
   }
 
   /* Companion */
