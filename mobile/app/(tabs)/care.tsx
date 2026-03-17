@@ -1,16 +1,18 @@
 /**
- * 🐾 Care Tab — Feed, walk, and monitor your companion.
+ * 🏠 Hub — Companion campfire scene + status + actions.
  *
- * Sprint 2: Pull-to-refresh, haptics, avatars, adoption.
- * Sprint 3: Mood-reactive avatars, sound effects.
- * Sprint 4: Daily gift.
- * Sprint 5: Mode toggle, morning briefing.
+ * The campfire reflects the power state:
+ *   🔥 Home — full fire, sparks, "What are we building today?"
+ *   ⚡ Connected — bright fire via Tailscale
+ *   🕯️ Offline — dim candle, "pocket power"
+ *   🔥 Reconnected — burst flare, "I'm back!"
+ *
+ * One companion, one soul. It dims when away from home.
  */
 import { useState, useCallback } from "react";
 import {
     View,
     Text,
-    TextInput,
     TouchableOpacity,
     ScrollView,
     StyleSheet,
@@ -22,13 +24,12 @@ import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
 import { playSound } from "../../src/sounds";
+import CampfireScene from "../../src/CampfireScene";
 import DailyGiftModal from "../../src/DailyGift";
 import MorningBriefing from "../../src/MorningBriefing";
-import WeeklySummary from "../../src/WeeklySummary";
-import { useMode } from "../../src/ModeContext";
 import type { PetSpecies, WalkEvent } from "../../src/types";
 
-// Mood-reactive avatar images — Sprint 3 (3 expressions per species)
+// Mood-reactive avatar images
 type Mood = "happy" | "neutral" | "sad";
 
 const AVATAR_MAP: Record<string, ReturnType<typeof require>> = {
@@ -52,19 +53,9 @@ const AVATAR_MAP: Record<string, ReturnType<typeof require>> = {
     dragon_sad: require("../../assets/companions/dragon_sad.png"),
 };
 
-// Fallback map for adoption picker (uses neutral)
-const SPECIES_AVATARS: Record<PetSpecies, ReturnType<typeof require>> = {
-    cat: require("../../assets/companions/cat_neutral.png"),
-    dog: require("../../assets/companions/dog_neutral.png"),
-    penguin: require("../../assets/companions/penguin_neutral.png"),
-    fox: require("../../assets/companions/fox_neutral.png"),
-    owl: require("../../assets/companions/owl_neutral.png"),
-    dragon: require("../../assets/companions/dragon_neutral.png"),
-};
-
 function getAvatarSource(species: PetSpecies, happiness: number) {
     const mood: Mood = happiness > 70 ? "happy" : happiness > 30 ? "neutral" : "sad";
-    return AVATAR_MAP[`${species}_${mood}`] || SPECIES_AVATARS[species];
+    return AVATAR_MAP[`${species}_${mood}`];
 }
 
 const SPECIES_EMOJI: Record<PetSpecies, string> = {
@@ -105,29 +96,16 @@ const OFFLINE_WALK_EVENTS: Record<PetSpecies, WalkEvent[]> = {
     ],
 };
 
-const ADOPTABLE_SPECIES: { species: PetSpecies; emoji: string; desc: string }[] = [
-    { species: "cat", emoji: "🐱", desc: "Curious & independent" },
-    { species: "dog", emoji: "🐶", desc: "Loyal & energetic" },
-    { species: "penguin", emoji: "🐧", desc: "Formal & precise" },
-    { species: "fox", emoji: "🦊", desc: "Clever & resourceful" },
-    { species: "owl", emoji: "🦉", desc: "Wise & thoughtful" },
-    { species: "dragon", emoji: "🐉", desc: "Fierce & majestic" },
-];
-
-export default function CareTab() {
-    const { isOnline, companionData, queueAction, updateCompanionLocal, sync } = useConnection();
+export default function HubTab() {
+    const { isOnline, powerState, companionData, queueAction, updateCompanionLocal, sync } = useConnection();
     const [walking, setWalking] = useState(false);
     const [feeding, setFeeding] = useState(false);
     const [walkResult, setWalkResult] = useState<WalkEvent | null>(null);
     const [refreshing, setRefreshing] = useState(false);
-    // Adoption flow state
-    const [adopting, setAdopting] = useState(false);
-    const [adoptName, setAdoptName] = useState("");
-    const [adoptSpecies, setAdoptSpecies] = useState<PetSpecies>("cat");
 
     const companion = companionData?.companion;
     const petName = companion?.name || "";
-    const species = (companion?.species || "cat") as PetSpecies;
+    const species = (companion?.species || "fox") as PetSpecies;
     const happiness = companion?.happiness ?? 50;
     const xp = companion?.xp ?? 0;
     const level = companion?.level ?? 1;
@@ -138,10 +116,6 @@ export default function CareTab() {
             happiness > 30 ? colors.happinessMid :
                 colors.happinessLow;
 
-    const happinessEmoji =
-        happiness > 70 ? "💚" : happiness > 30 ? "💛" : happiness > 0 ? "🧡" : "💔";
-
-    // Pull-to-refresh — Sprint 2
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await sync();
@@ -175,7 +149,6 @@ export default function CareTab() {
                     xp: prev.xp + 2,
                 }));
             }
-
             setTimeout(() => setFeeding(false), 600);
         },
         [feeding, isOnline, queueAction, updateCompanionLocal]
@@ -217,54 +190,17 @@ export default function CareTab() {
             }));
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-
         setTimeout(() => setWalking(false), 2000);
     }, [walking, isOnline, species, queueAction, updateCompanionLocal]);
 
-    // Adoption flow — Sprint 2
-    const handleAdopt = useCallback(async () => {
-        const name = adoptName.trim();
-        if (!name) return;
-        setAdopting(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-        if (isOnline) {
-            try {
-                await companionAPI.adopt(name, adoptSpecies);
-                await sync();
-            } catch {
-                // Optimistic local adoption
-                updateCompanionLocal(() => ({
-                    name,
-                    species: adoptSpecies,
-                    happiness: 80,
-                    xp: 0,
-                    level: 1,
-                    streak: 0,
-                }));
-            }
-        } else {
-            updateCompanionLocal(() => ({
-                name,
-                species: adoptSpecies,
-                happiness: 80,
-                xp: 0,
-                level: 1,
-                streak: 0,
-            }));
-        }
-        setAdopting(false);
-    }, [adoptName, adoptSpecies, isOnline, sync, updateCompanionLocal]);
-
-    // No companion — show transfer instruction (companion comes from PC)
+    // No companion data — show transfer instruction
     if (!petName) {
         return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.adoptContent}>
-                <Text style={styles.adoptTitle}>🔥 Waiting for Companion</Text>
-                <Text style={styles.adoptSubtitle}>
-                    Your companion is created on your PC and transferred to your phone during QR pairing.
+            <ScrollView style={styles.container} contentContainerStyle={styles.waitingContent}>
+                <Text style={styles.waitingTitle}>🔥 Waiting for Companion</Text>
+                <Text style={styles.waitingSubtitle}>
+                    Your companion is created on your PC and transferred during QR pairing.
                 </Text>
-
                 <View style={styles.transferCard}>
                     <Text style={styles.transferEmoji}>📱 ← 💻</Text>
                     <Text style={styles.transferTitle}>How to get your companion</Text>
@@ -273,9 +209,8 @@ export default function CareTab() {
                     <Text style={styles.transferStep}>3. Go to Settings → Pair Phone</Text>
                     <Text style={styles.transferStep}>4. Scan the QR code with this app</Text>
                 </View>
-
                 <Text style={styles.transferNote}>
-                    Your companion's name, species, personality, skills, and level will all transfer from your PC. They're the same companion — just portable!
+                    Your companion's name, species, personality, skills, and level all transfer from your PC. Same soul — just portable!
                 </Text>
             </ScrollView>
         );
@@ -286,25 +221,17 @@ export default function CareTab() {
             style={styles.container}
             contentContainerStyle={styles.content}
             refreshControl={
-                <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    tintColor={colors.neon}
-                    colors={[colors.neon]}
-                />
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.neon} />
             }
         >
-            {/* Weekly Summary — Sprint 7 */}
-            <WeeklySummary petName={petName} />
-
-            {/* Morning Briefing — Sprint 5 */}
+            {/* Morning Briefing */}
             <MorningBriefing
                 petName={petName}
                 species={species}
                 platform={companionData?.platform}
             />
 
-            {/* Daily Gift — Sprint 4 */}
+            {/* Daily Gift */}
             <DailyGiftModal
                 petName={petName}
                 species={species}
@@ -318,93 +245,98 @@ export default function CareTab() {
                 }}
             />
 
-            {/* Header with mode toggle */}
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>{petName}'s Status</Text>
-                <View style={styles.headerMeta}>
-                    <View
-                        style={[
-                            styles.onlineDot,
-                            { backgroundColor: isOnline ? colors.onlineDot : colors.offlineDot },
-                        ]}
-                    />
-                    <Text style={styles.levelText}>Level {level}</Text>
+            {/* ═══ Campfire Scene ═══ */}
+            <CampfireScene
+                powerState={powerState}
+                companionEmoji={SPECIES_EMOJI[species]}
+                companionName={petName}
+            />
+
+            {/* Avatar + Name */}
+            <View style={styles.avatarRow}>
+                <Image source={getAvatarSource(species, happiness)} style={styles.avatarImage} />
+                <View>
+                    <Text style={styles.avatarName}>{petName}</Text>
+                    <Text style={styles.avatarSpecies}>Level {level} {species}</Text>
                 </View>
             </View>
 
-            {/* Avatar Card — Sprint 3: mood-reactive expression */}
-            <View style={styles.avatarCard}>
-                <Image source={getAvatarSource(species, happiness)} style={styles.avatarImage} />
-                <Text style={styles.avatarName}>{petName}</Text>
-                <Text style={styles.avatarSpecies}>{species}</Text>
-            </View>
-
-            {/* Happiness Bar */}
-            <View style={styles.statCard}>
-                <View style={styles.statHeader}>
-                    <Text style={styles.statLabel}>{happinessEmoji} Happiness</Text>
+            {/* Stat Bars */}
+            <View style={styles.statsRow}>
+                {/* Happiness */}
+                <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>
+                        {happiness > 70 ? "💚" : happiness > 30 ? "💛" : "🧡"} Mood
+                    </Text>
+                    <View style={styles.barTrack}>
+                        <View style={[styles.barFill, { width: `${happiness}%`, backgroundColor: happinessColor }]} />
+                    </View>
                     <Text style={styles.statValue}>{happiness}%</Text>
                 </View>
-                <View style={styles.barTrack}>
-                    <View
-                        style={[
-                            styles.barFill,
-                            { width: `${happiness}%`, backgroundColor: happinessColor },
-                        ]}
-                    />
-                </View>
-                {happiness < 30 && (
-                    <Text style={styles.warningText}>Your companion misses you 🥺</Text>
-                )}
-            </View>
 
-            {/* XP Bar */}
-            <View style={styles.statCard}>
-                <View style={styles.statHeader}>
+                {/* XP */}
+                <View style={styles.statCard}>
                     <Text style={styles.statLabel}>✨ XP</Text>
-                    <Text style={styles.statValue}>
-                        {xp}/{xpNeeded}
-                    </Text>
-                </View>
-                <View style={styles.barTrack}>
-                    <View
-                        style={[
-                            styles.barFill,
-                            styles.xpBar,
-                            { width: `${Math.min(100, (xp / xpNeeded) * 100)}%` },
-                        ]}
-                    />
+                    <View style={styles.barTrack}>
+                        <View style={[styles.barFill, styles.xpBar, { width: `${Math.min(100, (xp / xpNeeded) * 100)}%` }]} />
+                    </View>
+                    <Text style={styles.statValue}>{xp}/{xpNeeded}</Text>
                 </View>
             </View>
 
-            {/* Walk Button */}
-            <TouchableOpacity
-                style={[styles.walkBtn, walking && styles.walkBtnActive]}
-                onPress={handleWalk}
-                disabled={walking}
-                activeOpacity={0.7}
-            >
-                <Text style={styles.walkBtnText}>
-                    {walking ? "🚶 Walking..." : "🚶 Go for a walk"}
-                </Text>
-            </TouchableOpacity>
+            {/* Actions */}
+            <View style={styles.actionRow}>
+                <TouchableOpacity
+                    style={[styles.actionBtn, walking && styles.actionBtnDisabled]}
+                    onPress={handleWalk}
+                    disabled={walking}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.actionEmoji}>{walking ? "🚶" : "🐾"}</Text>
+                    <Text style={styles.actionText}>{walking ? "Walking..." : "Walk"}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionBtnPrimary]}
+                    onPress={() => handleFeed("treat")}
+                    disabled={feeding || happiness >= 100}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.actionEmoji}>🍬</Text>
+                    <Text style={[styles.actionText, styles.actionTextPrimary]}>Feed</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        playSound("feed");
+                        updateCompanionLocal((prev) => ({
+                            ...prev,
+                            happiness: Math.min(100, prev.happiness + 5),
+                            xp: prev.xp + 1,
+                        }));
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.actionEmoji}>🎾</Text>
+                    <Text style={styles.actionText}>Play</Text>
+                </TouchableOpacity>
+            </View>
 
             {/* Walk Result */}
-            {
-                walkResult && (
-                    <View style={styles.walkResult}>
-                        <Text style={styles.walkResultText}>
-                            <Text style={styles.walkEmoji}>{walkResult.emoji} </Text>
-                            {petName} {walkResult.text}
-                        </Text>
-                        <Text style={styles.walkBonus}>
-                            +{walkResult.happinessBoost}% happiness · +{walkResult.xpGain} XP
-                        </Text>
-                    </View>
-                )
-            }
+            {walkResult && (
+                <View style={styles.walkResult}>
+                    <Text style={styles.walkResultText}>
+                        {walkResult.emoji} {petName} {walkResult.text}
+                    </Text>
+                    <Text style={styles.walkBonus}>
+                        +{walkResult.happinessBoost}% mood · +{walkResult.xpGain} XP
+                    </Text>
+                </View>
+            )}
 
-            {/* Feed Buttons */}
+            {/* Feed Options */}
             <Text style={styles.sectionLabel}>Feed {petName}</Text>
             <View style={styles.treatRow}>
                 {TREAT_ITEMS.map((treat) => (
@@ -420,239 +352,57 @@ export default function CareTab() {
                     </TouchableOpacity>
                 ))}
             </View>
-        </ScrollView >
+
+            {happiness < 30 && (
+                <Text style={styles.warningText}>Your companion misses you 🥺</Text>
+            )}
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.bgPrimary,
-    },
-    content: {
-        paddingHorizontal: spacing.lg,
-        paddingTop: 60,
-        paddingBottom: spacing.xxxl,
-    },
-    header: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: spacing.xl,
-    },
-    headerTitle: {
-        fontFamily: "Inter_600SemiBold",
-        fontSize: fontSize.xl,
-        color: colors.textPrimary,
-    },
-    headerMeta: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.sm,
-    },
-    onlineDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-    },
-    levelText: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.xs,
-        color: colors.textDim,
-    },
-    avatarCard: {
-        backgroundColor: colors.bgCard,
-        borderRadius: borderRadius.lg,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-        paddingVertical: spacing.xl,
-        alignItems: "center",
-        marginBottom: spacing.lg,
-        ...shadows.card,
-    },
-    avatarImage: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
-        marginBottom: spacing.sm,
-    },
-    avatarName: {
-        fontFamily: "Inter_700Bold",
-        fontSize: fontSize.xxl,
-        color: colors.textPrimary,
-    },
-    avatarSpecies: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.sm,
-        color: colors.textDim,
-        textTransform: "capitalize",
-        marginTop: 2,
-    },
-    statCard: {
-        backgroundColor: colors.bgCard,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-        padding: spacing.lg,
-        marginBottom: spacing.md,
-    },
-    statHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginBottom: spacing.sm,
-    },
-    statLabel: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.sm,
-        color: colors.textDim,
-    },
-    statValue: {
-        fontFamily: "Inter_500Medium",
-        fontSize: fontSize.sm,
-        color: colors.textSecondary,
-    },
-    barTrack: {
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: colors.bgInput,
-        overflow: "hidden",
-    },
-    barFill: {
-        height: 8,
-        borderRadius: 4,
-    },
-    xpBar: {
-        backgroundColor: colors.neon,
-    },
-    warningText: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.xs,
-        color: colors.warning,
-        marginTop: spacing.xs,
-    },
-    walkBtn: {
-        backgroundColor: colors.neon,
-        borderRadius: borderRadius.md,
-        paddingVertical: spacing.md + 2,
-        alignItems: "center",
-        marginBottom: spacing.md,
-        ...shadows.glow,
-    },
-    walkBtnActive: {
-        opacity: 0.5,
-    },
-    walkBtnText: {
-        fontFamily: "Inter_600SemiBold",
-        fontSize: fontSize.md,
-        color: colors.bgPrimary,
-    },
-    walkResult: {
-        backgroundColor: colors.neonGlow,
-        borderWidth: 1,
-        borderColor: colors.neonBorder,
-        borderRadius: borderRadius.md,
-        padding: spacing.md,
-        marginBottom: spacing.lg,
-    },
-    walkResultText: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.sm,
-        color: colors.textSecondary,
-        lineHeight: 20,
-    },
-    walkEmoji: {
-        fontSize: fontSize.lg,
-    },
-    walkBonus: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.tiny,
-        color: colors.neon,
-        marginTop: spacing.xs,
-    },
-    sectionLabel: {
-        fontFamily: "Inter_500Medium",
-        fontSize: fontSize.sm,
-        color: colors.textDim,
-        marginBottom: spacing.sm,
-    },
-    treatRow: {
-        flexDirection: "row",
-        gap: spacing.sm,
-    },
-    treatBtn: {
-        flex: 1,
-        backgroundColor: colors.bgCard,
-        borderRadius: borderRadius.md,
-        borderWidth: 1,
-        borderColor: colors.glassBorder,
-        paddingVertical: spacing.md,
-        alignItems: "center",
-    },
-    treatBtnDisabled: {
-        opacity: 0.3,
-    },
-    treatEmoji: {
-        fontSize: 24,
-        marginBottom: 2,
-    },
-    treatName: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.tiny,
-        color: colors.textDim,
-    },
-    // Companion transfer styles (companion comes from PC)
-    adoptContent: {
-        paddingHorizontal: spacing.lg,
-        paddingTop: 80,
-        paddingBottom: spacing.xxxl,
-    },
-    adoptTitle: {
-        fontFamily: "Inter_700Bold",
-        fontSize: fontSize.hero,
-        color: colors.textPrimary,
-        textAlign: "center",
-        marginBottom: spacing.sm,
-    },
-    adoptSubtitle: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.md,
-        color: colors.textDim,
-        textAlign: "center",
-        marginBottom: spacing.xxl,
-    },
-    transferCard: {
-        backgroundColor: colors.bgCard,
-        borderRadius: borderRadius.lg,
-        borderWidth: 1,
-        borderColor: colors.neonBorder,
-        padding: spacing.xl,
-        marginBottom: spacing.xl,
-        ...shadows.card,
-    },
-    transferEmoji: {
-        fontSize: 32,
-        textAlign: "center",
-        marginBottom: spacing.md,
-    },
-    transferTitle: {
-        fontFamily: "Inter_600SemiBold",
-        fontSize: fontSize.md,
-        color: colors.textPrimary,
-        textAlign: "center",
-        marginBottom: spacing.md,
-    },
-    transferStep: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.sm,
-        color: colors.textSecondary,
-        lineHeight: 24,
-        paddingLeft: spacing.sm,
-    },
-    transferNote: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.xs,
-        color: colors.textDim,
-        textAlign: "center",
-        lineHeight: 18,
-    },
+    container: { flex: 1, backgroundColor: colors.bgPrimary },
+    content: { paddingHorizontal: spacing.lg, paddingTop: 60, paddingBottom: spacing.xxxl },
+    // Avatar row
+    avatarRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.lg },
+    avatarImage: { width: 56, height: 56, borderRadius: 28 },
+    avatarName: { fontFamily: "Inter_700Bold", fontSize: fontSize.lg, color: colors.textPrimary },
+    avatarSpecies: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, textTransform: "capitalize" },
+    // Stats
+    statsRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg },
+    statCard: { flex: 1, backgroundColor: colors.bgCard, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.glassBorder, padding: spacing.md },
+    statLabel: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textDim, marginBottom: spacing.xs },
+    barTrack: { height: 6, borderRadius: 3, backgroundColor: colors.bgInput, overflow: "hidden", marginBottom: spacing.xs },
+    barFill: { height: 6, borderRadius: 3 },
+    xpBar: { backgroundColor: colors.neon },
+    statValue: { fontFamily: "Inter_500Medium", fontSize: fontSize.tiny, color: colors.textSecondary, textAlign: "right" },
+    // Actions
+    actionRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg },
+    actionBtn: { flex: 1, backgroundColor: colors.bgCard, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.glassBorder, paddingVertical: spacing.md, alignItems: "center", ...shadows.card },
+    actionBtnPrimary: { backgroundColor: colors.neon, borderColor: colors.neon, ...shadows.glow },
+    actionBtnDisabled: { opacity: 0.4 },
+    actionEmoji: { fontSize: 24, marginBottom: 2 },
+    actionText: { fontFamily: "Inter_500Medium", fontSize: fontSize.tiny, color: colors.textDim },
+    actionTextPrimary: { color: colors.bgPrimary },
+    // Walk result
+    walkResult: { backgroundColor: colors.neonGlow, borderWidth: 1, borderColor: colors.neonBorder, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.lg },
+    walkResultText: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 20 },
+    walkBonus: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.neon, marginTop: spacing.xs },
+    // Feed
+    sectionLabel: { fontFamily: "Inter_500Medium", fontSize: fontSize.sm, color: colors.textDim, marginBottom: spacing.sm },
+    treatRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+    treatBtn: { flex: 1, backgroundColor: colors.bgCard, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.glassBorder, paddingVertical: spacing.md, alignItems: "center" },
+    treatBtnDisabled: { opacity: 0.3 },
+    treatEmoji: { fontSize: 24, marginBottom: 2 },
+    treatName: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textDim },
+    warningText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.warning, textAlign: "center", marginTop: spacing.sm },
+    // Transfer waiting
+    waitingContent: { paddingHorizontal: spacing.lg, paddingTop: 80, paddingBottom: spacing.xxxl },
+    waitingTitle: { fontFamily: "Inter_700Bold", fontSize: fontSize.hero, color: colors.textPrimary, textAlign: "center", marginBottom: spacing.sm },
+    waitingSubtitle: { fontFamily: "Inter_400Regular", fontSize: fontSize.md, color: colors.textDim, textAlign: "center", marginBottom: spacing.xxl },
+    transferCard: { backgroundColor: colors.bgCard, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.neonBorder, padding: spacing.xl, marginBottom: spacing.xl, ...shadows.card },
+    transferEmoji: { fontSize: 32, textAlign: "center", marginBottom: spacing.md },
+    transferTitle: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.textPrimary, textAlign: "center", marginBottom: spacing.md },
+    transferStep: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 24, paddingLeft: spacing.sm },
+    transferNote: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, textAlign: "center", lineHeight: 18 },
 });

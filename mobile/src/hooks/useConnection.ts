@@ -1,21 +1,29 @@
 /**
- * useConnection — Manages connectivity to the Valhalla backend.
+ * useConnection — Manages connectivity & power state.
  *
- * - On mount: attempts /mobile/sync. On fail, loads cached state from AsyncStorage.
+ * Power States:
+ *   🔥 home        — connected via LAN to PC
+ *   ⚡ connected   — connected via Tailscale bridge
+ *   🕯️ offline     — no connection, running on pocket power
+ *   🔥 reconnected — just came back online (briefly, then → home/connected)
+ *
+ * - On mount: attempts /mobile/sync. On fail, loads cached state.
  * - Polls every 30s to detect connection changes.
- * - Exposes `isOnline`, `companionData`, `sync()` for manual refresh.
- * - Queues offline actions and replays them when connection resumes.
+ * - Queues offline actions and replays on reconnect.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { companionAPI, testConnection, getHost } from "../api";
+import { companionAPI, testConnection, getHost, getConnectionPref } from "../api";
 import type { MobileSyncResponse, CompanionState } from "../types";
 
 const CACHE_KEY = "valhalla_cache";
-const POLL_INTERVAL = 30_000; // 30 seconds
+const POLL_INTERVAL = 30_000;
+const RECONNECT_FLASH_MS = 3_000; // show "reconnected" state for 3s
+
+export type PowerState = "home" | "connected" | "offline" | "reconnected";
 
 export interface OfflineAction {
-    type: "feed" | "walk" | "chat";
+    type: "feed" | "walk" | "chat" | "play";
     payload?: string;
     timestamp: number;
 }
@@ -23,6 +31,7 @@ export interface OfflineAction {
 interface ConnectionState {
     isOnline: boolean;
     isConfigured: boolean;
+    powerState: PowerState;
     companionData: MobileSyncResponse | null;
     offlineActions: OfflineAction[];
     isLoading: boolean;
@@ -32,20 +41,39 @@ export function useConnection() {
     const [state, setState] = useState<ConnectionState>({
         isOnline: false,
         isConfigured: false,
+        powerState: "offline",
         companionData: null,
         offlineActions: [],
         isLoading: true,
     });
 
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const wasOfflineRef = useRef(true);
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    /** Determine power state from connection type. */
+    const determinePowerState = useCallback(async (isOnline: boolean): Promise<PowerState> => {
+        if (!isOnline) return "offline";
+        const pref = await getConnectionPref();
+        return pref === "bridge" ? "connected" : "home";
+    }, []);
+
+    /** Flash reconnected state, then settle. */
+    const flashReconnected = useCallback(async () => {
+        setState((prev) => ({ ...prev, powerState: "reconnected" }));
+
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(async () => {
+            const settled = await determinePowerState(true);
+            setState((prev) => ({ ...prev, powerState: settled }));
+        }, RECONNECT_FLASH_MS);
+    }, [determinePowerState]);
 
     /** Save companion data to AsyncStorage for offline access. */
     const cacheData = useCallback(async (data: MobileSyncResponse) => {
         try {
             await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
-        } catch {
-            // silently fail
-        }
+        } catch { }
     }, []);
 
     /** Load cached data from AsyncStorage. */
@@ -74,9 +102,7 @@ export function useConnection() {
                             if (action.payload) await companionAPI.chat(action.payload);
                             break;
                     }
-                } catch {
-                    // If replay fails, drop the action — stale actions aren't worth retrying
-                }
+                } catch { }
             }
         },
         []
@@ -87,33 +113,52 @@ export function useConnection() {
         try {
             const data = await companionAPI.sync();
             await cacheData(data);
+            const power = await determinePowerState(true);
 
             setState((prev) => {
-                // If we were offline and had queued actions, replay them
-                if (!prev.isOnline && prev.offlineActions.length > 0) {
+                const justReconnected = !prev.isOnline && wasOfflineRef.current;
+
+                if (justReconnected && prev.offlineActions.length > 0) {
                     replayOfflineActions(prev.offlineActions);
                 }
+
+                wasOfflineRef.current = false;
+
                 return {
                     ...prev,
                     isOnline: true,
+                    powerState: justReconnected ? "reconnected" : power,
                     companionData: data,
                     offlineActions: [],
                     isLoading: false,
                 };
             });
+
+            // If reconnected, flash then settle
+            if (wasOfflineRef.current === false) {
+                // Check if we need to flash (state was just set to reconnected above)
+                setState((prev) => {
+                    if (prev.powerState === "reconnected") {
+                        flashReconnected();
+                    }
+                    return prev;
+                });
+            }
+
             return true;
         } catch {
-            // Load cached data if sync fails
             const cached = await loadCache();
+            wasOfflineRef.current = true;
             setState((prev) => ({
                 ...prev,
                 isOnline: false,
+                powerState: "offline",
                 companionData: cached || prev.companionData,
                 isLoading: false,
             }));
             return false;
         }
-    }, [cacheData, loadCache, replayOfflineActions]);
+    }, [cacheData, loadCache, replayOfflineActions, determinePowerState, flashReconnected]);
 
     /** Queue an action for when we're back online. */
     const queueAction = useCallback((action: OfflineAction) => {
@@ -123,7 +168,7 @@ export function useConnection() {
         }));
     }, []);
 
-    /** Update local companion state optimistically (for offline interactions). */
+    /** Update local companion state optimistically. */
     const updateCompanionLocal = useCallback(
         (updater: (prev: CompanionState) => CompanionState) => {
             setState((prev) => {
@@ -132,7 +177,6 @@ export function useConnection() {
                     ...prev.companionData,
                     companion: updater(prev.companionData.companion),
                 };
-                // Cache the optimistic update
                 cacheData(updated);
                 return { ...prev, companionData: updated };
             });
@@ -140,7 +184,7 @@ export function useConnection() {
         [cacheData]
     );
 
-    /** Check if host is configured. */
+    /** Boot: check if configured and sync. */
     useEffect(() => {
         (async () => {
             const host = await getHost();
@@ -153,7 +197,7 @@ export function useConnection() {
         })();
     }, [sync]);
 
-    /** Background polling — detects when connection resumes. */
+    /** Background polling — detects reconnection. */
     useEffect(() => {
         pollRef.current = setInterval(async () => {
             const host = await getHost();
@@ -161,19 +205,18 @@ export function useConnection() {
             const online = await testConnection();
             if (online) {
                 setState((prev) => {
-                    if (!prev.isOnline) {
-                        // Connection just resumed — sync
-                        sync();
-                    }
+                    if (!prev.isOnline) sync();
                     return prev;
                 });
             } else {
-                setState((prev) => ({ ...prev, isOnline: false }));
+                wasOfflineRef.current = true;
+                setState((prev) => ({ ...prev, isOnline: false, powerState: "offline" }));
             }
         }, POLL_INTERVAL);
 
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
         };
     }, [sync]);
 

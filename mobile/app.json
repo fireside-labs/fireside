@@ -19,6 +19,9 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Camera is used to scan QR codes for pairing with your home PC.",
         "NSMicrophoneUsageDescription": "Microphone is used for voice mode to talk to your AI companion."
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.valhalla.companion"]
       }
     },
     "android": {
@@ -34,6 +37,13 @@
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.intent.action.SEND",
+          "category": ["android.intent.category.DEFAULT"],
+          "data": [{ "mimeType": "text/plain" }]
+        }
       ]
     },
     "web": {

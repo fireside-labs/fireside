@@ -1,14 +1,17 @@
 /**
- * ⚡ Skills Tab — RPG skill toggle cards.
+ * ⚡ Skills Tab — RPG skill toggle cards with unbounded XP tiers.
  *
- * Lists companion's active skills with toggle switches.
- * Power level (unbounded XP, no cap). Shows skill tree progress.
+ * Tier system (no cap):
+ *   🌱 Basic (0-499) → 🌿 Solid (500-999) → 💪 Strong (1000-1499)
+ *   → ⚡ Legendary (1500-1999) → 🔥 Mythic (2000-2499) → 🌟 Ascended (2500+)
+ *
+ * XP = skill points × 50. Progress bar fills within each 500 XP tier.
+ * Display: "⚡ Legendary · 3,500 XP"
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
     View,
     Text,
-    TouchableOpacity,
     ScrollView,
     StyleSheet,
     RefreshControl,
@@ -30,7 +33,44 @@ interface Skill {
     xp_cost?: number;
 }
 
-// Fallback skills when offline
+// ── Tier System ──
+const TIER_SIZE = 500;
+
+interface Tier {
+    name: string;
+    emoji: string;
+    color: string;
+    minXP: number;
+}
+
+const TIERS: Tier[] = [
+    { name: "Basic",     emoji: "🌱", color: "#6b7280", minXP: 0 },
+    { name: "Solid",     emoji: "🌿", color: "#22c55e", minXP: 500 },
+    { name: "Strong",    emoji: "💪", color: "#3b82f6", minXP: 1000 },
+    { name: "Legendary", emoji: "⚡", color: "#f59e0b", minXP: 1500 },
+    { name: "Mythic",    emoji: "🔥", color: "#ef4444", minXP: 2000 },
+    { name: "Ascended",  emoji: "🌟", color: "#a855f7", minXP: 2500 },
+];
+
+function getTier(xp: number): Tier {
+    for (let i = TIERS.length - 1; i >= 0; i--) {
+        if (xp >= TIERS[i].minXP) return TIERS[i];
+    }
+    return TIERS[0];
+}
+
+function getTierProgress(xp: number): number {
+    const tier = getTier(xp);
+    const tierIndex = TIERS.indexOf(tier);
+    const nextTier = TIERS[tierIndex + 1];
+    if (!nextTier) {
+        // Ascended — progress continues beyond 2500, loop within 500
+        return ((xp - tier.minXP) % TIER_SIZE) / TIER_SIZE;
+    }
+    return (xp - tier.minXP) / TIER_SIZE;
+}
+
+// Fallback skills
 const FALLBACK_SKILLS: Skill[] = [
     { id: "web_search", name: "Web Search", description: "Search the internet for information", emoji: "🔍", enabled: true, level: 3 },
     { id: "code_review", name: "Code Review", description: "Analyze and review code quality", emoji: "💻", enabled: true, level: 2 },
@@ -49,18 +89,21 @@ export default function SkillsTab() {
     const [refreshing, setRefreshing] = useState(false);
 
     const petName = companionData?.companion?.name || "Companion";
-    const totalXP = companionData?.companion?.xp ?? 0;
-    const level = companionData?.companion?.level ?? 1;
     const enabledCount = skills.filter((s) => s.enabled).length;
-    const totalPower = skills.reduce((acc, s) => acc + (s.enabled ? s.level * 10 : 0), 0);
+
+    // Calculate total XP: each enabled skill point × 50
+    const totalXP = useMemo(() => {
+        return skills.reduce((acc, s) => acc + (s.enabled ? s.level * 50 : 0), 0);
+    }, [skills]);
+
+    const currentTier = useMemo(() => getTier(totalXP), [totalXP]);
+    const tierProgress = useMemo(() => getTierProgress(totalXP), [totalXP]);
 
     const fetchSkills = useCallback(async () => {
         try {
             const res = await companionAPI.skills();
             if (res.skills?.length) setSkills(res.skills);
-        } catch {
-            // Use fallback
-        }
+        } catch { }
         setLoading(false);
     }, []);
 
@@ -82,7 +125,6 @@ export default function SkillsTab() {
             try {
                 await companionAPI.skillToggle(skill.id, newEnabled);
             } catch {
-                // Revert on failure
                 setSkills((prev) =>
                     prev.map((s) => (s.id === skill.id ? { ...s, enabled: !newEnabled } : s))
                 );
@@ -105,54 +147,107 @@ export default function SkillsTab() {
             <Text style={styles.title}>⚡ Skills</Text>
             <Text style={styles.subtitle}>{petName}'s active abilities</Text>
 
-            {/* Power Level Card */}
-            <View style={styles.powerCard}>
+            {/* ═══ Power Level Card ═══ */}
+            <View style={[styles.powerCard, { borderColor: currentTier.color }]}>
                 <Text style={styles.powerLabel}>POWER LEVEL</Text>
-                <Text style={styles.powerValue}>{totalPower}</Text>
+
+                {/* Tier badge */}
+                <View style={styles.tierRow}>
+                    <Text style={styles.tierEmoji}>{currentTier.emoji}</Text>
+                    <Text style={[styles.tierName, { color: currentTier.color }]}>
+                        {currentTier.name}
+                    </Text>
+                </View>
+
+                {/* XP display */}
+                <Text style={styles.xpValue}>{totalXP.toLocaleString()} XP</Text>
+
+                {/* Tier progress bar */}
+                <View style={styles.tierBarTrack}>
+                    <View
+                        style={[
+                            styles.tierBarFill,
+                            {
+                                width: `${Math.min(100, tierProgress * 100)}%`,
+                                backgroundColor: currentTier.color,
+                            },
+                        ]}
+                    />
+                </View>
+
+                {/* Tier milestone labels */}
+                <View style={styles.tierMilestones}>
+                    {TIERS.map((t) => (
+                        <Text
+                            key={t.name}
+                            style={[
+                                styles.tierMilestone,
+                                totalXP >= t.minXP && { color: t.color, opacity: 1 },
+                            ]}
+                        >
+                            {t.emoji}
+                        </Text>
+                    ))}
+                </View>
+
                 <View style={styles.powerStats}>
                     <Text style={styles.powerStat}>⚡ {enabledCount}/{skills.length} active</Text>
                     <Text style={styles.powerStat}>✨ {totalXP.toLocaleString()} XP</Text>
-                    <Text style={styles.powerStat}>📊 Level {level}</Text>
                 </View>
             </View>
 
-            {/* Skill Cards */}
+            {/* ═══ Skill Cards ═══ */}
             {loading ? (
                 <ActivityIndicator color={colors.neon} style={{ marginTop: spacing.xl }} />
             ) : (
-                skills.map((skill) => (
-                    <View
-                        key={skill.id}
-                        style={[styles.skillCard, skill.enabled && styles.skillCardEnabled]}
-                    >
-                        <View style={styles.skillHeader}>
-                            <Text style={styles.skillEmoji}>{skill.emoji}</Text>
-                            <View style={styles.skillInfo}>
-                                <Text style={styles.skillName}>{skill.name}</Text>
-                                <Text style={styles.skillDesc}>{skill.description}</Text>
+                skills.map((skill) => {
+                    const skillXP = skill.level * 50;
+                    const skillTier = getTier(skillXP);
+
+                    return (
+                        <View
+                            key={skill.id}
+                            style={[styles.skillCard, skill.enabled && styles.skillCardEnabled]}
+                        >
+                            <View style={styles.skillHeader}>
+                                <Text style={styles.skillEmoji}>{skill.emoji}</Text>
+                                <View style={styles.skillInfo}>
+                                    <Text style={styles.skillName}>{skill.name}</Text>
+                                    <Text style={styles.skillDesc}>{skill.description}</Text>
+                                </View>
+                                <Switch
+                                    value={skill.enabled}
+                                    onValueChange={() => handleToggle(skill)}
+                                    trackColor={{ false: colors.glassBorder, true: colors.neonGlow }}
+                                    thumbColor={skill.enabled ? colors.neon : colors.textMuted}
+                                />
                             </View>
-                            <Switch
-                                value={skill.enabled}
-                                onValueChange={() => handleToggle(skill)}
-                                trackColor={{ false: colors.glassBorder, true: colors.neonGlow }}
-                                thumbColor={skill.enabled ? colors.neon : colors.textMuted}
-                            />
-                        </View>
-                        <View style={styles.skillFooter}>
-                            <View style={styles.levelBar}>
-                                <View style={[styles.levelFill, { width: `${Math.min(100, skill.level * 20)}%` }]} />
+                            <View style={styles.skillFooter}>
+                                <View style={styles.levelBar}>
+                                    <View
+                                        style={[
+                                            styles.levelFill,
+                                            {
+                                                width: `${Math.min(100, getTierProgress(skillXP) * 100)}%`,
+                                                backgroundColor: skillTier.color,
+                                            },
+                                        ]}
+                                    />
+                                </View>
+                                <Text style={[styles.levelText, { color: skillTier.color }]}>
+                                    {skillTier.emoji} {skillXP} XP
+                                </Text>
                             </View>
-                            <Text style={styles.levelText}>Lv.{skill.level}</Text>
                         </View>
-                    </View>
-                ))
+                    );
+                })
             )}
 
-            {/* No cap note */}
+            {/* Info note */}
             <View style={styles.noteCard}>
                 <Text style={styles.noteText}>
-                    💎 Power level has no cap. The more you use skills, the stronger they get.
-                    Each skill levels up independently through usage.
+                    💎 Power level has no cap. Each skill levels up independently through usage.
+                    XP multiplied by 50 per skill point. Tiers reset every 500 XP.
                 </Text>
             </View>
         </ScrollView>
@@ -165,9 +260,25 @@ const styles = StyleSheet.create({
     title: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.xl, color: colors.textPrimary, marginBottom: 2 },
     subtitle: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, marginBottom: spacing.xl },
     // Power card
-    powerCard: { backgroundColor: colors.neonGlow, borderWidth: 1, borderColor: colors.neonBorder, borderRadius: borderRadius.lg, padding: spacing.xl, marginBottom: spacing.xl, alignItems: "center", ...shadows.ember },
-    powerLabel: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.tiny, color: colors.neon, letterSpacing: 2, marginBottom: spacing.xs },
-    powerValue: { fontFamily: "Inter_700Bold", fontSize: 48, color: colors.ember, marginBottom: spacing.sm },
+    powerCard: {
+        backgroundColor: "rgba(255,255,255,0.03)",
+        borderWidth: 1,
+        borderRadius: borderRadius.lg,
+        padding: spacing.xl,
+        marginBottom: spacing.xl,
+        alignItems: "center",
+        ...shadows.ember,
+    },
+    powerLabel: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.tiny, color: colors.textDim, letterSpacing: 2, marginBottom: spacing.sm },
+    tierRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
+    tierEmoji: { fontSize: 28 },
+    tierName: { fontFamily: "Inter_700Bold", fontSize: fontSize.xl, textTransform: "uppercase", letterSpacing: 2 },
+    xpValue: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textDim, marginBottom: spacing.md },
+    // Tier progress bar
+    tierBarTrack: { width: "100%", height: 8, borderRadius: 4, backgroundColor: colors.bgInput, overflow: "hidden", marginBottom: spacing.sm },
+    tierBarFill: { height: 8, borderRadius: 4 },
+    tierMilestones: { flexDirection: "row", justifyContent: "space-between", width: "100%", marginBottom: spacing.md },
+    tierMilestone: { fontSize: 12, opacity: 0.3 },
     powerStats: { flexDirection: "row", gap: spacing.lg },
     powerStat: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textDim },
     // Skill cards
@@ -180,8 +291,8 @@ const styles = StyleSheet.create({
     skillDesc: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textDim, marginTop: 1 },
     skillFooter: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
     levelBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.bgInput, overflow: "hidden" },
-    levelFill: { height: 4, borderRadius: 2, backgroundColor: colors.ember },
-    levelText: { fontFamily: "Inter_500Medium", fontSize: fontSize.tiny, color: colors.ember, minWidth: 28 },
+    levelFill: { height: 4, borderRadius: 2 },
+    levelText: { fontFamily: "Inter_500Medium", fontSize: fontSize.tiny, minWidth: 70 },
     // Note
     noteCard: { backgroundColor: colors.bgCard, borderRadius: borderRadius.md, padding: spacing.md, marginTop: spacing.md },
     noteText: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textDim, textAlign: "center", lineHeight: 16 },

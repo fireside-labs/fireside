@@ -215,37 +215,31 @@ export const companionAPI = {
             { method: "POST", body: JSON.stringify({ text, voice }) }
         ),
 
-    /** Search marketplace (Sprint 6). */
-    marketplaceSearch: (query: string, category?: string) =>
-        apiFetch<{ items: Array<Record<string, any>> }>(
-            `/api/v1/marketplace/search?q=${encodeURIComponent(query)}${category ? `&category=${category}` : ""}`
-        ),
-
-    /** Install marketplace item (Sprint 6). */
-    marketplaceInstall: (itemId: string) =>
-        apiFetch<{ ok: boolean }>(
-            "/api/v1/marketplace/install",
-            { method: "POST", body: JSON.stringify({ item_id: itemId }) }
-        ),
-
-    /** Summarize a URL via browse plugin (Sprint 6). */
+    /** Summarize a URL via browse plugin. */
     browseSummarize: (url: string) =>
         apiFetch<{ title?: string; summary?: string; keyPoints?: string[] }>(
             "/api/v1/browse/summarize",
             { method: "POST", body: JSON.stringify({ url }) }
         ),
 
-    /** Check for new achievements after an action (Sprint 7). */
+    /** Check for new achievements. */
     achievementsCheck: () =>
         apiFetch<{ new_achievements?: Array<{ id: string; name: string; description: string; emoji: string }>; all_achievements?: Array<Record<string, any>> }>(
             "/api/v1/companion/achievements/check",
             { method: "POST" }
         ),
 
-    /** Get weekly summary (Sprint 7). */
-    weeklySummary: () =>
-        apiFetch<Record<string, any>>(
-            "/api/v1/companion/weekly-summary"
+    /** Save chat history to backend. */
+    chatHistory: (messages: Array<{ role: string; content: string; timestamp?: string }>) =>
+        apiFetch<{ ok: boolean; saved: number }>(
+            "/api/v1/chat/history",
+            { method: "POST", body: JSON.stringify({ messages }) }
+        ),
+
+    /** Get working memory health. */
+    memoryStatus: () =>
+        apiFetch<{ ok: boolean; entries?: number; backend?: string }>(
+            "/api/v1/working-memory/status"
         ),
 
     /** Pair mobile app with backend via token (Sprint 7). */
@@ -279,16 +273,16 @@ export const companionAPI = {
             "/api/v1/network/status"
         ),
 
-    /** List available models from brain-installer registry. */
+    /** List available models (verified: GET /api/v1/models). */
     brainModels: () =>
-        apiFetch<{ models: Array<{ id: string; name: string; size: string; quantization: string; loaded: boolean; vram_required?: string }> }>(
-            "/api/v1/brain/models"
+        apiFetch<{ models: Array<{ id: string; name: string; size: string; quantization: string; loaded: boolean; vram_required?: string }>; default?: string }>(
+            "/api/v1/models"
         ),
 
-    /** Get currently active model. */
+    /** Brain health check (verified: GET /api/v1/brains/status). */
     brainActive: () =>
-        apiFetch<{ model: string; backend: string; context_length?: number; gpu_layers?: number }>(
-            "/api/v1/brain/active"
+        apiFetch<{ model: string; backend: string; context_length?: number; gpu_layers?: number; ok?: boolean }>(
+            "/api/v1/brains/status"
         ),
 
     /** Switch the active model on PC. */

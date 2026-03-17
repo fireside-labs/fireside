@@ -1,7 +1,8 @@
 /**
- * 🔧 Tools Tab — Sprint 5 Task 1, Sprint 6 Task 3.
+ * 🔧 Tools Tab — Executive mode utilities.
  *
- * Replaces Care+Bag+Quest in Tool mode.
+ * Translation is USER-INITIATED via action menu or paste.
+ * DO NOT auto-translate. Users may speak multiple languages.
  * Contains: Platform card, URL summary, Translation, TeachMe.
  */
 import { useState, useCallback } from "react";
@@ -178,10 +179,16 @@ export default function ToolsTab() {
             {/* ———— URL Summary (Sprint 6 Task 3) ———— */}
             <UrlSummary petName={petName} isOnline={isOnline} />
 
-            {/* ———— Translation (Sprint 5 Task 2) ———— */}
+            {/* ———— Translation (User-Initiated Action Menu) ———— */}
             <View style={styles.card}>
-                <Text style={styles.cardTitle}>🌐 Translation</Text>
-                <Text style={styles.cardSubtitle}>200 languages · powered by NLLB-200</Text>
+                <Text style={styles.cardTitle}>🌐 Translate with Ember</Text>
+                <Text style={styles.cardSubtitle}>
+                    200 languages · NLLB-200 · User-initiated only
+                </Text>
+                <Text style={styles.actionNote}>
+                    📱 Shared text from other apps appears here automatically.
+                    Or paste text below to translate.
+                </Text>
 
                 {/* Language selectors */}
                 <View style={styles.langRow}>
@@ -264,6 +271,21 @@ export default function ToolsTab() {
                     </Text>
                 </TouchableOpacity>
 
+                {/* Paste from clipboard */}
+                <TouchableOpacity
+                    style={styles.pasteBtn}
+                    onPress={async () => {
+                        const text = await Clipboard.getStringAsync();
+                        if (text) {
+                            setTranslateInput(text);
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.pasteBtnText}>📋 Paste from clipboard</Text>
+                </TouchableOpacity>
+
                 {/* Result */}
                 {translateResult ? (
                     <View style={styles.translateResult}>
@@ -338,6 +360,9 @@ const styles = StyleSheet.create({
     // Platform card
     statLine: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textSecondary, lineHeight: 22 },
     offlineText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textMuted, fontStyle: "italic" },
+    actionNote: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 16 },
+    pasteBtn: { backgroundColor: colors.bgInput, borderRadius: borderRadius.md, paddingVertical: spacing.sm, alignItems: "center", marginBottom: spacing.md, borderWidth: 1, borderColor: colors.glassBorder },
+    pasteBtnText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim },
     // Translation
     langRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
     langBtn: { flex: 1, backgroundColor: colors.bgInput, borderRadius: borderRadius.md, paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.glassBorder },

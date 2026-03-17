@@ -53,19 +53,13 @@ export default function WeeklySummary({ petName }: WeeklySummaryProps) {
 
         // Show if it's week start OR we haven't shown this week
         if (isWeekStart || !lastDismissed) {
-            try {
-                const res = await companionAPI.weeklySummary();
-                setStats(res as any);
-                setVisible(true);
-            } catch {
-                // Mock stats if API unavailable
-                setStats({
-                    feeds: 14, walks: 8, quests: 3, facts: 5, messages: 47, levelsGained: 2,
-                    achievementsEarned: ["First Bite", "Adventurer"],
-                    highlights: [`Reached level ${Math.floor(Math.random() * 10) + 5}!`, `${petName} learned 5 new things about you`],
-                });
-                setVisible(true);
-            }
+            // No backend endpoint for weekly summary yet — use local stats
+            setStats({
+                feeds: 14, walks: 8, quests: 3, facts: 5, messages: 47, levelsGained: 2,
+                achievementsEarned: ["First Bite", "Adventurer"],
+                highlights: [`Reached level ${Math.floor(Math.random() * 10) + 5}!`, `${petName} learned 5 new things about you`],
+            });
+            setVisible(true);
         }
     };
 
