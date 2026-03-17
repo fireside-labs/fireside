@@ -1,87 +1,159 @@
-# Pipeline UX — The Iterative Quality Loop
+# Pipeline UX — The Orchestration Engine
 
 ---
 
-## What Is a Pipeline?
+## How Pipelines Work
 
-A pipeline is Valhalla's way of turning a task into a shipped result through structured iteration. Instead of one-shot generation, the system:
+The user **just talks**. The system does the rest.
 
-1. **Specs** the task (cloud model — Huginn / GLM-5)
-2. **Builds** in parallel (local model — free)
-3. **Tests** the output (Heimdall)
-4. If it fails → **checks for progress or regression** (cloud model)
-5. If progress → **fixes and rebuilds** (local model)
-6. If regression → **escalates to a human**
-7. If it passes → **distills lessons** (Muninn / Kimi) → **ships**
+```
+User: "Draft a letter to the board about our Q4 results"
+  ↓
+orchestrator.classify() → "complex"
+  ↓
+classify_template() → "drafting" (matched "draft", "letter")
+  ↓
+mesh_active()? → single-node → local sub-agents with system prompts
+              → multi-node  → War Room dispatch to real agents
+  ↓
+Pipeline runs: context → draft → review (on_fail: goto:draft)
+  ↓
+User gets a polished letter
+```
 
-The insight: local models are weaker but free. Let them iterate 20 times overnight. Cloud models handle the parts that need real intelligence — specs, reviews, regression checks. Iteration count is the quality equalizer.
+There is no "create pipeline" button in the default flow. The user types a message in chat, the AI decides it's complex, picks the right template, and runs it. The dashboard wizard exists for power users who want manual control.
 
 ---
 
-## Creating a Pipeline (Dashboard Wizard)
+## Template Auto-Detection
 
-### Step 1 — New Pipeline
+The system ships 6 built-in templates. The right one is selected automatically based on what the user says:
 
-From the **Pipeline** page, click **+ New Pipeline**. A wizard modal opens:
+| User Says | Template | Stages |
+|---|---|---|
+| "Build me an API" | ⚡ **Coding** | spec → build ═ (parallel backend + frontend) → test → review |
+| "Research AI safety" | 🔍 **Research** | gather → analyze → write |
+| "Draft a letter to investors" | ✉️ **Drafting** | context → draft → review |
+| "Make a presentation about Q4" | 📊 **Presentation** | outline → content → design → review |
+| "Show me the trends in our data" | 📈 **Analysis** | gather → analyze → insights → report |
+| "Help me organize my day" | 📋 **General** | plan → execute → review |
+
+**How detection works:** Zero-latency keyword scoring. Each template has signal words (e.g., "api", "backend", "deploy" → Coding). Highest score wins. No match → General. Users can also create custom templates in `~/.valhalla/pipelines/`.
+
+---
+
+## Single-Node vs Multi-Node
+
+The same template works in both modes. The orchestrator auto-detects:
+
+### Single-Node (most users)
+No mesh peers → **local sub-agents**:
+- Each stage role becomes a system prompt personality
+- "backend" → "You are a backend engineer. You build APIs, databases..."
+- "reviewer" → "You are a quality reviewer. You check for completeness..."
+- All stages run on the same local model (omlx / llama.cpp)
+- Stages are chained: each stage receives the previous stage's output
+
+### Multi-Node (mesh users)
+Mesh peers detected → **War Room dispatch**:
+- Each stage role maps to a real node via `bot/router.py`
+- "backend" → Thor (best backend skills, checked via VRAM load)
+- Parallel stages run on different GPUs simultaneously
+- Huginn generates the spec, Muninn distills lessons
+- Nodes talk to each other via the War Room, not through a central orchestrator
+
+---
+
+## Failure Handling (on_fail)
+
+Each stage has an `on_fail` action that fires when a stage returns VERDICT: FAIL:
+
+| Action | What Happens |
+|---|---|
+| `retry` | Retry the same stage (default) |
+| `goto:build` | Jump back to the build stage with the failure feedback |
+| `stop` | Halt the pipeline, escalate to human |
+
+Built-in routing:
+- **Coding:** test fails → goto:build, review fails → goto:test
+- **Research:** analysis fails → goto:gather (re-research)
+- **Drafting:** review fails → goto:draft (rewrite)
+- **Presentation:** review fails → goto:content (revise slides)
+- **Analysis:** insights fail → goto:analyze (re-analyze)
+- **General:** review fails → goto:execute (redo)
+
+---
+
+## Dashboard: Creating a Pipeline (Power Users)
+
+### Default Path (from Chat)
+The user types something complex → pipeline auto-creates → they watch it on the Pipeline page.
+
+### Manual Path (Dashboard Wizard)
+From the **Pipeline** page, click **+ New Pipeline**:
 
 ```
 ┌────────────────────────────────────────────────────┐
-│  ⚡ New Pipeline                                   │
+│  ⚡ New Pipeline                            [ × ]  │
 │                                                    │
-│  Title:                                            │
-│  [ Add user auth to the API              ]         │
+│  What should we build?                             │
+│  ┌──────────────────────────────────────────┐      │
+│  │ Build a real-time chat app with auth     │      │
+│  └──────────────────────────────────────────┘      │
+│  ↑ As they type, template auto-selects below       │
 │                                                    │
-│  Description (optional):                           │
-│  [ JWT-based auth on all /api/v1 endpoints.        │
-│    Include registration, login, and token   ]      │
-│    refresh.                                        │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │ ⚡ Code  │ │ 🔍 Rsrch │ │ ✉️ Draft │           │
+│  │  ●═●─●─● │ │  ●─●─●   │ │  ●─●─●   │           │
+│  └──────────┘ └──────────┘ └──────────┘           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│  │ 📊 Pres  │ │ 📈 Anlys │ │ 📋 Genrl │           │
+│  │  ●─●─●─● │ │  ●─●─●─● │ │  ●─●─●   │           │
+│  └──────────┘ └──────────┘ └──────────┘           │
+│  ↑ selected card: neon border + glow               │
 │                                                    │
-│  Max Iterations:                                   │
-│  [ 10 ▾ ]  (hard cap — pipeline stops here)        │
+│  Stage Preview:                                    │
+│  Spec → Build ═══ → Test → Review                  │
+│         ├ Backend                                  │
+│         └ Frontend                                 │
 │                                                    │
-│  Escalation Channel:                               │
-│  ● Dashboard notification                          │
-│  ○ Telegram                                        │
-│  ○ Email                                           │
+│  Max Iterations: [━━━━━●━━━━━] 3  ▸ Advanced      │
 │                                                    │
-│  [ Cancel ]                  [ Create Pipeline → ] │
+│  [ Cancel ]               [ ⚡ Create Pipeline ]   │
 └────────────────────────────────────────────────────┘
 ```
 
-**Design rules:**
-- Title is mandatory. Description is optional but recommended.
-- Max iterations defaults to 10. The Heimdall-enforced hard cap is 25.
-- Escalation channel default = dashboard notification (always on). Telegram/email are additive.
-- Advanced options (collapsed by default): token budget, stage timeout, custom reviewer personas.
+**UX Rules:**
+- Template cards auto-highlight as the user types (live keyword detection)
+- Selected card: neon green border + `box-shadow: 0 0 20px rgba(0, 255, 136, 0.15)`
+- Cards on hover: `translateY(-2px)` with shadow lift
+- Stage preview uses `StageTimeline` component, stagger-in animation (50ms/stage)
+- "Advanced" expands: stage toggles, on_fail overrides, model selection per stage
+- On mobile: cards stack 1-column, stage preview scrolls horizontal, button sticky at bottom
 
-### Step 2 — Stage Configuration (Advanced, Optional)
+### Stage Configuration (Advanced, Optional)
 
-For power users, clicking "Advanced" expands stage configuration:
+Clicking "Advanced" expands:
 
 ```
 ┌────────────────────────────────────────────────────┐
 │  Stages                                            │
 │                                                    │
-│  1. ☑ Spec        agent: huginn   model: glm-5     │
-│  2. ☑ Build       agent: local    model: default   │
-│  3. ☑ Test        agent: heimdall model: default   │
-│  4. ☑ Review      rounds: 3      threshold: 0.7    │
-│  5. ☑ Distill     agent: muninn   model: kimi      │
+│  1. ☑ Spec     role: planner   on_fail: retry      │
+│  2. ☑ Build    ═ parallel      on_fail: retry      │
+│  3. ☑ Test     role: tester    on_fail: goto:build  │
+│  4. ☑ Review   role: reviewer  on_fail: goto:test   │
 │                                                    │
-│  Each stage can be toggled on/off. Reviewers        │
-│  are configurable via Socratic debate settings.     │
+│  Each stage can be toggled on/off. On_fail can      │
+│  be changed to: retry | goto:[stage] | stop        │
 └────────────────────────────────────────────────────┘
 ```
 
 Most users leave this alone. Defaults are good.
 
-### Step 3 — Pipeline Created
-
-Clicking **Create Pipeline** calls `POST /api/v1/pipeline` and the pipeline card appears on the Pipeline page with status "Running."
-
 ---
 
-## Watching a Pipeline Run (Progress UI)
+## Watching a Pipeline Run
 
 ### Pipeline Card (List View)
 
@@ -91,60 +163,54 @@ Clicking **Create Pipeline** calls `POST /api/v1/pipeline` and the pipeline card
 │                                                    │
 │  ▇▇▇▇▇▇▇▇▇░░░░░░░░░░░  Stage: Test   30%         │
 │                                                    │
-│  Spec ✔ → Build ✔ → Test 🔄 → Fix → Distill       │
+│  Spec ✔ → Build ✔ → Test 🔄 → Review              │
 │                                                    │
-│  ETA: ~12 min remaining          [ View Details ]  │
+│  Template: ⚡ Coding  ·  ETA: ~12 min              │
+│  Mode: 🖥️ Local sub-agents                         │
+│                                    [ View Details ] │
 └────────────────────────────────────────────────────┘
 ```
 
-### Pipeline Detail View
-
-Clicking **View Details** opens the full pipeline page (`/pipeline/{id}`):
+### Pipeline Detail View (`/pipeline/{id}`)
 
 ```
 ┌────────────────────────────────────────────────────────────┐
 │  ⚡ Add user auth to the API                              │
 │  Status: Running · Iteration 3/10 · Started 14 min ago    │
+│  Template: Coding · Mode: Local sub-agents                │
 ├────────────────────────────────────────────────────────────┤
 │                                                            │
 │  Stage Timeline                                            │
 │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
-│  ✔ Spec      ✔ Build     🔄 Test      ○ Fix     ○ Distill │
-│  (huginn)    (local)     (heimdall)                        │
+│  ✔ Spec      ✔ Build     🔄 Test      ○ Review            │
+│  (planner)   (═ parallel) (tester)    (reviewer)           │
 │                                                            │
 │  Iteration History                                         │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  Iteration 3 (current)                              │  │
-│  │  Stage: Test · Agent: heimdall                      │  │
+│  │  Stage: Test · Role: tester                         │  │
 │  │  Running tests... 12/18 passing                     │  │
+│  │  on_fail: goto:build                                │  │
 │  ├──────────────────────────────────────────────────────┤  │
 │  │  Iteration 2 · PROGRESS                             │  │
+│  │  on_fail triggered: goto:build (test failed)        │  │
 │  │  Build fixed 4 of 6 test failures.                  │  │
-│  │  Huginn verdict: "Clear progress. JWT signing now   │  │
-│  │  works. Remaining: token refresh endpoint."         │  │
 │  ├──────────────────────────────────────────────────────┤  │
 │  │  Iteration 1 · FAIL                                 │  │
-│  │  6 tests failed. Missing JWT secret config,         │  │
-│  │  bcrypt import error, no token refresh endpoint.    │  │
+│  │  6 tests failed. Missing JWT secret config.         │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                                                            │
 │  [ Cancel Pipeline ]              [ Force Advance ]        │
 └────────────────────────────────────────────────────────────┘
 ```
 
-**Real-time updates:** The detail view subscribes to `WS /api/v1/events/stream` and updates live. No polling. Users see test results appear, iteration verdicts stream in, and the stage timeline advance — all without refreshing.
-
-**Design rules:**
-- Stage timeline uses color coding: ✔ green (passed), 🔄 blue (running), ❌ red (failed), ○ gray (pending)
-- Iteration history shows most recent first
-- Each iteration card is collapsible — click to expand full agent output
-- ETA is estimated from average iteration time × remaining iterations
+**Real-time updates:** Detail view subscribes to `WS /api/v1/events/stream`. No polling.
 
 ---
 
 ## Socratic Debate (In-Pipeline Review)
 
-When a pipeline stage has `review_after: true`, the Socratic debate fires. The pipeline detail view shows a sub-panel:
+When review stages fire, the AI debates itself using different role perspectives:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -152,41 +218,31 @@ When a pipeline stage has `review_after: true`, the Socratic debate fires. The p
 │  Round 2/3 · Consensus: 45%                              │
 │  ━━━━━━━━━━━━━━━━━━━░░░░░░░░░░░░░░░  45%                │
 │                                                          │
-│  🏛️ Architect (huginn/glm-5)                             │
+│  🏛️ Planner (spec)                                       │
 │  "The auth middleware is solid but the token refresh      │
-│  flow has a race condition. If two requests hit          │
-│  /refresh simultaneously..."                             │
+│  flow has a race condition..."                           │
 │                                                          │
-│  😈 Devil's Advocate (heimdall/deepseek)                 │
+│  😈 Tester (quality)                                     │
 │  "What happens in 6 months when you have 50 endpoints?   │
-│  This middleware pattern requires manual annotation       │
-│  on every route..."                                      │
+│  This middleware pattern requires manual annotation..."   │
 │                                                          │
-│  👤 End User (local)                                      │
+│  👤 Reviewer (final)                                      │
 │  "The error messages are cryptic. 'Invalid JWT' tells     │
-│  me nothing. What expired? What do I do?"                │
-│                                                          │
-│  💬 Thor's Defense                                        │
-│  "Good catch on the race condition — adding mutex.        │
-│  Re: route annotation — I'll add a decorator pattern.     │
-│  Re: error messages — agreed, will add context."         │
+│  me nothing..."                                          │
 │                                                          │
 │  [ 🖐️ Intervene — Add Your Take ]                       │
 └──────────────────────────────────────────────────────────┘
 ```
 
-**Human intervention:** Clicking **Intervene** lets the user add their own objection to the debate. The reviewers respond to it in the next round. This is the human-in-the-loop approval flow.
+**Human intervention:** Click **Intervene** to add your own input to the debate.
 
 ---
 
 ## Escalation
 
-When Huginn's regression check returns **REGRESS** (the fix made things worse), the pipeline escalates.
+When regression is detected (on_fail: stop, or max iterations reached):
 
 ### Dashboard Notification
-
-A toast appears in the bottom-right:
-
 ```
 ┌──────────────────────────────────────┐
 │  ⚠️ Pipeline Escalated              │
@@ -196,95 +252,90 @@ A toast appears in the bottom-right:
 └──────────────────────────────────────┘
 ```
 
-The pipeline card turns amber with a "🖐 Needs Review" badge. The detail view shows:
-
-```
-┌──────────────────────────────────────────────────────┐
-│  ⚠️ REGRESSION DETECTED — Iteration 5               │
-│                                                      │
-│  Huginn's analysis:                                  │
-│  "Iteration 4 fixed token refresh but broke the      │
-│  original login flow. The bcrypt hash comparison      │
-│  was removed during refactor. This is a net loss."   │
-│                                                      │
-│  Previous passing tests now failing:                 │
-│  ❌ test_login_valid_credentials                     │
-│  ❌ test_password_hash_verification                  │
-│                                                      │
-│  Options:                                            │
-│  [ 🔄 Retry from Last Good ]  [ 📝 Give Guidance ]  │
-│  [ ❌ Cancel Pipeline ]                              │
-└──────────────────────────────────────────────────────┘
-```
-
-**Retry from Last Good:** Reverts to iteration 4 state and retries with new fix instructions.
-**Give Guidance:** Opens a text input where the user can write specific instructions for the next iteration.
-**Cancel:** Stops the pipeline. Work done so far stays accessible.
-
-### Telegram Notification (if configured)
-
-```
-⚠️ Pipeline "Add user auth" hit regression at iteration 5.
-Huginn: "Fixed token refresh but broke login flow."
-→ Dashboard: http://odin:3000/pipeline/abc123
-```
+### Options
+- **🔄 Retry from Last Good** — revert and retry with new instructions
+- **📝 Give Guidance** — free-text instructions for the next iteration
+- **❌ Cancel Pipeline** — stop, keep work done so far
 
 ---
 
 ## Completion
 
-When the pipeline passes all tests:
-
 ```
 ┌──────────────────────────────────────────────────────┐
 │  ✅ Pipeline Complete                                │
 │  "Add user auth to the API"                         │
+│  Template: ⚡ Coding · Mode: Local sub-agents       │
 │                                                      │
-│  Iterations: 7                                       │
-│  Time: 34 minutes                                    │
-│  Cloud tokens: 12,400 (GLM-5: 8,200 · Kimi: 4,200) │
-│  Local tokens: 89,000 (free)                         │
+│  Iterations: 7 · Time: 34 min                       │
+│  Cloud tokens: 12.4K · Local tokens: 89K (free)     │
 │  Tests: 18/18 passing                                │
 │                                                      │
 │  Lessons Learned (by Muninn):                        │
 │  • "JWT token refresh needs mutex to prevent races"  │
 │  • "Always test login flow after auth changes"       │
-│  • "bcrypt.checkpw is the correct API, not ==  "     │
-│                                                      │
-│  These lessons are stored in procedural memory       │
-│  and will be available in future pipelines.          │
 │                                                      │
 │  [ View Diff ]  [ View Lessons ]  [ New Pipeline ]   │
 └──────────────────────────────────────────────────────┘
 ```
 
-**Design rules:**
-- Show cost breakdown: cloud (paid) vs. local (free). Reinforces the value prop.
-- Lessons learned are shown prominently — this is the learning that competitors don't have.
-- "View Diff" shows the actual code changes. "View Lessons" shows what was distilled to memory.
+---
+
+## Custom Templates
+
+Power users create custom templates in `~/.valhalla/pipelines/`:
+
+```json
+{
+  "name": "Onboarding",
+  "version": 1,
+  "description": "Create employee onboarding materials",
+  "icon": "🎓",
+  "on_fail": "retry",
+  "stages": [
+    {"name": "research", "role": "researcher", "prompt": "Gather role requirements and company context"},
+    {"name": "design", "role": "planner", "prompt": "Design the onboarding program structure"},
+    {"name": "content", "role": "writer", "prompt": "Write all onboarding materials"},
+    {"name": "review", "role": "reviewer", "on_fail": "goto:content", "prompt": "Review for completeness and tone"}
+  ],
+  "max_iterations": 2
+}
+```
+
+Custom templates appear in the dashboard wizard alongside built-ins.
 
 ---
 
-## Error States
-
-| State | What the User Sees | What They Can Do |
-|---|---|---|
-| **Max iterations reached** | "Pipeline reached 10 iterations without passing all tests." | Increase max iterations, give guidance, or cancel |
-| **Token budget exceeded** | "Cloud spend reached $2.50 limit." | Increase budget or switch to local-only mode |
-| **Stage timeout** | "Build stage exceeded 15-minute timeout." | Retry or check if the task is too large |
-| **Model unavailable** | "NVIDIA API returned 503. Falling back to local." | Automatic — user sees a toast, pipeline continues |
-| **Escalation with no human response (24h)** | "Pipeline has been waiting for review for 24 hours." | Auto-cancels with notification |
-
----
-
-## API Reference (for Thor)
+## API Reference
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/v1/pipeline` | POST | Create pipeline (title, description, max_iterations, stages) |
+| `/api/v1/pipeline/templates` | GET | List all templates (built-in + custom) |
+| `/api/v1/orchestrate` | POST | Submit task. Auto-detects template. Accepts optional `template` field |
+| `/api/v1/pipeline` | POST | Create pipeline (title, description, stages, template) |
 | `/api/v1/pipeline` | GET | List active pipelines |
-| `/api/v1/pipeline/{id}` | GET | Pipeline detail (status, stage, iterations, history) |
-| `/api/v1/pipeline/{id}/advance` | POST | Force advance to next stage (admin) |
+| `/api/v1/pipeline/{id}` | GET | Pipeline detail (status, stages, iterations) |
+| `/api/v1/pipeline/{id}/advance` | POST | Force advance to next stage |
 | `/api/v1/pipeline/{id}` | DELETE | Cancel pipeline |
-| `/api/v1/socratic/debate/{id}` | GET | Debate status, rounds, consensus |
-| `/api/v1/socratic/debate/{id}/intervene` | POST | Human adds objection to debate |
+| `/api/v1/socratic/debate/{id}` | GET | Debate status and rounds |
+| `/api/v1/socratic/debate/{id}/intervene` | POST | Human adds input to debate |
+
+---
+
+## Roles Reference
+
+These roles are used across all templates. On single-node, each becomes a system prompt persona:
+
+| Role | Specialty |
+|---|---|
+| `planner` | Breaks tasks into sub-tasks, thinks about dependencies |
+| `backend` | APIs, databases, server logic, security |
+| `frontend` | UI, components, responsive design, accessibility |
+| `tester` | Unit tests, integration tests, edge cases |
+| `reviewer` | Quality, completeness, accuracy, professionalism |
+| `researcher` | Information gathering, source evaluation, citations |
+| `analyst` | Strategic patterns, trends, critical thinking |
+| `data_analyst` | Statistics, visualizations, data quality |
+| `writer` | Clear prose, key takeaways, tone matching |
+| `designer` | Visual layout, typography, color, hierarchy |
+| `executor` | Takes plans and implements them methodically |

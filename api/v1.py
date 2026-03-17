@@ -838,45 +838,51 @@ class ChatRequest(BaseModel):
 async def post_chat(req: ChatRequest):
     """Proxy chat to local llama.cpp. Stream response via SSE.
 
-    Uses companion personality from companion_state.json.
+    Orchestrated: recalls memories, predicts, scores, stores, publishes.
+    Uses companion personality from soul files (never hardcoded).
     """
     import urllib.request
     from fastapi.responses import StreamingResponse
 
+    # --- Orchestrator: pre-inference ---
+    try:
+        import orchestrator
+        orch_ctx = orchestrator.pre_inference(req.message, req.context)
+    except Exception as e:
+        log.debug("[chat] Orchestrator pre-inference skipped: %s", e)
+        orch_ctx = {
+            "classification": "simple",
+            "memories": [],
+            "query_hash": None,
+            "agent_name": "Companion",
+            "user_name": "",
+            "enriched_system_additions": "",
+        }
+
+    agent_name = orch_ctx["agent_name"]
+    user_name = orch_ctx["user_name"]
+
     # Build system prompt from soul files + personality settings
-    system_prompt = "You are a helpful AI assistant."
+    system_prompt = f"You are {agent_name}, a helpful AI companion."
     try:
         from prompt_assembler import assemble_system_prompt
-
-        # Determine active skills from enabled plugins
         from plugin_loader import get_plugins
         active_skills = [p["name"] for p in get_plugins() if p.get("status") == "loaded"]
 
-        # Get user name from onboarding
-        onboarding_file = Path.home() / ".fireside" / "onboarding.json"
-        user_name = ""
-        if onboarding_file.exists():
-            try:
-                ob = json.loads(onboarding_file.read_text(encoding="utf-8"))
-                user_name = ob.get("user_name", "")
-            except Exception:
-                pass
-
         system_prompt = assemble_system_prompt(
             soul_dir=_base_dir / "souls" / "default",
-            agent_name="Atlas",
+            agent_name=agent_name,
             user_name=user_name,
             active_skills=active_skills,
+            memories=[m.get("content", "")[:200] for m in orch_ctx.get("memories", [])],
         )
     except Exception as e:
         log.warning("[chat] Prompt assembler failed, using fallback: %s", e)
-        # Fallback to companion_state.json
         state_path = Path.home() / ".valhalla" / "companion_state.json"
         try:
             if state_path.exists():
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                companion_name = state.get("name", "Ember")
-                agent_name = state.get("agent", {}).get("name", "Atlas")
+                companion_name = state.get("name", agent_name)
                 system_prompt = (
                     f"You are {companion_name}, a helpful AI companion. "
                     f"You are friendly, warm, and helpful. "
@@ -884,6 +890,10 @@ async def post_chat(req: ChatRequest):
                 )
         except Exception:
             pass
+
+    # Inject recalled memories into system prompt
+    if orch_ctx.get("enriched_system_additions"):
+        system_prompt += orch_ctx["enriched_system_additions"]
 
     # Build llama.cpp /completion payload
     prompt_parts = [f"System: {system_prompt}"]
@@ -903,7 +913,11 @@ async def post_chat(req: ChatRequest):
         "stop": ["User:", "System:"],
     }).encode()
 
+    query_hash = orch_ctx.get("query_hash")
+    classification = orch_ctx.get("classification", "simple")
+
     async def stream_response():
+        full_response = []
         try:
             http_req = urllib.request.Request(
                 "http://127.0.0.1:8080/completion",
@@ -923,19 +937,107 @@ async def post_chat(req: ChatRequest):
                             obj = json.loads(chunk)
                             content = obj.get("content", "")
                             if content:
+                                full_response.append(content)
                                 yield f"data: {json.dumps({'content': content})}\n\n"
                         except json.JSONDecodeError:
                             pass
         except Exception as e:
             log.warning("[chat] llama.cpp unreachable: %s", e)
-            yield f"data: {json.dumps({'content': f'{companion_name} is thinking... but the brain is offline right now. Start the backend first!'})}\n\n"
+            yield f"data: {json.dumps({'content': f'{agent_name} is thinking... but the brain is offline right now. Start the backend first!'})}\n\n"
             yield "data: [DONE]\n\n"
+
+        # --- Orchestrator: post-inference ---
+        if full_response:
+            try:
+                import orchestrator as _orch
+                _orch.post_inference(
+                    req.message, "".join(full_response),
+                    query_hash=query_hash,
+                    classification=classification,
+                )
+            except Exception as ex:
+                log.debug("[chat] Orchestrator post-inference skipped: %s", ex)
 
     return StreamingResponse(
         stream_response(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints: Orchestrate  (explicit pipeline creation)
+# ---------------------------------------------------------------------------
+
+class OrchestrateRequest(BaseModel):
+    task: str = Field(max_length=4096)
+    mode: str = "auto"  # "auto" | "direct" | "pipeline"
+    template: str = ""  # "coding" | "research" | "general" | custom name | "" = auto
+
+
+@router.post("/orchestrate")
+async def post_orchestrate(req: OrchestrateRequest):
+    """Submit a task for orchestrated execution.
+
+    mode='auto': classify and route (simple → direct, complex → pipeline)
+    mode='pipeline': force multi-stage pipeline
+    mode='direct': skip pipeline, just enrich and respond
+
+    template='' → auto-detect best template for the task
+    template='coding' → force coding pipeline
+    """
+    try:
+        import orchestrator
+
+        classification = orchestrator.classify(req.task)
+
+        if req.mode == "pipeline" or (req.mode == "auto" and classification == "complex"):
+            meta = orchestrator.create_task_pipeline(
+                req.task,
+                mode="pipeline",
+                template_name=req.template or None,
+            )
+            if meta:
+                return {
+                    "ok": True,
+                    "mode": "pipeline",
+                    "classification": classification,
+                    "pipeline_id": meta.get("id", ""),
+                    "status": meta.get("status", "active"),
+                    "stages": len(meta.get("stages", [])),
+                    "mesh_active": orchestrator.mesh_active(),
+                    "template": req.template or "auto",
+                }
+
+        # Direct mode — just classify and return enriched context
+        orch_ctx = orchestrator.pre_inference(req.task)
+        return {
+            "ok": True,
+            "mode": "direct",
+            "classification": classification,
+            "agent_name": orch_ctx["agent_name"],
+            "memories_found": len(orch_ctx.get("memories", [])),
+            "hint": "Use POST /api/v1/chat for the actual response",
+        }
+    except Exception as e:
+        log.error("[orchestrate] Failed: %s", e)
+        from fastapi import HTTPException
+        raise HTTPException(500, f"Orchestration failed: {e}")
+
+
+@router.get("/pipeline/templates")
+async def get_pipeline_templates():
+    """List available pipeline templates (built-in + user custom)."""
+    try:
+        from pipeline_templates import list_templates
+        templates = list_templates()
+        return {"ok": True, "templates": templates}
+    except ImportError:
+        return {"ok": True, "templates": []}
+    except Exception as e:
+        log.error("[templates] Failed: %s", e)
+        return {"ok": False, "templates": [], "error": str(e)}
+
 
 
 # ---------------------------------------------------------------------------
@@ -1541,6 +1643,14 @@ def init_api(config: dict) -> APIRouter:
     _config = config
     _start_time = time.time()
     _base_dir = Path(config.get("_meta", {}).get("base_dir", "."))
+
+    # Initialize orchestrator
+    try:
+        import orchestrator
+        orchestrator.init(config, _base_dir)
+    except Exception as e:
+        log.warning("[api/v1] Orchestrator init failed (non-fatal): %s", e)
+
     log.info("[api/v1] Initialized (%d endpoints)", len(router.routes))
     return router
 

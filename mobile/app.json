@@ -53,6 +53,7 @@
       "expo-router",
       "expo-font",
       "expo-notifications",
+      "./modules/translate-extension/expo-plugin",
       [
         "expo-camera",
         {

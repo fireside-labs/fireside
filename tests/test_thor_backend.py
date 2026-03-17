@@ -328,11 +328,249 @@ class TestRegression(unittest.TestCase):
         for ep in ["/status/agent", "/brains/install", "/chat"]:
             self.assertIn(ep, src)
 
+    def test_no_hardcoded_atlas(self):
+        """Agent name should come from config, not hardcoded."""
+        src = _read("api/v1.py")
+        # The post_chat function should NOT contain agent_name="Atlas"
+        self.assertNotIn('agent_name="Atlas"', src)
+
+    def test_orchestrate_endpoint_exists(self):
+        src = _read("api/v1.py")
+        self.assertIn("/orchestrate", src)
+
     def test_registry_intact(self):
         src = _read("plugins/brain-installer/registry.py")
         self.assertIn("llama-3.1-8b", src)
         self.assertIn("def get_available", src)
 
 
+# ===========================================================================
+# Orchestrator — hybrid enrichment layer (V1 mesh + V2 enrichment)
+# ===========================================================================
+
+class TestOrchestrator(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "orchestrator",
+            str(REPO_ROOT / "orchestrator.py"),
+        )
+        cls.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.mod)
+        cls.mod.init({"node": {"name": "test-node"}}, REPO_ROOT)
+
+    def test_classify_simple(self):
+        """Short messages should be classified as simple."""
+        self.assertEqual(self.mod.classify("hello"), "simple")
+        self.assertEqual(self.mod.classify("thanks"), "simple")
+        self.assertEqual(self.mod.classify("how are you?"), "simple")
+
+    def test_classify_complex(self):
+        """Research/analysis tasks should be classified as complex."""
+        self.assertEqual(
+            self.mod.classify("Research AI safety best practices and give me a comprehensive summary"),
+            "complex",
+        )
+        self.assertEqual(
+            self.mod.classify("Analyze and compare these two approaches step by step"),
+            "complex",
+        )
+
+    def test_pre_inference_returns_dict(self):
+        """pre_inference should return a well-structured dict with routing."""
+        result = self.mod.pre_inference("hello world")
+        self.assertIn("classification", result)
+        self.assertIn("memories", result)
+        self.assertIn("agent_name", result)
+        self.assertIn("user_name", result)
+        self.assertIn("enriched_system_additions", result)
+        self.assertIn("routing", result)  # hybrid: includes routing info
+        self.assertIsInstance(result["memories"], list)
+
+    def test_post_inference_returns_dict(self):
+        """post_inference should return stored + prediction info."""
+        result = self.mod.post_inference("hello", "world", classification="simple")
+        self.assertIn("prediction_error", result)
+        self.assertIn("surprising", result)
+        self.assertIn("stored", result)
+
+    def test_agent_name_not_hardcoded(self):
+        """Agent name should come from config, never hardcoded 'Atlas'."""
+        name = self.mod.get_agent_name()
+        self.assertIsInstance(name, str)
+        self.assertTrue(len(name) > 0)
+
+    def test_orchestrator_module_structure(self):
+        """Verify all public functions exist (V1 + V2 hybrid)."""
+        for fn_name in ["classify", "recall_memories", "pre_predict",
+                        "post_score", "observe", "publish",
+                        "pre_inference", "post_inference",
+                        "create_task_pipeline", "check_belief_shadows",
+                        "route_to_node"]:  # hybrid: uses V1 router
+            self.assertTrue(
+                hasattr(self.mod, fn_name),
+                f"Missing function: {fn_name}",
+            )
+
+    def test_v1_router_integration(self):
+        """Orchestrator should import and use bot/router.py."""
+        src = _read("orchestrator.py")
+        self.assertIn("bot_router", src)
+        self.assertIn("Router", src)
+        self.assertIn("semantic_route", src)
+        self.assertIn("score_all", src)
+
+    def test_v1_pipeline_integration(self):
+        """Orchestrator should use bot/pipeline.py as primary pipeline."""
+        src = _read("orchestrator.py")
+        self.assertIn("bot_pipeline", src)
+        self.assertIn("Huginn", src)
+        self.assertIn("Muninn", src)
+        self.assertIn("v1_war_room", src)
+        self.assertIn("v2_local", src)  # fallback
+
+    def test_event_bus_integration(self):
+        """Orchestrator should publish events."""
+        src = _read("orchestrator.py")
+        self.assertIn("orchestrator.pre_inference", src)
+        self.assertIn("orchestrator.post_inference", src)
+        self.assertIn("orchestrator.pipeline_created", src)
+
+    def test_mesh_active_function(self):
+        """mesh_active() should exist and return bool."""
+        self.assertTrue(hasattr(self.mod, "mesh_active"))
+        result = self.mod.mesh_active()  # No bifrost running → should return False
+        self.assertIsInstance(result, bool)
+
+    def test_template_based_pipeline(self):
+        """create_task_pipeline should accept template_name."""
+        src = _read("orchestrator.py")
+        self.assertIn("template_name", src)
+        self.assertIn("classify_template", src)
+        self.assertIn("resolve_stages", src)
+
+
+# ===========================================================================
+# Pipeline Templates — template engine
+# ===========================================================================
+
+class TestPipelineTemplates(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "pipeline_templates",
+            str(REPO_ROOT / "pipeline_templates.py"),
+        )
+        cls.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.mod)
+
+    def test_builtin_presets(self):
+        """Should have 6 built-in templates."""
+        templates = self.mod.BUILTIN_TEMPLATES
+        for name in ["coding", "research", "general",
+                      "drafting", "presentation", "analysis"]:
+            self.assertIn(name, templates, f"Missing template: {name}")
+
+    def test_each_template_has_stages(self):
+        """Every built-in template must have at least 2 stages + version."""
+        for name, tmpl in self.mod.BUILTIN_TEMPLATES.items():
+            self.assertGreaterEqual(
+                len(tmpl["stages"]), 2,
+                f"Template '{name}' has fewer than 2 stages",
+            )
+            self.assertIn("name", tmpl)
+            self.assertIn("max_iterations", tmpl)
+            self.assertIn("version", tmpl)
+
+    def test_classify_coding(self):
+        """Coding keywords should map to coding template."""
+        self.assertEqual(self.mod.classify_template("Build me a REST API"), "coding")
+        self.assertEqual(self.mod.classify_template("Create a dashboard app"), "coding")
+
+    def test_classify_research(self):
+        """Research keywords should map to research template."""
+        self.assertEqual(self.mod.classify_template("Research quantum computing"), "research")
+        self.assertEqual(self.mod.classify_template("Investigate the pros and cons"), "research")
+
+    def test_classify_drafting(self):
+        """Writing/email tasks should map to drafting template."""
+        self.assertEqual(self.mod.classify_template("Draft a letter to the board"), "drafting")
+        self.assertEqual(self.mod.classify_template("Write an email follow up"), "drafting")
+
+    def test_classify_presentation(self):
+        """Presentation tasks should map to presentation template."""
+        self.assertEqual(self.mod.classify_template("Make a presentation about Q4"), "presentation")
+        self.assertEqual(self.mod.classify_template("Create a pitch deck for investors"), "presentation")
+
+    def test_classify_analysis(self):
+        """Data tasks should map to analysis template."""
+        self.assertEqual(self.mod.classify_template("Analyze data and show me the trends"), "analysis")
+        self.assertEqual(self.mod.classify_template("Give me a quarterly KPI breakdown"), "analysis")
+
+    def test_classify_general(self):
+        """Ambiguous tasks should map to general template."""
+        self.assertEqual(self.mod.classify_template("hello"), "general")
+        self.assertEqual(self.mod.classify_template("thanks"), "general")
+
+    def test_list_templates(self):
+        """list_templates() should return at least 6 entries."""
+        templates = self.mod.list_templates()
+        self.assertGreaterEqual(len(templates), 6)
+        for t in templates:
+            self.assertIn("name", t)
+            self.assertIn("display_name", t)
+            self.assertIn("source", t)
+            self.assertIn("version", t)
+
+    def test_resolve_stages_single(self):
+        """Single-node resolution should add system_prompt to each stage."""
+        tmpl = self.mod.get_template("general")
+        resolved = self.mod.resolve_stages(tmpl, mode="single")
+        for stage in resolved:
+            if "parallel" not in stage:
+                self.assertEqual(stage["agent"], "local")
+                self.assertTrue(len(stage.get("system_prompt", "")) > 0)
+
+    def test_resolve_stages_mesh(self):
+        """Mesh resolution should keep role as agent name."""
+        tmpl = self.mod.get_template("coding")
+        resolved = self.mod.resolve_stages(tmpl, mode="mesh")
+        for stage in resolved:
+            if "parallel" not in stage:
+                self.assertNotEqual(stage.get("agent"), "local")
+
+    def test_role_prompts_coverage(self):
+        """Every role used in templates should have a system prompt."""
+        all_roles = set()
+        for tmpl in self.mod.BUILTIN_TEMPLATES.values():
+            for stage in tmpl["stages"]:
+                if "parallel" in stage:
+                    for p in stage["parallel"]:
+                        all_roles.add(p["role"])
+                elif "role" in stage:
+                    all_roles.add(stage["role"])
+        for role in all_roles:
+            self.assertIn(role, self.mod.ROLE_PROMPTS,
+                         f"Missing ROLE_PROMPT for '{role}'")
+
+    def test_on_fail_routing(self):
+        """Templates with on_fail should reference valid stage names."""
+        for name, tmpl in self.mod.BUILTIN_TEMPLATES.items():
+            valid, err = self.mod.validate_template(tmpl)
+            self.assertTrue(valid, f"Template '{name}' invalid: {err}")
+
+    def test_validate_template_rejects_bad(self):
+        """validate_template should reject invalid templates."""
+        valid, _ = self.mod.validate_template({})
+        self.assertFalse(valid)
+        valid, _ = self.mod.validate_template({"name": "x", "stages": [{"name": "a"}]})
+        self.assertFalse(valid)  # only 1 stage
+
+
 if __name__ == "__main__":
     unittest.main()
+

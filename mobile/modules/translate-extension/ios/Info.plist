@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  🦊 Translate with Ember — iOS Action Extension Info.plist
+
+  NSExtension config:
+  - Type: com.apple.ui-services (Action Extension)
+  - Activates on: text content
+  - Shows "Translate with Ember" in the action menu
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Translate with Ember</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>Translate with Ember</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.valhalla.companion.translate-action</string>
+
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.ui-services</string>
+
+        <key>NSExtensionPrincipalClass</key>
+        <string>ActionViewController</string>
+
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <!-- Only activate when text is available -->
+            <key>NSExtensionActivationRule</key>
+            <dict>
+                <key>NSExtensionActivationSupportsText</key>
+                <true/>
+                <key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+                <integer>0</integer>
+                <key>NSExtensionActivationSupportsFileWithMaxCount</key>
+                <integer>0</integer>
+                <key>NSExtensionActivationSupportsImageWithMaxCount</key>
+                <integer>0</integer>
+                <key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+                <integer>0</integer>
+            </dict>
+        </dict>
+    </dict>
+</dict>
+</plist>
