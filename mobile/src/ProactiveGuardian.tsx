@@ -1,5 +1,5 @@
 /**
- * 🛡️ Proactive Guardian bar — Sprint 5 Task 6.
+ * 🛡️ Proactive Guardian bar.
  *
  * On chat tab open, checks time. If late night (midnight-6AM):
  * Shows a gentle bar: "It's late. Want me to hold messages until morning?"

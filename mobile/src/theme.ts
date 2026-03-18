@@ -1,7 +1,7 @@
 /**
  * Fireside Design System — Mobile
  *
- * Sprint 8: Updated from neon-green to fire-orange palette per CREATIVE_DIRECTION.md.
+ * Updated from neon-green to fire-orange palette per CREATIVE_DIRECTION.md.
  * Warm amber fire palette — campfire aesthetic.
  *
  * Brand tokens:

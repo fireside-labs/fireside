@@ -1,5 +1,5 @@
 /**
- * 🛡️ Message Guardian — Sprint 4 Task 3.
+ * 🛡️ Message Guardian.
  *
  * Before sending a chat message, checks with the guardian API.
  * If unsafe, shows a friendly warning modal with optional rewrite.

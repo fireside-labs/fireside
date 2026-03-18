@@ -1,5 +1,5 @@
 /**
- * 🎁 Daily Gift component — Sprint 4 Task 2.
+ * 🎁 Daily Gift component.
  *
  * Shows once per day on app launch. Species-specific personality flavor.
  * Ported from dashboard DailyGift.tsx.

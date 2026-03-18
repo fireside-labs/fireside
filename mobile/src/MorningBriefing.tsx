@@ -1,5 +1,5 @@
 /**
- * ☀️ Morning Briefing — Sprint 5 Task 3.
+ * ☀️ Morning Briefing.
  *
  * Shows once per day between 6-11AM on Care/Tools tab.
  * Dismissible. Species-specific greeting.

@@ -1,5 +1,5 @@
 /**
- * 📊 Weekly Summary — Sprint 7 Task 2.
+ * 📊 Weekly Summary.
  *
  * Shows at top of Care/Tools tab on first open each week.
  * Ported from dashboard/components/WeeklyCard.tsx.

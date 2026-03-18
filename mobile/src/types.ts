@@ -40,7 +40,7 @@ export interface QueuedTask {
     result?: string;
 }
 
-/** Rich action data returned by the backend — Sprint 9 + Sprint 12 native types. */
+/** Rich action data returned by the backend. */
 export type ActionType =
     | "browse_result" | "pipeline_status" | "pipeline_complete" | "memory_recall" | "translation_result"
     | "calendar_event" | "health_summary" | "contact_info";
@@ -68,17 +68,17 @@ export interface ActionData {
     target_lang?: string;
     original?: string;
     translated?: string;
-    // Calendar (Sprint 12)
+    // Calendar
     startDate?: string;
     endDate?: string;
     location?: string;
     attendees?: string[];
-    // Health (Sprint 12)
+    // Health
     steps?: number;
     calories?: number;
     activeMinutes?: number;
     goal?: number;
-    // Contact (Sprint 12)
+    // Contact
     phone?: string;
     email?: string;
     organization?: string;

@@ -1,5 +1,5 @@
 /**
- * 🔍 Cross-Context Search — Sprint 9 Task 2.
+ * 🔍 Cross-Context Search.
  *
  * Search across the companion's entire memory: working memory, taught facts,
  * chat history, hypotheses. Calls POST /api/v1/companion/query.

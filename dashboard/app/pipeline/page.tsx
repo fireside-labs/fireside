@@ -612,77 +612,81 @@ const pageCSS = `
 
   /* ── FORGE ── */
   .fp-forge {
-    position: relative; padding: 40px 20px;
+    position: relative; padding: 50px 20px;
     margin-bottom: 20px; border-radius: 16px;
-    background: rgba(245,158,11,0.02);
-    border: 1px solid rgba(245,158,11,0.06);
+    background: url('/hub/forge_background.png') center/cover no-repeat;
+    border: 1px solid rgba(245,158,11,0.1);
     overflow: hidden;
+    min-height: 200px;
   }
   .fp-forge-glow {
-    position: absolute; bottom: 0; left: 0; right: 0; height: 60%;
-    background: radial-gradient(ellipse 80% 100% at 50% 100%, rgba(245,158,11,0.06), transparent);
+    position: absolute; bottom: 0; left: 0; right: 0; height: 70%;
+    background: radial-gradient(ellipse 80% 100% at 50% 100%, rgba(245,158,11,0.1), transparent);
     pointer-events: none;
   }
-  .fp-stages { display: flex; align-items: center; justify-content: center; gap: 0; position: relative; z-index: 2; }
+  .fp-stages { display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; z-index: 2; }
 
   .fp-stage {
     display: flex; flex-direction: column; align-items: center; gap: 8px;
-    position: relative; min-width: 80px;
+    position: relative; min-width: 100px;
     animation: fpStageIn 0.4s ease both;
   }
 
   .fp-ember-stone {
-    width: 44px; height: 44px; border-radius: 50%;
+    width: 72px; height: 72px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     position: relative; transition: all 0.4s;
+    background-size: contain; background-repeat: no-repeat; background-position: center;
   }
   .fp-ember-stone.done {
-    background: radial-gradient(circle, #F59E0B 30%, #D97706 70%);
-    box-shadow: 0 0 12px rgba(245,158,11,0.3), 0 0 4px rgba(245,158,11,0.5);
+    background-image: url('/hub/ember_stone_done.png');
+    filter: drop-shadow(0 0 15px rgba(245,158,11,0.4));
   }
   .fp-ember-stone.active {
-    background: radial-gradient(circle, #FBBF24 20%, #F59E0B 60%, #D97706 100%);
-    box-shadow: 0 0 20px rgba(245,158,11,0.5), 0 0 40px rgba(245,158,11,0.2);
+    background-image: url('/hub/ember_stone_active.png');
+    filter: drop-shadow(0 0 25px rgba(245,158,11,0.6));
     animation: fpEmberPulse 2s ease-in-out infinite;
   }
   @keyframes fpEmberPulse {
-    0%, 100% { box-shadow: 0 0 15px rgba(245,158,11,0.4), 0 0 30px rgba(245,158,11,0.15); }
-    50% { box-shadow: 0 0 25px rgba(245,158,11,0.6), 0 0 50px rgba(245,158,11,0.25); transform: scale(1.05); }
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(245,158,11,0.4)); transform: scale(1); }
+    50% { filter: drop-shadow(0 0 35px rgba(245,158,11,0.7)); transform: scale(1.08); }
   }
   .fp-ember-stone.pending {
-    background: rgba(255,255,255,0.04);
-    border: 2px solid rgba(255,255,255,0.08);
+    background-image: url('/hub/ember_stone_pending.png');
+    filter: drop-shadow(0 0 5px rgba(255,255,255,0.05));
+    opacity: 0.7;
   }
   .fp-ember-stone.failed {
-    background: radial-gradient(circle, #EF4444 30%, #B91C1C 70%);
-    box-shadow: 0 0 12px rgba(239,68,68,0.4);
+    background-image: url('/hub/ember_stone_active.png');
+    filter: drop-shadow(0 0 15px rgba(239,68,68,0.5)) hue-rotate(-40deg);
   }
-  .fp-ember-check { color: #0A0A0A; font-size: 16px; font-weight: 900; }
-  .fp-ember-x { color: #fff; font-size: 16px; font-weight: 900; }
+  .fp-ember-check { color: #FEF3C7; font-size: 18px; font-weight: 900; text-shadow: 0 0 8px rgba(245,158,11,0.8); }
+  .fp-ember-x { color: #fff; font-size: 18px; font-weight: 900; text-shadow: 0 0 6px rgba(239,68,68,0.8); }
   .fp-ember-flames {
-    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-    width: 20px; height: 20px;
-    background: radial-gradient(circle, rgba(255,200,50,0.8), transparent 70%);
-    border-radius: 50%; filter: blur(3px);
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+    width: 30px; height: 30px;
+    background: radial-gradient(circle, rgba(255,200,50,0.9), rgba(245,158,11,0.4) 50%, transparent 70%);
+    border-radius: 50%; filter: blur(4px);
     animation: fpFlame 0.8s ease-in-out infinite alternate;
   }
   @keyframes fpFlame {
     0% { transform: translateX(-50%) translateY(0) scale(1); opacity: 0.6; }
-    100% { transform: translateX(-50%) translateY(-6px) scale(1.3); opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-8px) scale(1.4); opacity: 1; }
   }
 
-  .fp-stage-label { font-size: 12px; font-weight: 800; color: #C4A882; }
-  .fp-stage-role { font-size: 9px; color: #4A3D30; text-transform: uppercase; letter-spacing: 0.5px; }
+  .fp-stage-label { font-size: 13px; font-weight: 800; color: #F0DCC8; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+  .fp-stage-role { font-size: 9px; color: #8A7A6A; text-transform: uppercase; letter-spacing: 0.5px; }
 
   .fp-fire-trail {
-    position: absolute; top: 22px; left: calc(50% + 22px);
-    width: 36px; height: 2px;
-    background: rgba(255,255,255,0.06);
+    position: absolute; top: 28px; left: calc(50% + 36px);
+    width: 28px; height: 20px;
+    background: url('/hub/fire_trail.png') center/cover no-repeat;
+    opacity: 0.15;
     transition: all 0.5s;
   }
   .fp-fire-trail.lit {
-    background: linear-gradient(90deg, rgba(245,158,11,0.5), rgba(245,158,11,0.2));
-    box-shadow: 0 0 6px rgba(245,158,11,0.2);
+    opacity: 0.7;
+    filter: drop-shadow(0 0 8px rgba(245,158,11,0.3));
   }
 
   /* Progress */

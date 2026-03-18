@@ -1,5 +1,5 @@
 /**
- * 🏆 Achievement Badge — Sprint 7 Task 1.
+ * 🏆 Achievement Badge.
  *
  * Circular badge with emoji icon, name, earned/locked state.
  * Ported from dashboard/components/AchievementBadge.tsx.

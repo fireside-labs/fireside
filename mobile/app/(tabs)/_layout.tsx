@@ -1,11 +1,8 @@
 /**
  * Tab layout — Mode-aware bottom tab navigator.
  *
- * Companion Mode: 🏠 Care | 💬 Chat | 🧠 Brain | ⚡ Skills | 🎭 More
- * Executive Mode: 💬 Chat | 🔧 Tools | 📋 Tasks | 🧠 Brain | 🎭 More
- *
- * "More" gives access to: Tasks, Quest, Bag, Marketplace, Personality.
- * Screens without a tab bar entry are still navigable but hidden from the bar.
+ * Companion Mode: 🏠 Home | 💬 Chat | 🧠 Brain | ⚡ Skills | 🎭 Soul
+ * Executive Mode: 💬 Chat | 🔧 Tools | 📋 Tasks | 🧠 Brain | 🎭 Soul
  */
 import { Tabs } from "expo-router";
 import { Text, StyleSheet } from "react-native";

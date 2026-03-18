@@ -1,5 +1,5 @@
 /**
- * Sound manager — Sprint 3.
+ * Sound manager.
  *
  * Plays short sound effects on key actions.
  * Feed, walk, level-up, chat send.

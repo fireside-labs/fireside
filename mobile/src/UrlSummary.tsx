@@ -1,5 +1,5 @@
 /**
- * 🌐 URL Summary — Sprint 6 Task 3.
+ * 🌐 URL Summary.
  *
  * Paste a URL → get a summary from the browse plugin on your home PC.
  * Alternative to native share sheet extension (simpler Expo approach).

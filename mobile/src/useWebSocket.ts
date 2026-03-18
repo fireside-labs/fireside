@@ -1,9 +1,9 @@
 /**
- * 🔄 WebSocket hook — Sprint 6 Task 5, Sprint 7 Task 4 (auth token).
+ * 🔄 WebSocket hook, Sprint 7 Task 4 (auth token).
  *
  * Real-time sync via WebSocket with exponential backoff reconnection.
  * Falls back to polling if WebSocket fails.
- * Sprint 7: Sends pairing token for auth, handles 401 rejection.
+ * Sends pairing token for auth, handles 401 rejection.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,7 +36,7 @@ export function useWebSocket(onEvent?: (event: WSEvent) => void): UseWebSocketRe
             const host = await getHost();
             if (!host) return;
 
-            // Sprint 7: Add auth token to WS URL
+            // Add auth token to WS URL
             const token = await AsyncStorage.getItem("pairingToken");
             const wsUrl = `ws://${host}/api/v1/companion/ws${token ? `?token=${token}` : ""}`;
             const ws = new WebSocket(wsUrl);

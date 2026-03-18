@@ -1,5 +1,5 @@
 /**
- * 🎴 Action Card — Sprint 9 Task 1.
+ * 🎴 Action Card.
  *
  * Renders rich visual cards in chat when the backend returns an `action` field.
  * Types: browse_result, pipeline_status, pipeline_complete, memory_recall, translation_result.
@@ -232,7 +232,7 @@ function TranslationResultCard({ action }: { action: ActionData }) {
     );
 }
 
-/** 📅 Calendar Event — meeting details with prep button (Sprint 12) */
+/** 📅 Calendar Event — meeting details with prep button */
 function CalendarEventCard({ action }: { action: ActionData }) {
     const formatTime = (iso?: string) => {
         if (!iso) return "";
@@ -278,7 +278,7 @@ function CalendarEventCard({ action }: { action: ActionData }) {
     );
 }
 
-/** 👣 Health Summary — daily activity with goal progress (Sprint 12) */
+/** 👣 Health Summary — daily activity with goal progress */
 function HealthSummaryCard({ action }: { action: ActionData }) {
     const steps = action.steps ?? 0;
     const calories = action.calories ?? 0;
@@ -324,7 +324,7 @@ function HealthSummaryCard({ action }: { action: ActionData }) {
     );
 }
 
-/** 👤 Contact Info — person card with action buttons (Sprint 12) */
+/** 👤 Contact Info — person card with action buttons */
 function ContactInfoCard({ action }: { action: ActionData }) {
     return (
         <View style={[styles.card, styles.contactCard]}>
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     copyBtn: { alignSelf: "flex-start", backgroundColor: colors.bgInput, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginTop: spacing.xs },
     copyBtnText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim },
 
-    // Calendar (Sprint 12)
+    // Calendar
     calendarCard: { backgroundColor: "rgba(59, 130, 246, 0.06)", borderColor: "#3B82F6", borderLeftWidth: 3 },
     calendarDetail: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
     calendarDetailIcon: { fontSize: 14 },
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     prepBtn: { alignSelf: "flex-start", backgroundColor: colors.neonGlow, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.neonBorder, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginTop: spacing.sm },
     prepBtnText: { fontFamily: "Inter_500Medium", fontSize: fontSize.xs, color: colors.neon },
 
-    // Health (Sprint 12)
+    // Health
     healthCard: { backgroundColor: "rgba(239, 68, 68, 0.05)", borderColor: "#EF4444", borderLeftWidth: 3 },
     healthStats: { gap: spacing.sm, marginBottom: spacing.sm },
     healthStat: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     goalFill: { height: "100%", borderRadius: 4 },
     goalText: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textMuted },
 
-    // Contact (Sprint 12)
+    // Contact
     contactCard: { backgroundColor: "rgba(139, 92, 246, 0.06)", borderColor: "#8B5CF6", borderLeftWidth: 3 },
     contactName: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.textPrimary, marginBottom: 2 },
     contactOrg: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, marginBottom: spacing.sm },

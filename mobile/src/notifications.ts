@@ -1,5 +1,5 @@
 /**
- * Push Notifications — Sprint 3.
+ * Push Notifications.
  *
  * Registers for Expo push notifications, sends token to backend,
  * and handles notification tap routing.
@@ -80,7 +80,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 }
 
 /**
- * Unregister push notifications — Sprint 3 Task 6.
+ * Unregister push notifications.
  */
 export async function unregisterPushNotifications(): Promise<void> {
     try {

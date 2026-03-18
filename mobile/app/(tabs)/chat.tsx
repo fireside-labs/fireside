@@ -1,13 +1,9 @@
 /**
  * 💬 Chat Tab — Talk to your companion.
  *
- * Sprint 2: Chat history persistence, haptic feedback.
- * Sprint 3: Sound effects.
- * Sprint 4: Message guardian integration.
- * Sprint 5: Proactive guardian.
- * Sprint 6: Voice mode (hold-to-talk walkie-talkie).
- * Sprint 9: Rich action cards.
- * Sprint 10: Companion references AI agent by name.
+ * Features: chat history persistence, haptic feedback, sound effects,
+ * message guardian, proactive guardian, hold-to-talk voice mode,
+ * rich action cards, companion references AI agent by name.
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -108,7 +104,7 @@ export default function ChatTab() {
     const species = (companionData?.companion?.species || "cat") as PetSpecies;
     const mood = companionData?.companion?.happiness ?? 50;
 
-    // Load chat history from AsyncStorage on mount — Sprint 2
+    // Load chat history from AsyncStorage on mount
     useEffect(() => {
         (async () => {
             const history = await loadHistory();
@@ -124,19 +120,19 @@ export default function ChatTab() {
         })();
     }, []);
 
-    // Persist whenever messages change — Sprint 2
+    // Persist whenever messages change
     useEffect(() => {
         if (historyLoaded && messages.length > 0) {
             saveHistory(messages);
         }
     }, [messages, historyLoaded]);
 
-    // Guardian state — Sprint 4
+    // Guardian state
     const [guardianVisible, setGuardianVisible] = useState(false);
     const [guardianResult, setGuardianResult] = useState<{ safe: boolean; reason?: string; suggestedRewrite?: string; sentiment?: string }>({ safe: true });
     const [pendingMessage, setPendingMessage] = useState("");
 
-    // Search state — Sprint 9
+    // Search state
     const [searchVisible, setSearchVisible] = useState(false);
 
     const actualSend = useCallback(async (text: string) => {
@@ -147,7 +143,7 @@ export default function ChatTab() {
         if (isOnline) {
             try {
                 const res = await companionAPI.chat(text);
-                // Sprint 10: Add relay flavor text
+                // Add relay flavor text
                 const relayPrefix = `Let me check with ${agent.name}... `;
                 const petMsg: Message = { role: "pet", content: relayPrefix + res.reply };
                 if (res.action) petMsg.action = res.action;
@@ -173,7 +169,7 @@ export default function ChatTab() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         playSound("send");
 
-        // Guardian check — Sprint 4: intercept before sending
+        // Guardian check: intercept before sending
         if (isOnline) {
             try {
                 const hour = new Date().getHours();
@@ -249,7 +245,7 @@ export default function ChatTab() {
                 {mood < 30 && <Text style={styles.moodEmoji}>😢</Text>}
             </View>
 
-            {/* Proactive Guardian — Sprint 5 */}
+            {/* Proactive Guardian */}
             <ProactiveGuardian
                 isOnline={isOnline}
                 onHoldMessages={() => { }}
@@ -296,7 +292,7 @@ export default function ChatTab() {
                 </TouchableOpacity>
             </View>
 
-            {/* Voice Mode — Sprint 6 */}
+            {/* Voice Mode */}
             <VoiceMode
                 petName={petName}
                 species={species}
@@ -310,7 +306,7 @@ export default function ChatTab() {
                 }}
             />
 
-            {/* Guardian Modal — Sprint 4 */}
+            {/* Guardian Modal */}
             <GuardianModal
                 visible={guardianVisible}
                 species={species}
@@ -322,7 +318,7 @@ export default function ChatTab() {
                 onCancel={handleGuardianCancel}
             />
 
-            {/* Cross-Context Search — Sprint 9 */}
+            {/* Cross-Context Search */}
             <SearchAll visible={searchVisible} onClose={() => setSearchVisible(false)} />
         </KeyboardAvoidingView>
     );

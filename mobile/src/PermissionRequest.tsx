@@ -1,5 +1,5 @@
 /**
- * 🐾 Permission Request — Sprint 12 Task 4.
+ * 🐾 Permission Request.
  *
  * Contextual, non-greedy permission flow. Each permission is
  * requested the first time Ember needs it, not at app launch.

@@ -1,5 +1,5 @@
 /**
- * 📜 Privacy Policy — Sprint 9 Task 3.
+ * 📜 Privacy Policy.
  *
  * Covers all features Sprints 1-8:
  * voice, camera/QR, marketplace, translation, TeachMe,

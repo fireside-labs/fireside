@@ -56,7 +56,7 @@ export default function TasksTab() {
     const [tasks, setTasks] = useState<QueuedTask[]>([]);
     const [expanded, setExpanded] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
-    // Task creation — Sprint 2
+    // Task creation
     const [showNewTask, setShowNewTask] = useState(false);
     const [newTaskText, setNewTaskText] = useState("");
     const [creating, setCreating] = useState(false);
@@ -76,7 +76,7 @@ export default function TasksTab() {
     const sent = tasks.filter((t) => t.status === "sent").length;
     const done = tasks.filter((t) => t.status === "completed").length;
 
-    // Pull-to-refresh — Sprint 2
+    // Pull-to-refresh
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await sync();
@@ -101,7 +101,7 @@ export default function TasksTab() {
         setExpanded(expanded === id ? null : id);
     };
 
-    // Create new task — Sprint 2
+    // Create new task
     const handleCreateTask = useCallback(async () => {
         const text = newTaskText.trim();
         if (!text || creating) return;
@@ -242,7 +242,7 @@ export default function TasksTab() {
                 </TouchableOpacity>
             )}
 
-            {/* FAB — New Task — Sprint 2 */}
+            {/* FAB — New Task */}
             <TouchableOpacity
                 style={styles.fab}
                 onPress={() => {
@@ -254,7 +254,7 @@ export default function TasksTab() {
                 <Text style={styles.fabText}>+</Text>
             </TouchableOpacity>
 
-            {/* New Task Modal — Sprint 2 */}
+            {/* New Task Modal */}
             <Modal
                 visible={showNewTask}
                 transparent
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
         fontSize: fontSize.sm,
         color: colors.textDim,
     },
-    // FAB — Sprint 2
+    // FAB
     fab: {
         position: "absolute",
         bottom: 100,
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
         fontFamily: "Inter_700Bold",
         lineHeight: 30,
     },
-    // Modal — Sprint 2
+    // Modal
     modalOverlay: {
         flex: 1,
         justifyContent: "flex-end",

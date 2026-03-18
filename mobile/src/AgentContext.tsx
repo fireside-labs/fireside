@@ -1,5 +1,5 @@
 /**
- * 🏠 Agent Context — Sprint 10 Task 3.
+ * 🏠 Agent Context.
  *
  * Stores the AI agent profile fetched from GET /api/v1/agent/profile.
  * Used by chat to show "Let me check with [agent name]..." flavor text.

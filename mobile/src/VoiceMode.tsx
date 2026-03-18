@@ -1,5 +1,5 @@
 /**
- * 🎤 Voice Mode — Sprint 6 Task 1.
+ * 🎤 Voice Mode.
  *
  * Hold-to-talk walkie-talkie UX.
  * Whisper STT + Kokoro TTS via home PC.

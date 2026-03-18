@@ -129,7 +129,7 @@ export default function SetupScreen() {
                     Make sure your home PC is running Bifrost{"\n"}and you're on the same network.
                 </Text>
 
-                {/* Privacy Policy link — Sprint 3 */}
+                {/* Privacy Policy link */}
                 <TouchableOpacity
                     onPress={() => router.push("/privacy")}
                     style={styles.privacyLink}

@@ -1,6 +1,6 @@
 /**
- * 🚀 Onboarding v2 — Sprint 8 Task 2.
- * Sprint 11: Connection choice (Local Only vs Anywhere Bridge).
+ * 🚀 Onboarding v2.
+ * Connection choice (Local Only vs Anywhere Bridge).
  *
  * Three paths:
  *   1. Self-hosted: QR/IP → connection choice → mode select → permissions → done
@@ -76,7 +76,7 @@ export default function OnboardingV2() {
             const ok = await testConnection();
             if (ok) {
                 await AsyncStorage.setItem("connectionMode", "selfhosted");
-                setStep("bridge"); // Sprint 11: ask connection preference next
+                setStep("bridge"); // ask connection preference next
             } else {
                 Alert.alert("Connection Failed", "Check the IP and make sure Fireside is running on your PC.");
             }
@@ -168,7 +168,7 @@ export default function OnboardingV2() {
         );
     }
 
-    // — Connection Choice (Sprint 11) —
+    // — Connection Choice —
     if (step === "bridge") {
         const handleLocalOnly = async () => {
             await setConnectionPref("local");
@@ -229,7 +229,7 @@ export default function OnboardingV2() {
         );
     }
 
-    // — VPN Guidance (Sprint 11) —
+    // — VPN Guidance —
     if (step === "vpn_guide") {
         return (
             <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>

@@ -47,13 +47,13 @@ export default function RootLayout() {
         })();
     }, []);
 
-    // Register for push notifications after setup — Sprint 3
+    // Register for push notifications after setup
     useEffect(() => {
         if (!isReady || needsSetup || needsOnboarding) return;
         registerForPushNotifications();
     }, [isReady, needsSetup, needsOnboarding]);
 
-    // Handle notification tap — navigate to relevant tab — Sprint 3
+    // Handle notification tap — navigate to relevant tab
     useEffect(() => {
         const sub = Notifications.addNotificationResponseReceivedListener((response) => {
             const data = response.notification.request.content.data || {};

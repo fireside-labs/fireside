@@ -25,7 +25,7 @@ import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/them
 import UrlSummary from "../../src/UrlSummary";
 import type { PetSpecies } from "../../src/types";
 
-// ———— TeachMe (Sprint 5 Task 4) ————
+// ———— TeachMe ————
 
 const CONFIRM_RESPONSES: Record<PetSpecies, (fact: string) => string> = {
     cat: (f) => `*yawns* Fine. I'll remember "${f}." Don't expect me to care.`,
@@ -92,7 +92,7 @@ export default function ToolsTab() {
         setTimeout(() => setTeachConfirm(null), 4000);
     };
 
-    // ———— Translation state (Sprint 5 Task 2) ————
+    // ———— Translation state ————
     const [translateInput, setTranslateInput] = useState("");
     const [sourceLang, setSourceLang] = useState("auto");
     const [targetLang, setTargetLang] = useState("Spanish");
@@ -145,7 +145,7 @@ export default function ToolsTab() {
             <Text style={styles.title}>🔧 Tools</Text>
             <Text style={styles.subtitle}>{petName}'s utility toolkit</Text>
 
-            {/* ———— What's Happening at Home (Sprint 5 Task 5) ———— */}
+            {/* ———— What's Happening at Home ———— */}
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>🏠 Your Home PC</Text>
                 {isOnline && platform ? (
@@ -176,7 +176,7 @@ export default function ToolsTab() {
                 )}
             </View>
 
-            {/* ———— URL Summary (Sprint 6 Task 3) ———— */}
+            {/* ———— URL Summary ———— */}
             <UrlSummary petName={petName} isOnline={isOnline} />
 
             {/* ———— Translation (User-Initiated Action Menu) ———— */}
@@ -306,7 +306,7 @@ export default function ToolsTab() {
                 ) : null}
             </View>
 
-            {/* ———— Teach Me (Sprint 5 Task 4) ———— */}
+            {/* ———— Teach Me ———— */}
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>💡 Teach {petName}</Text>
                 <Text style={styles.cardSubtitle}>

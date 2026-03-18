@@ -1,5 +1,5 @@
 /**
- * 🎉 Achievement Toast — Sprint 7 Task 1.
+ * 🎉 Achievement Toast.
  *
  * Slides in from top when a new achievement is earned.
  * Celebratory animation + haptic + sound.

@@ -1,6 +1,6 @@
 /**
- * ⚙️ Settings Screen — Sprint 8 Task 1.
- * Sprint 10: Added AI Agent section.
+ * ⚙️ Settings Screen.
+ * Added AI Agent section.
  *
  * One scrollable screen: mode switch, connection, companion info,
  * AI agent, voice, notifications, privacy, about.
@@ -129,7 +129,7 @@ export default function SettingsScreen() {
                 </View>
             </View>
 
-            {/* ———— AI Agent (Sprint 10) ———— */}
+            {/* ———— AI Agent ———— */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Your AI at Home</Text>
                 <View style={styles.card}>

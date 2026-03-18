@@ -2,7 +2,7 @@
  * Valhalla Companion API client.
  *
  * Reads the home PC IP from AsyncStorage ('valhalla_host').
- * Sprint 11: Supports Anywhere Bridge (Tailscale) — routes
+ * Supports Anywhere Bridge (Tailscale) — routes
  * through tailscale_ip when connection preference is 'bridge'.
  * Falls back to offline mode when the backend is unreachable.
  */
@@ -31,7 +31,7 @@ export async function setHost(host: string): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEY, host.replace(/\/+$/, ""));
 }
 
-/** Store the Tailscale VPN IP (Sprint 11). */
+/** Store the Tailscale VPN IP. */
 export async function setTailscaleIP(ip: string): Promise<void> {
     await AsyncStorage.setItem(BRIDGE_IP_KEY, ip);
 }
@@ -140,42 +140,42 @@ export const companionAPI = {
     /** Get companion status. */
     companionStatus: () => apiFetch<{ ok: boolean; companion: Record<string, unknown> }>("/api/v1/companion/status"),
 
-    /** Adopt a new companion (Sprint 2). */
+    /** Adopt a new companion. */
     adopt: (name: string, species: string) =>
         apiFetch<{ ok: boolean }>("/api/v1/companion/adopt", {
             method: "POST",
             body: JSON.stringify({ name, species }),
         }),
 
-    /** Create a new task from mobile (Sprint 2). */
+    /** Create a new task from mobile. */
     queueTask: (taskType: string, payload?: Record<string, unknown>) =>
         apiFetch<{ ok: boolean; task: Record<string, unknown> }>("/api/v1/companion/queue", {
             method: "POST",
             body: JSON.stringify({ task_type: taskType, payload }),
         }),
 
-    /** Register push notification token (Sprint 3). */
+    /** Register push notification token. */
     registerPush: (token: string) =>
         apiFetch<{ ok: boolean }>("/api/v1/companion/mobile/register-push", {
             method: "POST",
             body: JSON.stringify({ token }),
         }),
 
-    /** Unregister push notification token (Sprint 3). */
+    /** Unregister push notification token. */
     unregisterPush: (token: string) =>
         apiFetch<{ ok: boolean }>("/api/v1/companion/mobile/unregister-push", {
             method: "POST",
             body: JSON.stringify({ token }),
         }),
 
-    /** Check message through guardian before sending (Sprint 4). */
+    /** Check message through guardian before sending. */
     guardian: (message: string, timeOfDay?: string) =>
         apiFetch<{ safe: boolean; reason?: string; suggestedRewrite?: string; sentiment?: string }>(
             "/api/v1/companion/guardian",
             { method: "POST", body: JSON.stringify({ message, time_of_day: timeOfDay }) }
         ),
 
-    /** Get daily gift (Sprint 4). */
+    /** Get daily gift. */
     dailyGift: () =>
         apiFetch<{ available: boolean; gift?: { text: string; type: string; emoji: string; item?: string; happinessBoost?: number } }>(
             "/api/v1/companion/daily-gift"
@@ -188,27 +188,27 @@ export const companionAPI = {
             { method: "POST", body: JSON.stringify({ text, source_lang: sourceLang, target_lang: targetLang }) }
         ),
 
-    /** Teach companion a fact (Sprint 5). */
+    /** Teach companion a fact. */
     teach: (fact: string) =>
         apiFetch<{ ok: boolean; confirmation?: string; fact_count?: number }>(
             "/api/v1/companion/teach",
             { method: "POST", body: JSON.stringify({ fact }) }
         ),
 
-    /** Proactive guardian check-in (Sprint 5). */
+    /** Proactive guardian check-in. */
     guardianCheckIn: () =>
         apiFetch<{ proactive_warning: boolean; reason?: string }>(
             "/api/v1/companion/guardian/check-in"
         ),
 
-    /** Transcribe audio via Whisper (Sprint 6). */
+    /** Transcribe audio via Whisper. */
     voiceTranscribe: (formData: FormData) =>
         apiFetch<{ text: string; language?: string; confidence?: number }>(
             "/api/v1/voice/transcribe",
             { method: "POST", body: formData, headers: {} }
         ),
 
-    /** Speak text via Kokoro TTS (Sprint 6). */
+    /** Speak text via Kokoro TTS. */
     voiceSpeak: (text: string, voice?: string) =>
         apiFetch<{ audio_url: string; duration?: number }>(
             "/api/v1/voice/speak",
@@ -242,32 +242,32 @@ export const companionAPI = {
             "/api/v1/working-memory/status"
         ),
 
-    /** Pair mobile app with backend via token (Sprint 7). */
+    /** Pair mobile app with backend via token. */
     pair: (token: string) =>
         apiFetch<{ ok: boolean; paired: boolean }>(
             "/mobile/pair",
             { method: "POST", body: JSON.stringify({ token }) }
         ),
-    /** Join hosted waitlist (Sprint 8). */
+    /** Join hosted waitlist. */
     waitlist: (email: string) =>
         apiFetch<{ ok: boolean; message: string }>(
             "/api/v1/waitlist",
             { method: "POST", body: JSON.stringify({ email }) }
         ),
 
-    /** Cross-context search (Sprint 9). */
+    /** Cross-context search. */
     query: (query: string) =>
         apiFetch<{ results: Array<{ source: string; content: string; relevance: number; date?: string }>; total: number }>(
             "/api/v1/companion/query",
             { method: "POST", body: JSON.stringify({ query }) }
         ),
-    /** Agent profile (Sprint 10). */
+    /** Agent profile. */
     agentProfile: () =>
         apiFetch<{ name: string; style: string; uptime?: string; companion?: { name: string; species: string } }>(
             "/api/v1/agent/profile"
         ),
 
-    /** Network status — local + Tailscale IPs (Sprint 11). */
+    /** Network status — local + Tailscale IPs. */
     networkStatus: () =>
         apiFetch<{ local_ip: string; tailscale_ip: string | null; bridge_active: boolean }>(
             "/api/v1/network/status"

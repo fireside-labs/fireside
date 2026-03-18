@@ -1,5 +1,5 @@
 /**
- * 📱 QR Code Scanner — Sprint 7 Task 3.
+ * 📱 QR Code Scanner.
  *
  * Scans QR code from desktop dashboard to auto-pair.
  * Falls back to manual IP entry.
