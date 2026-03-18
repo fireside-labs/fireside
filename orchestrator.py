@@ -616,6 +616,55 @@ def _create_local_pipeline(task: str, stages: list, template: dict) -> Optional[
                     "prompt": f"Task: {task}\n\nYour part: {s.get('prompt', '')}",
                     "chain_context": chain,
                     "on_fail": on_fail,
+                    "debate": s.get("debate", False),
+                })
+
+        # Wire Socratic debate into review stages that have debate=True
+        for stage in v2_stages:
+            if stage.get("debate"):
+                stage["system_prompt"] = (
+                    "You are a REVIEW COORDINATOR for a Socratic debate. "
+                    "The previous stage's output will be reviewed by multiple "
+                    "personas (architect, devil's advocate, end-user) who will "
+                    "critique, debate, and score it. You synthesize their "
+                    "verdict into VERDICT: SHIP or VERDICT: FAIL.\n\n"
+                    "The debate is managed by the Socratic plugin at "
+                    "POST /api/v1/socratic/debate — it runs automatically."
+                )
+                stage["socratic_config"] = {
+                    "rounds": 3,
+                    "consensus_threshold": 0.7,
+                    "reviewers": [
+                        {
+                            "persona": "architect",
+                            "model": "local/default",
+                            "prompt": (
+                                "Review as a senior architect. Focus on "
+                                "scalability, maintainability, and correctness."
+                            ),
+                        },
+                        {
+                            "persona": "devil_advocate",
+                            "model": "local/default",
+                            "prompt": (
+                                "Attack every assumption. What breaks in 6 months? "
+                                "What edge cases were missed? Be ruthless."
+                            ),
+                        },
+                        {
+                            "persona": "end_user",
+                            "model": "local/default",
+                            "prompt": (
+                                "You are a non-technical end user. What's confusing? "
+                                "What's missing? Does this actually solve the problem?"
+                            ),
+                        },
+                    ],
+                }
+                publish("orchestrator.debate_configured", {
+                    "stage": stage["name"],
+                    "reviewers": 3,
+                    "rounds": 3,
                 })
 
         # Fix #5: Auto-inject terminal execution for artifact-producing templates
@@ -666,6 +715,183 @@ def _create_local_pipeline(task: str, stages: list, template: dict) -> Optional[
     except Exception as e:
         log.error("[orchestrator] Local pipeline failed: %s", e)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Gap #2: Pipeline State Tracking + Feedback Loop
+# ---------------------------------------------------------------------------
+_pipeline_state: dict[str, dict] = {}  # {pipeline_id: state}
+
+
+def track_iteration(pipeline_id: str, stage_name: str,
+                    output: str, verdict: str = "",
+                    test_pass: int = 0, test_total: int = 0) -> dict:
+    """Track a stage's output per iteration for feedback and regression detection.
+
+    Called after each stage completes. Stores the full transcript so:
+      1) on_fail retries get the failure REASON injected (Gap #2 feedback loop)
+      2) regression detection can compare across iterations (Gap #3)
+    """
+    if pipeline_id not in _pipeline_state:
+        _pipeline_state[pipeline_id] = {
+            "iterations": [],
+            "feedback_queue": [],  # pending feedback for retried stages
+            "status": "running",
+            "created_at": time.time(),
+        }
+
+    state = _pipeline_state[pipeline_id]
+    iteration = {
+        "stage": stage_name,
+        "output": output[:3000],  # cap stored output
+        "verdict": verdict,
+        "test_pass": test_pass,
+        "test_total": test_total,
+        "ts": time.time(),
+        "round": len(state["iterations"]) + 1,
+    }
+    state["iterations"].append(iteration)
+
+    # If stage failed, queue the feedback for the retried stage
+    if verdict.upper() in ("FAIL", "IMPROVE", "OBJECT"):
+        state["feedback_queue"].append({
+            "from_stage": stage_name,
+            "message": output[:2000],
+            "round": iteration["round"],
+        })
+
+    publish("orchestrator.stage_completed", {
+        "pipeline_id": pipeline_id,
+        "stage": stage_name,
+        "verdict": verdict,
+        "round": iteration["round"],
+    })
+
+    return iteration
+
+
+def inject_feedback(pipeline_id: str, stage_name: str,
+                    original_prompt: str) -> str:
+    """Inject feedback from failing stages into a retried stage's prompt.
+
+    When on_fail triggers goto:build, the build stage's prompt gets the
+    tester's specific failure output prepended. The agent knows exactly
+    what to fix — not just "try again."
+    """
+    state = _pipeline_state.get(pipeline_id, {})
+    queue = state.get("feedback_queue", [])
+
+    if not queue:
+        return original_prompt
+
+    # Drain all queued feedback into the prompt
+    feedback_blocks = []
+    for fb in queue:
+        feedback_blocks.append(
+            f"[FEEDBACK FROM {fb['from_stage'].upper()} — iteration {fb['round']}]\n"
+            f"{fb['message']}\n"
+            f"[END FEEDBACK]"
+        )
+
+    state["feedback_queue"] = []  # clear after injection
+
+    feedback_text = "\n\n".join(feedback_blocks)
+    return (
+        f"{feedback_text}\n\n"
+        f"Fix the specific issues described above.\n\n"
+        f"---\n\n{original_prompt}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Gap #3: Regression Detection + Escalation
+# ---------------------------------------------------------------------------
+
+def detect_regression(pipeline_id: str) -> dict:
+    """Compare test results across iterations. Detect regression or plateau.
+
+    Returns: {"status": "progress|plateau|regression|insufficient_data",
+              "details": str, "should_escalate": bool}
+    """
+    state = _pipeline_state.get(pipeline_id)
+    if not state:
+        return {"status": "insufficient_data", "details": "No state", "should_escalate": False}
+
+    # Get test iterations only (stages that have test results)
+    test_iters = [
+        it for it in state["iterations"]
+        if it.get("test_total", 0) > 0
+    ]
+
+    if len(test_iters) < 2:
+        return {"status": "insufficient_data", "details": "Need 2+ test iterations",
+                "should_escalate": False}
+
+    current = test_iters[-1]
+    previous = test_iters[-2]
+
+    cur_pass = current["test_pass"]
+    prev_pass = previous["test_pass"]
+    cur_total = current["test_total"]
+
+    if cur_pass > prev_pass:
+        return {
+            "status": "progress",
+            "details": f"Tests: {prev_pass} → {cur_pass}/{cur_total}",
+            "should_escalate": False,
+        }
+    elif cur_pass == prev_pass:
+        # Check for plateau (same result 2+ times)
+        plateau_count = sum(
+            1 for it in test_iters[-3:]
+            if it["test_pass"] == cur_pass
+        )
+        if plateau_count >= 2:
+            return {
+                "status": "plateau",
+                "details": f"Stuck at {cur_pass}/{cur_total} for {plateau_count} iterations",
+                "should_escalate": True,
+            }
+        return {
+            "status": "plateau",
+            "details": f"Same at {cur_pass}/{cur_total}",
+            "should_escalate": False,
+        }
+    else:
+        # REGRESSION — things got worse
+        result = {
+            "status": "regression",
+            "details": f"REGRESSION: {prev_pass} → {cur_pass}/{cur_total}",
+            "should_escalate": True,
+        }
+
+        # Auto-escalate
+        state["status"] = "escalated"
+        publish("orchestrator.pipeline_escalated", {
+            "pipeline_id": pipeline_id,
+            "reason": result["details"],
+            "current_pass": cur_pass,
+            "previous_pass": prev_pass,
+            "total": cur_total,
+        })
+        log.warning("[orchestrator] Pipeline %s ESCALATED: %s",
+                    pipeline_id, result["details"])
+
+        return result
+
+
+def get_pipeline_state(pipeline_id: str) -> dict:
+    """Return full pipeline state for dashboard / War Room display."""
+    state = _pipeline_state.get(pipeline_id)
+    if not state:
+        return {"error": "Pipeline not found"}
+    return {
+        "pipeline_id": pipeline_id,
+        "status": state["status"],
+        "iterations": len(state["iterations"]),
+        "feedback_pending": len(state.get("feedback_queue", [])),
+        "transcript": state["iterations"],
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -66,6 +66,7 @@ BUILTIN_TEMPLATES: dict[str, dict] = {
             {
                 "name": "review",
                 "role": "reviewer",
+                "debate": True,
                 "on_fail": "goto:test",  # if review fails, re-test
                 "prompt": (
                     "Final quality review. Check completeness, edge cases, "
@@ -138,6 +139,7 @@ BUILTIN_TEMPLATES: dict[str, dict] = {
             {
                 "name": "review",
                 "role": "reviewer",
+                "debate": True,
                 "on_fail": "goto:execute",  # if review fails, re-execute
                 "prompt": (
                     "Review the execution results. Check for completeness and "
@@ -176,6 +178,7 @@ BUILTIN_TEMPLATES: dict[str, dict] = {
             {
                 "name": "review",
                 "role": "reviewer",
+                "debate": True,
                 "on_fail": "goto:draft",
                 "prompt": (
                     "Review the draft for tone, clarity, completeness, and "
@@ -224,6 +227,7 @@ BUILTIN_TEMPLATES: dict[str, dict] = {
             {
                 "name": "review",
                 "role": "reviewer",
+                "debate": True,
                 "on_fail": "goto:content",
                 "prompt": (
                     "Review the full presentation for flow, messaging consistency, "

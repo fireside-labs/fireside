@@ -1,0 +1,21 @@
+name: lesson-distiller
+version: 1.0.0
+description: Extracts reusable lessons from completed pipelines and stores them in working memory
+author: valhalla
+license: MIT
+category: cognition
+rarity: legendary
+
+routes:
+  - method: POST
+    path: /api/v1/lessons/distill
+  - method: GET
+    path: /api/v1/lessons/recent
+
+events:
+  - lesson.distilled
+  - lesson.stored
+
+config_keys:
+  - lesson_distiller.max_lessons
+  - lesson_distiller.min_importance
