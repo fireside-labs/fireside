@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
 import { getSoul, putSoul } from "@/lib/api";
+import { DiscoveryCard } from "@/components/GuidedTour";
 
 function getTraitLow(label: string) {
     const map: Record<string, string> = { Warmth: "Distant", Humor: "Serious", Directness: "Diplomatic", Curiosity: "Focused", Formality: "Casual" };
@@ -179,6 +180,7 @@ export default function PersonalityPage() {
                 <Link href="/" className="per-back-link">🔥 Hub</Link>
                 <span className="per-topbar-title">Personality</span>
             </div>
+            <DiscoveryCard pageKey="/personality" />
             <div className="mb-6">
                 <h1 className="per-page-title">🦊 Personality</h1>
                 <p className="per-page-sub">Define who your AI is — and tell it about yourself.</p>

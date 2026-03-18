@@ -5,6 +5,7 @@ import { API_BASE } from "../lib/api";
 import Link from "next/link";
 import EmberParticles from "@/components/EmberParticles";
 import { playWhoosh, playTick } from "@/components/FiresideSounds";
+import { DiscoveryCard } from "@/components/GuidedTour";
 
 /* ═══════════════════════════════════════════════════════════════════
    Fireside — Hub + Chat
@@ -152,6 +153,7 @@ export default function CampfireHub() {
       {/* ═══════════ HUB VIEW ═══════════ */}
       {activeView === "hub" && (
         <div className="fs-hub">
+          <DiscoveryCard pageKey="/" />
           <div className="fs-ambient" />
 
           {/* LEFT: Campfire Scene */}

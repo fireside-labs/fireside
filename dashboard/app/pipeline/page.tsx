@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { API_BASE } from "../../lib/api";
+import { DiscoveryCard } from "@/components/GuidedTour";
 
 /* ═══════════════════════════════════════════════════════════════════
    Pipeline — The Forge
@@ -204,6 +205,8 @@ export default function PipelinePage() {
   return (
     <div className="fp-root">
       <style>{pageCSS}</style>
+
+      <DiscoveryCard pageKey="/pipeline" />
 
       <div className="fp-layout">
         {/* ── Sidebar ── */}

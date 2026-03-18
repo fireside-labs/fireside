@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
 import { browsePlugins, installPlugin, uninstallPlugin, API_BASE } from "@/lib/api";
+import { DiscoveryCard } from "@/components/GuidedTour";
 
 /* ═══════════════════════════════════════════════════════════════════
    Skills Marketplace — RPG-style skill shop
@@ -190,6 +191,8 @@ export default function SkillsPage() {
         <Link href="/" className="sk-back-link">🔥 Hub</Link>
         <span className="sk-topbar-title">Skills</span>
       </div>
+
+      <DiscoveryCard pageKey="/skills" />
 
       <h1 className="sk-page-title">✦ Skills Marketplace</h1>
       <p className="sk-page-sub">Equip your AI with abilities. Toggle skills on and off anytime.</p>

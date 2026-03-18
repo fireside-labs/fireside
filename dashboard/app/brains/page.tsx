@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import BrainSelectScreen from "@/components/BrainSelectScreen";
+import { DiscoveryCard } from "@/components/GuidedTour";
 
 export default function BrainsPage() {
     const router = useRouter();
@@ -18,6 +19,7 @@ export default function BrainsPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: '#080810' }}>
+            <DiscoveryCard pageKey="/brains" />
             {currentBrain && (
                 <div style={{
                     padding: '12px 24px',
