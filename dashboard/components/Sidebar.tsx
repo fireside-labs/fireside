@@ -19,6 +19,7 @@ const NAV_SECTIONS: NavSection[] = [
             { href: "/chat", label: "Chat", icon: "💬" },
             { href: "/brains", label: "Brain", icon: "🧠" },
             { href: "/skills", label: "Skills", icon: "✦" },
+            { href: "/pipeline", label: "Forge", icon: "⚡" },
             { href: "/personality", label: "Personality", icon: "🦊" },
         ],
     },

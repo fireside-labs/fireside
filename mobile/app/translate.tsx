@@ -137,7 +137,7 @@ export default function TranslateScreen() {
                 "auto",
                 targetLang.code
             );
-            setResult(res.translation || "Translation failed");
+            setResult(res.translated || "Translation failed");
             if (res.source_lang) setDetectedLang(res.source_lang);
         } catch {
             setResult("⚠️ Couldn't reach your home PC. Is it online?");

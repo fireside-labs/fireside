@@ -113,7 +113,7 @@ export default function ToolsTab() {
 
         try {
             const res = await companionAPI.translate(translateInput, sourceLang, targetLang);
-            setTranslateResult(res.translation || "Translation failed");
+            setTranslateResult(res.translated || "Translation failed");
             setTranslateConfidence(res.confidence || null);
         } catch {
             setTranslateResult("⚠️ Translation service unavailable. Is your home PC online?");

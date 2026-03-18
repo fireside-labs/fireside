@@ -181,11 +181,11 @@ export const companionAPI = {
             "/api/v1/companion/daily-gift"
         ),
 
-    /** Translate text via NLLB-200 (Sprint 5). */
+    /** Translate text via NLLB-200 (200 languages, offline). */
     translate: (text: string, sourceLang: string, targetLang: string) =>
-        apiFetch<{ translation: string; confidence?: number; source_lang?: string }>(
+        apiFetch<{ ok: boolean; translated: string; source_lang?: string; target_lang?: string; confidence?: number; note?: string }>(
             "/api/v1/companion/translate",
-            { method: "POST", body: JSON.stringify({ text, source: sourceLang, target: targetLang }) }
+            { method: "POST", body: JSON.stringify({ text, source_lang: sourceLang, target_lang: targetLang }) }
         ),
 
     /** Teach companion a fact (Sprint 5). */
