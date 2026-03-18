@@ -9,7 +9,7 @@
  *
  * Per CREATIVE_DIRECTION.md: warm, inviting, campfire aesthetic.
  */
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     View,
     Text,
@@ -23,7 +23,8 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { companionAPI, setHost, setTailscaleIP, setConnectionPref, testConnection } from "../src/api";
+import { companionAPI, setHost, setTailscaleIP, setConnectionPref, testConnection, discoverFireside } from "../src/api";
+import type { DiscoveredHost } from "../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../src/theme";
 
 /** Check if onboarding has been completed. */
@@ -57,6 +58,10 @@ export default function OnboardingV2() {
     const [companionName, setCompanionName] = useState("");
     const [adopting, setAdopting] = useState(false);
     const [hasExistingCompanion, setHasExistingCompanion] = useState(false);
+    // Auto-discovery state
+    const [scanning, setScanning] = useState(false);
+    const [discoveredHost, setDiscoveredHost] = useState<DiscoveredHost | null>(null);
+    const scanStarted = useRef(false);
 
     // — Welcome —
     if (step === "welcome") {
@@ -81,33 +86,46 @@ export default function OnboardingV2() {
 
     // — Connect —
     if (step === "connect") {
-        const handleSelfHosted = async () => {
-            const ip = manualIP.trim();
-            if (!ip) return;
+        // Auto-scan the network on first render of connect step
+        if (!scanStarted.current) {
+            scanStarted.current = true;
+            setScanning(true);
+            discoverFireside().then((host) => {
+                if (host) setDiscoveredHost(host);
+                setScanning(false);
+            }).catch(() => setScanning(false));
+        }
+
+        const handleConnect = async (ip: string) => {
             setConnecting(true);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             await setHost(ip);
             const ok = await testConnection();
             if (ok) {
                 await AsyncStorage.setItem("connectionMode", "selfhosted");
-                // Check if a companion already exists on the desktop
                 try {
                     const status = await companionAPI.companionStatus();
                     if (status.companion && Object.keys(status.companion).length > 0) {
                         setHasExistingCompanion(true);
                         setCompanionName((status.companion as any).name || "");
                         setSelectedSpecies((status.companion as any).species || "fox");
-                        setStep("bridge"); // companion exists, skip creation
+                        setStep("bridge");
                     } else {
-                        setStep("companion_create"); // no companion — let user create one
+                        setStep("companion_create");
                     }
                 } catch {
-                    setStep("companion_create"); // can't check — offer creation
+                    setStep("companion_create");
                 }
             } else {
                 Alert.alert("Connection Failed", "Check the IP and make sure Fireside is running on your PC.");
             }
             setConnecting(false);
+        };
+
+        const handleSelfHosted = () => {
+            const ip = manualIP.trim();
+            if (!ip) return;
+            handleConnect(ip);
         };
 
         const handleWaitlist = async () => {
@@ -119,9 +137,7 @@ export default function OnboardingV2() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             try {
                 await companionAPI.waitlist(waitlistEmail.trim());
-            } catch {
-                // Backend may not be running — that's okay for waitlist
-            }
+            } catch { }
             await AsyncStorage.setItem("connectionMode", "waitlist");
             await AsyncStorage.setItem("waitlistEmail", waitlistEmail.trim());
             setWaitlistSubmitting(false);
@@ -130,19 +146,52 @@ export default function OnboardingV2() {
 
         return (
             <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>
-                <Text style={styles.stepTitle}>How would you like to connect?</Text>
+                <Text style={styles.stepTitle}>Connect to Fireside</Text>
+                <Text style={styles.stepSubtitle}>
+                    {scanning ? "Scanning your network..." : discoveredHost ? "Found your PC!" : "Enter your PC's IP or we'll find it"}
+                </Text>
 
-                {/* Self-hosted path */}
+                {/* Auto-discovered host — PRIMARY */}
+                {scanning && (
+                    <View style={styles.discoveryCard}>
+                        <Text style={styles.discoveryPulse}>📡</Text>
+                        <Text style={styles.discoveryText}>Searching for Fireside on your network...</Text>
+                    </View>
+                )}
+
+                {discoveredHost && !scanning && (
+                    <TouchableOpacity
+                        style={[styles.discoveryCard, styles.discoveryFound]}
+                        onPress={() => handleConnect(discoveredHost.ip)}
+                        disabled={connecting}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.discoveryFoundEmoji}>🔥</Text>
+                        <Text style={styles.discoveryFoundTitle}>
+                            Found Fireside on {discoveredHost.nodeName}!
+                        </Text>
+                        <Text style={styles.discoveryFoundIP}>{discoveredHost.ip}</Text>
+                        <View style={[styles.primaryBtn, { marginTop: spacing.md }]}>
+                            <Text style={styles.primaryBtnText}>
+                                {connecting ? "Connecting..." : "Connect Now"}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+
+                {/* Manual IP — FALLBACK */}
                 <View style={styles.pathCard}>
-                    <Text style={styles.pathEmoji}>🏠</Text>
-                    <Text style={styles.pathTitle}>I have Fireside on my PC</Text>
+                    <Text style={styles.pathEmoji}>{discoveredHost ? "🔧" : "🏠"}</Text>
+                    <Text style={styles.pathTitle}>
+                        {discoveredHost ? "Or enter IP manually" : "I have Fireside on my PC"}
+                    </Text>
                     <Text style={styles.pathDesc}>Connect to your home computer running Fireside</Text>
 
                     <TextInput
                         style={styles.ipInput}
                         value={manualIP}
                         onChangeText={setManualIP}
-                        placeholder="192.168.1.100:8765"
+                        placeholder="192.168.1.100:9099"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="url"
                         autoCapitalize="none"
@@ -599,6 +648,14 @@ const styles = StyleSheet.create({
     heroDesc: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textDim, textAlign: "center", lineHeight: 20, marginBottom: spacing.xxxl },
     stepTitle: { fontFamily: "Inter_700Bold", fontSize: fontSize.xxl, color: colors.textPrimary, textAlign: "center", marginBottom: spacing.xs },
     stepSubtitle: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textDim, textAlign: "center", marginBottom: spacing.xl },
+    // Discovery
+    discoveryCard: { backgroundColor: colors.bgCard, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.glassBorder, padding: spacing.xl, marginBottom: spacing.lg, alignItems: "center", ...shadows.card },
+    discoveryPulse: { fontSize: 40, marginBottom: spacing.sm },
+    discoveryText: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textDim, textAlign: "center" },
+    discoveryFound: { borderColor: colors.neon, backgroundColor: colors.neonGlow, ...shadows.glow },
+    discoveryFoundEmoji: { fontSize: 48, marginBottom: spacing.sm },
+    discoveryFoundTitle: { fontFamily: "Inter_700Bold", fontSize: fontSize.lg, color: colors.textPrimary, textAlign: "center", marginBottom: spacing.xs },
+    discoveryFoundIP: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim },
     // Connect
     pathCard: { backgroundColor: colors.bgCard, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.glassBorder, padding: spacing.xl, marginBottom: spacing.lg, ...shadows.card },
     pathEmoji: { fontSize: 32, marginBottom: spacing.sm },

@@ -52,6 +52,68 @@ export async function getConnectionPref(): Promise<"local" | "bridge"> {
     return (p === "bridge") ? "bridge" : "local";
 }
 
+/** Discovered Fireside instance on the local network. */
+export interface DiscoveredHost {
+    ip: string;
+    port: number;
+    nodeName: string;
+}
+
+/**
+ * Scan the local network for a running Fireside backend.
+ * Probes common subnet ranges hitting /health endpoint.
+ * Returns the first responding host, or null if none found.
+ */
+export async function discoverFireside(): Promise<DiscoveredHost | null> {
+    const PORT = 9099;
+    const PROBE_TIMEOUT = 1500; // ms per probe
+
+    // Try to guess the local subnet from a well-known gateway pattern
+    const subnets = ["192.168.1", "192.168.0", "192.168.86", "10.0.0", "10.0.1"];
+    const candidates: string[] = [];
+
+    for (const subnet of subnets) {
+        for (let i = 1; i <= 254; i++) {
+            candidates.push(`${subnet}.${i}`);
+        }
+    }
+
+    // Probe in parallel batches of 50
+    const BATCH = 50;
+    for (let offset = 0; offset < candidates.length; offset += BATCH) {
+        const batch = candidates.slice(offset, offset + BATCH);
+        const results = await Promise.allSettled(
+            batch.map(async (ip) => {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT);
+                try {
+                    const res = await fetch(`http://${ip}:${PORT}/health`, {
+                        signal: controller.signal,
+                    });
+                    clearTimeout(timer);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status === "ok" && data.node) {
+                            return { ip: `${ip}:${PORT}`, port: PORT, nodeName: data.node } as DiscoveredHost;
+                        }
+                    }
+                } catch {
+                    clearTimeout(timer);
+                }
+                throw new Error("not found");
+            })
+        );
+
+        for (const r of results) {
+            if (r.status === "fulfilled" && r.value) {
+                return r.value;
+            }
+        }
+    }
+
+    return null;
+}
+
 /**
  * Get the active host to use for API calls.
  * If preference is 'bridge' and a tailscale_ip exists, use it.

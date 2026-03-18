@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+import socket
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -52,11 +54,49 @@ def create_app(config_path: str | None = None) -> FastAPI:
     log.info("  Node: %s (%s)", node_name, node_role)
     log.info("═══════════════════════════════════════════════")
 
-    # 2. FastAPI app
+    # 2. mDNS / Zeroconf — broadcast on local network so mobile can find us
+    zc_instance = None
+    zc_info = None
+    try:
+        from zeroconf import Zeroconf, ServiceInfo
+        local_ip = _get_local_ip()
+        svc_port = config.get("node", {}).get("port", 8765)
+        zc_info = ServiceInfo(
+            "_fireside._tcp.local.",
+            f"{node_name}._fireside._tcp.local.",
+            addresses=[socket.inet_aton(local_ip)],
+            port=svc_port,
+            properties={
+                "node": node_name,
+                "role": node_role,
+                "version": "2.0.0",
+            },
+        )
+        zc_instance = Zeroconf()
+        log.info("mDNS: will broadcast as %s on %s:%d", node_name, local_ip, svc_port)
+    except ImportError:
+        log.info("mDNS: zeroconf not installed — skipping auto-discovery (pip install zeroconf)")
+    except Exception as e:
+        log.warning("mDNS: failed to prepare: %s", e)
+
+    # Lifecycle: register/unregister mDNS on startup/shutdown
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        if zc_instance and zc_info:
+            zc_instance.register_service(zc_info)
+            log.info("mDNS: broadcasting _fireside._tcp.local.")
+        yield
+        if zc_instance and zc_info:
+            zc_instance.unregister_service(zc_info)
+            zc_instance.close()
+            log.info("mDNS: stopped broadcasting")
+
+    # 3. FastAPI app
     app = FastAPI(
         title=f"Valhalla Bifrost — {node_name}",
         description="Valhalla Mesh V2 API",
         version="2.0.0",
+        lifespan=lifespan,
     )
 
     # CORS — allow dashboard + mobile app (Sprint 2: Heimdall-hardened)
@@ -102,6 +142,18 @@ def create_app(config_path: str | None = None) -> FastAPI:
     log.info("API v1 mounted at /api/v1/")
 
     return app
+
+
+def _get_local_ip() -> str:
+    """Get the machine's local network IP (not 127.0.0.1)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 def main() -> None:
