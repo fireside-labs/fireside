@@ -179,6 +179,14 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
   const [detailModel, setDetailModel] = useState<number | null>(null);
   const [detailQuant, setDetailQuant] = useState(0);
   const [mascotText, setMascotText] = useState(MASCOT_MESSAGES.categories);
+  const [species, setSpecies] = useState("fox");
+
+  useEffect(() => {
+    const s = typeof window !== "undefined" ? localStorage.getItem("fireside_companion_species") || "fox" : "fox";
+    setSpecies(s);
+  }, []);
+
+  const mascotSrc = `/hub/mascot_${species}.png`;
 
   const catColor = CATEGORIES.find(c => c.id === category)?.color || "#F59E0B";
 
@@ -403,7 +411,7 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
       {/* ═══ MASCOT GUIDE ═══ */}
       <div className="bs-mascot">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="bs-mascot-img" src="/hub/mascot_fox.png" alt="Fox Guide" />
+        <img className="bs-mascot-img" src={mascotSrc} alt="Guide" />
         <div className="bs-mascot-bubble">{mascotText}</div>
       </div>
     </div>

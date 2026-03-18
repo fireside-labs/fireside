@@ -46,6 +46,7 @@ export default function CampfireHub() {
   const [agentName, setAgentName] = useState("Atlas");
   const [species, setSpecies] = useState("fox");
   const [companionName, setCompanionName] = useState("");
+  const mascotSrc = `/hub/mascot_${species}.png`;
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string; memory?: string; skills?: string[]; ts?: Date }[]>([]);
   const [hasBrain, setHasBrain] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
@@ -165,7 +166,7 @@ export default function CampfireHub() {
                   {greeting} 🦊
                 </p>
               </div>
-              <img className="fs-fox" src="/hub/mascot_fox.png" alt="Fox" />
+              <img className="fs-fox" src={mascotSrc} alt={species} />
               <img className="fs-campfire" src="/hub/campfire.png" alt="Campfire" />
             </div>
 
@@ -324,7 +325,7 @@ export default function CampfireHub() {
               <button className="fs-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} title="Toggle conversations">
                 {sidebarOpen ? "◀" : "▶"}
               </button>
-              <img className="fs-chat-avatar" src="/hub/mascot_fox.png" alt={species} />
+              <img className="fs-chat-avatar" src={mascotSrc} alt={species} />
               <div className="fs-chat-info">
                 <p className="fs-chat-name">{displayName}</p>
                 <p className="fs-chat-status">
@@ -340,7 +341,7 @@ export default function CampfireHub() {
               {chatHistory.length === 0 && (
                 <div className="fs-empty-state">
                   <div className="fs-empty-fire">🔥</div>
-                  <img src="/hub/mascot_fox.png" alt="" className="fs-empty-fox" />
+                  <img src={mascotSrc} alt="" className="fs-empty-fox" />
                   <p className="fs-empty-text">Start a conversation with {displayName}</p>
                   <p className="fs-empty-sub">Your AI remembers everything · always private · always local</p>
                   <div className="fs-empty-suggestions">
@@ -353,7 +354,7 @@ export default function CampfireHub() {
               {chatHistory.map((msg, i) => (
                 <div key={i} className={`fs-msg ${msg.role === "user" ? "fs-msg-user" : "fs-msg-ai"}`}>
                   {msg.role === "assistant" && (
-                    <img src="/hub/mascot_fox.png" alt="" className="fs-msg-avatar" />
+                    <img src={mascotSrc} alt="" className="fs-msg-avatar" />
                   )}
                   <div>
                     {msg.memory && (
@@ -375,7 +376,7 @@ export default function CampfireHub() {
               ))}
               {isTyping && (
                 <div className="fs-msg fs-msg-ai">
-                  <img src="/hub/mascot_fox.png" alt="" className="fs-msg-avatar" />
+                  <img src={mascotSrc} alt="" className="fs-msg-avatar" />
                   <div className="fs-bubble fs-bubble-ai fs-typing">
                     <span className="fs-dot" /><span className="fs-dot" /><span className="fs-dot" />
                   </div>
