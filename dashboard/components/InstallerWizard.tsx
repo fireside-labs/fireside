@@ -35,8 +35,7 @@ interface InstallerConfig {
   userContext: string;
   companionSpecies: string;
   companionName: string;
-  agentName: string;
-  agentStyle: string;
+  companionStyle: string;
   brainSize: string;
   brainModel: string;
   actualModel: string;
@@ -102,8 +101,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
     userContext: "",
     companionSpecies: "fox",
     companionName: "Ember",
-    agentName: "Atlas",
-    agentStyle: "analytical",
+    companionStyle: "warm",
     brainSize: "smart",
     brainModel: "7B",
     actualModel: "llama-3.1-8b-q6",
@@ -219,8 +217,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         await tauriInvoke("write_config", {
           config: {
             user_name: config.userName || "User",
-            agent_name: config.agentName,
-            agent_style: config.agentStyle,
+            agent_name: config.companionName || "Ember",
+            agent_style: config.companionStyle,
             companion_species: config.companionSpecies,
             companion_name: config.companionName,
             brain: (sysInfo?.vram_gb || 0) >= 20 ? "deep" : "fast",
@@ -393,8 +391,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         {/* Step 3: Choose Companion */}
         {step === 3 && (
           <div className="installer-center">
-            <h2 className="installer-title">Choose a companion for your journey</h2>
-            <p className="installer-subtitle">Every journey starts with a friend.</p>
+            <h2 className="installer-title">Adopt your Companion</h2>
+            <p className="installer-subtitle">Choose their form, name them, and shape their personality.</p>
             <div className="installer-species-grid">
               {SPECIES.map((s) => (
                 <button
@@ -407,12 +405,24 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 </button>
               ))}
             </div>
-            <input
-              className="installer-input"
-              value={config.companionName}
+
+            <input className="installer-input" value={config.companionName}
               onChange={(e) => setConfig((c) => ({ ...c, companionName: e.target.value }))}
-              placeholder="Name your companion..."
-            />
+              placeholder="Name your companion... (e.g. Ember)" />
+
+            <label className="installer-label" style={{ marginTop: 8 }}>What&apos;s {config.companionName || "Ember"}&apos;s style?</label>
+            <div className="installer-style-grid">
+              {STYLES.map((s) => (
+                <button key={s.id}
+                  className={`installer-style-card ${config.companionStyle === s.id ? "selected" : ""}`}
+                  onClick={() => { playTick(); setConfig((c) => ({ ...c, companionStyle: s.id })); }}
+                >
+                  <span className="installer-style-emoji">{s.emoji}</span>
+                  <span className="installer-style-label">{s.label}</span>
+                  <span className="installer-style-desc">{s.desc}</span>
+                </button>
+              ))}
+            </div>
             <div className="installer-nav">
               <button className="installer-btn-back" onClick={() => goTo(2)}>← Back</button>
               <button className="installer-btn-primary" onClick={() => goTo(4)}>Next →</button>
@@ -420,28 +430,18 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
           </div>
         )}
 
-        {/* Step 4: Create AI + About You */}
+        {/* Step 4: About You */}
         {step === 4 && (
           <div className="installer-center" style={{ maxWidth: 520 }}>
-            <h2 className="installer-title">Let&apos;s set up the fireside.</h2>
+            <h2 className="installer-title">Tell {config.companionName || "Ember"} about you</h2>
             <p className="installer-subtitle">
-              Tell {config.companionName || "Ember"} who you are so your AI can be useful from day one.
+              Your companion will use this to personalize their help from day one.
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', marginBottom: 8 }}>
-              <div>
-                <label className="installer-label">Your name</label>
-                <input className="installer-input" value={config.userName}
-                  onChange={(e) => setConfig((c) => ({ ...c, userName: e.target.value }))}
-                  placeholder="Jordan" />
-              </div>
-              <div>
-                <label className="installer-label">Your AI&apos;s name</label>
-                <input className="installer-input" value={config.agentName}
-                  onChange={(e) => setConfig((c) => ({ ...c, agentName: e.target.value }))}
-                  placeholder="Atlas" />
-              </div>
-            </div>
+            <label className="installer-label">Your name</label>
+            <input className="installer-input" value={config.userName}
+              onChange={(e) => setConfig((c) => ({ ...c, userName: e.target.value }))}
+              placeholder="How should they address you?" />
 
             <label className="installer-label">What do you do?</label>
             <div className="installer-role-grid">
@@ -462,7 +462,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               ))}
             </div>
 
-            <label className="installer-label">Anything {config.agentName || "Atlas"} should know about you?</label>
+            <label className="installer-label">Anything {config.companionName || "Ember"} should know about you?</label>
             <textarea
               className="installer-textarea"
               value={config.userContext}
@@ -471,19 +471,6 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               rows={3}
             />
 
-            <label className="installer-label" style={{ marginTop: 8 }}>What&apos;s {config.agentName || "Atlas"}&apos;s style?</label>
-            <div className="installer-style-grid">
-              {STYLES.map((s) => (
-                <button key={s.id}
-                  className={`installer-style-card ${config.agentStyle === s.id ? "selected" : ""}`}
-                  onClick={() => { playTick(); setConfig((c) => ({ ...c, agentStyle: s.id })); }}
-                >
-                  <span className="installer-style-emoji">{s.emoji}</span>
-                  <span className="installer-style-label">{s.label}</span>
-                  <span className="installer-style-desc">{s.desc}</span>
-                </button>
-              ))}
-            </div>
             <div className="installer-nav">
               <button className="installer-btn-back" onClick={() => goTo(3)}>← Back</button>
               <button className="installer-btn-primary" onClick={() => goTo(5)}>Next →</button>
@@ -502,16 +489,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               </div>
               <div className="installer-confirm-divider" />
               <div className="installer-confirm-row">
-                <span className="installer-confirm-label">AI</span>
-                <span className="installer-confirm-value">
-                  {config.agentName || "Atlas"} ({STYLES.find((s) => s.id === config.agentStyle)?.emoji})
-                </span>
-              </div>
-              <div className="installer-confirm-divider" />
-              <div className="installer-confirm-row">
                 <span className="installer-confirm-label">Companion</span>
                 <span className="installer-confirm-value">
-                  {speciesEmoji} {config.companionName || "Ember"}
+                  {speciesEmoji} {config.companionName || "Ember"} ({STYLES.find((s) => s.id === config.companionStyle)?.emoji})
                 </span>
               </div>
               <div className="installer-confirm-divider" />
@@ -543,7 +523,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 
             <div style={{ position: 'relative', zIndex: 2 }}>
               <h2 className="installer-title">
-                {config.agentName || "Atlas"} and {config.companionName || "Ember"} are getting ready...
+                {config.companionName || "Ember"} {speciesEmoji} is getting ready...
               </h2>
 
               {/* Fire-intensity bar */}
@@ -629,12 +609,12 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
             </span>
             <h2 className="installer-title">
               {connectionStatus === 'testing' && 'Starting your AI...'}
-              {connectionStatus === 'success' && `${config.agentName || 'Atlas'} is ready!`}
+              {connectionStatus === 'success' && `${config.companionName || 'Ember'} is ready!`}
               {connectionStatus === 'fail' && 'Connection failed'}
             </h2>
             <p className="installer-subtitle">
               {connectionStatus === 'testing' && 'Testing connection to your AI brain...'}
-              {connectionStatus === 'success' && `${config.companionName || 'Ember'} is by their side. Let\'s go!`}
+              {connectionStatus === 'success' && `${config.companionName || 'Ember'} is ready to go!`}
               {connectionStatus === 'fail' && 'Don\'t worry — you can configure this in Settings.'}
             </p>
             {connectionStatus === 'fail' && (
@@ -660,8 +640,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
             <div className="installer-success-fire">🔥</div>
             <h2 className="installer-success-title">Fireside is live.</h2>
             <p className="installer-success-subtitle">
-              {config.agentName || "Atlas"} is at the fireside.{"\n"}
-              {config.companionName || "Ember"} is by their side.
+              {config.companionName || "Ember"} is ready.{"\n"}
+              Download the app to take {speciesEmoji} with you.
             </p>
             <div className="installer-success-scene">
               <span className="installer-success-fire-emoji">🔥</span>
@@ -669,9 +649,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
             </div>
             <div className="installer-success-tips">
               <p className="installer-success-tip-title">Things to try:</p>
-              <p className="installer-success-tip">1. Say &quot;Hello {config.companionName || "Ember"}!&quot;</p>
-              <p className="installer-success-tip">2. Ask &quot;Take me for a walk&quot;</p>
-              <p className="installer-success-tip">3. Say &quot;Remember: I like coffee black&quot;</p>
+              <p className="installer-success-tip">1. Start a pipeline — ask {config.companionName || "Ember"} to &quot;Research competitors&quot;</p>
+              <p className="installer-success-tip">2. Chat with {config.companionName || "Ember"} from the dashboard</p>
+              <p className="installer-success-tip">3. 📱 Download the Fireside app &mdash; same AI, pocket-sized</p>
             </div>
             <button
               className="installer-btn-primary"
@@ -680,8 +660,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 if (config.userName) localStorage.setItem("fireside_user_name", config.userName);
                 if (config.userRole) localStorage.setItem("fireside_user_role", config.userRole);
                 if (config.userContext) localStorage.setItem("fireside_user_context", config.userContext);
-                localStorage.setItem("fireside_agent_name", config.agentName || "Atlas");
-                localStorage.setItem("fireside_agent_style", config.agentStyle);
+                localStorage.setItem("fireside_agent_name", config.companionName || "Ember");
+                localStorage.setItem("fireside_agent_style", config.companionStyle);
                 localStorage.setItem("fireside_companion_species", config.companionSpecies);
                 localStorage.setItem("fireside_companion_name", config.companionName || "Ember");
                 localStorage.setItem("fireside_companion", JSON.stringify({

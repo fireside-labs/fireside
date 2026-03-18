@@ -88,18 +88,7 @@ const STAGE_EMOJI: Record<string, string> = {
   Review: "👤", Write: "✍️", Report: "📋", Execute: "⚡",
 };
 
-// ── Mascot pose mapping per stage ──
-function getMascotPose(species: string, status?: string, stageName?: string): string {
-  const base = `/hub/mascot_${species}`;
-  if (!status || status === "idle") return `${base}_reading.png`;
-  if (status === "complete") return `${base}_celebrating.png`;
-  if (status === "failed" || status === "escalated") return `${base}_surprised.png`;
-  if (stageName === "Test" || stageName === "Analyze") return `${base}_thinking.png`;
-  if (stageName === "Review" || stageName === "Write") return `${base}_thinking.png`;
-  if (stageName === "Build" || stageName === "Execute" || stageName === "Draft" || stageName === "Content") return `${base}_building.png`;
-  if (stageName === "Spec" || stageName === "Plan" || stageName === "Gather") return `${base}_reading.png`;
-  return `${base}_building.png`;
-}
+
 
 // ── Mock data ──
 const MOCK_PIPELINES: Pipeline[] = [
@@ -193,7 +182,7 @@ const MOCK_AGENT_FEED: AgentMessage[] = [
 
 
 export default function PipelinePage() {
-  const [species, setSpecies] = useState("fox");
+
   const [pipelines, setPipelines] = useState<Pipeline[]>(MOCK_PIPELINES);
   const [activePipeline, setActivePipeline] = useState<string | null>(null);
   const [taskInput, setTaskInput] = useState("");
@@ -204,54 +193,13 @@ export default function PipelinePage() {
   const [interveneText, setInterveneText] = useState("");
   const [showIntervene, setShowIntervene] = useState(false);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("fireside_companion");
-      if (stored) {
-        const c = JSON.parse(stored);
-        setSpecies(c.species || "fox");
-      }
-    } catch { /* default fox */ }
-  }, []);
+
 
   const current = useMemo(() => pipelines.find(p => p.id === activePipeline), [pipelines, activePipeline]);
-  const activeStage = current?.stages.find(s => s.status === "active");
   const progress = current ? Math.round((current.stages.filter(s => s.status === "done").length / current.stages.length) * 100) : 0;
   const detected = taskInput.trim() ? detectTemplate(taskInput) : null;
 
-  // Companion speech & pose
-  const companion = useMemo(() => {
-    if (activePipeline && current) {
-      if (current.status === "complete") return {
-        pose: getMascotPose(species, "complete"),
-        speech: "We did it! Here's what I learned along the way. 🎉",
-      };
-      if (current.status === "failed" || current.status === "escalated") return {
-        pose: getMascotPose(species, "failed"),
-        speech: "Something went wrong... I need your help to figure this out!",
-      };
-      return {
-        pose: getMascotPose(species, "running", activeStage?.name),
-        speech: activeStage?.name === "Test"
-          ? `Testing... ${activeStage?.output || "running checks"}`
-          : activeStage?.name === "Build"
-          ? "Forging the pieces together... 🔨"
-          : activeStage?.name === "Review"
-          ? "Reviewing the work for quality..."
-          : activeStage?.name === "Spec" || activeStage?.name === "Plan"
-          ? "Planning the approach... 📜"
-          : `Working on ${activeStage?.name || "it"}...`,
-      };
-    }
-    return {
-      pose: getMascotPose(species, "idle"),
-      speech: "I can break big tasks into steps and work through them. What should I work on?",
-    };
-  }, [species, activePipeline, current, activeStage]);
 
-  // Active stage index for mascot positioning
-  const activeIdx = current?.stages.findIndex(s => s.status === "active") ?? -1;
-  const stageCount = current?.stages.length ?? 1;
 
   return (
     <div className="fp-root">
@@ -308,18 +256,6 @@ export default function PipelinePage() {
               ═══════════════════════════════════════════════ */}
           {!activePipeline && (
             <div className="fp-create">
-              {/* Mascot — large, centered */}
-              <div className="fp-mascot-area">
-                <img
-                  src={companion.pose}
-                  alt=""
-                  className="fp-mascot-large"
-                  onError={(e) => { (e.target as HTMLImageElement).src = `/hub/mascot_${species}.png`; }}
-                />
-                <div className="fp-speech-bubble">
-                  <p>{companion.speech}</p>
-                </div>
-              </div>
 
               {/* Input */}
               <div className="fp-create-input-wrap">
@@ -434,27 +370,6 @@ export default function PipelinePage() {
                   ))}
                 </div>
 
-                {/* Mascot positioned near active stage */}
-                <div
-                  className="fp-forge-mascot"
-                  style={{
-                    left: activeIdx >= 0
-                      ? `calc(${((activeIdx + 0.5) / stageCount) * 100}% - 50px)`
-                      : current.status === "complete" ? "calc(100% - 120px)" : "20px"
-                  }}
-                >
-                  <img
-                    src={companion.pose}
-                    alt=""
-                    className="fp-forge-mascot-img"
-                    onError={(e) => { (e.target as HTMLImageElement).src = `/hub/mascot_${species}.png`; }}
-                  />
-                </div>
-              </div>
-
-              {/* Companion speech */}
-              <div className="fp-companion-strip">
-                <p>{companion.speech}</p>
               </div>
 
               {/* Progress */}

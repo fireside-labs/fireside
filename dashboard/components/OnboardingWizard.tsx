@@ -3,12 +3,6 @@
 import { useState, useEffect } from "react";
 import { API_BASE } from "../lib/api";
 
-const PERSONALITY_OPTIONS = [
-    { id: "friendly", emoji: "😊", label: "Friendly", desc: "Warm, chatty, uses emoji" },
-    { id: "formal", emoji: "💼", label: "Formal", desc: "Polite, proper, no slang" },
-    { id: "direct", emoji: "⚡", label: "Direct", desc: "Short, no fluff, gets to the point" },
-];
-
 const SPECIES_OPTIONS = [
     { id: "cat", emoji: "🐱", label: "Cat" },
     { id: "dog", emoji: "🐶", label: "Dog" },
@@ -18,8 +12,7 @@ const SPECIES_OPTIONS = [
     { id: "dragon", emoji: "🐉", label: "Dragon" },
 ];
 
-/** Sprint 10: AI agent style options */
-const AI_STYLE_OPTIONS = [
+const STYLE_OPTIONS = [
     { id: "analytical", emoji: "🎯", label: "Analytical", desc: "Data-driven, precise, sees the patterns" },
     { id: "creative", emoji: "🎨", label: "Creative", desc: "Imaginative, lateral thinker, sees possibilities" },
     { id: "direct", emoji: "⚡", label: "Direct", desc: "No-nonsense, efficient, gets to the point" },
@@ -29,42 +22,30 @@ const AI_STYLE_OPTIONS = [
 export default function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
     const [step, setStep] = useState(0);
     const [userName, setUserName] = useState("");
-    const [personality, setPersonality] = useState("friendly");
-    const [companionSpecies, setCompanionSpecies] = useState("fox");
-    const [companionName, setCompanionName] = useState("");
-    // Sprint 10: AI agent
-    const [agentName, setAgentName] = useState("Atlas");
-    const [agentStyle, setAgentStyle] = useState("analytical");
+
+    // The Companion IS the AI — one entity
+    const [species, setSpecies] = useState("fox");
+    const [name, setName] = useState("Ember");
+    const [style, setStyle] = useState("warm");
+
     const [hardware, setHardware] = useState({ device: "Detecting...", gpu: "Detecting...", vram: "—", ram: "—" });
     const [recommended, setRecommended] = useState({ emoji: "⚡", name: "Smart & Fast", model: "Llama 3.1, 8B" });
 
     useEffect(() => {
-        // Detect hardware: Try Tauri invoke first, then backend API, then browser fallback
         (async () => {
-            // 1. Try Tauri invoke (most accurate — uses nvidia-smi)
             try {
                 const tauriInvoke = (window as any).__TAURI__?.core?.invoke;
                 if (tauriInvoke) {
                     const info = await tauriInvoke("get_system_info");
                     const vram = info.vram_gb || 0;
-                    setHardware({
-                        device: `${info.os} (${info.arch})`,
-                        gpu: info.gpu || "Unknown",
-                        vram: `${vram}GB`,
-                        ram: `${info.ram_gb}GB`,
-                    });
-                    if (vram >= 20) {
-                        setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B — Requires 24GB+ VRAM" });
-                    } else if (vram >= 8) {
-                        setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
-                    } else {
-                        setRecommended({ emoji: "🌙", name: "Cloud Expert", model: "Cloud — No VRAM required" });
-                    }
-                    return; // Success — skip other detection methods
+                    setHardware({ device: `${info.os} (${info.arch})`, gpu: info.gpu || "Unknown", vram: `${vram}GB`, ram: `${info.ram_gb}GB` });
+                    if (vram >= 20) setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B — Requires 24GB+ VRAM" });
+                    else if (vram >= 8) setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
+                    else setRecommended({ emoji: "🌙", name: "Cloud Expert", model: "Cloud — No VRAM required" });
+                    return;
                 }
             } catch { /* Tauri not available */ }
 
-            // 2. Try backend API
             try {
                 const res = await fetch(`${API_BASE}/api/v1/brains/available`);
                 if (res.ok) {
@@ -74,31 +55,20 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                     const deviceName = runtime === "omlx" ? "Apple Silicon Mac" : runtime === "llamacpp" ? "NVIDIA GPU System" : "PC";
                     const gpuName = runtime === "omlx" ? `Apple Silicon (${vram}GB unified)` : runtime === "llamacpp" ? `NVIDIA GPU (${vram}GB VRAM)` : "Unknown GPU";
                     setHardware({ device: deviceName, gpu: gpuName, vram: `${vram}GB`, ram: `${vram}GB` });
-                    if (vram >= 20) {
-                        setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B — Requires 24GB+ VRAM" });
-                    } else if (vram >= 8) {
-                        setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
-                    } else {
-                        setRecommended({ emoji: "🌙", name: "Cloud Expert", model: "Cloud — No VRAM required" });
-                    }
+                    if (vram >= 20) setRecommended({ emoji: "🧠", name: "Deep Thinker", model: "35B — Requires 24GB+ VRAM" });
+                    else if (vram >= 8) setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
+                    else setRecommended({ emoji: "🌙", name: "Cloud Expert", model: "Cloud — No VRAM required" });
                     return;
                 }
             } catch { /* Backend not running */ }
 
-            // 3. Fallback: browser APIs (limited — deviceMemory is capped at 8GB)
             const plat = navigator?.platform || "";
             const isMac = plat.includes("Mac");
-            setHardware({
-                device: isMac ? "Mac" : "PC",
-                gpu: "Could not detect GPU (backend offline)",
-                vram: "Unknown",
-                ram: "Unknown",
-            });
+            setHardware({ device: isMac ? "Mac" : "PC", gpu: "Could not detect GPU (backend offline)", vram: "Unknown", ram: "Unknown" });
             setRecommended({ emoji: "⚡", name: "Smart & Fast", model: "8B — Requires 10GB+ VRAM" });
         })();
     }, []);
 
-    // Escape key to go back
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === "Escape" && step > 0) setStep((s) => s - 1);
@@ -110,18 +80,12 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
     const finish = () => {
         localStorage.setItem("fireside_onboarded", "1");
         if (userName) localStorage.setItem("fireside_user_name", userName);
-        localStorage.setItem("fireside_personality", personality);
-        localStorage.setItem("fireside_companion_species", companionSpecies);
-        localStorage.setItem("fireside_companion_name", companionName || "Ember");
-        // Also write JSON format for components that read fireside_companion
-        localStorage.setItem("fireside_companion", JSON.stringify({
-            name: companionName || "Ember",
-            species: companionSpecies,
-        }));
-        // Sprint 10: Save AI agent info
-        localStorage.setItem("fireside_agent_name", agentName || "Atlas");
-        localStorage.setItem("fireside_agent_style", agentStyle);
-        // Save VRAM + brain for BrainPicker
+        const finalName = name || "Ember";
+        localStorage.setItem("fireside_companion_species", species);
+        localStorage.setItem("fireside_companion_name", finalName);
+        localStorage.setItem("fireside_companion", JSON.stringify({ name: finalName, species }));
+        localStorage.setItem("fireside_agent_name", finalName);
+        localStorage.setItem("fireside_agent_style", style);
         const vramStr = hardware.vram.replace("GB", "").replace("Unknown", "0");
         const vramNum = parseFloat(vramStr) || 0;
         localStorage.setItem("fireside_vram", vramNum.toString());
@@ -131,79 +95,61 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         onComplete();
     };
 
-    const speciesEmoji = SPECIES_OPTIONS.find((s) => s.id === companionSpecies)?.emoji || "🦊";
-    const displayCompanionName = companionName || "Ember";
-    const displayAgentName = agentName || "Atlas";
+    const displayName = name || "Ember";
+    const speciesEmoji = SPECIES_OPTIONS.find((s) => s.id === species)?.emoji || "🦊";
 
     const screens = [
-        // 0: Welcome
+        /* ── 0: Welcome ── */
         <div key="welcome" className="text-center py-8">
             <div className="text-5xl mb-6">🔥</div>
             <h2 className="text-2xl font-bold text-white mb-3">Welcome to Fireside</h2>
-            <p className="text-[var(--color-rune-dim)] mb-1">Your own AI that runs on this computer,</p>
+            <p className="text-[var(--color-rune-dim)] mb-1">Your own AI companion that runs on this computer,</p>
             <p className="text-[var(--color-rune-dim)] mb-8">learns from your work, and never forgets.</p>
-            <p className="text-sm text-[var(--color-rune-dim)] mb-8">Let&apos;s set it up. Takes about 2 minutes.</p>
-            <button onClick={() => setStep(1)} className="btn-neon px-8 py-3 text-base">
-                Get Started →
-            </button>
+            <p className="text-sm text-[var(--color-rune-dim)] mb-8">Get ready to adopt. Takes about 2 minutes.</p>
+            <button onClick={() => setStep(1)} className="btn-neon px-8 py-3 text-base">Get Started →</button>
         </div>,
 
-        // 1: Your Name
-        <div key="name" className="py-6">
-            <h2 className="text-xl font-bold text-white mb-2">What&apos;s your name?</h2>
-            <p className="text-sm text-[var(--color-rune-dim)] mb-6">Your AI will use this to personalize conversations with you.</p>
-            <input
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Your name..."
-                autoFocus
-                className="w-full px-4 py-3 rounded-lg bg-[var(--color-glass)] border border-[var(--color-glass-border)] text-white text-base outline-none focus:border-[var(--color-neon)] transition-colors placeholder-[var(--color-rune-dim)] mb-8"
-            />
+        /* ── 1: Adopt Companion (species + name + style) ── */
+        <div key="companion" className="py-6">
+            <h2 className="text-xl font-bold text-white mb-2">Adopt your Companion</h2>
+            <p className="text-sm text-[var(--color-rune-dim)] mb-4">Choose their form and shape their personality.</p>
+
+            <div className="grid grid-cols-3 gap-2 mb-4" role="radiogroup" aria-label="Companion species">
+                {SPECIES_OPTIONS.map((opt) => (
+                    <button key={opt.id} onClick={() => setSpecies(opt.id)} role="radio" aria-checked={species === opt.id} tabIndex={0}
+                        className="glass-card p-2 text-center transition-all"
+                        style={{ borderColor: species === opt.id ? "var(--color-neon)" : "var(--color-glass-border)", borderWidth: species === opt.id ? 2 : 1 }}>
+                        <div className="text-2xl mb-1">{opt.emoji}</div>
+                        <div className="text-[10px] text-white font-medium uppercase tracking-wider">{opt.label}</div>
+                    </button>
+                ))}
+            </div>
+
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name your companion... (e.g. Ember)"
+                className="w-full px-4 py-3 rounded-lg bg-[var(--color-glass)] border border-[var(--color-glass-border)] text-white text-sm outline-none focus:border-[var(--color-neon)] transition-colors placeholder-[var(--color-rune-dim)] mb-5" />
+
+            <label className="text-xs text-[var(--color-rune-dim)] block mb-2">What&apos;s {displayName}&apos;s style?</label>
+            <div className="grid grid-cols-2 gap-2 mb-6" role="radiogroup" aria-label="Companion style">
+                {STYLE_OPTIONS.map((opt) => (
+                    <button key={opt.id} onClick={() => setStyle(opt.id)} role="radio" aria-checked={style === opt.id} tabIndex={0}
+                        className="glass-card p-3 text-left transition-all"
+                        style={{ borderColor: style === opt.id ? "var(--color-neon)" : "var(--color-glass-border)", borderWidth: style === opt.id ? 2 : 1 }}>
+                        <div className="text-lg mb-0.5">{opt.emoji}</div>
+                        <div className="text-xs text-white font-semibold">{opt.label}</div>
+                    </button>
+                ))}
+            </div>
+
             <div className="flex justify-between">
                 <button onClick={() => setStep(0)} className="text-sm text-[var(--color-rune-dim)] hover:text-white transition-colors">← Back</button>
                 <button onClick={() => setStep(2)} className="btn-neon px-6 py-2 text-sm">Next →</button>
             </div>
         </div>,
 
-        // 2: Choose Companion
-        <div key="companion" className="py-6">
-            <h2 className="text-xl font-bold text-white mb-2">Choose a companion for your journey</h2>
-            <p className="text-sm text-[var(--color-rune-dim)] mb-4">Every journey starts with a friend. This one goes with you on your phone.</p>
-            <div className="grid grid-cols-3 gap-3 mb-4" role="radiogroup" aria-label="Companion species">
-                {SPECIES_OPTIONS.map((opt) => (
-                    <button
-                        key={opt.id}
-                        onClick={() => setCompanionSpecies(opt.id)}
-                        role="radio"
-                        aria-checked={companionSpecies === opt.id}
-                        tabIndex={0}
-                        className="glass-card p-3 text-center transition-all"
-                        style={{
-                            borderColor: companionSpecies === opt.id ? "var(--color-neon)" : "var(--color-glass-border)",
-                            borderWidth: companionSpecies === opt.id ? 2 : 1,
-                        }}
-                    >
-                        <div className="text-3xl mb-1">{opt.emoji}</div>
-                        <div className="text-xs text-white font-medium">{opt.label}</div>
-                    </button>
-                ))}
-            </div>
-            <input
-                value={companionName}
-                onChange={(e) => setCompanionName(e.target.value)}
-                placeholder={`Name your ${SPECIES_OPTIONS.find(s => s.id === companionSpecies)?.label || "companion"}... (default: Ember)`}
-                className="w-full px-4 py-3 rounded-lg bg-[var(--color-glass)] border border-[var(--color-glass-border)] text-white text-sm outline-none focus:border-[var(--color-neon)] transition-colors placeholder-[var(--color-rune-dim)] mb-6"
-            />
-            <div className="flex justify-between">
-                <button onClick={() => setStep(1)} className="text-sm text-[var(--color-rune-dim)] hover:text-white transition-colors">← Back</button>
-                <button onClick={() => setStep(3)} className="btn-neon px-6 py-2 text-sm">Next →</button>
-            </div>
-        </div>,
-
-        // 3: AI Brain (auto-detected)
+        /* ── 2: Brain (auto-detected) ── */
         <div key="brain" className="py-6">
-            <h2 className="text-xl font-bold text-white mb-2">We checked your computer</h2>
-            <p className="text-sm text-[var(--color-rune-dim)] mb-6">Here&apos;s what we found:</p>
+            <h2 className="text-xl font-bold text-white mb-2">Now give {displayName} a brain</h2>
+            <p className="text-sm text-[var(--color-rune-dim)] mb-6">We checked your computer to find the best fit:</p>
             <div className="glass-card p-4 mb-4">
                 <div className="flex items-center gap-3 mb-2">
                     <span className="text-lg">💻</span>
@@ -215,117 +161,67 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
                 </div>
             </div>
             <div className="glass-card p-4 mb-4" style={{ borderColor: "var(--color-neon)", borderWidth: 1 }}>
-                <p className="text-xs text-[var(--color-rune-dim)] mb-1">Recommended brain:</p>
+                <p className="text-xs text-[var(--color-rune-dim)] mb-1">Recommended brain for {displayName}:</p>
                 <div className="flex items-center gap-2 mb-1">
                     <span>{recommended.emoji}</span>
                     <span className="text-white font-semibold">{recommended.name}</span>
                     <span className="text-xs text-[var(--color-rune-dim)]">({recommended.model})</span>
                 </div>
-                <p className="text-sm text-[var(--color-rune-dim)]">Perfect for everyday questions and tasks.</p>
                 <p className="text-sm text-[var(--color-neon)] mt-2">✅ This works great with your computer.</p>
             </div>
             <div className="flex justify-between">
-                <button onClick={() => setStep(2)} className="text-sm text-[var(--color-rune-dim)] hover:text-white transition-colors">← Back</button>
-                <button onClick={() => setStep(4)} className="btn-neon px-6 py-2 text-sm">Use this brain →</button>
+                <button onClick={() => setStep(1)} className="text-sm text-[var(--color-rune-dim)] hover:text-white transition-colors">← Back</button>
+                <button onClick={() => setStep(3)} className="btn-neon px-6 py-2 text-sm">Use this brain →</button>
             </div>
         </div>,
 
-        // 4: Create Your AI (Sprint 10 — NEW)
-        <div key="agent" className="py-6">
-            <h2 className="text-xl font-bold text-white mb-2">Now, who&apos;s running the show at home?</h2>
-            <p className="text-sm text-[var(--color-rune-dim)] mb-1">Every companion has someone at the fireside.</p>
-            <p className="text-sm text-[var(--color-rune-dim)] mb-6">This is the mind behind {displayCompanionName} — your AI.</p>
-
-            <label className="text-xs text-[var(--color-rune-dim)] block mb-1">Give your AI a name:</label>
-            <input
-                value={agentName}
-                onChange={(e) => setAgentName(e.target.value)}
-                placeholder="Atlas"
-                className="w-full px-4 py-3 rounded-lg bg-[var(--color-glass)] border border-[var(--color-glass-border)] text-white text-base outline-none focus:border-[var(--color-neon)] transition-colors placeholder-[var(--color-rune-dim)] mb-6"
-            />
-
-            <label className="text-xs text-[var(--color-rune-dim)] block mb-2">What&apos;s their style?</label>
-            <div className="grid grid-cols-2 gap-3 mb-6" role="radiogroup" aria-label="AI agent style">
-                {AI_STYLE_OPTIONS.map((opt) => (
-                    <button
-                        key={opt.id}
-                        onClick={() => setAgentStyle(opt.id)}
-                        role="radio"
-                        aria-checked={agentStyle === opt.id}
-                        tabIndex={0}
-                        className="glass-card p-4 text-left transition-all"
-                        style={{
-                            borderColor: agentStyle === opt.id ? "var(--color-neon)" : "var(--color-glass-border)",
-                            borderWidth: agentStyle === opt.id ? 2 : 1,
-                        }}
-                    >
-                        <div className="text-xl mb-1">{opt.emoji}</div>
-                        <div className="text-sm text-white font-semibold mb-0.5">{opt.label}</div>
-                        <div className="text-xs text-[var(--color-rune-dim)]">{opt.desc}</div>
-                    </button>
-                ))}
-            </div>
-
+        /* ── 3: About You ── */
+        <div key="about" className="py-6">
+            <h2 className="text-xl font-bold text-white mb-2">Tell {displayName} about you</h2>
+            <p className="text-sm text-[var(--color-rune-dim)] mb-6">Your companion will use this to personalize their help.</p>
+            <label className="text-xs text-[var(--color-rune-dim)] block mb-1">Your name</label>
+            <input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="How should they address you?" autoFocus
+                className="w-full px-4 py-3 rounded-lg bg-[var(--color-glass)] border border-[var(--color-glass-border)] text-white text-sm outline-none focus:border-[var(--color-neon)] transition-colors placeholder-[var(--color-rune-dim)] mb-8" />
             <div className="flex justify-between">
-                <button onClick={() => setStep(3)} className="text-sm text-[var(--color-rune-dim)] hover:text-white transition-colors">← Back</button>
-                <button onClick={() => setStep(5)} className="btn-neon px-6 py-2 text-sm">Next →</button>
+                <button onClick={() => setStep(2)} className="text-sm text-[var(--color-rune-dim)] hover:text-white transition-colors">← Back</button>
+                <button onClick={() => setStep(4)} className="btn-neon px-6 py-2 text-sm">Next →</button>
             </div>
         </div>,
 
-        // 5: Confirmation (Sprint 10: shows both characters)
+        /* ── 4: All Set ── */
         <div key="ready" className="text-center py-8">
             <div className="text-5xl mb-4">🔥</div>
-            <h2 className="text-2xl font-bold text-white mb-4">
-                You&apos;re all set{userName ? `, ${userName}` : ""}!
-            </h2>
-
+            <h2 className="text-2xl font-bold text-white mb-4">You&apos;re all set{userName ? `, ${userName}` : ""}!</h2>
             <div className="glass-card p-5 mb-6 text-left" style={{ borderColor: "var(--color-neon)", borderWidth: 1 }}>
                 <div className="flex items-center gap-3 mb-3 pb-3 border-b border-[var(--color-glass-border)]">
-                    <span className="text-sm text-[var(--color-rune-dim)]">Owner:</span>
-                    <span className="text-white font-semibold">{userName || "You"}</span>
-                </div>
-                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-[var(--color-glass-border)]">
-                    <span className="text-sm text-[var(--color-rune-dim)]">AI:</span>
-                    <span className="text-white font-semibold">{displayAgentName}</span>
-                    <span className="text-xs text-[var(--color-rune-dim)]">({AI_STYLE_OPTIONS.find(s => s.id === agentStyle)?.emoji} {AI_STYLE_OPTIONS.find(s => s.id === agentStyle)?.label})</span>
-                </div>
-                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-[var(--color-glass-border)]">
                     <span className="text-sm text-[var(--color-rune-dim)]">Companion:</span>
-                    <span className="text-white font-semibold">{speciesEmoji} {displayCompanionName}</span>
+                    <span className="text-white font-semibold">{speciesEmoji} {displayName}</span>
+                    <span className="text-xs text-[var(--color-rune-dim)]">({STYLE_OPTIONS.find(s => s.id === style)?.label})</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-sm text-[var(--color-rune-dim)]">Brain:</span>
                     <span className="text-white font-semibold">{recommended.emoji} {recommended.name}</span>
                 </div>
             </div>
-
-            <p className="text-sm text-[var(--color-rune-dim)] mb-6">
-                {displayAgentName} stays home. {displayCompanionName} goes with you. 🔥
-            </p>
-            <button onClick={finish} className="btn-neon px-8 py-3 text-base">
-                {displayAgentName} and {displayCompanionName} are ready →
-            </button>
+            <div className="glass-card p-4 mb-6 text-left" style={{ background: "rgba(245,158,11,0.06)" }}>
+                <p className="text-xs text-[var(--color-rune-dim)] font-semibold mb-2">Things to try:</p>
+                <p className="text-sm text-[var(--color-rune)] mb-1">1. Start a pipeline — ask {displayName} to &quot;Research competitors&quot;</p>
+                <p className="text-sm text-[var(--color-rune)] mb-1">2. Chat with {displayName} from the dashboard</p>
+                <p className="text-sm text-[var(--color-rune)] mb-1">3. 📱 Download the <strong>Fireside</strong> app — {displayName} goes with you</p>
+            </div>
+            <p className="text-sm text-[var(--color-rune-dim)] mb-6">One companion, everywhere. Desktop power, pocket convenience. 🔥</p>
+            <button onClick={finish} className="btn-neon px-8 py-3 text-base">Open Dashboard →</button>
         </div>,
     ];
-
-    // Progress bar
-    const totalSteps = screens.length;
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
             <div className="relative w-full max-w-md mx-4">
-                {/* Progress */}
-                <div className="flex gap-1.5 mb-4 justify-center" role="progressbar" aria-valuenow={step} aria-valuemin={0} aria-valuemax={totalSteps - 1} aria-label={`Step ${step + 1} of ${totalSteps}`}>
+                <div className="flex gap-1.5 mb-4 justify-center" role="progressbar" aria-valuenow={step} aria-valuemin={0} aria-valuemax={screens.length - 1} aria-label={`Step ${step + 1} of ${screens.length}`}>
                     {screens.map((_, i) => (
-                        <div
-                            key={i}
-                            className="h-1 rounded-full transition-all"
-                            style={{
-                                width: 40,
-                                background: i <= step ? "var(--color-neon)" : "var(--color-glass-border)",
-                            }}
-                        />
+                        <div key={i} className="h-1 rounded-full transition-all"
+                            style={{ width: 40, background: i <= step ? "var(--color-neon)" : "var(--color-glass-border)" }} />
                     ))}
                 </div>
                 <div className="glass-card p-8 animate-[fadeIn_0.3s_ease-out]">
