@@ -1396,6 +1396,8 @@ async def install_brain(request: Request):
             try:
                 _download_state.update(status="downloading", brain_id=model_id, progress=0, error=None)
 
+                downloaded_path = None
+
                 # Method 1: Try huggingface-hub if available (best progress tracking)
                 try:
                     from huggingface_hub import hf_hub_download
@@ -1405,37 +1407,60 @@ async def install_brain(request: Request):
                         local_dir=str(models_dir),
                         local_dir_use_symlinks=False,
                     )
-                    _download_state.update(status="done", progress=100)
-                    return
+                    downloaded_path = target
                 except ImportError:
                     pass
 
-                # Method 2: Direct HTTP download (no deps needed — stdlib only)
-                import urllib.request
-                url = f"https://huggingface.co/{brain['repo']}/resolve/main/{brain['filename']}"
-                log.info("[brains] Downloading %s from %s", brain["filename"], url)
+                if downloaded_path is None:
+                    # Method 2: Direct HTTP download (no deps needed — stdlib only)
+                    import urllib.request
+                    url = f"https://huggingface.co/{brain['repo']}/resolve/main/{brain['filename']}"
+                    log.info("[brains] Downloading %s from %s", brain["filename"], url)
 
-                req = urllib.request.Request(url, headers={"User-Agent": "Fireside/1.0"})
-                with urllib.request.urlopen(req) as resp:
-                    total = int(resp.headers.get("Content-Length", 0))
-                    downloaded = 0
-                    chunk_size = 1024 * 1024  # 1MB chunks
+                    req = urllib.request.Request(url, headers={"User-Agent": "Fireside/1.0"})
+                    with urllib.request.urlopen(req) as resp:
+                        total = int(resp.headers.get("Content-Length", 0))
+                        downloaded = 0
+                        chunk_size = 1024 * 1024  # 1MB chunks
 
-                    with open(str(target), "wb") as f:
-                        while True:
-                            chunk = resp.read(chunk_size)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if total > 0:
-                                _download_state["progress"] = int(downloaded / total * 100)
+                        with open(str(target), "wb") as f:
+                            while True:
+                                chunk = resp.read(chunk_size)
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total > 0:
+                                    _download_state["progress"] = int(downloaded / total * 100)
+
+                    downloaded_path = target
 
                 _download_state.update(status="done", progress=100)
+
+                # ── Auto-start llama-server with the downloaded model ──────
+                if downloaded_path and downloaded_path.exists():
+                    log.info("[brains] Download complete — auto-starting llama-server with %s", downloaded_path)
+                    try:
+                        # Persist model path to onboarding.json
+                        import json as _json
+                        ob_path = Path.home() / ".fireside" / "onboarding.json"
+                        ob = {}
+                        if ob_path.exists():
+                            ob = _json.loads(ob_path.read_text(encoding="utf-8"))
+                        ob["model_file"] = str(downloaded_path)
+                        ob["brain_installed"] = True
+                        ob_path.parent.mkdir(parents=True, exist_ok=True)
+                        ob_path.write_text(_json.dumps(ob, indent=2), encoding="utf-8")
+
+                        from bot.brain_manager import start as brain_start
+                        brain_start(downloaded_path, _config.get("llama", {}))
+                    except Exception as be:
+                        log.warning("[brains] Auto-start failed: %s", be)
 
             except Exception as e:
                 log.error("[brains] Download failed: %s", e)
                 _download_state.update(status="error", error=str(e))
+
 
         t = threading.Thread(target=_download_model, daemon=True)
         t.start()
@@ -1455,6 +1480,86 @@ async def install_brain(request: Request):
 async def get_brain_download_status():
     """Return current brain download status for post-onboarding flow."""
     return _download_state
+
+
+@router.get("/brains/status")
+async def get_brain_status():
+    """Return live llama-server process status.
+
+    Powers the Brain Lab status indicator in the dashboard.
+    """
+    try:
+        from bot.brain_manager import get_status
+        return get_status()
+    except Exception as e:
+        return {
+            "running": False,
+            "model": None,
+            "pid": None,
+            "port": 8080,
+            "error": str(e),
+        }
+
+
+class BrainSwitchRequest(BaseModel):
+    model_path: str  # absolute path to .gguf file
+
+
+@router.post("/brains/switch")
+async def switch_brain(req: BrainSwitchRequest):
+    """Hot-swap to a different GGUF model.
+
+    Stops the running llama-server, starts a new one with the specified model.
+    The model stays resident in VRAM — no offloading.
+    """
+    import asyncio
+    from pathlib import Path as P
+
+    model_path = P(req.model_path)
+    if not model_path.exists():
+        raise HTTPException(400, f"Model not found: {req.model_path}")
+    if not req.model_path.endswith(".gguf"):
+        raise HTTPException(400, "Only .gguf models are supported")
+
+    try:
+        from bot.brain_manager import switch_model
+        llama_cfg = _config.get("llama", {})
+        loop = asyncio.get_event_loop()
+        ok = await loop.run_in_executor(None, switch_model, model_path, llama_cfg)
+
+        # Persist the new model path to onboarding.json
+        try:
+            import json as _json
+            ob_path = Path.home() / ".fireside" / "onboarding.json"
+            ob = {}
+            if ob_path.exists():
+                ob = _json.loads(ob_path.read_text(encoding="utf-8"))
+            ob["model_file"] = str(model_path)
+            ob_path.write_text(_json.dumps(ob, indent=2), encoding="utf-8")
+        except Exception as pe:
+            log.warning("[brains] Failed to persist model switch: %s", pe)
+
+        return {
+            "ok": ok,
+            "model": model_path.stem,
+            "model_path": str(model_path),
+        }
+    except Exception as e:
+        log.error("[brains] Switch failed: %s", e)
+        raise HTTPException(500, f"Model switch failed: {e}")
+
+
+@router.post("/brains/restart")
+async def restart_brain():
+    """Restart llama-server with the currently configured model."""
+    import asyncio
+    try:
+        from bot.brain_manager import auto_start
+        loop = asyncio.get_event_loop()
+        ok = await loop.run_in_executor(None, auto_start, _config, _base_dir)
+        return {"ok": ok, "message": "Brain restarted" if ok else "No model configured"}
+    except Exception as e:
+        raise HTTPException(500, f"Restart failed: {e}")
 
 
 @router.get("/status/agent")

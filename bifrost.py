@@ -82,6 +82,17 @@ def create_app(config_path: str | None = None) -> FastAPI:
     # Lifecycle: register/unregister mDNS on startup/shutdown
     @asynccontextmanager
     async def lifespan(application: FastAPI):
+        # ── Brain: auto-start llama-server ──────────────────────────────
+        try:
+            from bot.brain_manager import auto_start as brain_auto_start
+            import asyncio
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, brain_auto_start, config, Path("."))
+        except Exception as e:
+            log.warning("Brain auto-start failed (non-fatal): %s", e)
+
+        # ── mDNS ────────────────────────────────────────────────────────
         if zc_instance and zc_info:
             zc_instance.register_service(zc_info)
             log.info("mDNS: broadcasting _fireside._tcp.local.")
@@ -90,6 +101,15 @@ def create_app(config_path: str | None = None) -> FastAPI:
             zc_instance.unregister_service(zc_info)
             zc_instance.close()
             log.info("mDNS: stopped broadcasting")
+
+        # ── Brain: clean shutdown ────────────────────────────────────────
+        try:
+            from bot.brain_manager import stop as brain_stop
+            brain_stop()
+            log.info("Brain: llama-server stopped")
+        except Exception as e:
+            log.warning("Brain stop failed: %s", e)
+
 
     # 3. FastAPI app
     app = FastAPI(
