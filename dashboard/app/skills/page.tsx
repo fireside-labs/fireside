@@ -97,7 +97,10 @@ export default function SkillsPage() {
         <div className="max-w-2xl mx-auto">
             <style>{css}</style>
 
-            <Link href="/" className="sk-back-link">← Hub</Link>
+            <div className="sk-topbar">
+                <Link href="/" className="sk-back-link">🔥 Hub</Link>
+                <span className="sk-topbar-title">Skills</span>
+            </div>
             <div className="mb-6">
                 <h1 className="sk-page-title">✦ Skills</h1>
                 <p className="sk-page-sub">Equip your AI with new abilities — toggle on or off anytime.</p>
@@ -189,12 +192,21 @@ const css = `
     font-family: 'Outfit', system-ui;
   }
   .sk-page-sub { font-size: 14px; color: #5A4D40; }
+  .sk-topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 0; margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
   .sk-back-link {
     display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; font-weight: 700; color: #5A4D40;
-    margin-bottom: 16px; text-decoration: none; transition: color 0.2s;
+    padding: 8px 16px; border-radius: 10px;
+    font-size: 13px; font-weight: 800; color: #C4A882;
+    text-decoration: none; transition: all 0.2s;
+    background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.12);
+    font-family: 'Outfit', system-ui;
   }
-  .sk-back-link:hover { color: #F59E0B; }
+  .sk-back-link:hover { background: rgba(245,158,11,0.12); color: #F59E0B; border-color: rgba(245,158,11,0.25); }
+  .sk-topbar-title { font-size: 12px; color: #3A3530; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 
   /* Power Level Bar */
   .sk-power-card {

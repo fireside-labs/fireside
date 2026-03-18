@@ -51,7 +51,10 @@ export default function SettingsPage() {
         <div className="max-w-2xl mx-auto">
             <style>{settingsCSS}</style>
 
-            <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#5A4D40', marginBottom: 16, textDecoration: 'none' }}>← Hub</Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800, color: '#C4A882', textDecoration: 'none', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.12)', fontFamily: "'Outfit', system-ui" }}>🔥 Hub</Link>
+                <span style={{ fontSize: 12, color: '#3A3530', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 1 }}>Settings</span>
+            </div>
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-white flex items-center gap-2"><span>⚙</span> Settings</h1>
                 <p className="text-sm text-[var(--color-rune-dim)] mt-1">API keys, voice, devices, and advanced tools.</p>
