@@ -539,10 +539,11 @@ const pageCSS = `
   }
   .fp-mascot-large {
     width: 140px; height: 140px; object-fit: contain;
-    filter: drop-shadow(0 0 30px rgba(245,158,11,0.25));
     animation: fpBob 4s ease-in-out infinite;
     transition: opacity 0.5s;
-    mix-blend-mode: lighten;
+    mix-blend-mode: screen;
+    mask-image: radial-gradient(ellipse 70% 70% at center, black 40%, transparent 72%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 70% at center, black 40%, transparent 72%);
   }
   @keyframes fpBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 
@@ -695,9 +696,10 @@ const pageCSS = `
   }
   .fp-forge-mascot-img {
     width: 100px; height: 100px; object-fit: contain;
-    filter: drop-shadow(0 0 20px rgba(245,158,11,0.3));
     animation: fpBob 3.5s ease-in-out infinite;
-    mix-blend-mode: lighten;
+    mix-blend-mode: screen;
+    mask-image: radial-gradient(ellipse 70% 70% at center, black 40%, transparent 72%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 70% at center, black 40%, transparent 72%);
   }
 
   /* Companion speech strip */

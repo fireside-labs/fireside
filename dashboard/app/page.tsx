@@ -509,9 +509,8 @@ const pageCSS = `
     position: absolute; bottom: 10px; left: 10px;
     width: 150px; height: 150px; object-fit: contain;
     mix-blend-mode: screen;
-    -webkit-mask-image: radial-gradient(circle, white 35%, transparent 65%);
-    mask-image: radial-gradient(circle, white 35%, transparent 65%);
-    filter: drop-shadow(0 0 25px rgba(245,158,11,0.35));
+    -webkit-mask-image: radial-gradient(ellipse 70% 70% at center, white 40%, transparent 72%);
+    mask-image: radial-gradient(ellipse 70% 70% at center, white 40%, transparent 72%);
     animation: fsFoxBob 4s ease-in-out infinite;
   }
   @keyframes fsFoxBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
