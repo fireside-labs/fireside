@@ -1,9 +1,11 @@
 """
-terminal — Plugin: AI terminal access with approval workflow.
+terminal — Plugin: AI terminal access with configurable permissions.
 
-Allows the AI to request command execution on the user's machine.
-All commands require explicit user approval before running (unless
-the user has whitelisted specific safe commands).
+Allows the AI to execute commands on the user's machine.
+Permission levels (configurable in valhalla.yaml under terminal.mode):
+  - "open"     : commands run immediately (default)
+  - "approve"  : commands queue for user approval first
+  - "blocklist": everything runs except blocked commands
 """
 
 from __future__ import annotations
@@ -40,14 +42,20 @@ def register_routes(app, config: dict) -> None:
 
     @app.post("/api/v1/terminal/exec")
     async def request_exec(req: ExecRequest):
-        """Request command execution — queued for user approval."""
+        """Execute a command — runs immediately unless approval mode is on."""
         terminal_cfg = _config.get("terminal", {})
-        require_approval = terminal_cfg.get("require_approval", True)
-        allowed = terminal_cfg.get("allowed_commands", [])
+        mode = terminal_cfg.get("mode", "open")  # open | approve | blocklist
+        blocked = terminal_cfg.get("blocked_commands", [])  # for blocklist mode
 
-        # Check if command is pre-approved
         cmd_base = req.command.split()[0] if req.command.strip() else ""
-        auto_approved = not require_approval or cmd_base in allowed
+
+        # Determine if command runs immediately
+        if mode == "approve":
+            auto_approved = False
+        elif mode == "blocklist" and cmd_base in blocked:
+            auto_approved = False
+        else:
+            auto_approved = True  # "open" mode — just run it
 
         import secrets
         cmd_id = f"cmd-{secrets.token_urlsafe(6)}"
@@ -97,10 +105,30 @@ def register_routes(app, config: dict) -> None:
         return {
             "pending": list(_pending_commands.values()),
             "pending_count": len(_pending_commands),
-            "require_approval": terminal_cfg.get("require_approval", True),
-            "sandbox": terminal_cfg.get("sandbox", True),
-            "allowed_commands": terminal_cfg.get("allowed_commands", []),
+            "mode": terminal_cfg.get("mode", "open"),
+            "blocked_commands": terminal_cfg.get("blocked_commands", []),
+            "timeout": terminal_cfg.get("timeout", 30),
         }
+
+    @app.put("/api/v1/terminal/permissions")
+    async def set_permissions(request):
+        """Change terminal permission mode (open/approve/blocklist)."""
+        import json
+        body = await request.json()
+        mode = body.get("mode", "open")
+        if mode not in ("open", "approve", "blocklist"):
+            raise HTTPException(400, "Mode must be: open, approve, or blocklist")
+
+        # Update in-memory config
+        if "terminal" not in _config:
+            _config["terminal"] = {}
+        _config["terminal"]["mode"] = mode
+
+        if "blocked_commands" in body:
+            _config["terminal"]["blocked_commands"] = body["blocked_commands"]
+
+        log.info("[terminal] Permission mode set to: %s", mode)
+        return {"ok": True, "mode": mode}
 
     @app.post("/api/v1/terminal/approve")
     async def approve_command(req: ApproveRequest):
