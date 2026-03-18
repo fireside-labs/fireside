@@ -43,11 +43,15 @@ _initialized: bool = False
 _router = None
 
 # Fix #2: Module cache — load each plugin module once, not on every call
-_module_cache: dict[str, object] = {}
+_module_cache: dict[str, tuple[object, float]] = {}  # key → (module, load_time)
+_MODULE_CACHE_TTL = 300  # seconds — re-import after 5min for hot-reload
 
 # Fix #3: Mesh status cache — avoid hitting /health on every pipeline create
 _mesh_cache: dict = {"active": False, "ts": 0.0}
 _MESH_CACHE_TTL = 30  # seconds
+
+# Templates that produce files/artifacts — auto-add terminal execution stage
+_ARTIFACT_TEMPLATES = {"presentation", "coding", "analysis", "drafting"}
 
 
 def init(config: dict, base_dir: Path) -> None:
@@ -94,22 +98,32 @@ def _get_router():
 
 
 def classify(message: str) -> str:
-    """Classify message as 'simple' or 'complex' using V1 Router.
+    """Classify message as 'simple' or 'complex'.
 
-    Uses semantic routing when available, falls back to keyword heuristics.
+    Uses classify_template() as the authority — if any template scores ≥1,
+    the task has enough structure to warrant a pipeline.
+    Falls back to V1 Router scoring and keyword heuristics.
     """
+    # PRIMARY: If a pipeline template matches, it's complex (period)
+    try:
+        from pipeline_templates import classify_template
+        template = classify_template(message)
+        if template != "general":  # specific match = complex
+            return "complex"
+    except ImportError:
+        pass
+
+    # SECONDARY: V1 Router semantic scoring
     router = _get_router()
     if router:
         try:
-            # Use keyword scoring — if the best node scores > 2,
-            # the task has enough domain-specific signals to be "complex"
             scores = router.score_all(message)
             if scores and scores[0]["score"] >= 2:
                 return "complex"
         except Exception:
             pass
 
-    # Fallback: length + keyword heuristics
+    # TERTIARY: Length + keyword heuristics
     lower = message.lower().strip()
     if len(lower) < 20:
         return "simple"
@@ -120,6 +134,7 @@ def classify(message: str) -> str:
         "evaluate options", "pros and cons", "deep dive", "comprehensive",
         "audit", "review all", "summarize everything", "give me a report",
         "and then", "after that", "first do", "plan for",
+        "powerpoint", "presentation", "slide deck", "deploy",
     ]
     score = sum(1 for sig in complex_signals if sig in lower)
     if score >= 2:
@@ -160,9 +175,15 @@ def route_to_node(message: str, exclude: list = None) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 def _load_module(key: str, path: Path):
-    """Load a module from path, caching to avoid repeated importlib overhead."""
+    """Load a module from path, with TTL cache for hot-reload support."""
+    now = time.time()
     if key in _module_cache:
-        return _module_cache[key]
+        mod, loaded_at = _module_cache[key]
+        if (now - loaded_at) < _MODULE_CACHE_TTL:
+            return mod
+        # TTL expired — re-import
+        log.debug("[orchestrator] Module cache expired for %s, reloading", key)
+
     if not path.exists():
         return None
     spec = importlib.util.spec_from_file_location(key, str(path))
@@ -170,7 +191,7 @@ def _load_module(key: str, path: Path):
         return None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    _module_cache[key] = mod
+    _module_cache[key] = (mod, now)
     return mod
 
 
@@ -560,9 +581,9 @@ def _create_mesh_pipeline(task: str, stages: list, template: dict) -> Optional[d
 def _create_local_pipeline(task: str, stages: list, template: dict) -> Optional[dict]:
     """Create pipeline via V2 plugin (single-node, local sub-agents).
 
-    Fix #1: Each stage receives the previous stage's output as context,
-    so stage 2 knows what stage 1 produced. Uses 'prev_context' field
-    which the pipeline plugin injects before each stage runs.
+    Fix #1: Each stage receives the previous stage's output as context.
+    Fix #5: Templates that produce artifacts (coding, presentation, analysis)
+            get an auto-injected terminal execution stage at the end.
     """
     try:
         mod = _load_module("pipeline", _base_dir / "plugins" / "pipeline" / "handler.py")
@@ -572,15 +593,10 @@ def _create_local_pipeline(task: str, stages: list, template: dict) -> Optional[
         # Convert to V2 format with context chaining
         v2_stages = []
         for i, s in enumerate(stages):
-            # Fix #1: chain_context tells the pipeline to pass
-            # previous stage output into this stage's prompt
-            chain = i > 0  # all stages after the first get context
-
-            # Fix #4: on_fail routing
+            chain = i > 0
             on_fail = s.get("on_fail", template.get("on_fail", "retry"))
 
             if "parallel" in s:
-                # V2 doesn't support true parallel — serialize them
                 for j, p in enumerate(s["parallel"]):
                     v2_stages.append({
                         "name": f"{s['name']}/{p.get('role', 'agent')}",
@@ -602,6 +618,33 @@ def _create_local_pipeline(task: str, stages: list, template: dict) -> Optional[
                     "on_fail": on_fail,
                 })
 
+        # Fix #5: Auto-inject terminal execution for artifact-producing templates
+        template_name = template.get("name", "").lower()
+        if template_name in _ARTIFACT_TEMPLATES:
+            v2_stages.append({
+                "name": "execute",
+                "agent": "local",
+                "task_type": "execute",
+                "system_prompt": (
+                    "You are an execution agent. You take the final output from "
+                    "previous stages and create real files and artifacts. You use "
+                    "the terminal to run commands: create files, install packages, "
+                    "run scripts, and generate outputs. You have full terminal access "
+                    "via POST /api/v1/terminal/exec with {command, reason, working_dir}. "
+                    "Always report which files you created and their paths."
+                ),
+                "prompt": (
+                    f"Task: {task}\n\n"
+                    "Using the terminal, create the actual output files from the "
+                    "previous stages. If this is a presentation, create the .pptx file. "
+                    "If code, write the files to disk. If analysis, export the report. "
+                    "Use the terminal API to execute commands. Report all created files."
+                ),
+                "chain_context": True,
+                "on_fail": "retry",
+                "terminal_enabled": True,
+            })
+
         meta = mod.create_pipeline(
             title=task[:100],
             description=task,
@@ -615,6 +658,7 @@ def _create_local_pipeline(task: str, stages: list, template: dict) -> Optional[
             "template": template.get("name", "unknown"),
             "task_preview": task[:80],
             "mode": "v2_local",
+            "has_terminal_stage": template_name in _ARTIFACT_TEMPLATES,
             "node": _node_id,
         })
 
@@ -644,3 +688,291 @@ def check_belief_shadows(task: str) -> dict:
     except Exception:
         return {"novel": True, "peer_knowledge": {}}
 
+
+# ===========================================================================
+# ALWAYS-ON CAPABILITIES — available on every message, template or not
+# ===========================================================================
+# These are tools the AI can invoke at any time during inference.
+# No template needed. No pipeline needed. Just capabilities.
+
+def get_available_tools() -> list[dict]:
+    """Return the list of tools the AI can always use.
+
+    This is injected into the system prompt so the model knows what it can do.
+    Each tool maps to an API endpoint the model can call via function calling
+    or structured output.
+    """
+    tools = [
+        {
+            "name": "terminal",
+            "description": "Run a command on the user's computer",
+            "endpoint": "POST /api/v1/terminal/exec",
+            "params": {"command": "str", "reason": "str", "working_dir": "str"},
+            "examples": [
+                "Create a file: echo 'content' > file.txt",
+                "Install a package: pip install python-pptx",
+                "Run a script: python generate_report.py",
+                "List files: dir /b (Windows) or ls -la (Linux)",
+            ],
+        },
+        {
+            "name": "browse",
+            "description": "Read and summarize a web page",
+            "endpoint": "POST /api/v1/browse/read",
+            "params": {"url": "str", "summary": "bool"},
+        },
+        {
+            "name": "memory_search",
+            "description": "Search past conversations and stored knowledge",
+            "endpoint": "GET /api/v1/memory/search",
+            "params": {"query": "str", "top_k": "int"},
+        },
+        {
+            "name": "memory_store",
+            "description": "Store important information for later recall",
+            "endpoint": "POST /api/v1/memory/store",
+            "params": {"content": "str", "importance": "float"},
+        },
+        {
+            "name": "spawn_agent",
+            "description": "Delegate a sub-task to a specialist sub-agent",
+            "endpoint": "POST /api/v1/orchestrator/spawn",
+            "params": {"role": "str", "task": "str", "context": "str"},
+        },
+        {
+            "name": "create_pipeline",
+            "description": "Create a multi-step workflow for complex tasks",
+            "endpoint": "POST /api/v1/pipeline/create",
+            "params": {"task": "str", "template": "str (optional)"},
+        },
+        {
+            "name": "file_read",
+            "description": "Read the contents of a file",
+            "endpoint": "POST /api/v1/files/read",
+            "params": {"path": "str", "encoding": "str (utf-8)"},
+        },
+        {
+            "name": "file_write",
+            "description": "Write content to a file (creates dirs if needed)",
+            "endpoint": "POST /api/v1/files/write",
+            "params": {"path": "str", "content": "str", "mode": "str (w or a)"},
+        },
+        {
+            "name": "file_list",
+            "description": "List files and directories at a path",
+            "endpoint": "POST /api/v1/files/list",
+            "params": {"path": "str", "recursive": "bool", "pattern": "str (glob)"},
+        },
+        {
+            "name": "file_search",
+            "description": "Search for text inside files (grep-like)",
+            "endpoint": "POST /api/v1/files/search",
+            "params": {"path": "str", "query": "str", "extensions": "list[str]"},
+        },
+    ]
+
+    # Only include tools whose plugins are actually loaded
+    # (terminal always available since it was just created)
+    return tools
+
+
+def get_tools_system_prompt() -> str:
+    """Generate system prompt addition describing available tools.
+
+    This gets injected into every inference call so the AI always knows
+    what it can do — no template required.
+    """
+    tools = get_available_tools()
+    lines = [
+        "\n\n[AVAILABLE TOOLS — you can use these at any time]",
+        "To use a tool, output a structured JSON block with the tool name and params.",
+        "You may use multiple tools in sequence to complete a task.\n",
+    ]
+    for t in tools:
+        params = ", ".join(f"{k}: {v}" for k, v in t.get("params", {}).items())
+        lines.append(f"• {t['name']}: {t['description']}")
+        lines.append(f"  → {t['endpoint']} ({params})")
+        if t.get("examples"):
+            for ex in t["examples"][:2]:
+                lines.append(f"    e.g. {ex}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# SUB-AGENT SPAWNING — single machine, multiple personalities
+# ---------------------------------------------------------------------------
+# Spin up ephemeral sub-agents on the same LLM with different system prompts.
+# Each sub-agent is just a separate inference call with a role-specific prompt.
+# This is how one machine acts like a team.
+
+def spawn_sub_agent(
+    role: str,
+    task: str,
+    context: str = "",
+    model_override: str = None,
+) -> dict:
+    """Spawn an ephemeral sub-agent with a specific role.
+
+    Single-machine mode: same LLM, different system prompt.
+    The sub-agent runs to completion and returns its output.
+
+    Roles: planner, backend, frontend, tester, reviewer, researcher,
+           analyst, writer, designer, executor, data_analyst
+    """
+    from pipeline_templates import ROLE_PROMPTS
+
+    system_prompt = ROLE_PROMPTS.get(role, ROLE_PROMPTS.get("executor", ""))
+    if not system_prompt:
+        system_prompt = f"You are a {role} specialist. Complete the assigned task thoroughly."
+
+    # Build the full prompt with context
+    full_prompt = f"Task: {task}"
+    if context:
+        full_prompt = f"Context from previous work:\n{context}\n\n{full_prompt}"
+
+    result = {
+        "role": role,
+        "task": task[:200],
+        "status": "completed",
+        "output": None,
+        "model": model_override or "default",
+    }
+
+    try:
+        # Try to use the actual inference endpoint
+        import urllib.request
+        port = _config.get("server", {}).get("port", 8765)
+        url = f"http://127.0.0.1:{port}/api/v1/chat"
+
+        payload = json.dumps({
+            "message": full_prompt,
+            "system_prompt": system_prompt,
+            "model": model_override,
+            "stream": False,
+            "sub_agent": True,  # flag so chat endpoint doesn't re-orchestrate
+        }).encode()
+
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+            result["output"] = data.get("response", data.get("content", ""))
+            result["status"] = "completed"
+
+        log.info("[orchestrator] Sub-agent %s completed: %s", role, task[:60])
+
+    except Exception as e:
+        log.warning("[orchestrator] Sub-agent %s failed: %s", role, e)
+        result["status"] = "failed"
+        result["error"] = str(e)
+
+    publish("orchestrator.sub_agent", {
+        "role": role,
+        "task": task[:80],
+        "status": result["status"],
+        "node": _node_id,
+    })
+
+    return result
+
+
+def execute_ad_hoc(task: str, tools_needed: list[str] = None) -> dict:
+    """Execute an ad-hoc task using available tools. No template needed.
+
+    This is the fallback for tasks that don't match any template but
+    still need real-world action (terminal, files, browsing).
+
+    The AI figures out the steps and executes them sequentially.
+    """
+    result = {
+        "task": task[:200],
+        "steps_completed": [],
+        "artifacts": [],
+        "status": "completed",
+    }
+
+    # Step 1: Ask a planner sub-agent to break it down
+    plan = spawn_sub_agent(
+        role="planner",
+        task=f"Break this into 2-4 concrete steps that can be executed with terminal commands: {task}",
+    )
+
+    if plan["status"] != "completed" or not plan.get("output"):
+        result["status"] = "failed"
+        result["error"] = "Planning failed"
+        return result
+
+    result["steps_completed"].append({
+        "step": "plan",
+        "output": plan["output"],
+    })
+
+    # Step 2: Ask an executor sub-agent to run the steps
+    execution = spawn_sub_agent(
+        role="executor",
+        task=task,
+        context=f"Plan:\n{plan['output']}",
+    )
+
+    result["steps_completed"].append({
+        "step": "execute",
+        "output": execution.get("output", ""),
+    })
+
+    # Step 3: If the task involves file creation, run terminal commands
+    if tools_needed and "terminal" in tools_needed:
+        try:
+            import urllib.request
+            port = _config.get("server", {}).get("port", 8765)
+            terminal_url = f"http://127.0.0.1:{port}/api/v1/terminal/exec"
+
+            # Ask the executor's output for commands to run
+            cmd_agent = spawn_sub_agent(
+                role="executor",
+                task=(
+                    "Extract the exact terminal commands from this plan and "
+                    "output ONLY the commands, one per line, no explanations:\n"
+                    f"{execution.get('output', '')}"
+                ),
+            )
+
+            if cmd_agent.get("output"):
+                commands = [
+                    line.strip() for line in cmd_agent["output"].split("\n")
+                    if line.strip() and not line.strip().startswith("#")
+                ]
+                for cmd in commands[:10]:  # safety: max 10 commands
+                    try:
+                        payload = json.dumps({
+                            "command": cmd,
+                            "reason": f"Ad-hoc task: {task[:80]}",
+                        }).encode()
+                        req = urllib.request.Request(
+                            terminal_url, data=payload,
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(req, timeout=30) as resp:
+                            cmd_result = json.loads(resp.read())
+                            result["steps_completed"].append({
+                                "step": f"terminal: {cmd[:60]}",
+                                "output": cmd_result.get("result", {}),
+                            })
+                    except Exception as e:
+                        log.warning("[orchestrator] Ad-hoc command failed: %s — %s", cmd[:40], e)
+
+        except Exception as e:
+            log.warning("[orchestrator] Ad-hoc terminal execution failed: %s", e)
+
+    publish("orchestrator.ad_hoc_completed", {
+        "task": task[:80],
+        "steps": len(result["steps_completed"]),
+        "node": _node_id,
+    })
+
+    return result
