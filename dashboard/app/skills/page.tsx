@@ -50,6 +50,7 @@ const SKILL_DISPLAY: Record<string, { icon: string; label: string; color: string
   "socratic": { icon: "🗣️", label: "Socratic Debate", color: "#A78BFA" },
   "task-persistence": { icon: "💾", label: "Task Persistence", color: "#60A5FA" },
   "telegram": { icon: "✈️", label: "Telegram Bot", color: "#818CF8" },
+  "terminal": { icon: "💻", label: "Terminal Access", color: "#22D3EE" },
   "voice": { icon: "🎙️", label: "Voice Mode", color: "#F472B6" },
   "watchdog": { icon: "🐕", label: "Watchdog", color: "#34D399" },
   "working-memory": { icon: "🧠", label: "Working Memory", color: "#A78BFA" },
@@ -62,7 +63,6 @@ const CATEGORIES = [
   { id: "automation", label: "Automation", icon: "🔧" },
   { id: "connectivity", label: "Connectivity", icon: "🌐" },
   { id: "memory", label: "Memory", icon: "🧠" },
-  { id: "platform", label: "System", icon: "🏪" },
 ];
 
 const RARITY_CONFIG: Record<string, { label: string; color: string; bg: string; glow: string }> = {
@@ -72,37 +72,33 @@ const RARITY_CONFIG: Record<string, { label: string; color: string; bg: string; 
   common: { label: "Common", color: "#6A5A4A", bg: "rgba(106,90,74,0.08)", glow: "none" },
 };
 
-// Non-negotiable plugins — always on, toggle disabled
-const REQUIRED_PLUGINS = new Set([
-  // Core experience — disabling these breaks the companion
-  "working-memory", "personality", "self-model", "adaptive-thinking", "companion",
-  // System infrastructure — must always be running
+// Infrastructure plugins — hidden from UI entirely
+const HIDDEN_PLUGINS = new Set([
   "event-bus", "marketplace", "payments", "consumer-api", "brain-installer", "agent_profiles",
+]);
+
+// Core experience plugins — always on, toggle locked
+const CORE_PLUGINS = new Set([
+  "working-memory", "personality", "self-model", "adaptive-thinking", "companion",
 ]);
 
 const POWER_MAP: Record<string, number> = {
   legendary: 25, rare: 15, uncommon: 8, common: 5,
 };
 
-// Full plugin list — used when backend is offline
+// Full plugin list — used when backend is offline (no platform plugins)
 const ALL_PLUGINS: SkillPlugin[] = [
   { name: "adaptive-thinking", version: "1.0.0", description: "Chain-of-thought reasoning. Slower but significantly smarter on hard questions.", author: "valhalla-core", category: "intelligence", rarity: "rare", installed: true },
-  { name: "agent_profiles", version: "1.0.0", description: "Manage downloadable agent personas and configurations.", author: "valhalla-core", category: "platform", rarity: "uncommon", installed: true },
   { name: "alerts", version: "1.0.0", description: "Proactive notifications — your AI reaches out when it has something for you.", author: "valhalla-core", category: "communication", rarity: "common", installed: false },
   { name: "belief-shadows", version: "1.0.0", description: "Confidence calibration — detects blind spots in the AI's knowledge.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
-  { name: "brain-installer", version: "1.0.0", description: "Download and manage LLM model files for local inference.", author: "valhalla-core", category: "platform", rarity: "uncommon", installed: true },
   { name: "browse", version: "1.0.0", description: "Read and summarize web pages, search for current information.", author: "valhalla-core", category: "connectivity", rarity: "common", installed: false },
   { name: "companion", version: "1.0.0", description: "Core companion logic — handles chat, presence, and interaction.", author: "valhalla-core", category: "communication", rarity: "rare", installed: true },
-  { name: "consumer-api", version: "1.0.0", description: "Public-facing REST API for third-party integrations.", author: "valhalla-core", category: "platform", rarity: "uncommon", installed: true },
   { name: "context-compactor", version: "1.0.0", description: "Smart context window compression — never loses important details.", author: "valhalla-core", category: "memory", rarity: "rare", installed: false },
   { name: "crucible", version: "1.0.0", description: "AI stress testing — finds edge cases and breaks bad habits.", author: "valhalla-core", category: "automation", rarity: "legendary", installed: false },
-  { name: "event-bus", version: "1.0.0", description: "In-process pub/sub event hub with WebSocket streaming.", author: "valhalla-core", category: "platform", rarity: "common", installed: true },
   { name: "hydra", version: "1.0.0", description: "Fracture resilience — when a node dies, another absorbs its role.", author: "valhalla-core", category: "connectivity", rarity: "legendary", installed: false },
   { name: "hypotheses", version: "1.0.0", description: "Artificial Epistemology — dream cycles generate beliefs from memory.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
-  { name: "marketplace", version: "1.0.0", description: "Agent Marketplace — export, import, browse, and trade evolved agents.", author: "valhalla-core", category: "platform", rarity: "uncommon", installed: true },
   { name: "model-router", version: "1.0.0", description: "Smart model routing — picks the right model for each task type.", author: "valhalla-core", category: "connectivity", rarity: "rare", installed: false },
   { name: "model-switch", version: "1.0.0", description: "Switch LLM models via API or chat alias.", author: "valhalla-core", category: "connectivity", rarity: "common", installed: false },
-  { name: "payments", version: "1.0.0", description: "Stripe payments — marketplace checkout, seller payouts.", author: "valhalla-core", category: "platform", rarity: "uncommon", installed: true },
   { name: "personality", version: "1.0.0", description: "Personality adapts based on interactions, developing unique traits.", author: "valhalla-core", category: "memory", rarity: "rare", installed: true },
   { name: "philosopher-stone", version: "1.0.0", description: "Nightly wisdom distillation — aggregates mesh knowledge into prompts.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
   { name: "pipeline", version: "1.0.0", description: "Multi-stage pipeline orchestrator — iterative quality loop.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
@@ -111,6 +107,7 @@ const ALL_PLUGINS: SkillPlugin[] = [
   { name: "socratic", version: "1.0.0", description: "Socratic Review — structured multi-perspective debate engine.", author: "valhalla-core", category: "automation", rarity: "legendary", installed: false },
   { name: "task-persistence", version: "1.0.0", description: "Crash-resilient tasks — checkpoint pattern, resume on heal.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
   { name: "telegram", version: "1.0.0", description: "Telegram bot — chat, commands, and push notifications from your mesh.", author: "valhalla-core", category: "communication", rarity: "uncommon", installed: false },
+  { name: "terminal", version: "1.0.0", description: "Run commands on your computer. Create files, install software, run scripts. Always asks permission first.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
   { name: "voice", version: "1.0.0", description: "Voice I/O — Whisper STT + Kokoro TTS. Local processing, zero cloud.", author: "valhalla-core", category: "communication", rarity: "rare", installed: false },
   { name: "watchdog", version: "1.0.0", description: "Health monitoring — polls mesh peers, auto-detects failures.", author: "valhalla-core", category: "connectivity", rarity: "uncommon", installed: false },
   { name: "working-memory", version: "1.0.0", description: "Remembers past conversations and learns your preferences over time.", author: "valhalla-core", category: "memory", rarity: "rare", installed: true },
@@ -132,7 +129,8 @@ export default function SkillsPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.plugins && data.plugins.length > 0) {
-            setAllPlugins(data.plugins);
+            // Filter out hidden infrastructure plugins from API results too
+            setAllPlugins(data.plugins.filter((p: SkillPlugin) => !HIDDEN_PLUGINS.has(p.name)));
           }
         }
       } catch {
@@ -162,7 +160,7 @@ export default function SkillsPage() {
 
   const togglePlugin = async (name: string) => {
     const plugin = allPlugins.find(p => p.name === name);
-    if (!plugin || REQUIRED_PLUGINS.has(name)) return;
+    if (!plugin || CORE_PLUGINS.has(name)) return;
 
     const display = SKILL_DISPLAY[name]?.label || name;
     setToggling(name);
@@ -249,7 +247,7 @@ export default function SkillsPage() {
           {(tab === "equipped" ? equipped : available).map((plugin, i) => {
             const display = SKILL_DISPLAY[plugin.name] || { icon: "⚙️", label: plugin.name, color: "#6A5A4A" };
             const rConf = RARITY_CONFIG[plugin.rarity] || RARITY_CONFIG.common;
-            const isRequired = REQUIRED_PLUGINS.has(plugin.name);
+            const isRequired = CORE_PLUGINS.has(plugin.name);
             const isToggling = toggling === plugin.name;
             const catInfo = CATEGORIES.find(c => c.id === plugin.category);
 

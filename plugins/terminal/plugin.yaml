@@ -1,0 +1,27 @@
+name: terminal
+version: 1.0.0
+category: automation
+rarity: rare
+description: "Terminal access — run commands, create files, and manage your system through AI"
+author: valhalla-core
+
+routes:
+  - method: POST
+    path: /api/v1/terminal/exec
+  - method: GET
+    path: /api/v1/terminal/status
+  - method: POST
+    path: /api/v1/terminal/approve
+  - method: GET
+    path: /api/v1/terminal/history
+
+events:
+  - terminal.command_requested
+  - terminal.command_approved
+  - terminal.command_executed
+  - terminal.command_denied
+
+config_keys:
+  - terminal.sandbox
+  - terminal.allowed_commands
+  - terminal.require_approval
