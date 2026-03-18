@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useToast } from "@/components/Toast";
 import { getSoul, putSoul } from "@/lib/api";
 
@@ -174,6 +175,7 @@ export default function PersonalityPage() {
         <div className="max-w-2xl mx-auto">
             <style>{css}</style>
 
+            <Link href="/" className="per-back-link">← Hub</Link>
             <div className="mb-6">
                 <h1 className="per-page-title">🦊 Personality</h1>
                 <p className="per-page-sub">Define who your AI is — and tell it about yourself.</p>
@@ -302,6 +304,12 @@ const css = `
     font-family: 'Outfit', system-ui;
   }
   .per-page-sub { font-size: 14px; color: #5A4D40; }
+  .per-back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; color: #5A4D40;
+    margin-bottom: 16px; text-decoration: none; transition: color 0.2s;
+  }
+  .per-back-link:hover { color: #F59E0B; }
 
   .per-preset-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
   .per-preset-card {

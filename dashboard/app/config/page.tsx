@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import VoiceSettings from "@/components/VoiceSettings";
 import { useToast } from "@/components/Toast";
@@ -50,6 +51,7 @@ export default function SettingsPage() {
         <div className="max-w-2xl mx-auto">
             <style>{settingsCSS}</style>
 
+            <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#5A4D40', marginBottom: 16, textDecoration: 'none' }}>← Hub</Link>
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-white flex items-center gap-2"><span>⚙</span> Settings</h1>
                 <p className="text-sm text-[var(--color-rune-dim)] mt-1">API keys, voice, devices, and advanced tools.</p>

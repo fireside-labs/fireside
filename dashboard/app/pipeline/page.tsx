@@ -534,6 +534,7 @@ const pageCSS = `
     filter: drop-shadow(0 0 30px rgba(245,158,11,0.25));
     animation: fpBob 4s ease-in-out infinite;
     transition: opacity 0.5s;
+    mix-blend-mode: lighten;
   }
   @keyframes fpBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 
@@ -649,6 +650,7 @@ const pageCSS = `
     display: flex; align-items: center; justify-content: center;
     position: relative; transition: all 0.4s;
     background-size: contain; background-repeat: no-repeat; background-position: center;
+    mix-blend-mode: lighten;
   }
   .fp-ember-stone.done { background-image: url('/hub/ember_stone_done.png'); filter: drop-shadow(0 0 15px rgba(245,158,11,0.4)); }
   .fp-ember-stone.active { background-image: url('/hub/ember_stone_active.png'); filter: drop-shadow(0 0 25px rgba(245,158,11,0.6)); animation: fpEmberPulse 2s ease infinite; }
@@ -674,6 +676,7 @@ const pageCSS = `
     width: 28px; height: 18px;
     background: url('/hub/fire_trail.png') center/cover no-repeat;
     opacity: 0.12; transition: all 0.5s;
+    mix-blend-mode: lighten;
   }
   .fp-fire-trail.lit { opacity: 0.65; filter: drop-shadow(0 0 6px rgba(245,158,11,0.3)); }
 
@@ -686,6 +689,7 @@ const pageCSS = `
     width: 100px; height: 100px; object-fit: contain;
     filter: drop-shadow(0 0 20px rgba(245,158,11,0.3));
     animation: fpBob 3.5s ease-in-out infinite;
+    mix-blend-mode: lighten;
   }
 
   /* Companion speech strip */

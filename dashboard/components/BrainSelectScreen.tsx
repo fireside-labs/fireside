@@ -1,131 +1,166 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════
-   Brain Select — Two-Screen RPG Flow
-   Screen 1: Three category boxes (Speed / Power / Specialist)
-   Screen 2: Filterable model list + expandable cards + inline quant + stat bars
+   Brain Select — Premium Two-Screen RPG Flow
+   Screen 1: Three category cards with generated card art + glow effects
+   Screen 2: 3-column model grid + slide-out detail panel + mascot guide
+   Ported from design_preview.html prototype
    ═══════════════════════════════════════════════════════════════════ */
 
 // ── Data ──
 
-interface ModelDef {
-  id: string;
+interface QuantDef {
   label: string;
-  family: string;
-  params: string;
-  paramNum: number;
-  speed: string;
-  speedNum: number;
-  category: "speed" | "power" | "specialist";
-  tags: string[];
-  quants: string[];
-  sizes: Record<string, string>;
-  vrams: Record<string, number>;
+  bits: string;
+  intel: number;
+  spd: number;
+  sizeGB: number;
+  size: string;
 }
 
-const QUANT_META: Record<string, { label: string; bits: string; quality: number }> = {
-  Q2_K:   { label: "Tiny",   bits: "2-bit", quality: 15 },
-  Q4_K_M: { label: "Low",    bits: "4-bit", quality: 35 },
-  Q6_K:   { label: "Medium", bits: "6-bit", quality: 60 },
-  Q8_0:   { label: "High",   bits: "8-bit", quality: 80 },
-  FP16:   { label: "Ultra",  bits: "16-bit", quality: 100 },
-  API:    { label: "Cloud",  bits: "API",   quality: 95 },
-};
+interface ModelDef {
+  id: string;
+  name: string;
+  family: string;
+  params: string;
+  speed: string;
+  category: "speed" | "power" | "specialist";
+  tags: string[];
+  recommended: boolean;
+  desc: string;
+  quants: QuantDef[];
+}
 
 const MODELS: ModelDef[] = [
   // ── Speed ──
   {
-    id: "phi-3-mini", label: "Phi-3 Mini", family: "Microsoft",
-    params: "3.8B", paramNum: 3.8, speed: "~80 tok/s", speedNum: 80,
-    category: "speed", tags: ["compact", "efficient"],
-    quants: ["Q4_K_M", "Q6_K", "Q8_0"],
-    sizes: { Q4_K_M: "2.2 GB", Q6_K: "2.9 GB", Q8_0: "3.8 GB" },
-    vrams: { Q4_K_M: 4, Q6_K: 5, Q8_0: 6 },
+    id: "phi-3-mini", name: "Phi-3 Mini", family: "Microsoft",
+    params: "3.8B", speed: "~80 tok/s", category: "speed",
+    tags: ["compact", "efficient"], recommended: false,
+    desc: "Microsoft\u2019s ultra-compact model. Surprisingly capable for its size \u2014 trained on high-quality textbook data. Great for quick Q&A and simple tasks when you need instant responses.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 25, spd: 95, sizeGB: 2.2, size: "2.2 GB" },
+      { label: "Medium", bits: "6-bit", intel: 30, spd: 90, sizeGB: 2.9, size: "2.9 GB" },
+      { label: "High", bits: "8-bit", intel: 32, spd: 80, sizeGB: 3.8, size: "3.8 GB" },
+    ],
   },
   {
-    id: "llama-3.1-8b", label: "Llama 3.1 8B", family: "Meta",
-    params: "8B", paramNum: 8, speed: "~45 tok/s", speedNum: 45,
-    category: "speed", tags: ["general", "reliable"],
-    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
-    sizes: { Q4_K_M: "4.9 GB", Q6_K: "6.6 GB", Q8_0: "8.5 GB", FP16: "16 GB" },
-    vrams: { Q4_K_M: 7, Q6_K: 9, Q8_0: 11, FP16: 18 },
+    id: "llama-3.1-8b", name: "Llama 3.1 8B", family: "Meta",
+    params: "8B", speed: "~45 tok/s", category: "speed",
+    tags: ["general", "reliable"], recommended: true,
+    desc: "Meta\u2019s open-source workhorse. Llama 3.1 set the standard for open models \u2014 reliable across every task from writing to analysis. The 8B version is the sweet spot of speed and smarts.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 45, spd: 70, sizeGB: 4.9, size: "4.9 GB" },
+      { label: "Medium", bits: "6-bit", intel: 50, spd: 60, sizeGB: 6.6, size: "6.6 GB" },
+      { label: "High", bits: "8-bit", intel: 55, spd: 50, sizeGB: 8.5, size: "8.5 GB" },
+      { label: "Ultra", bits: "16-bit", intel: 58, spd: 35, sizeGB: 16, size: "16 GB" },
+    ],
   },
   {
-    id: "qwen-3.5-7b", label: "Qwen 3.5 7B", family: "Alibaba",
-    params: "7B", paramNum: 7, speed: "~50 tok/s", speedNum: 50,
-    category: "speed", tags: ["general", "multilingual"],
-    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
-    sizes: { Q4_K_M: "4.4 GB", Q6_K: "5.9 GB", Q8_0: "7.6 GB", FP16: "14 GB" },
-    vrams: { Q4_K_M: 6, Q6_K: 8, Q8_0: 10, FP16: 16 },
+    id: "qwen-3.5-7b", name: "Qwen 3.5 7B", family: "Alibaba",
+    params: "7B", speed: "~50 tok/s", category: "speed",
+    tags: ["versatile", "thinking"], recommended: false,
+    desc: "Alibaba\u2019s latest thinking model. Qwen 3.5 introduced hybrid reasoning \u2014 it can \u2018think step by step\u2019 for hard problems or respond instantly for simple ones. Multilingual powerhouse.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 50, spd: 75, sizeGB: 4.4, size: "4.4 GB" },
+      { label: "Medium", bits: "6-bit", intel: 55, spd: 65, sizeGB: 5.6, size: "5.6 GB" },
+      { label: "High", bits: "8-bit", intel: 60, spd: 55, sizeGB: 7.5, size: "7.5 GB" },
+    ],
   },
   {
-    id: "mistral-7b", label: "Mistral 7B", family: "Mistral AI",
-    params: "7B", paramNum: 7, speed: "~50 tok/s", speedNum: 50,
-    category: "speed", tags: ["general", "creative"],
-    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
-    sizes: { Q4_K_M: "4.4 GB", Q6_K: "5.9 GB", Q8_0: "7.6 GB", FP16: "14.5 GB" },
-    vrams: { Q4_K_M: 6, Q6_K: 8, Q8_0: 10, FP16: 17 },
+    id: "gemma-2-9b", name: "Gemma 2 9B", family: "Google",
+    params: "9B", speed: "~40 tok/s", category: "speed",
+    tags: ["balanced", "modern"], recommended: false,
+    desc: "Google\u2019s open model built on Gemini research. Clean, balanced, and efficient. Punches above its weight on benchmarks. Great all-rounder with strong instruction following.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 50, spd: 65, sizeGB: 5.5, size: "5.5 GB" },
+      { label: "Medium", bits: "6-bit", intel: 55, spd: 55, sizeGB: 7.0, size: "7.0 GB" },
+      { label: "High", bits: "8-bit", intel: 58, spd: 45, sizeGB: 9.1, size: "9.1 GB" },
+    ],
   },
   // ── Power ──
   {
-    id: "qwen-2.5-14b", label: "Qwen 2.5 14B", family: "Alibaba",
-    params: "14B", paramNum: 14, speed: "~25 tok/s", speedNum: 25,
-    category: "power", tags: ["deep", "reasoning"],
-    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
-    sizes: { Q4_K_M: "9.0 GB", Q6_K: "12 GB", Q8_0: "15 GB", FP16: "28 GB" },
-    vrams: { Q4_K_M: 12, Q6_K: 14, Q8_0: 18, FP16: 30 },
+    id: "qwen-2.5-14b", name: "Qwen 2.5 14B", family: "Alibaba",
+    params: "14B", speed: "~25 tok/s", category: "power",
+    tags: ["deep", "reasoning"], recommended: true,
+    desc: "The thinking powerhouse. Alibaba\u2019s 14B model rivals GPT-4 on many benchmarks at a fraction of the size. Exceptional at reasoning, math, and complex multi-step tasks.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 70, spd: 50, sizeGB: 9.0, size: "9.0 GB" },
+      { label: "Medium", bits: "6-bit", intel: 75, spd: 40, sizeGB: 11.4, size: "11.4 GB" },
+      { label: "High", bits: "8-bit", intel: 80, spd: 30, sizeGB: 14.5, size: "14.5 GB" },
+      { label: "Ultra", bits: "16-bit", intel: 85, spd: 18, sizeGB: 28, size: "28 GB" },
+    ],
   },
   {
-    id: "llama-3.1-70b", label: "Llama 3.1 70B", family: "Meta",
-    params: "70B", paramNum: 70, speed: "~8 tok/s", speedNum: 8,
-    category: "power", tags: ["flagship", "deep"],
-    quants: ["Q2_K", "Q4_K_M", "Q6_K"],
-    sizes: { Q2_K: "26 GB", Q4_K_M: "40 GB", Q6_K: "54 GB" },
-    vrams: { Q2_K: 28, Q4_K_M: 44, Q6_K: 58 },
+    id: "llama-3.1-70b", name: "Llama 3.1 70B", family: "Meta",
+    params: "70B", speed: "~8 tok/s", category: "power",
+    tags: ["frontier", "powerful"], recommended: false,
+    desc: "Meta\u2019s flagship open model. 70 billion parameters of raw intelligence. Closest thing to GPT-4 you can run locally \u2014 if you have the VRAM. Slow but brilliant.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 90, spd: 18, sizeGB: 40, size: "40 GB" },
+      { label: "Medium", bits: "6-bit", intel: 93, spd: 10, sizeGB: 55, size: "55 GB" },
+    ],
   },
   {
-    id: "command-r-35b", label: "Command R 35B", family: "Cohere",
-    params: "35B", paramNum: 35, speed: "~15 tok/s", speedNum: 15,
-    category: "power", tags: ["agents", "tools"],
-    quants: ["Q4_K_M", "Q6_K"],
-    sizes: { Q4_K_M: "20 GB", Q6_K: "27 GB" },
-    vrams: { Q4_K_M: 22, Q6_K: 30 },
+    id: "command-r-35b", name: "Command R 35B", family: "Cohere",
+    params: "35B", speed: "~15 tok/s", category: "power",
+    tags: ["RAG", "enterprise"], recommended: false,
+    desc: "Built by Cohere specifically for enterprise RAG workflows. Excels at grounded generation \u2014 citing sources accurately and following complex instructions in business contexts.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 78, spd: 30, sizeGB: 20, size: "20 GB" },
+      { label: "Medium", bits: "6-bit", intel: 82, spd: 22, sizeGB: 27, size: "27 GB" },
+      { label: "High", bits: "8-bit", intel: 85, spd: 15, sizeGB: 35, size: "35 GB" },
+    ],
+  },
+  {
+    id: "cloud-gpt4", name: "GPT-4o (Cloud)", family: "OpenAI",
+    params: "~200B+", speed: "~60 tok/s", category: "power",
+    tags: ["cloud", "best"], recommended: false,
+    desc: "OpenAI\u2019s multimodal flagship. The gold standard in AI \u2014 handles text, vision, and audio. Requires an API key and internet connection. Unmatched quality, but data leaves your machine.",
+    quants: [
+      { label: "Cloud", bits: "API", intel: 98, spd: 85, sizeGB: 0, size: "0 GB" },
+    ],
   },
   // ── Specialist ──
   {
-    id: "qwen-2.5-coder-7b", label: "Qwen 2.5 Coder 7B", family: "Alibaba",
-    params: "7B", paramNum: 7, speed: "~50 tok/s", speedNum: 50,
-    category: "specialist", tags: ["code", "programming"],
-    quants: ["Q4_K_M", "Q6_K", "Q8_0", "FP16"],
-    sizes: { Q4_K_M: "4.4 GB", Q6_K: "5.9 GB", Q8_0: "7.6 GB", FP16: "14 GB" },
-    vrams: { Q4_K_M: 6, Q6_K: 8, Q8_0: 10, FP16: 16 },
+    id: "qwen-2.5-coder-14b", name: "Qwen 2.5 Coder 14B", family: "Alibaba",
+    params: "14B", speed: "~25 tok/s", category: "specialist",
+    tags: ["code", "autocomplete"], recommended: true,
+    desc: "Purpose-built for developers. Alibaba\u2019s coding specialist handles autocomplete, code review, debugging, and generation across 90+ languages. Top-tier on coding benchmarks.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 72, spd: 50, sizeGB: 9.0, size: "9.0 GB" },
+      { label: "Medium", bits: "6-bit", intel: 78, spd: 40, sizeGB: 11.4, size: "11.4 GB" },
+      { label: "High", bits: "8-bit", intel: 82, spd: 30, sizeGB: 14.5, size: "14.5 GB" },
+    ],
   },
   {
-    id: "deepseek-coder-v2", label: "DeepSeek Coder V2", family: "DeepSeek",
-    params: "16B", paramNum: 16, speed: "~22 tok/s", speedNum: 22,
-    category: "specialist", tags: ["code", "math"],
-    quants: ["Q4_K_M", "Q6_K", "Q8_0"],
-    sizes: { Q4_K_M: "9.5 GB", Q6_K: "12.8 GB", Q8_0: "16.5 GB" },
-    vrams: { Q4_K_M: 12, Q6_K: 15, Q8_0: 19 },
-  },
-  // ── Cloud ──
-  {
-    id: "cloud-gpt4", label: "GPT-4o (Cloud)", family: "OpenAI",
-    params: "~200B+", paramNum: 200, speed: "~60 tok/s", speedNum: 60,
-    category: "power", tags: ["cloud", "api"],
-    quants: ["API"],
-    sizes: { API: "0 GB" },
-    vrams: { API: 0 },
+    id: "deepseek-coder-v2", name: "DeepSeek Coder V2", family: "DeepSeek",
+    params: "16B", speed: "~22 tok/s", category: "specialist",
+    tags: ["code", "math", "reasoning"], recommended: false,
+    desc: "DeepSeek\u2019s coding + math hybrid. Uses Mixture-of-Experts architecture for efficiency. Exceptional at mathematical reasoning and complex code generation. Strong open-source contender.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 75, spd: 45, sizeGB: 9.5, size: "9.5 GB" },
+      { label: "Medium", bits: "6-bit", intel: 80, spd: 35, sizeGB: 12, size: "12 GB" },
+      { label: "High", bits: "8-bit", intel: 85, spd: 25, sizeGB: 16, size: "16 GB" },
+    ],
   },
 ];
 
 const CATEGORIES = [
-  { id: "speed" as const, icon: "⚡", img: "/hub/card_speed.png", label: "Speed", color: "#F59E0B", subtitle: "Fast responses, lighter models", bg: "rgba(245,158,11,0.06)" },
-  { id: "power" as const, icon: "🧠", img: "/hub/card_power.png", label: "Power", color: "#A78BFA", subtitle: "Deep intelligence, larger models", bg: "rgba(167,139,250,0.06)" },
-  { id: "specialist" as const, icon: "🔧", img: "/hub/card_specialist.png", label: "Specialist", color: "#34D399", subtitle: "Code, math, creative", bg: "rgba(52,211,153,0.06)" },
+  { id: "speed" as const, img: "/hub/card_speed.png", label: "Speed", color: "#F59E0B", subtitle: "Fast responses, lighter models" },
+  { id: "power" as const, img: "/hub/card_power.png", label: "Power", color: "#A78BFA", subtitle: "Deep intelligence, larger models" },
+  { id: "specialist" as const, img: "/hub/card_specialist.png", label: "Specialist", color: "#34D399", subtitle: "Code, math, creative writing" },
 ];
+
+const CAT_LABELS: Record<string, string> = { speed: "\u26A1 SPEED", power: "\uD83E\uDDE0 POWER", specialist: "\uD83D\uDD27 SPECIALIST" };
+
+const MASCOT_MESSAGES: Record<string, string> = {
+  categories: "Hey there! Pick a path that fits your style \u2728",
+  models: "Click any model card to see the details! \u2605 means I recommend it \uD83E\uDD8A",
+  detail: "Try different quality levels! Higher quality = smarter but slower \uD83E\uDDE0",
+};
 
 // ── Component ──
 
@@ -140,26 +175,19 @@ interface Props {
 export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, fullscreen }: Props) {
   const [screen, setScreen] = useState<"categories" | "models">("categories");
   const [category, setCategory] = useState<"speed" | "power" | "specialist">("speed");
-  const [expandedModel, setExpandedModel] = useState<string | null>(null);
-  const [selectedQuants, setSelectedQuants] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
+  const [detailModel, setDetailModel] = useState<number | null>(null);
+  const [detailQuant, setDetailQuant] = useState(0);
+  const [mascotText, setMascotText] = useState(MASCOT_MESSAGES.categories);
 
-  const pickCategory = (cat: typeof category) => {
-    setCategory(cat);
-    setScreen("models");
-    setExpandedModel(null);
-    setSearch("");
-  };
-
-  const getQuant = (modelId: string, model: ModelDef) =>
-    selectedQuants[modelId] || model.quants[0];
+  const catColor = CATEGORIES.find(c => c.id === category)?.color || "#F59E0B";
 
   const filteredModels = useMemo(() => {
     let list = MODELS.filter(m => m.category === category);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(m =>
-        m.label.toLowerCase().includes(q) ||
+        m.name.toLowerCase().includes(q) ||
         m.family.toLowerCase().includes(q) ||
         m.tags.some(t => t.includes(q))
       );
@@ -167,551 +195,584 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
     return list;
   }, [category, search]);
 
-  const confirmModel = (model: ModelDef) => {
-    const q = getQuant(model.id, model);
-    const size = model.sizes[q] || "?";
-    const qm = QUANT_META[q];
-    const label = `${model.label} (${qm?.bits || q})`;
-    onSelect(model.id, label, size, q);
+  const pickCategory = (cat: typeof category) => {
+    setCategory(cat);
+    setScreen("models");
+    setSearch("");
+    setDetailModel(null);
+    setMascotText(MASCOT_MESSAGES.models);
   };
 
-  const catColor = CATEGORIES.find(c => c.id === category)?.color || "#F59E0B";
+  const openDetail = (idx: number) => {
+    setDetailModel(idx);
+    setDetailQuant(0);
+    setMascotText(MASCOT_MESSAGES.detail);
+  };
+
+  const closeDetail = () => {
+    setDetailModel(null);
+    setMascotText(MASCOT_MESSAGES.models);
+  };
+
+  const confirmModel = (model: ModelDef, quant: QuantDef) => {
+    const label = `${model.name} (${quant.bits})`;
+    onSelect(model.id, label, quant.size, quant.bits);
+  };
+
+  // Reset mascot when returning to categories
+  useEffect(() => {
+    if (screen === "categories") setMascotText(MASCOT_MESSAGES.categories);
+  }, [screen]);
+
+  const detailModelData = detailModel !== null ? filteredModels[detailModel] : null;
+  const detailQuantData = detailModelData ? detailModelData.quants[detailQuant] : null;
 
   return (
-    <div className={`bss2-root ${fullscreen ? "bss2-fullscreen" : ""}`}>
+    <div className={`bs-root ${fullscreen ? "bs-fullscreen" : ""}`} style={{ "--cat-color": catColor } as React.CSSProperties}>
       <style>{css}</style>
 
       {/* ═══ SCREEN 1: CATEGORIES ═══ */}
       {screen === "categories" && (
-        <div className="bss2-categories">
-          <h2 className="bss2-title">Choose your path</h2>
-          <p className="bss2-sub">What matters most to you?</p>
-          <div className="bss2-cat-grid">
+        <div className="bs-categories">
+          <h2 className="bs-title">Choose Your Path</h2>
+          <p className="bs-sub">What matters most to you?</p>
+          <div className="bs-cat-grid">
             {CATEGORIES.map((cat, i) => (
               <button
                 key={cat.id}
-                className="bss2-cat-card"
+                className={`bs-card bs-card-${cat.id}`}
                 onClick={() => pickCategory(cat.id)}
-                style={{
-                  "--cat-color": cat.color,
-                  "--cat-bg": cat.bg,
-                  animationDelay: `${i * 0.1}s`,
-                } as React.CSSProperties}
+                style={{ animationDelay: `${i * 0.12}s, ${i * 0.5}s` }}
               >
-                <div className="bss2-cat-glow" />
-                <div className="bss2-cat-shimmer" />
-                <span className="bss2-cat-icon">{cat.icon}</span>
-                <span className="bss2-cat-label">{cat.label}</span>
-                <span className="bss2-cat-sub">{cat.subtitle}</span>
-                <span className="bss2-cat-count">
-                  {MODELS.filter(m => m.category === cat.id).length} models
+                <div className="bs-shimmer" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="bs-card-icon" src={cat.img} alt={cat.label} />
+                <span className="bs-card-label">{cat.label}</span>
+                <span className="bs-card-desc">{cat.subtitle}</span>
+                <span className="bs-card-count">
+                  {MODELS.filter(m => m.category === cat.id).length} MODELS
                 </span>
               </button>
             ))}
           </div>
+          <div className="bs-hint">Click a card to begin →</div>
           {onBack && (
-            <button className="bss2-back-link" onClick={onBack}>
+            <button className="bs-back-link" onClick={onBack}>
               ← Back to recommended
             </button>
           )}
         </div>
       )}
 
-      {/* ═══ SCREEN 2: MODEL LIST ═══ */}
+      {/* ═══ SCREEN 2: MODEL GRID ═══ */}
       {screen === "models" && (
-        <div className="bss2-models">
+        <div className="bs-models">
           {/* Header */}
-          <div className="bss2-models-header">
-            <button className="bss2-back-btn" onClick={() => setScreen("categories")}>
+          <div className="bs-models-header">
+            <button className="bs-s2-back" onClick={() => { setScreen("categories"); closeDetail(); }}>
               ← Back
             </button>
-            <div className="bss2-models-title-area">
-              <span className="bss2-cat-badge" style={{ background: catColor }}>
-                {CATEGORIES.find(c => c.id === category)?.icon} {CATEGORIES.find(c => c.id === category)?.label}
-              </span>
-              {detectedVram > 0 && (
-                <span className="bss2-vram-badge">💾 {detectedVram} GB VRAM</span>
-              )}
-            </div>
+            <span className="bs-cat-badge" style={{ color: catColor, borderColor: catColor + "4D", background: catColor + "14" }}>
+              {CAT_LABELS[category]}
+            </span>
+            {detectedVram > 0 && (
+              <span className="bs-vram-badge">🖥 {detectedVram} GB VRAM</span>
+            )}
           </div>
 
           {/* Search */}
-          <div className="bss2-search-wrap">
-            <span className="bss2-search-icon">🔍</span>
+          <div className="bs-search-wrap">
+            <span className="bs-search-icon">🔍</span>
             <input
-              className="bss2-search"
+              className="bs-search"
               placeholder="Search models..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
 
-          {/* Model list */}
-          <div className="bss2-model-list">
+          {/* Model grid */}
+          <div className="bs-model-grid">
             {filteredModels.length === 0 && (
-              <p className="bss2-empty">No models found. Try a different search.</p>
+              <p className="bs-empty">No models found. Try a different search.</p>
             )}
-            {filteredModels.map(model => {
-              const isExpanded = expandedModel === model.id;
-              const q = getQuant(model.id, model);
-              const qm = QUANT_META[q] || { label: q, bits: q, quality: 50 };
-              const compatible = detectedVram >= (model.vrams[q] || 0);
-              const intel = Math.min(100, Math.round((model.paramNum / 72) * 100));
-              const spd = Math.min(100, Math.round((model.speedNum / 100) * 100));
-              const sizeNum = parseFloat((model.sizes[q] || "0").replace(/[^0-9.]/g, ""));
-              const siz = Math.min(100, Math.round((sizeNum / 60) * 100));
-
+            {filteredModels.map((model, i) => {
+              const defaultQ = model.quants[0];
+              const overVram = defaultQ.sizeGB > detectedVram && detectedVram > 0 && defaultQ.bits !== "API";
+              const isSelected = detailModel === i;
               return (
-                <div
+                <button
                   key={model.id}
-                  className={`bss2-model-card ${isExpanded ? "bss2-expanded" : ""} ${!compatible && detectedVram > 0 ? "bss2-dim" : ""}`}
-                  style={{ "--cat-color": catColor } as React.CSSProperties}
+                  className={`bs-model-card ${overVram ? "bs-dim-vram" : ""} ${isSelected ? "bs-selected" : ""}`}
+                  onClick={() => openDetail(i)}
+                  style={{ animationDelay: `${i * 0.07}s` }}
                 >
-                  {/* Collapsed header */}
-                  <button
-                    className="bss2-model-header"
-                    onClick={() => setExpandedModel(isExpanded ? null : model.id)}
-                  >
-                    <div className="bss2-model-info">
-                      <span className="bss2-model-name">{model.label}</span>
-                      <span className="bss2-model-family">{model.family}</span>
+                  {model.recommended && <div className="bs-rec-badge">★ Best Pick</div>}
+                  <span className="bs-mc-name">{model.name}</span>
+                  <span className="bs-mc-family">{model.family}</span>
+                  <div className="bs-mc-badges">
+                    <span className="bs-mc-badge">{model.params}</span>
+                    <span className="bs-mc-badge">{model.speed}</span>
+                  </div>
+                  <div className="bs-mc-stats">
+                    <div className="bs-mc-stat">
+                      <span className="bs-mc-stat-label">🧠</span>
+                      <div className="bs-mc-stat-bar"><div className="bs-mc-stat-fill bs-fill-intel" style={{ width: `${defaultQ.intel}%` }} /></div>
                     </div>
-                    <div className="bss2-model-badges">
-                      <span className="bss2-param-badge">{model.params}</span>
-                      <span className="bss2-speed-badge">{model.speed}</span>
+                    <div className="bs-mc-stat">
+                      <span className="bs-mc-stat-label">⚡</span>
+                      <div className="bs-mc-stat-bar"><div className="bs-mc-stat-fill bs-fill-speed" style={{ width: `${defaultQ.spd}%` }} /></div>
                     </div>
-                    <span className="bss2-chevron">{isExpanded ? "▾" : "▸"}</span>
-                  </button>
-
-                  {/* Expanded content */}
-                  {isExpanded && (
-                    <div className="bss2-model-body">
-                      {/* Tags */}
-                      <div className="bss2-tags">
-                        {model.tags.map(t => (
-                          <span key={t} className="bss2-tag">{t}</span>
-                        ))}
-                      </div>
-
-                      {/* Quant pills */}
-                      <div className="bss2-quant-area">
-                        <span className="bss2-quant-label">Quality</span>
-                        <div className="bss2-quant-pills">
-                          {model.quants.map(qOpt => {
-                            const qInfo = QUANT_META[qOpt] || { label: qOpt, bits: qOpt };
-                            return (
-                              <button
-                                key={qOpt}
-                                className={`bss2-qpill ${qOpt === q ? "bss2-qpill-active" : ""}`}
-                                onClick={() =>
-                                  setSelectedQuants(prev => ({ ...prev, [model.id]: qOpt }))
-                                }
-                              >
-                                <span className="bss2-qpill-name">{qInfo.label}</span>
-                                <span className="bss2-qpill-bits">{qInfo.bits}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Stat bars */}
-                      <div className="bss2-stats">
-                        <div className="bss2-stat">
-                          <span className="bss2-stat-icon">🧠</span>
-                          <span className="bss2-stat-name">Intelligence</span>
-                          <div className="bss2-stat-bar">
-                            <div className="bss2-stat-fill bss2-fill-intel" style={{ width: `${intel}%` }} />
-                          </div>
-                          <span className="bss2-stat-val">{model.params}</span>
-                        </div>
-                        <div className="bss2-stat">
-                          <span className="bss2-stat-icon">⚡</span>
-                          <span className="bss2-stat-name">Speed</span>
-                          <div className="bss2-stat-bar">
-                            <div className="bss2-stat-fill bss2-fill-speed" style={{ width: `${spd}%` }} />
-                          </div>
-                          <span className="bss2-stat-val">{model.speed}</span>
-                        </div>
-                        <div className="bss2-stat">
-                          <span className="bss2-stat-icon">💎</span>
-                          <span className="bss2-stat-name">Quality</span>
-                          <div className="bss2-stat-bar">
-                            <div className="bss2-stat-fill bss2-fill-qual" style={{ width: `${qm.quality}%` }} />
-                          </div>
-                          <span className="bss2-stat-val">{qm.bits}</span>
-                        </div>
-                        <div className="bss2-stat">
-                          <span className="bss2-stat-icon">💾</span>
-                          <span className="bss2-stat-name">Download</span>
-                          <div className="bss2-stat-bar">
-                            <div className="bss2-stat-fill bss2-fill-size" style={{ width: `${siz}%` }} />
-                          </div>
-                          <span className="bss2-stat-val">{model.sizes[q]}</span>
-                        </div>
-                      </div>
-
-                      {/* VRAM warning */}
-                      {!compatible && detectedVram > 0 && (
-                        <p className="bss2-vram-warn">
-                          ⚠ Needs ~{model.vrams[q]} GB VRAM (you have {detectedVram} GB)
-                        </p>
-                      )}
-
-                      {/* Confirm */}
-                      <button className="bss2-confirm" onClick={() => confirmModel(model)}>
-                        Select {model.label} ({qm.bits}) →
-                      </button>
+                    <div className="bs-mc-stat">
+                      <span className="bs-mc-stat-label">💾</span>
+                      <div className="bs-mc-stat-bar"><div className="bs-mc-stat-fill bs-fill-size" style={{ width: `${Math.min(100, defaultQ.sizeGB / 40 * 100)}%` }} /></div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                </button>
               );
             })}
           </div>
         </div>
       )}
+
+      {/* ═══ DETAIL OVERLAY + SLIDE-OUT PANEL ═══ */}
+      {detailModel !== null && detailModelData && detailQuantData && (
+        <>
+          <div className="bs-detail-overlay" onClick={closeDetail} />
+          <div className="bs-detail-panel">
+            <button className="bs-dp-close" onClick={closeDetail}>✕ Close</button>
+            <div className="bs-dp-name">{detailModelData.name}</div>
+            <div className="bs-dp-family">{detailModelData.family} · {detailModelData.params} · {detailModelData.speed}</div>
+            <div className="bs-dp-tags">
+              {detailModelData.tags.map(t => (
+                <span key={t} className="bs-dp-tag">{t}</span>
+              ))}
+            </div>
+            <div className="bs-dp-desc">{detailModelData.desc}</div>
+
+            <div className="bs-dp-section-title">Quality</div>
+            <div className="bs-dp-quant-pills">
+              {detailModelData.quants.map((qo, j) => (
+                <button
+                  key={j}
+                  className={`bs-dp-qpill ${j === detailQuant ? "bs-dp-qpill-active" : ""}`}
+                  onClick={() => setDetailQuant(j)}
+                >
+                  <span>{qo.label}</span>
+                  <span className="bs-dp-qpill-bits">{qo.bits}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="bs-dp-section-title">Stats</div>
+            <div className="bs-dp-stats">
+              <div className="bs-dp-stat-row">
+                <span className="bs-dp-stat-icon">🧠</span>
+                <span className="bs-dp-stat-name">Intelligence</span>
+                <div className="bs-dp-stat-bar-bg"><div className="bs-dp-stat-fill bs-dp-intel" style={{ width: `${detailQuantData.intel}%` }} /></div>
+                <span className="bs-dp-stat-value">{detailModelData.params}</span>
+              </div>
+              <div className="bs-dp-stat-row">
+                <span className="bs-dp-stat-icon">⚡</span>
+                <span className="bs-dp-stat-name">Speed</span>
+                <div className="bs-dp-stat-bar-bg"><div className="bs-dp-stat-fill bs-dp-speed" style={{ width: `${detailQuantData.spd}%` }} /></div>
+                <span className="bs-dp-stat-value">{detailModelData.speed}</span>
+              </div>
+              <div className="bs-dp-stat-row">
+                <span className="bs-dp-stat-icon">💾</span>
+                <span className="bs-dp-stat-name">Size</span>
+                <div className="bs-dp-stat-bar-bg"><div className="bs-dp-stat-fill bs-dp-size" style={{ width: `${Math.min(100, detailQuantData.sizeGB / 40 * 100)}%` }} /></div>
+                <span className="bs-dp-stat-value">{detailQuantData.size}</span>
+              </div>
+            </div>
+
+            {/* VRAM warning */}
+            {detectedVram > 0 && detailQuantData.sizeGB > detectedVram && detailQuantData.bits !== "API" && (
+              <p className="bs-dp-vram-warn">
+                ⚠ Needs ~{detailQuantData.sizeGB} GB VRAM (you have {detectedVram} GB)
+              </p>
+            )}
+
+            <button className="bs-dp-select" onClick={() => confirmModel(detailModelData, detailQuantData)}>
+              Select {detailModelData.name} · {detailQuantData.bits} →
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ═══ MASCOT GUIDE ═══ */}
+      <div className="bs-mascot">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="bs-mascot-img" src="/hub/mascot_fox.png" alt="Fox Guide" />
+        <div className="bs-mascot-bubble">{mascotText}</div>
+      </div>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════
-// CSS
+// CSS — ported from design_preview.html
 // ════════════════════════════════════════════════════════════════════
 
 const css = `
-  .bss2-root {
+  .bs-root {
     width: 100%; min-height: 100%;
     font-family: 'Outfit', 'Inter', system-ui, sans-serif;
     color: #F0DCC8;
-    background: #080810;
+    background: #060609;
+    position: relative;
   }
-  .bss2-fullscreen {
+  .bs-fullscreen {
     position: fixed; inset: 0; z-index: 100;
-    background: #080810;
+    background: #060609;
     overflow-y: auto;
   }
 
   /* ═══ SCREEN 1: CATEGORIES ═══ */
-  .bss2-categories {
+  .bs-categories {
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
     padding: 40px 24px; min-height: 100vh; width: 100%;
-    animation: fadeUp 0.5s ease forwards;
+    animation: bsFadeUp 0.5s ease forwards;
   }
-  @keyframes fadeUp {
+  @keyframes bsFadeUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
   }
-  .bss2-title {
-    font-size: 28px; font-weight: 800; margin: 0 0 8px;
-    background: linear-gradient(135deg, #F0DCC8, #FBBF24);
+  .bs-title {
+    font-size: 32px; font-weight: 900; margin: 0 0 6px;
+    background: linear-gradient(135deg, #F0DCC8 0%, #FBBF24 50%, #D97706 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
-  .bss2-sub {
-    font-size: 14px; color: #5A4D40; margin: 0 0 40px;
+  .bs-sub { font-size: 14px; color: #4A3D30; margin: 0 0 48px; }
+  .bs-cat-grid {
+    display: grid; grid-template-columns: repeat(3, 200px);
+    gap: 28px;
   }
-  .bss2-cat-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 24px; max-width: 760px; width: 100%;
+  .bs-hint {
+    margin-top: 48px; font-size: 11px; color: #2A2520;
+    letter-spacing: 1px; text-transform: uppercase;
+    animation: bsFadeIn 1s 0.8s both;
   }
-  .bss2-cat-card {
-    position: relative;
-    display: flex; flex-direction: column;
-    align-items: center; gap: 14px;
-    padding: 48px 28px 36px;
-    border-radius: 24px;
-    aspect-ratio: 3 / 4;
-    justify-content: center;
-    background: radial-gradient(ellipse at 50% 30%,
-      color-mix(in srgb, var(--cat-color) 10%, transparent) 0%,
-      rgba(10,10,16,0.97) 60%);
-    border: 1.5px solid color-mix(in srgb, var(--cat-color) 15%, transparent);
-    cursor: pointer;
-    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    animation: cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-  @keyframes cardPop {
-    from { opacity: 0; transform: translateY(40px) scale(0.85); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  /* Radial glow that BLEEDS outside the card */
-  .bss2-cat-glow {
-    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-    width: 200px; height: 200px; border-radius: 50%;
-    background: radial-gradient(circle,
-      color-mix(in srgb, var(--cat-color) 20%, transparent) 0%,
-      color-mix(in srgb, var(--cat-color) 8%, transparent) 40%,
-      transparent 70%);
-    pointer-events: none;
-    animation: glowPulse 3s ease-in-out infinite alternate;
-    z-index: 0;
-  }
-  @keyframes glowPulse { 0% { opacity: 0.4; transform: translateX(-50%) scale(0.9); } 100% { opacity: 1; transform: translateX(-50%) scale(1.1); } }
-  /* Diagonal shimmer sweep */
-  .bss2-cat-shimmer {
-    position: absolute; inset: 0;
-    border-radius: 24px;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .bss2-cat-shimmer::after {
-    content: ''; position: absolute; inset: -50% -50%;
-    background: linear-gradient(
-      105deg,
-      transparent 30%,
-      color-mix(in srgb, var(--cat-color) 5%, transparent) 45%,
-      transparent 55%
-    );
-    animation: shimmerSweep 5s ease-in-out infinite;
-  }
-  @keyframes shimmerSweep {
-    0% { transform: translateX(-150%); }
-    40%, 100% { transform: translateX(250%); }
-  }
-  .bss2-cat-card:hover {
-    transform: translateY(-10px) scale(1.05);
-    border-color: color-mix(in srgb, var(--cat-color) 60%, transparent);
-    box-shadow:
-      0 24px 60px color-mix(in srgb, var(--cat-color) 20%, transparent),
-      0 0 100px color-mix(in srgb, var(--cat-color) 10%, transparent);
-  }
-  .bss2-cat-card:hover .bss2-cat-glow {
-    opacity: 1.3;
-    width: 240px; height: 240px;
-  }
-  .bss2-cat-icon {
-    font-size: 64px; position: relative; z-index: 2;
-    filter: drop-shadow(0 0 25px color-mix(in srgb, var(--cat-color) 50%, transparent));
-    animation: iconFloat 5s ease-in-out infinite;
-  }
-  @keyframes iconFloat {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
-  }
-  .bss2-cat-label {
-    font-size: 20px; font-weight: 800; color: var(--cat-color);
-    text-transform: uppercase; letter-spacing: 3px;
-    position: relative; z-index: 2;
-    text-shadow: 0 0 25px color-mix(in srgb, var(--cat-color) 35%, transparent);
-  }
-  .bss2-cat-sub {
-    font-size: 12px; color: #5A4D40; text-align: center; line-height: 1.4;
-    position: relative; z-index: 2;
-  }
-  .bss2-cat-count {
-    font-size: 10px; color: #3A3530; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 1px;
-  }
-  .bss2-back-link {
-    margin-top: 32px;
+  @keyframes bsFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .bs-back-link {
+    margin-top: 16px;
     background: none; border: none; cursor: pointer;
-    color: #5A4D40; font-size: 12px;
+    color: #5A4D40; font-size: 12px; font-family: inherit;
     transition: color 0.2s;
   }
-  .bss2-back-link:hover { color: #F0DCC8; }
+  .bs-back-link:hover { color: #F0DCC8; }
 
-  /* ═══ SCREEN 2: MODELS ═══ */
-  .bss2-models {
-    width: 100%; max-width: 640px;
-    min-height: 100vh;
-    padding: 24px;
+  /* Card */
+  .bs-card {
+    position: relative; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    padding: 48px 24px 40px; border-radius: 22px; aspect-ratio: 3 / 4;
+    cursor: pointer; font-family: inherit;
+    background: radial-gradient(ellipse at 50% 25%, var(--glow-soft) 0%, rgba(8,8,14,0.98) 55%);
+    border: 2px solid var(--border-idle);
+    box-shadow: 0 0 35px var(--shadow-outer), 0 0 15px var(--shadow-diffuse), inset 0 0 25px rgba(0,0,0,0.3);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: bsCardIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both, bsBorderPulse 3s ease-in-out infinite alternate;
+  }
+  @keyframes bsCardIn { from { opacity: 0; transform: translateY(50px) scale(0.8); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes bsBorderPulse { 0% { border-color: var(--border-idle); } 100% { border-color: var(--border-glow); box-shadow: 0 0 45px var(--shadow-outer), 0 0 20px var(--shadow-diffuse); } }
+
+  .bs-card::before {
+    content: ''; position: absolute; top: -30px; left: 50%; width: 220px; height: 220px;
+    transform: translateX(-50%); border-radius: 50%;
+    background: radial-gradient(circle, var(--glow-strong) 0%, var(--glow-mid) 35%, transparent 65%);
+    z-index: -1; pointer-events: none; animation: bsOuterGlow 3.5s ease-in-out infinite alternate; opacity: 0.6;
+  }
+  @keyframes bsOuterGlow { 0% { opacity: 0.4; transform: translateX(-50%) scale(0.85); } 100% { opacity: 0.8; transform: translateX(-50%) scale(1.1); } }
+
+  .bs-card:hover {
+    transform: translateY(-12px) scale(1.06);
+    border-color: var(--border-hover);
+    box-shadow: 0 30px 80px var(--shadow-outer), 0 0 120px var(--shadow-diffuse), 0 0 40px var(--shadow-outer);
+  }
+  .bs-card:hover::before { opacity: 1; width: 280px; height: 280px; }
+  .bs-card:hover .bs-card-icon { filter: drop-shadow(0 0 50px var(--glow-strong)); transform: translateY(-4px) scale(1.1); }
+
+  .bs-shimmer { position: absolute; inset: 0; border-radius: 22px; overflow: hidden; pointer-events: none; }
+  .bs-shimmer::after {
+    content: ''; position: absolute; inset: -50% -50%;
+    background: linear-gradient(105deg, transparent 30%, var(--shimmer-color) 50%, transparent 100%);
+    animation: bsSweep 6s ease-in-out infinite;
+  }
+  @keyframes bsSweep { 0% { left: -100%; } 35%, 100% { left: 250%; } }
+
+  .bs-card-icon {
+    width: 140px; height: 140px; object-fit: contain;
+    position: relative; z-index: 2;
+    filter: drop-shadow(0 0 30px var(--glow-strong));
+    animation: bsIconBreathe 5s ease-in-out infinite;
+    mix-blend-mode: screen;
+    -webkit-mask-image: radial-gradient(circle, white 35%, transparent 70%);
+    mask-image: radial-gradient(circle, white 35%, transparent 70%);
+  }
+  @keyframes bsIconBreathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-7px) scale(1.04); } }
+  .bs-card-label {
+    font-size: 18px; font-weight: 900; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 4px;
+    position: relative; z-index: 2;
+    text-shadow: 0 0 30px var(--glow-strong);
+  }
+  .bs-card-desc {
+    font-size: 12px; color: #5A4D40; text-align: center; line-height: 1.5;
+    position: relative; z-index: 2; max-width: 140px;
+  }
+  .bs-card-count {
+    font-size: 9px; color: #3A3530; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    position: relative; z-index: 2;
+  }
+
+  /* Card color variants */
+  .bs-card-speed { --accent: #F59E0B; --glow-strong: rgba(245,158,11,0.25); --glow-mid: rgba(217,119,6,0.10); --glow-soft: rgba(245,158,11,0.06); --border-idle: rgba(245,158,11,0.30); --border-hover: rgba(245,158,11,0.85); --border-glow: rgba(245,158,11,0.55); --border-glow-dim: rgba(245,158,11,0.25); --shadow-outer: rgba(245,158,11,0.12); --shadow-diffuse: rgba(245,158,11,0.06); --shimmer-color: rgba(245,158,11,0.04); }
+  .bs-card-power { --accent: #A78BFA; --glow-strong: rgba(167,139,250,0.25); --glow-mid: rgba(139,92,246,0.10); --glow-soft: rgba(167,139,250,0.06); --border-idle: rgba(167,139,250,0.30); --border-hover: rgba(167,139,250,0.85); --border-glow: rgba(167,139,250,0.55); --border-glow-dim: rgba(167,139,250,0.25); --shadow-outer: rgba(167,139,250,0.12); --shadow-diffuse: rgba(167,139,250,0.06); --shimmer-color: rgba(167,139,250,0.04); }
+  .bs-card-specialist { --accent: #34D399; --glow-strong: rgba(52,211,153,0.25); --glow-mid: rgba(16,185,129,0.10); --glow-soft: rgba(52,211,153,0.06); --border-idle: rgba(52,211,153,0.30); --border-hover: rgba(52,211,153,0.85); --border-glow: rgba(52,211,153,0.55); --border-glow-dim: rgba(52,211,153,0.25); --shadow-outer: rgba(52,211,153,0.12); --shadow-diffuse: rgba(52,211,153,0.06); --shimmer-color: rgba(52,211,153,0.04); }
+
+  /* ═══ SCREEN 2: MODEL GRID ═══ */
+  .bs-models {
+    width: 100%; max-width: 960px;
+    min-height: 100vh; padding: 28px 24px;
     margin: 0 auto;
-    background: #080810;
-    animation: fadeUp 0.4s ease forwards;
+    animation: bsFadeUp 0.4s ease forwards;
   }
-  .bss2-models-header {
+  .bs-models-header {
     display: flex; align-items: center; gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
   }
-  .bss2-back-btn {
-    background: none; border: 1px solid rgba(255,255,255,0.06);
-    color: #7A6A5A; font-size: 12px; font-weight: 600; cursor: pointer;
-    padding: 6px 14px; border-radius: 8px; transition: all 0.2s;
-    flex-shrink: 0;
+  .bs-s2-back {
+    padding: 8px 16px; border-radius: 10px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: #8A7A6A; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all 0.3s;
   }
-  .bss2-back-btn:hover { color: #F0DCC8; border-color: rgba(217,119,6,0.3); }
-  .bss2-models-title-area {
-    display: flex; align-items: center; gap: 10px; flex: 1;
+  .bs-s2-back:hover { background: rgba(255,255,255,0.08); color: #F0DCC8; }
+  .bs-cat-badge {
+    padding: 6px 16px; border-radius: 8px;
+    font-size: 12px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 2px;
+    border: 1px solid;
   }
-  .bss2-cat-badge {
-    font-size: 11px; font-weight: 700; color: #0A0A0A;
-    padding: 4px 12px; border-radius: 6px;
-    text-transform: uppercase; letter-spacing: 1px;
-  }
-  .bss2-vram-badge {
-    font-size: 10px; color: #5A4D40; font-weight: 600;
-    padding: 4px 10px; border-radius: 6px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.04);
+  .bs-vram-badge {
+    margin-left: auto; padding: 6px 14px; border-radius: 8px;
+    font-size: 11px; color: #6A5A4A; font-weight: 600;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
   }
 
   /* Search */
-  .bss2-search-wrap {
-    position: relative; margin-bottom: 16px;
+  .bs-search-wrap { position: relative; margin-bottom: 16px; }
+  .bs-search-icon {
+    position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+    font-size: 16px; pointer-events: none; opacity: 0.6;
   }
-  .bss2-search-icon {
-    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-    font-size: 14px; pointer-events: none;
+  .bs-search {
+    width: 100%; padding: 16px 20px 16px 48px; border-radius: 16px;
+    border: 1.5px solid rgba(245,158,11,0.12);
+    background: rgba(245,158,11,0.03);
+    color: #F0DCC8; font-size: 15px; font-family: inherit; outline: none;
+    transition: all 0.3s; box-shadow: 0 0 20px rgba(245,158,11,0.04);
   }
-  .bss2-search {
-    width: 100%; padding: 12px 14px 12px 40px;
-    border-radius: 12px;
-    background: rgba(18,18,26,0.6);
-    border: 1px solid rgba(255,255,255,0.06);
-    color: #F0DCC8; font-size: 13px; outline: none;
-    transition: all 0.3s;
+  .bs-search:focus {
+    border-color: color-mix(in srgb, var(--cat-color) 50%, transparent);
+    box-shadow: 0 0 40px color-mix(in srgb, var(--cat-color) 12%, transparent);
+    background: rgba(245,158,11,0.05);
   }
-  .bss2-search:focus {
-    border-color: rgba(217,119,6,0.3);
-    box-shadow: 0 0 20px rgba(245,158,11,0.06);
-  }
-  .bss2-search::placeholder { color: rgba(240,220,200,0.2); }
+  .bs-search::placeholder { color: #4A3D30; font-weight: 500; }
 
-  /* Model list */
-  .bss2-model-list {
-    display: flex; flex-direction: column; gap: 8px;
-    max-height: calc(100vh - 200px);
-    overflow-y: auto;
-    padding-right: 4px;
+  /* Model grid */
+  .bs-model-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
   }
-  .bss2-model-list::-webkit-scrollbar { width: 3px; }
-  .bss2-model-list::-webkit-scrollbar-thumb { background: rgba(245,158,11,0.15); border-radius: 2px; }
+  .bs-empty { color: #3A3530; text-align: center; font-size: 13px; padding: 40px 0; grid-column: 1/-1; }
 
-  .bss2-empty { color: #3A3530; text-align: center; font-size: 13px; padding: 40px 0; }
+  .bs-model-card {
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+    border: 1.5px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(10px);
+    padding: 20px; cursor: pointer; font-family: inherit;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: bsCardSlide 0.4s ease both;
+    display: flex; flex-direction: column; gap: 12px;
+    position: relative; text-align: left; color: inherit;
+  }
+  @keyframes bsCardSlide { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .bs-model-card:hover {
+    transform: translateY(-6px) scale(1.02);
+    border-color: color-mix(in srgb, var(--cat-color) 35%, transparent);
+    box-shadow: 0 12px 40px color-mix(in srgb, var(--cat-color) 8%, transparent), 0 0 20px color-mix(in srgb, var(--cat-color) 5%, transparent);
+  }
+  .bs-selected {
+    border-color: color-mix(in srgb, var(--cat-color) 50%, transparent);
+    box-shadow: 0 0 30px color-mix(in srgb, var(--cat-color) 12%, transparent);
+  }
+  .bs-dim-vram { opacity: 0.35; pointer-events: none; }
 
-  /* Model card */
-  .bss2-model-card {
-    border-radius: 14px;
-    background: rgba(18,18,26,0.4);
-    border: 1px solid rgba(255,255,255,0.04);
-    overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  .bss2-model-card:hover {
-    border-color: rgba(255,255,255,0.08);
-  }
-  .bss2-expanded {
-    border-color: color-mix(in srgb, var(--cat-color) 25%, transparent);
-    box-shadow: 0 8px 32px color-mix(in srgb, var(--cat-color) 8%, transparent);
-  }
-  .bss2-dim { opacity: 0.35; }
-
-  .bss2-model-header {
-    width: 100%; padding: 14px 16px;
-    display: flex; align-items: center; gap: 12px;
-    background: none; border: none; cursor: pointer;
-    color: #F0DCC8; text-align: left;
-  }
-  .bss2-model-info { flex: 1; }
-  .bss2-model-name { font-size: 14px; font-weight: 700; display: block; }
-  .bss2-model-family { font-size: 10px; color: #5A4D40; }
-  .bss2-model-badges { display: flex; gap: 6px; }
-  .bss2-param-badge, .bss2-speed-badge {
-    font-size: 10px; font-weight: 600; padding: 2px 8px;
-    border-radius: 4px; background: rgba(255,255,255,0.04);
-    color: #7A6A5A;
-    font-family: 'SF Mono', 'JetBrains Mono', monospace;
-  }
-  .bss2-chevron { font-size: 12px; color: #3A3530; flex-shrink: 0; }
-
-  /* Expanded body */
-  .bss2-model-body {
-    padding: 0 16px 16px;
-    animation: bodyIn 0.3s ease forwards;
-  }
-  @keyframes bodyIn { from { opacity: 0; } to { opacity: 1; } }
-
-  /* Tags */
-  .bss2-tags { display: flex; gap: 6px; margin-bottom: 12px; }
-  .bss2-tag {
-    font-size: 9px; font-weight: 600; color: #5A4D40;
-    padding: 2px 8px; border-radius: 4px;
-    background: rgba(255,255,255,0.03);
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
-
-  /* Quant pills */
-  .bss2-quant-area { margin-bottom: 12px; }
-  .bss2-quant-label {
-    font-size: 10px; font-weight: 600; color: #3A3530;
-    text-transform: uppercase; letter-spacing: 1px;
-    margin-bottom: 6px; display: block;
-  }
-  .bss2-quant-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-  .bss2-qpill {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 6px 14px; border-radius: 8px; cursor: pointer;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.04);
-    transition: all 0.2s;
-  }
-  .bss2-qpill:hover { border-color: rgba(255,255,255,0.1); }
-  .bss2-qpill-active {
-    background: rgba(245,158,11,0.1);
-    border-color: rgba(245,158,11,0.3);
-  }
-  .bss2-qpill-name { font-size: 11px; font-weight: 700; color: #F0DCC8; }
-  .bss2-qpill-bits { font-size: 9px; color: #5A4D40; }
-
-  /* Stat bars */
-  .bss2-stats {
-    display: flex; flex-direction: column; gap: 5px;
-    margin-bottom: 12px;
-  }
-  .bss2-stat { display: flex; align-items: center; gap: 8px; }
-  .bss2-stat-icon { font-size: 11px; width: 14px; text-align: center; }
-  .bss2-stat-name {
-    font-size: 9px; font-weight: 600; color: #3A3530;
-    width: 70px; flex-shrink: 0;
-    text-transform: uppercase; letter-spacing: 0.5px;
-  }
-  .bss2-stat-bar {
-    flex: 1; height: 6px; border-radius: 3px;
-    background: rgba(255,255,255,0.04); overflow: hidden;
-  }
-  .bss2-stat-fill {
-    height: 100%; border-radius: 3px;
-    transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  .bss2-stat-fill::after {
-    content: ''; display: block; width: 100%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15));
-    border-radius: inherit;
-  }
-  .bss2-fill-intel { background: linear-gradient(90deg, #92400E, #FBBF24); }
-  .bss2-fill-speed { background: linear-gradient(90deg, #065F46, #34D399); }
-  .bss2-fill-qual  { background: linear-gradient(90deg, #5B21B6, #A78BFA); }
-  .bss2-fill-size  { background: linear-gradient(90deg, #1E3A5F, #60A5FA); }
-  .bss2-stat-val {
-    font-size: 9px; font-weight: 600; color: #5A4D40;
-    width: 50px; text-align: right; flex-shrink: 0;
-    font-family: 'SF Mono', 'JetBrains Mono', monospace;
-  }
-
-  /* VRAM warning */
-  .bss2-vram-warn {
-    font-size: 10px; color: #F59E0B; font-weight: 600;
-    margin: 0 0 8px; padding: 6px 10px;
-    border-radius: 6px; background: rgba(245,158,11,0.06);
-  }
-
-  /* Confirm */
-  .bss2-confirm {
-    width: 100%; padding: 12px;
-    border-radius: 12px; border: none; cursor: pointer;
+  .bs-rec-badge {
+    position: absolute; top: -6px; right: -6px;
+    padding: 3px 10px; border-radius: 8px;
+    font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
     background: linear-gradient(135deg, #D97706, #F59E0B);
-    color: #0A0A0A; font-size: 13px; font-weight: 800;
-    letter-spacing: 0.5px;
-    box-shadow: 0 4px 20px rgba(245,158,11,0.2);
-    transition: all 0.3s;
+    color: #0A0A0A;
+    box-shadow: 0 2px 12px rgba(245,158,11,0.4);
+    animation: bsRecPulse 2s ease-in-out infinite alternate;
   }
-  .bss2-confirm:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 28px rgba(245,158,11,0.35);
+  @keyframes bsRecPulse { 0% { box-shadow: 0 2px 12px rgba(245,158,11,0.3); } 100% { box-shadow: 0 4px 20px rgba(245,158,11,0.6); } }
+
+  .bs-mc-name { font-size: 15px; font-weight: 700; }
+  .bs-mc-family { font-size: 11px; color: #5A4D40; }
+  .bs-mc-badges { display: flex; gap: 6px; margin-top: 2px; }
+  .bs-mc-badge {
+    padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700;
+    color: #6A5A4A; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  }
+  .bs-mc-stats { display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
+  .bs-mc-stat { display: flex; align-items: center; gap: 6px; }
+  .bs-mc-stat-label { font-size: 9px; font-weight: 700; color: #4A3D30; width: 16px; text-align: center; }
+  .bs-mc-stat-bar { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.04); overflow: hidden; }
+  .bs-mc-stat-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+  .bs-fill-intel { background: linear-gradient(90deg, #DB2777, #F472B6); }
+  .bs-fill-speed { background: linear-gradient(90deg, #10B981, #34D399); }
+  .bs-fill-size { background: linear-gradient(90deg, #3B82F6, #60A5FA); }
+
+  /* ═══ DETAIL PANEL ═══ */
+  .bs-detail-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+    animation: bsFadeIn 0.2s ease;
+  }
+  .bs-detail-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 51;
+    width: 400px;
+    background: linear-gradient(180deg, #0C0C14 0%, #080810 100%);
+    border-left: 1.5px solid rgba(255,255,255,0.08);
+    box-shadow: -20px 0 60px rgba(0,0,0,0.5);
+    padding: 28px 24px; overflow-y: auto;
+    animation: bsSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes bsSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+  .bs-dp-close {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 6px 12px; color: #6A5A4A;
+    font-size: 12px; cursor: pointer; font-family: inherit; transition: all 0.2s;
+  }
+  .bs-dp-close:hover { background: rgba(255,255,255,0.1); color: #F0DCC8; }
+
+  .bs-dp-name { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .bs-dp-family { font-size: 13px; color: #5A4D40; margin-bottom: 16px; }
+  .bs-dp-tags { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+  .bs-dp-tag {
+    padding: 4px 12px; border-radius: 6px; font-size: 10px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--cat-color);
+    background: color-mix(in srgb, var(--cat-color) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--cat-color) 15%, transparent);
+  }
+  .bs-dp-desc {
+    font-size: 13px; color: #8A7A6A; line-height: 1.7; margin-bottom: 20px;
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+  }
+  .bs-dp-section-title {
+    font-size: 10px; font-weight: 700; color: #5A4D40;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+  }
+  .bs-dp-quant-pills { display: flex; gap: 6px; margin-bottom: 24px; }
+  .bs-dp-qpill {
+    flex: 1; padding: 10px 8px; border-radius: 12px; cursor: pointer;
+    background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.08);
+    color: #6A5A4A; font-family: inherit; font-size: 13px; font-weight: 700;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; transition: all 0.3s;
+  }
+  .bs-dp-qpill:hover { background: rgba(255,255,255,0.06); border-color: color-mix(in srgb, var(--cat-color) 30%, transparent); }
+  .bs-dp-qpill-active {
+    background: color-mix(in srgb, var(--cat-color) 15%, transparent);
+    border-color: var(--cat-color); color: var(--cat-color);
+    box-shadow: 0 0 25px color-mix(in srgb, var(--cat-color) 15%, transparent);
+  }
+  .bs-dp-qpill-bits { font-size: 10px; font-weight: 600; opacity: 0.5; }
+
+  .bs-dp-stats { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+  .bs-dp-stat-row { display: flex; align-items: center; gap: 10px; }
+  .bs-dp-stat-icon { font-size: 15px; width: 22px; text-align: center; filter: saturate(1.4); }
+  .bs-dp-stat-name { font-size: 11px; font-weight: 700; color: #6A5A4A; text-transform: uppercase; width: 85px; letter-spacing: 0.5px; }
+  .bs-dp-stat-bar-bg {
+    flex: 1; height: 12px; border-radius: 6px;
+    background: rgba(255,255,255,0.04); overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+  }
+  .bs-dp-stat-fill {
+    height: 100%; border-radius: 6px; position: relative; overflow: hidden;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .bs-dp-stat-fill::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.3), transparent);
+  }
+  .bs-dp-stat-fill::after {
+    content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+    border-radius: 6px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    animation: bsBarShine 3s ease-in-out infinite;
+  }
+  @keyframes bsBarShine { 0% { left: -100%; } 50%, 100% { left: 200%; } }
+  .bs-dp-intel { background: linear-gradient(90deg, #9D174D, #DB2777, #EC4899, #F472B6); box-shadow: 0 0 12px rgba(236,72,153,0.35); }
+  .bs-dp-speed { background: linear-gradient(90deg, #047857, #059669, #10B981, #34D399); box-shadow: 0 0 12px rgba(16,185,129,0.35); }
+  .bs-dp-size { background: linear-gradient(90deg, #1D4ED8, #2563EB, #3B82F6, #60A5FA); box-shadow: 0 0 12px rgba(59,130,246,0.35); }
+  .bs-dp-stat-value { font-size: 11px; color: #6A5A4A; width: 65px; text-align: right; font-weight: 700; }
+
+  .bs-dp-vram-warn {
+    font-size: 11px; color: #EF4444; font-weight: 600;
+    margin: 0 0 12px; padding: 8px 12px; border-radius: 8px;
+    background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15);
   }
 
-  /* Responsive */
-  @media (max-width: 600px) {
-    .bss2-cat-grid { grid-template-columns: 1fr; max-width: 320px; }
+  .bs-dp-select {
+    width: 100%; padding: 16px; border-radius: 14px; border: none;
+    cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 800;
+    background: linear-gradient(135deg, #D97706, #F59E0B);
+    color: #0A0A0A; box-shadow: 0 4px 24px rgba(245,158,11,0.25);
+    transition: all 0.3s;
+  }
+  .bs-dp-select:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(245,158,11,0.4); }
+
+  /* ═══ MASCOT ═══ */
+  .bs-mascot {
+    position: fixed; bottom: 16px; left: 20px; z-index: 40;
+    display: flex; align-items: flex-end; gap: 0;
+    pointer-events: none;
+  }
+  .bs-mascot-img {
+    width: 180px; height: 180px; object-fit: contain;
+    filter: drop-shadow(0 4px 30px rgba(245,158,11,0.4));
+    animation: bsMascotBob 4s ease-in-out infinite;
+    mix-blend-mode: screen;
+    -webkit-mask-image: radial-gradient(circle, white 30%, transparent 60%);
+    mask-image: radial-gradient(circle, white 30%, transparent 60%);
+  }
+  @keyframes bsMascotBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  .bs-mascot-bubble {
+    position: relative; bottom: 50px;
+    background: rgba(20,18,28,0.92); border: 1.5px solid rgba(245,158,11,0.20);
+    border-radius: 14px 14px 14px 4px;
+    padding: 10px 14px; max-width: 220px;
+    font-size: 12px; color: #C4A882; line-height: 1.5;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    pointer-events: auto;
+  }
+
+  /* ═══ Responsive ═══ */
+  @media (max-width: 700px) {
+    .bs-cat-grid { grid-template-columns: 1fr; max-width: 240px; }
+    .bs-model-grid { grid-template-columns: 1fr; }
+    .bs-detail-panel { width: 100%; }
+    .bs-mascot { display: none; }
   }
 `;

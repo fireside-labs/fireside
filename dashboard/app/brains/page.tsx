@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import BrainSelectScreen from "@/components/BrainSelectScreen";
 
 export default function BrainsPage() {
+    const router = useRouter();
     const [detectedVram, setDetectedVram] = useState(0);
     const [currentBrain, setCurrentBrain] = useState("");
 
@@ -36,6 +38,7 @@ export default function BrainsPage() {
                     setCurrentBrain(label);
                 }}
                 detectedVram={detectedVram}
+                onBack={() => router.push('/')}
                 fullscreen
             />
         </div>

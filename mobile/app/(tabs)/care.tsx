@@ -17,7 +17,6 @@ import {
     ScrollView,
     StyleSheet,
     RefreshControl,
-    Image,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useConnection } from "../../src/hooks/useConnection";
@@ -25,6 +24,7 @@ import { companionAPI } from "../../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
 import { playSound } from "../../src/sounds";
 import CampfireScene from "../../src/CampfireScene";
+import FadedImage from "../../src/FadedImage";
 import DailyGiftModal from "../../src/DailyGift";
 import MorningBriefing from "../../src/MorningBriefing";
 import type { PetSpecies, WalkEvent } from "../../src/types";
@@ -254,7 +254,12 @@ export default function HubTab() {
 
             {/* Avatar + Name */}
             <View style={styles.avatarRow}>
-                <Image source={getAvatarSource(species, happiness)} style={styles.avatarImage} />
+                <FadedImage
+                    source={getAvatarSource(species, happiness)}
+                    size={72}
+                    fadeWidth={14}
+                    circular
+                />
                 <View>
                     <Text style={styles.avatarName}>{petName}</Text>
                     <Text style={styles.avatarSpecies}>Level {level} {species}</Text>
@@ -365,7 +370,7 @@ const styles = StyleSheet.create({
     content: { paddingHorizontal: spacing.lg, paddingTop: 60, paddingBottom: spacing.xxxl },
     // Avatar row
     avatarRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.lg },
-    avatarImage: { width: 56, height: 56, borderRadius: 28 },
+    // avatarImage now handled by FadedImage component
     avatarName: { fontFamily: "Inter_700Bold", fontSize: fontSize.lg, color: colors.textPrimary },
     avatarSpecies: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, textTransform: "capitalize" },
     // Stats

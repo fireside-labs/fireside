@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useToast } from "@/components/Toast";
 import { getPlugins, installPlugin, uninstallPlugin } from "@/lib/api";
 
@@ -96,6 +97,7 @@ export default function SkillsPage() {
         <div className="max-w-2xl mx-auto">
             <style>{css}</style>
 
+            <Link href="/" className="sk-back-link">← Hub</Link>
             <div className="mb-6">
                 <h1 className="sk-page-title">✦ Skills</h1>
                 <p className="sk-page-sub">Equip your AI with new abilities — toggle on or off anytime.</p>
@@ -187,6 +189,12 @@ const css = `
     font-family: 'Outfit', system-ui;
   }
   .sk-page-sub { font-size: 14px; color: #5A4D40; }
+  .sk-back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; color: #5A4D40;
+    margin-bottom: 16px; text-decoration: none; transition: color 0.2s;
+  }
+  .sk-back-link:hover { color: #F59E0B; }
 
   /* Power Level Bar */
   .sk-power-card {
