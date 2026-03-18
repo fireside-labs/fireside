@@ -231,6 +231,17 @@ export default function CampfireHub() {
               </div>
             </Link>
 
+            <Link href="/pipeline" onClick={() => playWhoosh()}>
+              <div className="fs-nav-card fs-c6" style={{ animationDelay: "0.8s" }}>
+                <div className="fs-nc-icon"><img src="/hub/nav_tasks.png" alt="Tasks" /></div>
+                <div className="fs-nc-text">
+                  <div className="fs-nc-title">Tasks</div>
+                  <div className="fs-nc-desc">Set up multi-step workflows your AI runs for you</div>
+                </div>
+                <span className="fs-nc-arrow">→</span>
+              </div>
+            </Link>
+
             {!hasBrain && (
               <Link href="/brains">
                 <button className="fs-btn-gold" onClick={() => playWhoosh()}>Set Up Brain →</button>
@@ -568,6 +579,7 @@ const pageCSS = `
   .fs-c3 { --nc: #FBBF24; }
   .fs-c4 { --nc: #FB923C; }
   .fs-c5 { --nc: #60A5FA; }
+  .fs-c6 { --nc: #2DD4BF; }
 
   .fs-nc-icon { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .fs-nc-icon img {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { API_BASE } from "../../lib/api";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -192,7 +193,8 @@ export default function PipelinePage() {
         {/* ── Sidebar ── */}
         <div className="fp-sidebar">
           <div className="fp-sidebar-header">
-            <h2 className="fp-sidebar-title">🔥 The Forge</h2>
+            <Link href="/" className="fp-back-hub">🔥 Hub</Link>
+            <h2 className="fp-sidebar-title">Tasks</h2>
           </div>
 
           <button
@@ -478,7 +480,13 @@ const pageCSS = `
     border-right: 1px solid rgba(255,255,255,0.04);
     padding: 20px 14px; display: flex; flex-direction: column; gap: 8px;
   }
-  .fp-sidebar-header { margin-bottom: 12px; }
+  .fp-sidebar-header { margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+  .fp-back-hub {
+    padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 800;
+    background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.12);
+    color: #C4A882; text-decoration: none; transition: all 0.2s; font-family: 'Outfit';
+  }
+  .fp-back-hub:hover { background: rgba(245,158,11,0.12); color: #F59E0B; border-color: rgba(245,158,11,0.25); }
   .fp-sidebar-title {
     font-size: 18px; font-weight: 900; margin: 0;
     background: linear-gradient(135deg, #F0DCC8, #F59E0B);
