@@ -1,5 +1,7 @@
 name: working-memory
 version: 1.0.0
+category: memory
+rarity: rare
 description: Short-term memory buffer with token-budget-aware prompt injection
 author: valhalla-core
 

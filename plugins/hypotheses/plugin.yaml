@@ -1,5 +1,7 @@
 name: hypotheses
 version: 1.0.0
+category: intelligence
+rarity: legendary
 description: "Artificial Epistemology — dream cycles generate beliefs from memory collisions"
 author: valhalla-core
 

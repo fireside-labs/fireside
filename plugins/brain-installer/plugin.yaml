@@ -1,5 +1,7 @@
 name: brain-installer
 version: 1.0.0
+category: platform
+rarity: uncommon
 description: "One-click brain (model) installation — oMLX for Mac, llama-server for NVIDIA, cloud for everyone"
 author: valhalla-core
 

@@ -1,5 +1,7 @@
 name: pipeline
 version: 1.0.0
+category: automation
+rarity: rare
 description: "Multi-stage pipeline orchestrator — iterative quality loop"
 author: valhalla-core
 

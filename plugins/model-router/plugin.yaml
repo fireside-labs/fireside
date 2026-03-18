@@ -1,5 +1,7 @@
 name: model-router
 version: 1.0.0
+category: connectivity
+rarity: rare
 description: "Smart model routing — picks the right model for each task type"
 author: valhalla-core
 

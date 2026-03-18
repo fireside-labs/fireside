@@ -1,5 +1,7 @@
 name: watchdog
 version: 1.0.0
+category: connectivity
+rarity: uncommon
 description: Health monitoring — polls mesh peers, auto-detects failures
 author: valhalla-core
 routes:

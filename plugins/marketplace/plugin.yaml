@@ -1,5 +1,7 @@
 name: marketplace
 version: 1.0.0
+category: platform
+rarity: uncommon
 description: "Agent Marketplace — export, import, browse, and trade evolved agents"
 author: valhalla-core
 

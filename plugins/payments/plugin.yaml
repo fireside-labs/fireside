@@ -1,5 +1,7 @@
 name: payments
 version: 1.0.0
+category: platform
+rarity: uncommon
 description: "Stripe payments — marketplace checkout, seller payouts, purchase tracking"
 author: valhalla-core
 

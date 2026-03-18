@@ -1,5 +1,7 @@
 name: agent_profiles
 version: 1.0.0
+category: platform
+rarity: uncommon
 description: "RPG agent profiles — levels, XP, achievements, personality sliders, agent stats"
 author: valhalla-core
 

@@ -1,5 +1,7 @@
 name: telegram
 version: 1.0.0
+category: communication
+rarity: uncommon
 description: "Telegram bot — chat, commands, and push notifications from your mesh"
 author: valhalla-core
 

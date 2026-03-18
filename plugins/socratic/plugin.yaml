@@ -1,5 +1,7 @@
 name: socratic
 version: 1.0.0
+category: automation
+rarity: legendary
 description: "Socratic Review — structured multi-perspective debate engine"
 author: valhalla-core
 

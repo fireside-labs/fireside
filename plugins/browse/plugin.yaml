@@ -1,5 +1,7 @@
 name: browse
 version: 1.0.0
+category: connectivity
+rarity: common
 description: Web browsing via accessibility-tree parsing — 90% fewer tokens than raw DOM
 routes:
   - method: POST

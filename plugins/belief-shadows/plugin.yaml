@@ -1,5 +1,7 @@
 name: belief-shadows
 version: 1.0.0
+category: intelligence
+rarity: legendary
 description: "Theory of Mind — track peer belief vs reality gaps"
 author: valhalla-core
 

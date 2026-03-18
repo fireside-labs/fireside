@@ -1,5 +1,7 @@
 name: companion
 version: 1.0.0
+category: communication
+rarity: rare
 description: "Pocket companion — AI pet sim engine, task queue, phone sync"
 author: valhalla-core
 

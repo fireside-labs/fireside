@@ -1,5 +1,7 @@
 name: self-model
 version: 1.0.0
+category: intelligence
+rarity: legendary
 description: "Default Mode Network — self-awareness through reflection cycles"
 author: valhalla-core
 

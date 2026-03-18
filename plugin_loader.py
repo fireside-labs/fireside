@@ -167,6 +167,8 @@ def get_plugins() -> list[dict]:
             "version": p.get("version", "0.0.0"),
             "description": p.get("description", ""),
             "author": p.get("author", ""),
+            "category": p.get("category", "general"),
+            "rarity": p.get("rarity", "common"),
             "routes": p.get("routes", []),
             "events": p.get("events", []),
             "config_keys": p.get("config_keys", []),

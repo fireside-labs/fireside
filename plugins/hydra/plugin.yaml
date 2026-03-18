@@ -1,5 +1,7 @@
 name: hydra
 version: 1.0.0
+category: connectivity
+rarity: legendary
 description: "Fracture resilience — when a node dies, another absorbs its role"
 author: valhalla-core
 

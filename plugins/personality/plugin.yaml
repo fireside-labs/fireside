@@ -1,5 +1,7 @@
 name: personality
 version: 1.0.0
+category: memory
+rarity: rare
 description: "Epigenetic personality — traits, prompts, event-driven evolution"
 author: valhalla-core
 

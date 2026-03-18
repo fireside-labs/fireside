@@ -1,5 +1,7 @@
 name: consumer-api
 version: 1.0.0
+category: platform
+rarity: uncommon
 description: "Consumer-friendly API responses — hardware detection, friendly names, activity & learning summaries"
 author: valhalla-core
 

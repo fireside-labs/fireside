@@ -1,5 +1,7 @@
 name: context-compactor
 version: 1.0.0
+category: memory
+rarity: rare
 description: "Automatic context compaction for long firesides — never hit token limits"
 author: valhalla-core
 

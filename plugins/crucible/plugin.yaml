@@ -1,5 +1,7 @@
 name: crucible
 version: 1.0.0
+category: automation
+rarity: legendary
 description: "Adversarial stress-testing of learned procedures"
 author: valhalla-core
 

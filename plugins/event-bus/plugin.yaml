@@ -1,5 +1,7 @@
 name: event-bus
 version: 1.0.0
+category: platform
+rarity: common
 description: In-process pub/sub event hub with WebSocket streaming
 author: valhalla-core
 

@@ -1,5 +1,7 @@
 name: alerts
 version: 1.0.0
+category: communication
+rarity: common
 description: "Proactive alerts — pattern detection, push to Telegram/toast/mobile"
 author: valhalla-core
 

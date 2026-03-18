@@ -1,5 +1,7 @@
 name: predictions
 version: 1.0.0
+category: intelligence
+rarity: rare
 description: Predictive processing engine — Free Energy Principle for /ask
 author: valhalla-core
 

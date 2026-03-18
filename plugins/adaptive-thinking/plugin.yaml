@@ -1,5 +1,7 @@
 name: adaptive-thinking
 version: 1.0.0
+category: intelligence
+rarity: rare
 description: "System 1/2 thinking — fast responses for simple questions, full reasoning for complex ones"
 author: valhalla-core
 

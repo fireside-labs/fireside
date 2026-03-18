@@ -1,5 +1,7 @@
 name: model-switch
 version: 1.0.0
+category: connectivity
+rarity: common
 description: Switch LLM models via API or chat alias
 author: valhalla-core
 routes:

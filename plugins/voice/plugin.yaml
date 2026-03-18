@@ -1,5 +1,7 @@
 name: voice
 version: 1.0.0
+category: communication
+rarity: rare
 description: "Voice I/O — Whisper STT + Kokoro TTS. Local processing, zero cloud."
 author: valhalla-core
 

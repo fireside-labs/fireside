@@ -1,5 +1,7 @@
 name: philosopher-stone
 version: 1.0.0
+category: intelligence
+rarity: legendary
 description: "Nightly wisdom distillation — aggregates mesh knowledge into a session prompt"
 author: valhalla-core
 

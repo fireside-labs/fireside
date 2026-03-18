@@ -35,6 +35,8 @@ export interface PluginInfo {
   version: string;
   description: string;
   author: string;
+  category: string;
+  rarity: string;
   routes: { method: string; path: string }[];
   enabled: boolean;
 }

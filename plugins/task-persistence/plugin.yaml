@@ -1,5 +1,7 @@
 name: task-persistence
 version: 1.0.0
+category: automation
+rarity: rare
 description: "Crash-resilient tasks — checkpoint pattern, resume on heal"
 author: valhalla-core
 
