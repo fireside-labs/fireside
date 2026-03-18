@@ -26,6 +26,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { companionAPI, setHost, setTailscaleIP, setConnectionPref, testConnection, discoverFireside } from "../src/api";
 import type { DiscoveredHost } from "../src/api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../src/theme";
+import { registerForPushNotifications } from "../src/notifications";
+import { applyBestRoute } from "../src/SmartRouter";
+import { scheduleMorningDream } from "../src/DreamJournal";
 
 /** Check if onboarding has been completed. */
 export async function hasOnboarded(): Promise<boolean> {
@@ -550,7 +553,13 @@ export default function OnboardingV2() {
     if (step === "permissions") {
         const requestPermissions = async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try { await Notifications.requestPermissionsAsync(); } catch { }
+            // Register for push notifications + schedule dream journal
+            try {
+                await registerForPushNotifications();
+                await scheduleMorningDream();
+            } catch { }
+            // Apply smart routing (detect LAN vs Tailscale)
+            try { await applyBestRoute(); } catch { }
             setStep(hasExistingCompanion ? "first_jump" : "done");
         };
 
@@ -571,14 +580,14 @@ export default function OnboardingV2() {
                         <Text style={styles.permIcon}>🔔</Text>
                         <View style={styles.permInfo}>
                             <Text style={styles.permName}>Notifications</Text>
-                            <Text style={styles.permWhy}>Get alerts when your companion needs attention</Text>
+                            <Text style={styles.permWhy}>Pipeline updates, dream journal, companion alerts</Text>
                         </View>
                     </View>
                     <View style={styles.permItem}>
-                        <Text style={styles.permIcon}>📷</Text>
+                        <Text style={styles.permIcon}>📋</Text>
                         <View style={styles.permInfo}>
-                            <Text style={styles.permName}>Camera</Text>
-                            <Text style={styles.permWhy}>Scan QR codes to pair with your PC</Text>
+                            <Text style={styles.permName}>Share Sheet</Text>
+                            <Text style={styles.permWhy}>Send links, text, and photos to your companion</Text>
                         </View>
                     </View>
                 </View>
@@ -612,7 +621,11 @@ export default function OnboardingV2() {
                 </Text>
                 <TouchableOpacity
                     style={styles.primaryBtn}
-                    onPress={() => router.replace("/(tabs)/care")}
+                    onPress={async () => {
+                        // Apply smart routing on first entry
+                        try { await applyBestRoute(); } catch { }
+                        router.replace("/(tabs)/care");
+                    }}
                     activeOpacity={0.8}
                 >
                     <Text style={styles.primaryBtnText}>Hey {displayName}! 🔥</Text>

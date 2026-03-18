@@ -17,8 +17,21 @@ import { companionAPI, testConnection, getHost, getConnectionPref } from "../api
 import type { MobileSyncResponse, CompanionState } from "../types";
 
 const CACHE_KEY = "valhalla_cache";
+const LAST_SEEN_KEY = "valhalla_last_seen";
 const POLL_INTERVAL = 30_000;
-const RECONNECT_FLASH_MS = 3_000; // show "reconnected" state for 3s
+const RECONNECT_FLASH_MS = 3_000;
+
+/** Format a duration in ms to human-readable string. */
+function formatDuration(ms: number): string {
+    const mins = Math.floor(ms / 60_000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    if (hours < 24) return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+}
 
 export type PowerState = "home" | "connected" | "offline" | "reconnected";
 
@@ -35,6 +48,10 @@ interface ConnectionState {
     companionData: MobileSyncResponse | null;
     offlineActions: OfflineAction[];
     isLoading: boolean;
+    /** How long the user has been away from the desktop (human-readable). */
+    awayDuration: string | null;
+    /** Timestamp of last successful sync. */
+    lastSeen: number | null;
 }
 
 export function useConnection() {
@@ -45,6 +62,8 @@ export function useConnection() {
         companionData: null,
         offlineActions: [],
         isLoading: true,
+        awayDuration: null,
+        lastSeen: null,
     });
 
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -131,6 +150,8 @@ export function useConnection() {
                     companionData: data,
                     offlineActions: [],
                     isLoading: false,
+                    lastSeen: Date.now(),
+                    awayDuration: null,
                 };
             });
 
@@ -149,12 +170,15 @@ export function useConnection() {
         } catch {
             const cached = await loadCache();
             wasOfflineRef.current = true;
+            const lastSeen = state.lastSeen;
+            const awayDuration = lastSeen ? formatDuration(Date.now() - lastSeen) : null;
             setState((prev) => ({
                 ...prev,
                 isOnline: false,
                 powerState: "offline",
                 companionData: cached || prev.companionData,
                 isLoading: false,
+                awayDuration,
             }));
             return false;
         }

@@ -20,8 +20,25 @@ import {
 import * as Haptics from "expo-haptics";
 import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
-import { colors, spacing, borderRadius, fontSize } from "../../src/theme";
+import { colors, spacing, borderRadius, fontSize, shadows } from "../../src/theme";
 import type { QueuedTask } from "../../src/types";
+
+// Pipeline types for mini-view
+interface PipelineStage {
+    name: string;
+    status: "done" | "running" | "pending" | "failed";
+}
+
+interface PipelineSummary {
+    id: string;
+    name: string;
+    status: "running" | "completed" | "failed" | "escalated";
+    stages: PipelineStage[];
+    iteration: number;
+    elapsed: string;
+    test_pass?: number;
+    test_total?: number;
+}
 
 const FALLBACK_TASKS: QueuedTask[] = [];
 
@@ -60,6 +77,11 @@ export default function TasksTab() {
     const [showNewTask, setShowNewTask] = useState(false);
     const [newTaskText, setNewTaskText] = useState("");
     const [creating, setCreating] = useState(false);
+    // Pipeline state
+    const [pipelines, setPipelines] = useState<PipelineSummary[]>([]);
+    const [showIntervene, setShowIntervene] = useState<string | null>(null);
+    const [interveneText, setInterveneText] = useState("");
+    const [sendingIntervene, setSendingIntervene] = useState(false);
 
     useEffect(() => {
         if (isOnline) {
@@ -67,6 +89,13 @@ export default function TasksTab() {
                 .queue()
                 .then((res) => setTasks(res.tasks || []))
                 .catch(() => setTasks(companionData?.pending_tasks || FALLBACK_TASKS));
+            // Fetch active pipelines
+            companionAPI
+                .pipelines()
+                .then((res: any) => {
+                    if (res.pipelines) setPipelines(res.pipelines);
+                })
+                .catch(() => {});
         } else {
             setTasks(companionData?.pending_tasks || FALLBACK_TASKS);
         }
@@ -204,6 +233,83 @@ export default function TasksTab() {
                 Tasks queued from your phone. They'll run on your home PC when connected.
             </Text>
 
+            {/* Pipeline Mini-View */}
+            {pipelines.length > 0 && (
+                <View style={styles.pipelineSection}>
+                    <Text style={styles.pipelineSectionTitle}>🔥 Active Pipelines</Text>
+                    {pipelines.map((p) => (
+                        <View key={p.id} style={[
+                            styles.pipelineCard,
+                            p.status === "escalated" && styles.pipelineEscalated,
+                            p.status === "completed" && styles.pipelineCompleted,
+                        ]}>
+                            <View style={styles.pipelineHeader}>
+                                <Text style={styles.pipelineName} numberOfLines={1}>
+                                    {p.name}
+                                </Text>
+                                <Text style={[
+                                    styles.pipelineStatus,
+                                    p.status === "running" && { color: colors.neon },
+                                    p.status === "completed" && { color: colors.success },
+                                    p.status === "failed" && { color: colors.danger },
+                                    p.status === "escalated" && { color: colors.warning },
+                                ]}>
+                                    {p.status === "running" ? "⚡ Running" :
+                                     p.status === "completed" ? "✅ Done" :
+                                     p.status === "escalated" ? "⚠️ Escalated" : "❌ Failed"}
+                                </Text>
+                            </View>
+
+                            {/* Stage progress rail */}
+                            <View style={styles.stageRail}>
+                                {p.stages.map((s, i) => (
+                                    <View key={i} style={styles.stageItem}>
+                                        <View style={[
+                                            styles.stageDot,
+                                            s.status === "done" && styles.stageDone,
+                                            s.status === "running" && styles.stageRunning,
+                                            s.status === "failed" && styles.stageFailed,
+                                        ]} />
+                                        <Text style={styles.stageName}>{s.name}</Text>
+                                        {i < p.stages.length - 1 && (
+                                            <View style={[
+                                                styles.stageLine,
+                                                s.status === "done" && styles.stageLineDone,
+                                            ]} />
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
+
+                            {/* Metadata row */}
+                            <View style={styles.pipelineMeta}>
+                                <Text style={styles.pipelineMetaText}>Iter {p.iteration}</Text>
+                                {p.test_pass !== undefined && (
+                                    <Text style={styles.pipelineMetaText}>
+                                        Tests: {p.test_pass}/{p.test_total}
+                                    </Text>
+                                )}
+                                <Text style={styles.pipelineMetaText}>{p.elapsed}</Text>
+                            </View>
+
+                            {/* Intervene button */}
+                            {(p.status === "running" || p.status === "escalated") && (
+                                <TouchableOpacity
+                                    style={styles.interveneBtn}
+                                    onPress={() => {
+                                        setShowIntervene(p.id);
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.interveneBtnText}>🎯 Intervene</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    ))}
+                </View>
+            )}
+
             {/* Task List */}
             {tasks.length === 0 ? (
                 <View style={styles.emptyState}>
@@ -297,6 +403,67 @@ export default function TasksTab() {
                             >
                                 <Text style={styles.modalSubmitText}>
                                     {creating ? "Adding..." : "Add Task"}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Intervene Modal */}
+            <Modal
+                visible={showIntervene !== null}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowIntervene(null)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalTitle}>🎯 Intervene</Text>
+                        <Text style={styles.modalSubtitle}>
+                            Send instructions to the running pipeline. Your companion will inject them into the next iteration.
+                        </Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            value={interveneText}
+                            onChangeText={setInterveneText}
+                            placeholder="e.g. Use a HashMap instead of array..."
+                            placeholderTextColor={colors.textMuted}
+                            autoFocus
+                            multiline
+                            maxLength={500}
+                        />
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={styles.modalCancel}
+                                onPress={() => {
+                                    setShowIntervene(null);
+                                    setInterveneText("");
+                                }}
+                            >
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.modalSubmit,
+                                    (!interveneText.trim() || sendingIntervene) && styles.modalSubmitDisabled,
+                                ]}
+                                onPress={async () => {
+                                    if (!interveneText.trim() || !showIntervene) return;
+                                    setSendingIntervene(true);
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                                    try {
+                                        await companionAPI.intervene(showIntervene, interveneText.trim());
+                                    } catch { }
+                                    setSendingIntervene(false);
+                                    setShowIntervene(null);
+                                    setInterveneText("");
+                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                }}
+                                disabled={!interveneText.trim() || sendingIntervene}
+                            >
+                                <Text style={styles.modalSubmitText}>
+                                    {sendingIntervene ? "Sending..." : "Send to Pipeline"}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -512,5 +679,113 @@ const styles = StyleSheet.create({
         fontFamily: "Inter_600SemiBold",
         fontSize: fontSize.sm,
         color: colors.bgPrimary,
+    },
+    // Pipeline mini-view
+    pipelineSection: {
+        marginBottom: spacing.lg,
+    },
+    pipelineSectionTitle: {
+        fontFamily: "Inter_600SemiBold",
+        fontSize: fontSize.md,
+        color: colors.textPrimary,
+        marginBottom: spacing.sm,
+    },
+    pipelineCard: {
+        backgroundColor: colors.bgCard,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        padding: spacing.md,
+        marginBottom: spacing.sm,
+        ...shadows.card,
+    },
+    pipelineEscalated: {
+        borderColor: colors.warning,
+        backgroundColor: "rgba(245, 166, 35, 0.04)",
+    },
+    pipelineCompleted: {
+        borderColor: colors.success,
+        backgroundColor: "rgba(46, 204, 113, 0.04)",
+    },
+    pipelineHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: spacing.sm,
+    },
+    pipelineName: {
+        fontFamily: "Inter_500Medium",
+        fontSize: fontSize.sm,
+        color: colors.textPrimary,
+        flex: 1,
+        marginRight: spacing.sm,
+    },
+    pipelineStatus: {
+        fontFamily: "Inter_500Medium",
+        fontSize: fontSize.tiny,
+        color: colors.textDim,
+    },
+    stageRail: {
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: spacing.sm,
+    },
+    stageItem: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    stageDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: colors.textMuted,
+    },
+    stageDone: {
+        backgroundColor: colors.success,
+    },
+    stageRunning: {
+        backgroundColor: colors.neon,
+    },
+    stageFailed: {
+        backgroundColor: colors.danger,
+    },
+    stageName: {
+        fontFamily: "Inter_400Regular",
+        fontSize: fontSize.tiny,
+        color: colors.textDim,
+        marginLeft: 3,
+    },
+    stageLine: {
+        width: 12,
+        height: 1,
+        backgroundColor: colors.textMuted,
+        marginHorizontal: 2,
+    },
+    stageLineDone: {
+        backgroundColor: colors.success,
+    },
+    pipelineMeta: {
+        flexDirection: "row",
+        gap: spacing.md,
+    },
+    pipelineMetaText: {
+        fontFamily: "Inter_400Regular",
+        fontSize: fontSize.tiny,
+        color: colors.textMuted,
+    },
+    interveneBtn: {
+        backgroundColor: colors.neonGlow,
+        borderRadius: borderRadius.sm,
+        borderWidth: 1,
+        borderColor: colors.neonBorder,
+        paddingVertical: spacing.xs,
+        paddingHorizontal: spacing.md,
+        alignSelf: "flex-start",
+        marginTop: spacing.sm,
+    },
+    interveneBtnText: {
+        fontFamily: "Inter_500Medium",
+        fontSize: fontSize.tiny,
+        color: colors.neon,
     },
 });

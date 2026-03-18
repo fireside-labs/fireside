@@ -392,6 +392,32 @@ export const companionAPI = {
             "/api/v1/companion/interact",
             { method: "POST", body: JSON.stringify({ action, item }) }
         ),
+
+    /** List active/recent pipelines. */
+    pipelines: (status?: string) =>
+        apiFetch<{ pipelines: Array<Record<string, unknown>> }>(
+            `/api/v1/pipelines${status ? `?status=${status}` : ""}`
+        ),
+
+    /** Send intervention instructions to a running pipeline. */
+    intervene: (pipelineId: string, instructions: string) =>
+        apiFetch<{ ok: boolean; injected: boolean }>(
+            `/api/v1/pipelines/${pipelineId}/intervene`,
+            { method: "POST", body: JSON.stringify({ instructions }) }
+        ),
+
+    /** Get heartbeat — what the companion is currently doing. */
+    heartbeat: () =>
+        apiFetch<{ activity: string; emoji: string; detail?: string; since?: string }>(
+            "/api/v1/companion/heartbeat"
+        ),
+
+    /** Forget all companion data (nuclear reset). */
+    forgetAll: () =>
+        apiFetch<{ ok: boolean; message: string }>(
+            "/api/v1/companion/forget",
+            { method: "DELETE" }
+        ),
 };
 
 /** Quick connectivity check — returns true if the backend responds. */

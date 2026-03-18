@@ -9,7 +9,7 @@
  *
  * One companion, one soul. It dims when away from home.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
     View,
     Text,
@@ -102,6 +102,15 @@ export default function HubTab() {
     const [feeding, setFeeding] = useState(false);
     const [walkResult, setWalkResult] = useState<WalkEvent | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    // Heartbeat — what the companion is doing right now
+    const [heartbeat, setHeartbeat] = useState<{ activity: string; emoji: string; detail?: string } | null>(null);
+
+    // Fetch heartbeat on mount + refresh
+    useEffect(() => {
+        if (isOnline) {
+            companionAPI.heartbeat().then(setHeartbeat).catch(() => {});
+        }
+    }, [isOnline]);
 
     const companion = companionData?.companion;
     const petName = companion?.name || "";
@@ -119,9 +128,12 @@ export default function HubTab() {
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await sync();
+        if (isOnline) {
+            companionAPI.heartbeat().then(setHeartbeat).catch(() => {});
+        }
         setRefreshing(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, [sync]);
+    }, [sync, isOnline]);
 
     const handleFeed = useCallback(
         async (food: string) => {
@@ -226,6 +238,20 @@ export default function HubTab() {
                 species={species}
                 platform={companionData?.platform}
             />
+
+            {/* Heartbeat Feed — what the companion is doing right now */}
+            {heartbeat && (
+                <View style={styles.heartbeatBanner}>
+                    <Text style={styles.heartbeatEmoji}>{heartbeat.emoji}</Text>
+                    <View style={styles.heartbeatContent}>
+                        <Text style={styles.heartbeatActivity}>{heartbeat.activity}</Text>
+                        {heartbeat.detail && (
+                            <Text style={styles.heartbeatDetail}>{heartbeat.detail}</Text>
+                        )}
+                    </View>
+                    <Text style={styles.heartbeatLive}>● LIVE</Text>
+                </View>
+            )}
 
             {/* Daily Gift */}
             <DailyGiftModal
@@ -406,4 +432,11 @@ const styles = StyleSheet.create({
     transferTitle: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.textPrimary, textAlign: "center", marginBottom: spacing.md },
     transferStep: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 24, paddingLeft: spacing.sm },
     transferNote: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, textAlign: "center", lineHeight: 18 },
+    // Heartbeat banner
+    heartbeatBanner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.bgCard, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.neonBorder, padding: spacing.md, marginBottom: spacing.lg, gap: spacing.sm, ...shadows.card },
+    heartbeatEmoji: { fontSize: 24 },
+    heartbeatContent: { flex: 1 },
+    heartbeatActivity: { fontFamily: "Inter_500Medium", fontSize: fontSize.sm, color: colors.textPrimary },
+    heartbeatDetail: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, marginTop: 2 },
+    heartbeatLive: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.tiny, color: colors.neon },
 });

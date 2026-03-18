@@ -103,13 +103,27 @@ export function getNotificationRoute(
 ): string {
     const type = data?.type as string;
     switch (type) {
+        // Sprint 2: Pipeline events
+        case "pipeline_pass":
+        case "pipeline_fail":
+        case "pipeline_escalated":
+        case "task_done":
+        case "task_queued":
+            return "/(tabs)/tasks";
+        // Sprint 4: Dream journal
+        case "dream":
+        case "morning_briefing":
+        // Sprint 1-era events
         case "misses_you":
         case "surprise":
         case "gift":
         case "leveled_up":
             return "/(tabs)/care";
-        case "task_done":
-            return "/(tabs)/tasks";
+        // Sprint 5: Mesh events
+        case "mesh_query":
+        case "mesh_response":
+        case "cross_companion":
+            return "/(tabs)/chat";
         default:
             return "/(tabs)/care";
     }
