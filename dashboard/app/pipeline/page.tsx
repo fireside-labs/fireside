@@ -42,6 +42,44 @@ interface DebateRound {
   message: string;
 }
 
+interface AgentMessage {
+  id: string;
+  role: string;
+  icon: string;
+  color: string;
+  message: string;
+  ts: number;
+  type: "normal" | "verdict_pass" | "verdict_fail" | "feedback" | "debate_start" | "debate_end" | "debate" | "escalation" | "lesson" | "iteration" | "typing";
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  planner: "#60A5FA",
+  coder: "#22D3EE",
+  backend: "#22D3EE",
+  frontend: "#22D3EE",
+  tester: "#FB923C",
+  reviewer: "#A78BFA",
+  architect: "#A78BFA",
+  devil_advocate: "#F87171",
+  end_user: "#60A5FA",
+  distiller: "#FBBF24",
+  system: "#6B7280",
+};
+
+const ROLE_ICONS: Record<string, string> = {
+  planner: "🧠",
+  coder: "⚡",
+  backend: "⚡",
+  frontend: "🎨",
+  tester: "🔍",
+  reviewer: "👤",
+  architect: "🏛️",
+  devil_advocate: "😈",
+  end_user: "👤",
+  distiller: "📜",
+  system: "⚙️",
+};
+
 // ── Stage emoji mapping ──
 const STAGE_EMOJI: Record<string, string> = {
   Spec: "📜", Plan: "📜", Outline: "📜", Context: "📜", Gather: "🔎",
@@ -128,6 +166,32 @@ function detectTemplate(input: string): { name: string; icon: string; stages: st
 }
 
 
+// ── Mock agent feed data ──
+const MOCK_AGENT_FEED: AgentMessage[] = [
+  { id: "m1", role: "system", icon: "⚙️", color: "#6B7280", message: "Pipeline started — Coding template, max 10 iterations", ts: Date.now() - 14 * 60000, type: "normal" },
+  { id: "m2", role: "planner", icon: "🧠", color: "#60A5FA", message: "Breaking into 3 phases: auth middleware, API endpoints (signup/login/refresh/me), test suite. Using bcrypt for passwords, JWT RS256 for tokens.", ts: Date.now() - 13 * 60000, type: "normal" },
+  { id: "m3", role: "coder", icon: "⚡", color: "#22D3EE", message: "Building auth middleware — JWT verification, role extraction, token decode. 4 endpoints scaffolded.", ts: Date.now() - 11 * 60000, type: "normal" },
+  { id: "m4", role: "coder", icon: "⚡", color: "#22D3EE", message: "Backend done. Files: auth.py (middleware), routes/users.py (4 endpoints), models/user.py, utils/jwt.py. STATUS: DONE", ts: Date.now() - 9 * 60000, type: "normal" },
+  { id: "m5", role: "tester", icon: "🔍", color: "#FB923C", message: "Running tests... 12/18 passing. VERDICT: FAIL — /users/refresh returns 500 when token is expired (null check missing on decoded payload)", ts: Date.now() - 7 * 60000, type: "verdict_fail" },
+  { id: "m6", role: "system", icon: "⚙️", color: "#6B7280", message: "Feedback injected into coder → retrying build stage with failure context", ts: Date.now() - 7 * 60000 + 1000, type: "feedback" },
+  // ── Iteration 2 ──
+  { id: "m6b", role: "system", icon: "🔄", color: "#4A3D30", message: "Iteration 2 — Build → Test", ts: Date.now() - 6 * 60000, type: "iteration" },
+  { id: "m7", role: "coder", icon: "⚡", color: "#22D3EE", message: "Fixed! Added null guard on jwt.decode() return value in utils/jwt.py:42. Also added try/catch around refresh endpoint.", ts: Date.now() - 5 * 60000, type: "normal" },
+  { id: "m8", role: "tester", icon: "🔍", color: "#FB923C", message: "Running tests... 16/18 passing. Still failing: test_concurrent_refresh and test_token_reuse_after_refresh", ts: Date.now() - 4 * 60000, type: "verdict_fail" },
+  // ── Iteration 3 ──
+  { id: "m8b", role: "system", icon: "🔄", color: "#4A3D30", message: "Iteration 3 — Build → Test", ts: Date.now() - 3.5 * 60000, type: "iteration" },
+  { id: "m9", role: "coder", icon: "⚡", color: "#22D3EE", message: "Added mutex lock on refresh endpoint + token blacklist for used refresh tokens. Retry.", ts: Date.now() - 3 * 60000, type: "normal" },
+  { id: "m10", role: "tester", icon: "🔍", color: "#FB923C", message: "18/18 tests passing ✅ VERDICT: PASS — All tests green!", ts: Date.now() - 2 * 60000, type: "verdict_pass" },
+  // ── Debate phase ──
+  { id: "m11", role: "system", icon: "🗣️", color: "#A78BFA", message: "Socratic Review starting — 3 reviewers, 3 rounds, 70% consensus threshold", ts: Date.now() - 90000, type: "debate_start" },
+  { id: "m12", role: "architect", icon: "🏛️", color: "#A78BFA", message: "Score: 7/10 — Solid middleware but the token refresh has a race condition when two requests hit simultaneously. Mutex helps but isn't distributed-safe.", ts: Date.now() - 80000, type: "debate" },
+  { id: "m13", role: "devil_advocate", icon: "😈", color: "#F87171", message: "Score: 5/10 — What about 50 endpoints? Manual @requires_auth on every route is fragile. One missed decorator = security hole.", ts: Date.now() - 70000, type: "debate" },
+  { id: "m14", role: "end_user", icon: "👤", color: "#60A5FA", message: "Score: 8/10 — Error messages are cryptic. 'Invalid JWT' tells developers nothing. Add error codes + expiry info.", ts: Date.now() - 60000, type: "debate" },
+  // ── Typing indicator (simulated) ──
+  { id: "m15", role: "reviewer", icon: "👤", color: "#A78BFA", message: "Synthesizing debate verdict...", ts: Date.now() - 30000, type: "typing" },
+];
+
+
 export default function PipelinePage() {
   const [species, setSpecies] = useState("fox");
   const [pipelines, setPipelines] = useState<Pipeline[]>(MOCK_PIPELINES);
@@ -135,6 +199,10 @@ export default function PipelinePage() {
   const [taskInput, setTaskInput] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDebate, setShowDebate] = useState(false);
+  const [agentFeed] = useState<AgentMessage[]>(MOCK_AGENT_FEED);
+  const [showFeed, setShowFeed] = useState(true);
+  const [interveneText, setInterveneText] = useState("");
+  const [showIntervene, setShowIntervene] = useState(false);
 
   useEffect(() => {
     try {
@@ -397,13 +465,119 @@ export default function PipelinePage() {
                 <span className="fp-progress-text">{progress}% · {current.eta || "Complete"}</span>
               </div>
 
-              {/* Active stage output */}
-              {activeStage?.output && (
-                <div className="fp-stage-output">
-                  <div className="fp-so-label">Current Output</div>
-                  <pre className="fp-so-content">{activeStage.output}</pre>
+              {/* ═══ AGENT FEED ═══ */}
+              {current.status === "running" && (
+                <div className="fp-feed-section">
+                  <button
+                    className="fp-feed-toggle"
+                    onClick={() => setShowFeed(!showFeed)}
+                  >
+                    <span className="fp-feed-toggle-dot" />
+                    Agent Feed — {agentFeed.length} messages
+                    <span className="fp-feed-toggle-arrow">{showFeed ? "▼" : "▶"}</span>
+                  </button>
+
+                  {showFeed && (
+                    <div className="fp-feed-wrap">
+                      <div className="fp-feed">
+                        {agentFeed.map((msg, i) => {
+                          // Iteration markers
+                          if (msg.type === "iteration") {
+                            return (
+                              <div key={msg.id} className="fp-feed-iter" style={{ animationDelay: `${i * 0.03}s` }}>
+                                <div className="fp-feed-iter-line" />
+                                <span className="fp-feed-iter-label">{msg.message}</span>
+                                <div className="fp-feed-iter-line" />
+                              </div>
+                            );
+                          }
+
+                          // Typing indicator
+                          if (msg.type === "typing") {
+                            return (
+                              <div key={msg.id} className="fp-feed-typing">
+                                <div className="fp-feed-accent" style={{ background: msg.color } as React.CSSProperties} />
+                                <div className="fp-feed-icon">{msg.icon}</div>
+                                <div className="fp-feed-body">
+                                  <span className="fp-feed-role" style={{ color: msg.color }}>{msg.role}</span>
+                                  <span className="fp-feed-typing-dots">
+                                    <span className="fp-dot" /><span className="fp-dot" /><span className="fp-dot" />
+                                  </span>
+                                  <span className="fp-feed-typing-text">{msg.message}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Debate messages — grouped with indent
+                          const isDebate = msg.type === "debate" || msg.type === "debate_start";
+
+                          return (
+                            <div
+                              key={msg.id}
+                              className={`fp-feed-msg ${msg.type}${isDebate ? " fp-debate-indent" : ""}`}
+                              style={{
+                                "--agent-color": msg.color,
+                                animationDelay: `${i * 0.03}s`,
+                              } as React.CSSProperties}
+                            >
+                              <div className="fp-feed-accent" />
+                              <div className="fp-feed-icon">{msg.icon}</div>
+                              <div className="fp-feed-body">
+                                <div className="fp-feed-header">
+                                  <span className="fp-feed-role" style={{ color: msg.color }}>
+                                    {msg.role}
+                                  </span>
+                                  {isDebate && <span className="fp-feed-debate-tag">DEBATE</span>}
+                                  <span className="fp-feed-ts">
+                                    {new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                </div>
+                                <p className="fp-feed-text">{msg.message}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Sticky intervene bar — always visible */}
+                      <div className="fp-feed-intervene-sticky">
+                        {!showIntervene ? (
+                          <button
+                            className="fp-feed-intervene-btn"
+                            onClick={() => setShowIntervene(true)}
+                          >
+                            🖐️ Intervene — Jump In
+                          </button>
+                        ) : (
+                          <div className="fp-feed-intervene-input-wrap">
+                            <input
+                              className="fp-feed-intervene-input"
+                              value={interveneText}
+                              onChange={(e) => setInterveneText(e.target.value)}
+                              placeholder="Tell the agents what to do differently..."
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && interveneText.trim()) {
+                                  setShowIntervene(false);
+                                  setInterveneText("");
+                                }
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              className="fp-feed-send-btn"
+                              onClick={() => { setShowIntervene(false); setInterveneText(""); }}
+                            >
+                              Send ⚡
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
 
               {/* Socratic Debate */}
               {current.debate && current.debate.length > 0 && (
@@ -751,4 +925,183 @@ const pageCSS = `
   .fp-action-btn.advance:hover { background: rgba(245,158,11,0.12); }
   .fp-action-btn.new { background: linear-gradient(135deg, #D97706, #F59E0B); border: none; color: #0A0A0A; font-weight: 800; }
   .fp-action-btn.new:hover { transform: translateY(-1px); }
+
+  /* ═══ AGENT FEED ═══ */
+  .fp-feed-section { margin-bottom: 16px; }
+  .fp-feed-toggle {
+    padding: 10px 16px; border-radius: 12px; width: 100%; text-align: left;
+    background: rgba(34,211,238,0.04); border: 1px solid rgba(34,211,238,0.08);
+    color: #22D3EE; font-size: 12px; font-weight: 700; cursor: pointer;
+    font-family: 'Outfit'; transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .fp-feed-toggle:hover { background: rgba(34,211,238,0.08); }
+  .fp-feed-toggle-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #22D3EE;
+    animation: fpPulse 2s ease infinite; box-shadow: 0 0 8px rgba(34,211,238,0.5);
+  }
+  .fp-feed-toggle-arrow { margin-left: auto; font-size: 10px; opacity: 0.5; }
+
+  .fp-feed {
+    margin-top: 8px; border-radius: 12px;
+    background: rgba(6,6,12,0.8); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.04);
+    padding: 8px; max-height: 500px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 4px;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent;
+  }
+  .fp-feed::-webkit-scrollbar { width: 4px; }
+  .fp-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+  .fp-feed-msg {
+    display: flex; gap: 8px; padding: 8px 10px;
+    border-radius: 10px; position: relative;
+    background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.02);
+    animation: fpFeedIn 0.3s ease both; transition: all 0.2s;
+  }
+  .fp-feed-msg:hover { background: rgba(255,255,255,0.03); }
+  @keyframes fpFeedIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .fp-feed-accent {
+    position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
+    border-radius: 2px; background: var(--agent-color); opacity: 0.6;
+  }
+  .fp-feed-msg.verdict_pass { background: rgba(52,211,153,0.04); border-color: rgba(52,211,153,0.1); }
+  .fp-feed-msg.verdict_pass .fp-feed-accent { background: #34D399; opacity: 1; }
+  .fp-feed-msg.verdict_fail { background: rgba(239,68,68,0.04); border-color: rgba(239,68,68,0.1); }
+  .fp-feed-msg.verdict_fail .fp-feed-accent { background: #EF4444; opacity: 1; }
+  .fp-feed-msg.feedback { background: rgba(251,191,36,0.03); border-color: rgba(251,191,36,0.08); border-style: dashed; }
+  .fp-feed-msg.feedback .fp-feed-accent { background: #FBBF24; opacity: 0.8; }
+  .fp-feed-msg.debate_start { background: rgba(167,139,250,0.04); border-color: rgba(167,139,250,0.1); }
+  .fp-feed-msg.debate_start .fp-feed-accent { background: #A78BFA; opacity: 1; }
+  .fp-feed-msg.debate_end .fp-feed-accent { background: #34D399; opacity: 1; }
+  .fp-feed-msg.escalation { background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.15); animation: fpEscalationPulse 2s ease infinite; }
+  @keyframes fpEscalationPulse { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 16px rgba(239,68,68,0.1); } }
+  .fp-feed-msg.escalation .fp-feed-accent { background: #EF4444; opacity: 1; width: 4px; }
+  .fp-feed-msg.lesson { background: rgba(245,158,11,0.03); border-color: rgba(245,158,11,0.08); }
+  .fp-feed-msg.lesson .fp-feed-accent { background: #F59E0B; opacity: 0.8; }
+
+  .fp-feed-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .fp-feed-body { flex: 1; min-width: 0; }
+  .fp-feed-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+  .fp-feed-role { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+  .fp-feed-ts { margin-left: auto; font-size: 9px; color: #3A3530; font-weight: 500; }
+  .fp-feed-text { font-size: 12px; color: #C4A882; line-height: 1.5; margin: 0; word-break: break-word; }
+  .fp-feed-msg.verdict_pass .fp-feed-text { color: #6EE7B7; }
+  .fp-feed-msg.verdict_fail .fp-feed-text { color: #FCA5A5; }
+
+  /* #2: PASS glow — the victory moment */
+  .fp-feed-msg.verdict_pass {
+    animation: fpFeedIn 0.3s ease both, fpPassGlow 2s ease 0.3s;
+  }
+  @keyframes fpPassGlow {
+    0% { box-shadow: none; }
+    30% { box-shadow: 0 0 24px rgba(52,211,153,0.2), inset 0 0 8px rgba(52,211,153,0.05); }
+    100% { box-shadow: 0 0 8px rgba(52,211,153,0.06); }
+  }
+
+  /* #1: Iteration markers */
+  .fp-feed-iter {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 8px; animation: fpFeedIn 0.3s ease both;
+  }
+  .fp-feed-iter-line {
+    flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  }
+  .fp-feed-iter-label {
+    font-size: 9px; font-weight: 800; color: #3A3530;
+    text-transform: uppercase; letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  /* #3: Debate messages — indent + purple border */
+  .fp-debate-indent {
+    margin-left: 16px;
+    border-left: 2px solid rgba(167,139,250,0.15);
+    border-radius: 0 10px 10px 0;
+  }
+  .fp-debate-indent .fp-feed-accent { display: none; }
+  .fp-feed-debate-tag {
+    font-size: 7px; font-weight: 900; color: #A78BFA;
+    background: rgba(167,139,250,0.08); padding: 1px 5px;
+    border-radius: 3px; letter-spacing: 0.5px;
+  }
+  .fp-feed-msg.debate {
+    background: rgba(167,139,250,0.02);
+    border-color: rgba(167,139,250,0.06);
+  }
+
+  /* #4: Typing indicator */
+  .fp-feed-typing {
+    display: flex; gap: 8px; padding: 8px 10px;
+    border-radius: 10px; position: relative;
+    background: rgba(255,255,255,0.01);
+    border: 1px solid rgba(255,255,255,0.02);
+    animation: fpFeedIn 0.3s ease both;
+  }
+  .fp-feed-typing .fp-feed-body {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .fp-feed-typing-dots {
+    display: flex; gap: 3px; align-items: center;
+  }
+  .fp-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #A78BFA; opacity: 0.4;
+    animation: fpDotBounce 1.4s ease-in-out infinite;
+  }
+  .fp-dot:nth-child(2) { animation-delay: 0.2s; }
+  .fp-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes fpDotBounce {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+    40% { opacity: 1; transform: scale(1.3); }
+  }
+  .fp-feed-typing-text {
+    font-size: 11px; color: #4A3D30; font-style: italic;
+  }
+
+  /* #5: Feed wrapper + sticky intervene */
+  .fp-feed-wrap {
+    margin-top: 8px; border-radius: 12px;
+    background: rgba(6,6,12,0.8); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.04);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .fp-feed {
+    margin-top: 0; border-radius: 0; background: none;
+    backdrop-filter: none; border: none;
+    padding: 8px; max-height: 460px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 4px;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent;
+  }
+  .fp-feed-intervene-sticky {
+    padding: 8px 12px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    background: rgba(6,6,12,0.95);
+    display: flex; justify-content: center;
+  }
+  .fp-feed-intervene-btn {
+    padding: 8px 20px; border-radius: 10px;
+    border: 1px solid rgba(245,158,11,0.12); background: rgba(245,158,11,0.04);
+    color: #F59E0B; font-size: 11px; font-weight: 800;
+    cursor: pointer; font-family: 'Outfit'; transition: all 0.2s;
+  }
+  .fp-feed-intervene-btn:hover { background: rgba(245,158,11,0.1); box-shadow: 0 0 16px rgba(245,158,11,0.08); }
+  .fp-feed-intervene-input-wrap { display: flex; gap: 6px; width: 100%; }
+  .fp-feed-intervene-input {
+    flex: 1; padding: 8px 14px; border-radius: 10px;
+    background: rgba(15,13,22,0.6); border: 1px solid rgba(245,158,11,0.15);
+    color: #F0DCC8; font-size: 12px; font-family: 'Outfit'; outline: none; transition: all 0.2s;
+  }
+  .fp-feed-intervene-input:focus { border-color: rgba(245,158,11,0.3); box-shadow: 0 0 12px rgba(245,158,11,0.06); }
+  .fp-feed-intervene-input::placeholder { color: rgba(240,220,200,0.2); }
+  .fp-feed-send-btn {
+    padding: 8px 16px; border-radius: 10px; border: none;
+    background: linear-gradient(135deg, #D97706, #F59E0B);
+    color: #0A0A0A; font-size: 11px; font-weight: 800;
+    cursor: pointer; font-family: 'Outfit'; transition: all 0.2s;
+  }
+  .fp-feed-send-btn:hover { transform: translateY(-1px); }
 `;
