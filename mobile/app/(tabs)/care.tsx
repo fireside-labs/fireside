@@ -197,21 +197,17 @@ export default function HubTab() {
     if (!petName) {
         return (
             <ScrollView style={styles.container} contentContainerStyle={styles.waitingContent}>
-                <Text style={styles.waitingTitle}>🔥 Waiting for Companion</Text>
+                <Text style={styles.waitingTitle}>🔥 Almost There!</Text>
                 <Text style={styles.waitingSubtitle}>
-                    Your companion is created on your PC and transferred during QR pairing.
+                    Your companion hasn't arrived yet. Make sure your PC is running and you've completed pairing.
                 </Text>
                 <View style={styles.transferCard}>
-                    <Text style={styles.transferEmoji}>📱 ← 💻</Text>
-                    <Text style={styles.transferTitle}>How to get your companion</Text>
-                    <Text style={styles.transferStep}>1. Open Fireside on your PC</Text>
-                    <Text style={styles.transferStep}>2. Create your companion there</Text>
-                    <Text style={styles.transferStep}>3. Go to Settings → Pair Phone</Text>
-                    <Text style={styles.transferStep}>4. Scan the QR code with this app</Text>
+                    <Text style={styles.transferEmoji}>📱 ↔ 💻</Text>
+                    <Text style={styles.transferTitle}>One soul, two devices</Text>
+                    <Text style={styles.transferStep}>Your companion's brain lives on your PC.</Text>
+                    <Text style={styles.transferStep}>This phone is the portal — same personality, same memories.</Text>
+                    <Text style={styles.transferStep}>Pull down to refresh once your PC is connected.</Text>
                 </View>
-                <Text style={styles.transferNote}>
-                    Your companion's name, species, personality, skills, and level all transfer from your PC. Same soul — just portable!
-                </Text>
             </ScrollView>
         );
     }

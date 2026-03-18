@@ -32,7 +32,16 @@ export async function hasOnboarded(): Promise<boolean> {
     return mode === "selfhosted" || mode === "waitlist";
 }
 
-type OnboardingStep = "welcome" | "connect" | "waitlist_done" | "bridge" | "vpn_guide" | "mode" | "permissions" | "done";
+type OnboardingStep = "welcome" | "connect" | "waitlist_done" | "orphan_save" | "companion_create" | "bridge" | "vpn_guide" | "mode" | "permissions" | "first_jump" | "done";
+
+const SPECIES_OPTIONS: Array<{ id: string; emoji: string; name: string; personality: string; greeting: string }> = [
+    { id: "fox", emoji: "🦊", name: "Fox", personality: "Clever & curious", greeting: "Hmm, interesting place you've got here. I like it — cozy." },
+    { id: "cat", emoji: "🐱", name: "Cat", personality: "Independent & witty", greeting: "*yawns* Oh, a phone. Let me get comfortable..." },
+    { id: "dog", emoji: "🐶", name: "Dog", personality: "Loyal & enthusiastic", greeting: "OH WOW A NEW HOME!! I'm SO excited to be here!!" },
+    { id: "owl", emoji: "🦉", name: "Owl", personality: "Wise & thoughtful", greeting: "Ah, a pocket-sized dwelling. Compact, yet adequate for wisdom." },
+    { id: "penguin", emoji: "🐧", name: "Penguin", personality: "Formal & precise", greeting: "Good day. I've completed the transfer protocol. All systems nominal." },
+    { id: "dragon", emoji: "🐉", name: "Dragon", personality: "Bold & dramatic", greeting: "A PHONE?! This is... surprisingly warm. I approve!" },
+];
 
 export default function OnboardingV2() {
     const router = useRouter();
@@ -43,6 +52,11 @@ export default function OnboardingV2() {
     const [connecting, setConnecting] = useState(false);
     const [selectedMode, setSelectedMode] = useState<"pet" | "tool">("pet");
     const [fetchingBridge, setFetchingBridge] = useState(false);
+    // Companion creation state
+    const [selectedSpecies, setSelectedSpecies] = useState("fox");
+    const [companionName, setCompanionName] = useState("");
+    const [adopting, setAdopting] = useState(false);
+    const [hasExistingCompanion, setHasExistingCompanion] = useState(false);
 
     // — Welcome —
     if (step === "welcome") {
@@ -76,7 +90,20 @@ export default function OnboardingV2() {
             const ok = await testConnection();
             if (ok) {
                 await AsyncStorage.setItem("connectionMode", "selfhosted");
-                setStep("bridge"); // ask connection preference next
+                // Check if a companion already exists on the desktop
+                try {
+                    const status = await companionAPI.companionStatus();
+                    if (status.companion && Object.keys(status.companion).length > 0) {
+                        setHasExistingCompanion(true);
+                        setCompanionName((status.companion as any).name || "");
+                        setSelectedSpecies((status.companion as any).species || "fox");
+                        setStep("bridge"); // companion exists, skip creation
+                    } else {
+                        setStep("companion_create"); // no companion — let user create one
+                    }
+                } catch {
+                    setStep("companion_create"); // can't check — offer creation
+                }
             } else {
                 Alert.alert("Connection Failed", "Check the IP and make sure Fireside is running on your PC.");
             }
@@ -98,7 +125,7 @@ export default function OnboardingV2() {
             await AsyncStorage.setItem("connectionMode", "waitlist");
             await AsyncStorage.setItem("waitlistEmail", waitlistEmail.trim());
             setWaitlistSubmitting(false);
-            setStep("waitlist_done");
+            setStep("orphan_save");
         };
 
         return (
@@ -164,6 +191,128 @@ export default function OnboardingV2() {
                         </Text>
                     </TouchableOpacity>
                 </View>
+            </ScrollView>
+        );
+    }
+
+    // — Orphan Save (no desktop — pick companion + email link) —
+    if (step === "orphan_save") {
+        return (
+            <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>
+                <Text style={styles.stepTitle}>Pick Your Companion</Text>
+                <Text style={styles.stepSubtitle}>
+                    Choose who'll be waiting when you set up your desktop
+                </Text>
+
+                <View style={styles.speciesGrid}>
+                    {SPECIES_OPTIONS.map((s) => (
+                        <TouchableOpacity
+                            key={s.id}
+                            style={[styles.speciesCard, selectedSpecies === s.id && styles.speciesSelected]}
+                            onPress={() => { setSelectedSpecies(s.id); Haptics.selectionAsync(); }}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.speciesEmoji}>{s.emoji}</Text>
+                            <Text style={styles.speciesName}>{s.name}</Text>
+                            <Text style={styles.speciesPersonality}>{s.personality}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <TextInput
+                    style={styles.nameInput}
+                    value={companionName}
+                    onChangeText={setCompanionName}
+                    placeholder="Name your companion..."
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="words"
+                    maxLength={20}
+                />
+
+                <View style={styles.pathCard}>
+                    <Text style={styles.pathEmoji}>📧</Text>
+                    <Text style={styles.pathTitle}>We saved your choice!</Text>
+                    <Text style={styles.pathDesc}>
+                        We'll email you the link to download Fireside on your PC. Once it's running, open this app and your {SPECIES_OPTIONS.find(s => s.id === selectedSpecies)?.name || "companion"} will be waiting.
+                    </Text>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={async () => {
+                        await AsyncStorage.setItem("saved_species", selectedSpecies);
+                        await AsyncStorage.setItem("saved_name", companionName || SPECIES_OPTIONS.find(s => s.id === selectedSpecies)?.name || "Ember");
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setStep("waitlist_done");
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.primaryBtnText}>Save & Done 🔥</Text>
+                </TouchableOpacity>
+            </ScrollView>
+        );
+    }
+
+    // — Companion Creation (connected to desktop, no companion yet) —
+    if (step === "companion_create") {
+        const handleAdopt = async () => {
+            const name = companionName.trim() || SPECIES_OPTIONS.find(s => s.id === selectedSpecies)?.name || "Ember";
+            setAdopting(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+                await companionAPI.adopt(name, selectedSpecies);
+                setCompanionName(name);
+                setStep("bridge");
+            } catch {
+                Alert.alert("Adoption Failed", "Couldn't create your companion. Make sure your PC is running.");
+            }
+            setAdopting(false);
+        };
+
+        return (
+            <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>
+                <Text style={styles.fireEmoji}>✨</Text>
+                <Text style={styles.stepTitle}>Create Your Companion</Text>
+                <Text style={styles.stepSubtitle}>
+                    One soul — lives on your PC, travels with your phone
+                </Text>
+
+                <View style={styles.speciesGrid}>
+                    {SPECIES_OPTIONS.map((s) => (
+                        <TouchableOpacity
+                            key={s.id}
+                            style={[styles.speciesCard, selectedSpecies === s.id && styles.speciesSelected]}
+                            onPress={() => { setSelectedSpecies(s.id); Haptics.selectionAsync(); }}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.speciesEmoji}>{s.emoji}</Text>
+                            <Text style={styles.speciesName}>{s.name}</Text>
+                            <Text style={styles.speciesPersonality}>{s.personality}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <TextInput
+                    style={styles.nameInput}
+                    value={companionName}
+                    onChangeText={setCompanionName}
+                    placeholder="Name your companion..."
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="words"
+                    maxLength={20}
+                    onSubmitEditing={handleAdopt}
+                />
+
+                <TouchableOpacity
+                    style={[styles.primaryBtn, adopting && { opacity: 0.5 }]}
+                    onPress={handleAdopt}
+                    disabled={adopting}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.primaryBtnText}>
+                        {adopting ? "Creating..." : `Adopt ${companionName.trim() || SPECIES_OPTIONS.find(s => s.id === selectedSpecies)?.name || "Ember"} 🔥`}
+                    </Text>
+                </TouchableOpacity>
             </ScrollView>
         );
     }
@@ -338,7 +487,7 @@ export default function OnboardingV2() {
                     onPress={async () => {
                         await AsyncStorage.setItem("fireside_companion_mode", selectedMode);
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        setStep("permissions");
+                        setStep(hasExistingCompanion ? "permissions" : "permissions");
                     }}
                     activeOpacity={0.8}
                 >
@@ -353,7 +502,7 @@ export default function OnboardingV2() {
         const requestPermissions = async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             try { await Notifications.requestPermissionsAsync(); } catch { }
-            setStep("done");
+            setStep(hasExistingCompanion ? "first_jump" : "done");
         };
 
         return (
@@ -388,8 +537,36 @@ export default function OnboardingV2() {
                 <TouchableOpacity style={styles.primaryBtn} onPress={requestPermissions} activeOpacity={0.8}>
                     <Text style={styles.primaryBtnText}>Allow & Continue</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setStep("done")} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => setStep(hasExistingCompanion ? "first_jump" : "done")} activeOpacity={0.7}>
                     <Text style={styles.skipText}>Skip for now</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    // — First Jump Greeting (companion speaks in character) —
+    if (step === "first_jump") {
+        const speciesData = SPECIES_OPTIONS.find(s => s.id === selectedSpecies) || SPECIES_OPTIONS[0];
+        const displayName = companionName || "Companion";
+
+        return (
+            <View style={styles.screen}>
+                <Text style={styles.jumpEmoji}>{speciesData.emoji}</Text>
+                <Text style={styles.jumpTitle}>{displayName}</Text>
+                <View style={styles.jumpBubble}>
+                    <Text style={styles.jumpGreeting}>
+                        {speciesData.greeting}
+                    </Text>
+                </View>
+                <Text style={styles.jumpSubtext}>
+                    My brain lives on your PC, but now I can see through your phone too. Same soul — just portable.
+                </Text>
+                <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={() => router.replace("/(tabs)/care")}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.primaryBtnText}>Hey {displayName}! 🔥</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -455,4 +632,18 @@ const styles = StyleSheet.create({
     primaryBtn: { backgroundColor: colors.neon, borderRadius: borderRadius.md, paddingVertical: spacing.lg, paddingHorizontal: spacing.xxxl, marginTop: spacing.lg, ...shadows.glow },
     primaryBtnText: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.bgPrimary },
     skipText: { fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.lg },
+    // Species picker
+    speciesGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.lg },
+    speciesCard: { width: "48%" as any, backgroundColor: colors.bgCard, borderRadius: borderRadius.lg, borderWidth: 2, borderColor: colors.glassBorder, padding: spacing.lg, alignItems: "center", ...shadows.card },
+    speciesSelected: { borderColor: colors.neon, backgroundColor: colors.neonGlow, ...shadows.glow },
+    speciesEmoji: { fontSize: 36, marginBottom: spacing.xs },
+    speciesName: { fontFamily: "Inter_600SemiBold", fontSize: fontSize.md, color: colors.textPrimary },
+    speciesPersonality: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: colors.textDim, textAlign: "center", marginTop: 2 },
+    nameInput: { backgroundColor: colors.bgInput, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.glassBorder, paddingHorizontal: spacing.md, paddingVertical: spacing.lg, fontFamily: "Inter_600SemiBold", fontSize: fontSize.lg, color: colors.textPrimary, textAlign: "center", marginBottom: spacing.md },
+    // First jump greeting
+    jumpEmoji: { fontSize: 80, marginBottom: spacing.md },
+    jumpTitle: { fontFamily: "Inter_700Bold", fontSize: fontSize.hero, color: colors.textPrimary, marginBottom: spacing.lg },
+    jumpBubble: { backgroundColor: colors.bgCard, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.neonBorder, padding: spacing.xl, marginBottom: spacing.lg, maxWidth: "85%" as any, ...shadows.card },
+    jumpGreeting: { fontFamily: "Inter_400Regular", fontSize: fontSize.md, color: colors.textSecondary, lineHeight: 22, textAlign: "center", fontStyle: "italic" },
+    jumpSubtext: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, textAlign: "center", lineHeight: 18, paddingHorizontal: spacing.xl, marginBottom: spacing.lg },
 });
