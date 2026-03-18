@@ -10,7 +10,8 @@ Routes:
 All browsing happens locally (httpx).  No data is sent to any cloud.
 The orchestrator and companion can both use these routes.
 """
-from __future__ import annotations
+# NOTE: Do NOT use 'from __future__ import annotations' here — it breaks
+# FastAPI's Pydantic body detection for POST routes.
 
 import logging
 import time
@@ -308,7 +309,7 @@ async def auto_browse_message(message: str) -> Optional[dict]:
 # FastAPI route registration (called by plugin loader)
 # ---------------------------------------------------------------------------
 
-def register_routes(app):
+def register_routes(app, config: dict = None):
     """Register browse routes with the FastAPI app."""
     from pydantic import BaseModel
 
@@ -344,4 +345,53 @@ def register_routes(app):
     async def handle_headlines(req: HeadlinesRequest):
         return await fetch_headlines(req.urls, req.max_per_source)
 
-    log.info("[browse] Routes registered: /browse, /browse/summarize, /browse/compare, /browse/links, /browse/headlines")
+    # --- Interactive browsing routes ---
+
+    class ActRequest(BaseModel):
+        url: str
+        goal: str
+        headless: bool = True
+
+    class ActionRequest(BaseModel):
+        action: str  # "click 3", "type 1 'hello'", "select 2 'Large'"
+        session_id: str | None = None
+
+    @app.post("/browse/act")
+    async def handle_act(req: ActRequest):
+        """Open a page and return the interactive action tree (Pico)."""
+        try:
+            from plugins.browse.actor import BrowserActor
+            actor = BrowserActor(headless=req.headless)
+            result = await actor.open(req.url)
+            if result.get("ok"):
+                result["goal"] = req.goal
+            await actor.close()
+            return result
+        except ImportError:
+            return {"ok": False, "error": "Playwright not installed"}
+
+    @app.get("/browse/spending")
+    async def handle_spending_summary():
+        """Get current spending limits and history."""
+        try:
+            from plugins.browse.spending import get_spending_summary
+            return get_spending_summary()
+        except ImportError:
+            return {"error": "Spending module not available"}
+
+    @app.post("/browse/spending/check")
+    async def handle_spending_check(request):
+        """Check if a purchase is within limits."""
+        body = await request.json()
+        try:
+            from plugins.browse.spending import check_purchase
+            return check_purchase(
+                body.get("description", ""),
+                body.get("estimated_cost", 0),
+                body.get("site", ""),
+            )
+        except ImportError:
+            return {"allowed": True, "reason": "No spending controls"}
+
+    log.info("[browse] Routes registered: /browse, /browse/summarize, /browse/compare, /browse/links, /browse/headlines, /browse/act, /browse/spending")
+

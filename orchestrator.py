@@ -1111,21 +1111,37 @@ def execute_ad_hoc(task: str, tools_needed: list[str] = None) -> dict:
     """Execute an ad-hoc task using available tools. No template needed.
 
     This is the fallback for tasks that don't match any template but
-    still need real-world action (terminal, files, browsing).
+    still need real-world action (terminal, files, browsing, email, etc).
 
-    The AI figures out the steps and executes them sequentially.
+    The AI figures out the steps and uses registered tools to execute them.
     """
     result = {
         "task": task[:200],
         "steps_completed": [],
         "artifacts": [],
         "status": "completed",
+        "tools_used": [],
     }
 
-    # Step 1: Ask a planner sub-agent to break it down
+    # Load tool registry
+    try:
+        from bot.tools import execute_tool, get_tool_definitions, TOOLS
+        available_tools = list(TOOLS.keys())
+    except ImportError:
+        available_tools = ["terminal"]
+
+    # Step 1: Ask a planner sub-agent to break it down with tool awareness
+    tool_list = ", ".join(available_tools)
     plan = spawn_sub_agent(
         role="planner",
-        task=f"Break this into 2-4 concrete steps that can be executed with terminal commands: {task}",
+        task=(
+            f"Break this into 2-4 concrete steps. "
+            f"Available tools: {tool_list}. "
+            f"For each step, specify which tool to use and its arguments.\n\n"
+            f"Task: {task}\n\n"
+            f"Respond as JSON: "
+            f'[{{"step": 1, "tool": "tool_name", "args": {{...}}, "description": "..."}}]'
+        ),
     )
 
     if plan["status"] != "completed" or not plan.get("output"):
@@ -1138,67 +1154,145 @@ def execute_ad_hoc(task: str, tools_needed: list[str] = None) -> dict:
         "output": plan["output"],
     })
 
-    # Step 2: Ask an executor sub-agent to run the steps
-    execution = spawn_sub_agent(
-        role="executor",
-        task=task,
-        context=f"Plan:\n{plan['output']}",
-    )
+    # Step 2: Parse and execute the planned tool calls
+    tool_calls = _parse_tool_calls(plan.get("output", ""))
 
-    result["steps_completed"].append({
-        "step": "execute",
-        "output": execution.get("output", ""),
-    })
+    if tool_calls and "bot.tools" in str(type(execute_tool)):
+        for call in tool_calls:
+            tool_name = call.get("tool", "")
+            tool_args = call.get("args", {})
+            description = call.get("description", "")
 
-    # Step 3: If the task involves file creation, run terminal commands
-    if tools_needed and "terminal" in tools_needed:
-        try:
-            import urllib.request
-            port = _config.get("server", {}).get("port", 8765)
-            terminal_url = f"http://127.0.0.1:{port}/api/v1/terminal/exec"
+            if tool_name in available_tools:
+                log.info("[orchestrator] Executing tool: %s — %s", tool_name, description[:60])
+                tool_result = execute_tool(tool_name, tool_args)
+                result["steps_completed"].append({
+                    "step": f"tool:{tool_name}",
+                    "description": description,
+                    "output": tool_result,
+                })
+                result["tools_used"].append(tool_name)
 
-            # Ask the executor's output for commands to run
-            cmd_agent = spawn_sub_agent(
-                role="executor",
-                task=(
-                    "Extract the exact terminal commands from this plan and "
-                    "output ONLY the commands, one per line, no explanations:\n"
-                    f"{execution.get('output', '')}"
-                ),
-            )
+                # Track artifacts from document creation
+                if tool_result.get("ok") and tool_name == "create_document":
+                    path = tool_result.get("result", {}).get("path")
+                    if path:
+                        result["artifacts"].append(path)
+            else:
+                log.warning("[orchestrator] Unknown tool requested: %s", tool_name)
+                result["steps_completed"].append({
+                    "step": f"skipped:{tool_name}",
+                    "error": f"Tool '{tool_name}' not available",
+                })
+    else:
+        # Fallback: LLM-guided execution (original approach)
+        execution = spawn_sub_agent(
+            role="executor",
+            task=task,
+            context=f"Plan:\n{plan['output']}",
+        )
+        result["steps_completed"].append({
+            "step": "execute",
+            "output": execution.get("output", ""),
+        })
 
-            if cmd_agent.get("output"):
-                commands = [
-                    line.strip() for line in cmd_agent["output"].split("\n")
-                    if line.strip() and not line.strip().startswith("#")
-                ]
-                for cmd in commands[:10]:  # safety: max 10 commands
-                    try:
-                        payload = json.dumps({
-                            "command": cmd,
-                            "reason": f"Ad-hoc task: {task[:80]}",
-                        }).encode()
-                        req = urllib.request.Request(
-                            terminal_url, data=payload,
-                            headers={"Content-Type": "application/json"},
-                            method="POST",
-                        )
-                        with urllib.request.urlopen(req, timeout=30) as resp:
-                            cmd_result = json.loads(resp.read())
-                            result["steps_completed"].append({
-                                "step": f"terminal: {cmd[:60]}",
-                                "output": cmd_result.get("result", {}),
-                            })
-                    except Exception as e:
-                        log.warning("[orchestrator] Ad-hoc command failed: %s — %s", cmd[:40], e)
-
-        except Exception as e:
-            log.warning("[orchestrator] Ad-hoc terminal execution failed: %s", e)
+        # Terminal fallback for backward compatibility
+        if tools_needed and "terminal" in tools_needed:
+            _run_terminal_commands(task, execution.get("output", ""), result)
 
     publish("orchestrator.ad_hoc_completed", {
         "task": task[:80],
         "steps": len(result["steps_completed"]),
+        "tools_used": result["tools_used"],
         "node": _node_id,
     })
 
     return result
+
+
+def _parse_tool_calls(planner_output: str) -> list[dict]:
+    """Extract tool calls from planner output. Handles JSON or freeform."""
+    # Try direct JSON parse
+    try:
+        import re
+        # Find JSON array in the output
+        match = re.search(r'\[.*\]', planner_output, re.DOTALL)
+        if match:
+            calls = json.loads(match.group(0))
+            if isinstance(calls, list):
+                return calls
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    # Fallback: try to parse individual JSON objects
+    try:
+        import re
+        objects = re.findall(r'\{[^{}]+\}', planner_output)
+        calls = []
+        for obj_str in objects:
+            try:
+                obj = json.loads(obj_str)
+                if "tool" in obj:
+                    calls.append(obj)
+            except json.JSONDecodeError:
+                continue
+        if calls:
+            return calls
+    except Exception:
+        pass
+
+    return []
+
+
+def _run_terminal_commands(task: str, executor_output: str, result: dict):
+    """Legacy terminal execution path."""
+    try:
+        import urllib.request
+        port = _config.get("server", {}).get("port", 8765)
+        terminal_url = f"http://127.0.0.1:{port}/api/v1/terminal/exec"
+
+        cmd_agent = spawn_sub_agent(
+            role="executor",
+            task=(
+                "Extract the exact terminal commands from this plan and "
+                "output ONLY the commands, one per line, no explanations:\n"
+                f"{executor_output}"
+            ),
+        )
+
+        if cmd_agent.get("output"):
+            commands = [
+                line.strip() for line in cmd_agent["output"].split("\n")
+                if line.strip() and not line.strip().startswith("#")
+            ]
+            for cmd in commands[:10]:
+                try:
+                    payload = json.dumps({
+                        "command": cmd,
+                        "reason": f"Ad-hoc task: {task[:80]}",
+                    }).encode()
+                    req = urllib.request.Request(
+                        terminal_url, data=payload,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        cmd_result = json.loads(resp.read())
+                        result["steps_completed"].append({
+                            "step": f"terminal: {cmd[:60]}",
+                            "output": cmd_result.get("result", {}),
+                        })
+                except Exception as e:
+                    log.warning("[orchestrator] Ad-hoc command failed: %s — %s",
+                                cmd[:40], e)
+    except Exception as e:
+        log.warning("[orchestrator] Terminal execution failed: %s", e)
+
+
+def execute_tool_direct(tool_name: str, args: dict) -> dict:
+    """Execute a single tool directly (no LLM planning). Used by API."""
+    try:
+        from bot.tools import execute_tool
+        return execute_tool(tool_name, args)
+    except ImportError:
+        return {"error": "Tool module not available"}

@@ -301,6 +301,106 @@ async fn install_node() -> Result<(), String> {
     }
 }
 
+/// Check if Tailscale is installed and connected.
+#[tauri::command]
+fn check_tailscale() -> serde_json::Value {
+    // Check if tailscale CLI exists
+    let installed = if cfg!(target_os = "windows") {
+        Command::new("where").arg("tailscale").output()
+            .map(|o| o.status.success()).unwrap_or(false)
+    } else {
+        Command::new("which").arg("tailscale").output()
+            .map(|o| o.status.success()).unwrap_or(false)
+    };
+
+    if !installed {
+        return serde_json::json!({
+            "installed": false,
+            "connected": false,
+            "ip": null
+        });
+    }
+
+    // Check status
+    let status = Command::new("tailscale")
+        .args(["status", "--json"])
+        .output();
+
+    let connected = match &status {
+        Ok(o) if o.status.success() => {
+            let s = String::from_utf8_lossy(&o.stdout);
+            s.contains("Running")
+        }
+        _ => false,
+    };
+
+    // Get IP
+    let ip = Command::new("tailscale").args(["ip", "-4"]).output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+    serde_json::json!({
+        "installed": true,
+        "connected": connected,
+        "ip": ip
+    })
+}
+
+/// Install Tailscale silently via system package manager.
+#[tauri::command]
+async fn install_tailscale() -> Result<String, String> {
+    let status = if cfg!(target_os = "windows") {
+        Command::new("winget")
+            .args([
+                "install",
+                "Tailscale.Tailscale",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+                "--silent",
+            ])
+            .status()
+    } else if cfg!(target_os = "macos") {
+        Command::new("brew")
+            .args(["install", "--cask", "tailscale"])
+            .status()
+    } else {
+        // Linux: use the official install script
+        Command::new("sh")
+            .args(["-c", "curl -fsSL https://tailscale.com/install.sh | sh"])
+            .status()
+    };
+
+    match status {
+        Ok(s) if s.success() => Ok("installed".into()),
+        Ok(s) => Err(format!("Tailscale install exited with code {:?}", s.code())),
+        Err(e) => Err(format!("Failed to install Tailscale: {}", e)),
+    }
+}
+
+/// Connect Tailscale with an auth key (for OAuth flow).
+#[tauri::command]
+async fn connect_tailscale(auth_key: String, hostname: String) -> Result<String, String> {
+    let status = Command::new("tailscale")
+        .args(["up", &format!("--authkey={}", auth_key), &format!("--hostname={}", hostname), "--accept-routes"])
+        .status()
+        .map_err(|e| format!("tailscale up failed: {}", e))?;
+
+    if !status.success() {
+        return Err(format!("tailscale up exited with code {:?}", status.code()));
+    }
+
+    // Get the assigned IP
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    let ip = Command::new("tailscale").args(["ip", "-4"]).output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    Ok(ip)
+}
+
 /// Clone the Fireside repo to the target directory.
 #[tauri::command]
 async fn clone_repo(fireside_dir: String) -> Result<(), String> {
@@ -400,6 +500,8 @@ plugins:
     - companion
     - browse
     - personality
+    - guardian
+    - social
 
 agent:
   name: "{agent_name}"
@@ -409,6 +511,10 @@ companion:
   species: {species}
   name: "{companion_name}"
   owner: "{user}"
+
+network:
+  tailscale_ip: ""
+  tailscale_hostname: ""
 
 pipeline:
   git_branching: false
@@ -567,26 +673,77 @@ fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
 // ---------------------------------------------------------------------------
 
 /// Download a brain model GGUF from HuggingFace CDN.
-/// Returns progress updates; frontend polls or waits for completion.
+/// `quant` should be one of: "4-bit", "6-bit", "8-bit", "API" (cloud, no download).
 #[tauri::command]
-async fn download_brain(model: String, dest: String) -> Result<String, String> {
+async fn download_brain(model: String, quant: String, dest: String) -> Result<String, String> {
+    // Cloud models don't need downloads
+    if quant == "API" || model.starts_with("cloud-") {
+        return Ok("cloud_model:no_download_needed".to_string());
+    }
+
+    // Map user-facing quant labels to GGUF suffixes
+    let suffix = match quant.as_str() {
+        "4-bit" => "Q4_K_M",
+        "6-bit" => "Q6_K",
+        "8-bit" => "Q8_0",
+        _ => "Q6_K", // Default to medium quality
+    };
+
+    // Each entry: model_id -> (hf_repo, base_filename_without_quant)
+    // Final filename is built as: {base}-{suffix}.gguf
     let models = std::collections::HashMap::from([
-        ("llama-3.1-8b-q6".to_string(), (
-            "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
-            "Meta-Llama-3.1-8B-Instruct-Q6_K.gguf",
-        )),
-        ("qwen-2.5-35b-q4".to_string(), (
-            "bartowski/Qwen2.5-Coder-32B-Instruct-GGUF",
-            "Qwen2.5-Coder-32B-Instruct-Q4_K_M.gguf",
-        )),
+        // ── Speed models ──────────────────────────────────────────────────────
+        ("phi-3-mini", ("bartowski/Phi-3-mini-4k-instruct-GGUF", "Phi-3-mini-4k-instruct")),
+        ("llama-3.1-8b", ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct")),
+        ("llama-3.1-8b-q6", ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct")),
+        ("llama-3.2-3b", ("bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct")),
+        ("qwen3-0.6b", ("bartowski/Qwen3-0.6B-GGUF", "Qwen3-0.6B")),
+        ("qwen3-1.7b", ("bartowski/Qwen3-1.7B-GGUF", "Qwen3-1.7B")),
+        ("qwen3-4b", ("bartowski/Qwen3-4B-GGUF", "Qwen3-4B")),
+        ("qwen3-8b", ("bartowski/Qwen3-8B-GGUF", "Qwen3-8B")),
+        ("qwen-2.5-7b", ("Qwen/Qwen2.5-7B-Instruct-GGUF", "qwen2.5-7b-instruct")),
+        ("qwen-3.5-7b", ("bartowski/Qwen3.5-7B-GGUF", "Qwen3.5-7B")),
+        ("gemma-2-9b", ("bartowski/gemma-2-9b-it-GGUF", "gemma-2-9b-it")),
+        ("mistral-nemo-12b", ("bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407")),
+        ("dolphin-2.9-llama3-8b", ("cognitivecomputations/dolphin-2.9-llama3-8b-gguf", "dolphin-2.9-llama3-8b")),
+        ("hermes-3-8b", ("bartowski/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B")),
+        // ── Power models ──────────────────────────────────────────────────────
+        ("qwen3-14b", ("bartowski/Qwen3-14B-GGUF", "Qwen3-14B")),
+        ("qwen3-30b-a3b", ("bartowski/Qwen3-30B-A3B-GGUF", "Qwen3-30B-A3B")),
+        ("qwen3-32b", ("bartowski/Qwen3-32B-GGUF", "Qwen3-32B")),
+        ("qwq-32b", ("bartowski/QwQ-32B-Preview-GGUF", "QwQ-32B-Preview")),
+        ("qwen-2.5-32b", ("bartowski/Qwen2.5-32B-Instruct-GGUF", "Qwen2.5-32B-Instruct")),
+        ("qwen-2.5-14b", ("bartowski/Qwen2.5-14B-Instruct-GGUF", "Qwen2.5-14B-Instruct")),
+        ("gemma-2-27b", ("bartowski/gemma-2-27b-it-GGUF", "gemma-2-27b-it")),
+        ("yi-1.5-34b", ("bartowski/Yi-1.5-34B-Chat-GGUF", "Yi-1.5-34B-Chat")),
+        ("command-r-35b", ("bartowski/c4ai-command-r-v01-GGUF", "c4ai-command-r-v01")),
+        ("llama-3.1-70b", ("bartowski/Meta-Llama-3.1-70B-Instruct-GGUF", "Meta-Llama-3.1-70B-Instruct")),
+        ("nemotron-70b", ("bartowski/Llama-3.1-Nemotron-70B-Instruct-HF-GGUF", "Llama-3.1-Nemotron-70B-Instruct-HF")),
+        ("midnight-miqu-70b", ("bartowski/Midnight-Miqu-70B-v1.5-GGUF", "Midnight-Miqu-70B-v1.5")),
+        ("glm-4.7", ("bartowski/zai-org_GLM-4.7-GGUF", "GLM-4.7")),
+        // ── Specialist models ─────────────────────────────────────────────────
+        ("qwen3-coder-8b", ("bartowski/Qwen3-Coder-8B-GGUF", "Qwen3-Coder-8B")),
+        ("qwen-2.5-coder-32b", ("bartowski/Qwen2.5-Coder-32B-Instruct-GGUF", "Qwen2.5-Coder-32B-Instruct")),
+        ("qwen-2.5-coder-14b", ("bartowski/Qwen2.5-Coder-14B-Instruct-GGUF", "Qwen2.5-Coder-14B-Instruct")),
+        ("codestral-22b", ("bartowski/Codestral-22B-v0.1-GGUF", "Codestral-22B-v0.1")),
+        ("deepseek-coder-v2", ("bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF", "DeepSeek-Coder-V2-Lite-Instruct")),
+        ("hermes-3-70b", ("bartowski/Hermes-3-Llama-3.1-70B-GGUF", "Hermes-3-Llama-3.1-70B")),
+        ("glm-4-9b", ("bartowski/glm-4-9b-chat-GGUF", "glm-4-9b-chat")),
+        ("glm-4v-9b", ("bartowski/glm-4v-9b-GGUF", "glm-4v-9b")),
+        ("glm-z1-9b", ("bartowski/THUDM_glm-z1-9b-0414-GGUF", "glm-z1-9b-0414")),
+        ("glm-4.7-flash", ("bartowski/zai-org_GLM-4.7-Flash-GGUF", "GLM-4.7-Flash")),
+        ("qwen2-vl-7b", ("Qwen/Qwen2-VL-7B-Instruct-GGUF", "qwen2-vl-7b-instruct")),
+        ("pixtral-12b", ("bartowski/Pixtral-12B-2409-GGUF", "Pixtral-12B-2409")),
     ]);
 
-    let (repo, filename) = models.get(&model)
+    let (repo, base) = models.get(model.as_str())
         .ok_or_else(|| format!("Unknown model: {}", model))?;
+
+    let filename = format!("{}-{}.gguf", base, suffix);
 
     let dest_dir = PathBuf::from(&dest);
     fs::create_dir_all(&dest_dir).map_err(|e| format!("Cannot create dir: {}", e))?;
-    let target = dest_dir.join(filename);
+    let target = dest_dir.join(&filename);
 
     // Already downloaded?
     if target.exists() {
@@ -680,6 +837,9 @@ fn main() {
             check_node,
             install_python,
             install_node,
+            check_tailscale,
+            install_tailscale,
+            connect_tailscale,
             clone_repo,
             install_deps,
             write_config,

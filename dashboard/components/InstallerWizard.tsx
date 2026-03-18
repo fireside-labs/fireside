@@ -114,6 +114,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   const [animClass, setAnimClass] = useState("installer-enter");
   const [brainProgress, setBrainProgress] = useState(0);
   const [brainDownloading, setBrainDownloading] = useState(false);
+  const [brainError, setBrainError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<"pending" | "testing" | "success" | "fail">("pending");
   const [installIntensity, setInstallIntensity] = useState(0);
   const [sparkBurst, setSparkBurst] = useState(false);
@@ -174,6 +175,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       { label: "Checking Python", status: "pending" },
       { label: "Checking Node.js", status: "pending" },
       { label: "Setting up Fireside", status: "pending" },
+      { label: "Setting up secure remote access", status: "pending" },
       { label: "Installing packages", status: "pending" },
       { label: "Saving your preferences", status: "pending" },
     ];
@@ -211,9 +213,18 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         await tauriInvoke("clone_repo", { firesideDir: "~/.fireside" });
       });
       await run(3, async () => {
-        await tauriInvoke("install_deps", { firesideDir: "~/.fireside" });
+        // Silent Tailscale setup — user sees "Setting up secure remote access"
+        const ts = await tauriInvoke<{ installed: boolean; connected: boolean; ip: string | null }>("check_tailscale");
+        if (!ts.installed) {
+          await tauriInvoke("install_tailscale");
+        }
+        // Note: OAuth connect happens when user opens the mobile app
+        // For now, just ensure Tailscale is installed
       });
       await run(4, async () => {
+        await tauriInvoke("install_deps", { firesideDir: "~/.fireside" });
+      });
+      await run(5, async () => {
         await tauriInvoke("write_config", {
           config: {
             user_name: config.userName || "User",
@@ -232,9 +243,9 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       setSparkBurst(true);
       setTimeout(() => setSparkBurst(false), 200);
 
-      // Check results: config write (step 4) is critical, others are non-critical
-      const hasCriticalFail = steps[4].status === "fail";
-      const hasWarnings = steps.some((s, i) => i < 4 && s.status === "fail");
+      // Check results: config write (step 5) is critical, others are non-critical
+      const hasCriticalFail = steps[5].status === "fail";
+      const hasWarnings = steps.some((s, i) => i < 5 && s.status === "fail");
 
       if (hasCriticalFail) {
         setInstallIntensity(10);
@@ -243,7 +254,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 
       if (hasWarnings) {
         steps.forEach((s, i) => {
-          if (i < 4 && s.status === "fail") {
+          if (i < 5 && s.status === "fail") {
             steps[i] = { ...s, status: "done", label: `${s.label} (skipped — already set up)` };
           }
         });
@@ -273,14 +284,15 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         });
       }, 300);
 
-      await tauriInvoke("download_brain", { model, dest: "~/.fireside/models/" });
+      await tauriInvoke("download_brain", { model, quant: config.brainModel || "6-bit", dest: "~/.fireside/models/" });
       clearInterval(progressInterval);
       setBrainProgress(100);
       localStorage.setItem("fireside_model", model);
       setTimeout(() => goTo(8), 600);
-    } catch {
+    } catch (err) {
       setBrainDownloading(false);
       setBrainProgress(0);
+      setBrainError(typeof err === 'string' ? err : 'Download failed. Check your internet connection.');
     }
   }, [config.actualModel, goTo]);
 
@@ -388,22 +400,81 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
           />
         )}
 
-        {/* Step 3: Choose Companion */}
+        {/* Step 3: Choose Companion — character select carousel */}
         {step === 3 && (
-          <div className="installer-center">
-            <h2 className="installer-title">Adopt your Companion</h2>
-            <p className="installer-subtitle">Choose their form, name them, and shape their personality.</p>
-            <div className="installer-species-grid">
-              {SPECIES.map((s) => (
-                <button
-                  key={s.id}
-                  className={`installer-species-card ${config.companionSpecies === s.id ? "selected" : ""}`}
-                  onClick={() => { playTick(); setConfig((c) => ({ ...c, companionSpecies: s.id })); }}
-                >
-                  <span className="installer-species-emoji">{s.emoji}</span>
-                  <span className="installer-species-label">{s.label}</span>
-                </button>
-              ))}
+          <div className="installer-center" style={{ maxWidth: 600 }}>
+            <h2 className="installer-title">Choose your Companion</h2>
+            <p className="installer-subtitle">They&apos;ll learn alongside you, evolve over time, and become uniquely yours.</p>
+
+            {/* Carousel with arrows */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 28, width: '100%', justifyContent: 'center' }}>
+              <button
+                className="installer-carousel-arrow"
+                onClick={() => {
+                  playTick();
+                  const idx = SPECIES.findIndex(s => s.id === config.companionSpecies);
+                  const prev = (idx - 1 + SPECIES.length) % SPECIES.length;
+                  setConfig(c => ({ ...c, companionSpecies: SPECIES[prev].id }));
+                }}
+                aria-label="Previous companion"
+              >
+                ‹
+              </button>
+
+              <div style={{ position: 'relative', width: 220, height: 220, flexShrink: 0 }}>
+                {/* Glow ring */}
+                <div style={{
+                  position: 'absolute', inset: -10, borderRadius: '50%',
+                  background: 'radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 70%)',
+                  animation: 'pulse 3s ease-in-out infinite',
+                }} />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/hub/mascot_${config.companionSpecies}.png`}
+                  alt={SPECIES.find(s => s.id === config.companionSpecies)?.label || 'Companion'}
+                  style={{
+                    width: 220, height: 220, objectFit: 'contain',
+                    filter: 'drop-shadow(0 0 40px rgba(245,158,11,0.4))',
+                    animation: 'float 3s ease-in-out infinite',
+                    transition: 'all 0.3s ease',
+                  }}
+                />
+              </div>
+
+              <button
+                className="installer-carousel-arrow"
+                onClick={() => {
+                  playTick();
+                  const idx = SPECIES.findIndex(s => s.id === config.companionSpecies);
+                  const next = (idx + 1) % SPECIES.length;
+                  setConfig(c => ({ ...c, companionSpecies: SPECIES[next].id }));
+                }}
+                aria-label="Next companion"
+              >
+                ›
+              </button>
+            </div>
+
+            {/* Species name + dots indicator */}
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <span style={{ fontSize: 20, fontWeight: 800, color: '#F59E0B', letterSpacing: 2 }}>
+                {SPECIES.find(s => s.id === config.companionSpecies)?.emoji}{' '}
+                {SPECIES.find(s => s.id === config.companionSpecies)?.label}
+              </span>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 10 }}>
+                {SPECIES.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => { playTick(); setConfig(c => ({ ...c, companionSpecies: s.id })); }}
+                    style={{
+                      width: config.companionSpecies === s.id ? 24 : 8,
+                      height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
+                      background: config.companionSpecies === s.id ? '#F59E0B' : 'rgba(255,255,255,0.1)',
+                      transition: 'all 0.3s',
+                    }}
+                  />
+                ))}
+              </div>
             </div>
 
             <input className="installer-input" value={config.companionName}
@@ -568,8 +639,13 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 
               {!brainDownloading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-                  <button className="installer-btn-primary" onClick={startBrainDownload}>
-                    Download Brain →
+                  {brainError && (
+                    <p style={{ fontSize: 12, color: '#EF4444', background: 'rgba(239,68,68,0.08)', padding: '8px 16px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.2)', maxWidth: 400, textAlign: 'center' }}>
+                      {brainError}
+                    </p>
+                  )}
+                  <button className="installer-btn-primary" onClick={() => { setBrainError(null); startBrainDownload(); }}>
+                    {brainError ? 'Retry Download →' : 'Download Brain →'}
                   </button>
                   <button
                     className="installer-btn-secondary"
@@ -1074,4 +1150,23 @@ const installerCSS = `
   }
   .installer-success-tip-title { font-size: 13px; color: #D97706; font-weight: 700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
   .installer-success-tip { font-size: 13px; color: #7A6A5A; margin-bottom: 6px; }
+
+  /* ── Carousel arrows ── */
+  .installer-carousel-arrow {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: #C4A882; font-size: 32px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-family: inherit; transition: all 0.3s;
+    flex-shrink: 0;
+  }
+  .installer-carousel-arrow:hover {
+    background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.25);
+    color: #F59E0B; transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(245,158,11,0.15);
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
 `;

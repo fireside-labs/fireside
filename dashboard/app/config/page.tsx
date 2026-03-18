@@ -140,11 +140,11 @@ export default function SettingsPage() {
                                 { label: "Agents", icon: "👤", href: "/agents/thor", desc: "Mesh agents" },
                                 { label: "Debate", icon: "💬", href: "/debate", desc: "Agent debates" },
                             ].map(tool => (
-                                <a key={tool.href} href={tool.href} className="dev-tool-card">
+                                <Link key={tool.href} href={tool.href} className="dev-tool-card">
                                     <span className="dev-tool-icon">{tool.icon}</span>
                                     <span className="dev-tool-label">{tool.label}</span>
                                     <span className="dev-tool-desc">{tool.desc}</span>
-                                </a>
+                                </Link>
                             ))}
                         </div>
                     </div>

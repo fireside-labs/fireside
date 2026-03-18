@@ -1,8 +1,8 @@
 name: browse
-version: 1.0.0
+version: 2.0.0
 category: connectivity
 rarity: common
-description: Web browsing via accessibility-tree parsing — 90% fewer tokens than raw DOM
+description: Web browsing via accessibility-tree parsing — 90% fewer tokens than raw DOM. Now with interactive browsing (click, type, navigate).
 routes:
   - method: POST
     path: /browse
@@ -12,9 +12,16 @@ routes:
     path: /browse/compare
   - method: POST
     path: /browse/links
+  - method: POST
+    path: /browse/act
+  - method: GET
+    path: /browse/spending
+  - method: POST
+    path: /browse/spending/check
 events:
   subscribes: [chat.url_detected]
-  publishes: [browse.completed, browse.failed]
+  publishes: [browse.completed, browse.failed, browse.purchase_check]
 dependencies:
   - httpx
   - beautifulsoup4
+  - playwright  # optional: for interactive browsing

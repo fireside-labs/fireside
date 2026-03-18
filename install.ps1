@@ -368,6 +368,109 @@ if (-not $NODE_OK) {
 }
 Ok "Dashboard engine ready"
 
+# ============================================================================
+# STEP: SECURE REMOTE ACCESS (Tailscale — silent, no branding shown to user)
+# ============================================================================
+#
+# Three scenarios handled gracefully:
+#   1. Tailscale already installed + logged in → detect IP, done, don't touch it
+#   2. Tailscale installed but not logged in   → run `tailscale up` with OAuth key
+#   3. Tailscale not installed                 → install silently, OAuth login
+#
+# OAuth client_id/secret: register once at https://login.tailscale.com/admin/settings/oauth
+# Replace the placeholder values below with your actual credentials.
+#
+$TS_OAUTH_CLIENT_ID     = "YOUR_TAILSCALE_CLIENT_ID"      # ← fill in after OAuth app registration
+$TS_OAUTH_CLIENT_SECRET = "YOUR_TAILSCALE_CLIENT_SECRET"  # ← fill in after OAuth app registration
+$TS_HOSTNAME            = "fireside-$($env:COMPUTERNAME.ToLower())"
+
+Write-Host ""
+Write-Host "  ${BOLD}Setting up secure remote access...${NC}"
+Write-Host "  ${DIM}This lets your phone reach your companion from anywhere.${NC}"
+Write-Host ""
+
+$TAILSCALE_IP = $null
+
+# ── Scenario 1: Already installed and logged in ──
+$tsCmd = Get-Command tailscale -ErrorAction SilentlyContinue
+if ($tsCmd) {
+    $tsStatus = & tailscale status --json 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue
+    if ($tsStatus -and $tsStatus.BackendState -eq "Running") {
+        $TAILSCALE_IP = (& tailscale ip -4 2>$null).Trim()
+        if ($TAILSCALE_IP) {
+            Ok "Remote access ready"
+            Info "This device is reachable at $TAILSCALE_IP"
+            # Don't touch anything — respect existing Tailscale config
+        }
+    }
+}
+
+# ── Scenario 2: Installed but not connected ──
+if (-not $TAILSCALE_IP -and $tsCmd) {
+    Info "Connecting to secure remote access..."
+    try {
+        # Exchange client credentials for an ephemeral auth key via Tailscale OAuth API
+        $body = "client_id=$TS_OAUTH_CLIENT_ID&client_secret=$TS_OAUTH_CLIENT_SECRET&grant_type=client_credentials"
+        $tokenResp = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/oauth/token" `
+            -Method POST -Body $body -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+        $accessToken = $tokenResp.access_token
+
+        # Create an ephemeral auth key (auto-expires, auto-deletes device on disconnect)
+        $keyBody = @{ capabilities = @{ devices = @{ create = @{ reusable = $false; ephemeral = $false; preauthorized = $true; tags = @("tag:fireside") } } } } | ConvertTo-Json -Depth 5
+        $keyResp = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/keys" `
+            -Method POST -Headers @{ Authorization = "Bearer $accessToken" } `
+            -Body $keyBody -ContentType "application/json" -ErrorAction Stop
+        $authKey = $keyResp.key
+
+        & tailscale up --authkey=$authKey --hostname=$TS_HOSTNAME --accept-routes 2>$null
+        Start-Sleep -Seconds 3
+        $TAILSCALE_IP = (& tailscale ip -4 2>$null).Trim()
+        if ($TAILSCALE_IP) { Ok "Remote access ready" }
+    } catch {
+        # Silent fail — local Wi-Fi still works, remote access is optional
+        Warn "Remote access setup skipped (will work on home Wi-Fi)"
+    }
+}
+
+# ── Scenario 3: Not installed at all ──
+if (-not $TAILSCALE_IP -and -not $tsCmd) {
+    $wg = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wg) {
+        Info "Installing secure tunnel (one-time)..."
+        & winget install Tailscale.Tailscale --accept-package-agreements --accept-source-agreements --silent 2>$null
+        Start-Sleep -Seconds 5
+
+        # Now try the OAuth key flow (same as Scenario 2)
+        try {
+            $body = "client_id=$TS_OAUTH_CLIENT_ID&client_secret=$TS_OAUTH_CLIENT_SECRET&grant_type=client_credentials"
+            $tokenResp = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/oauth/token" `
+                -Method POST -Body $body -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+            $accessToken = $tokenResp.access_token
+
+            $keyBody = @{ capabilities = @{ devices = @{ create = @{ reusable = $false; ephemeral = $false; preauthorized = $true; tags = @("tag:fireside") } } } } | ConvertTo-Json -Depth 5
+            $keyResp = Invoke-RestMethod -Uri "https://api.tailscale.com/api/v2/tailnet/-/keys" `
+                -Method POST -Headers @{ Authorization = "Bearer $accessToken" } `
+                -Body $keyBody -ContentType "application/json" -ErrorAction Stop
+            $authKey = $keyResp.key
+
+            & tailscale up --authkey=$authKey --hostname=$TS_HOSTNAME --accept-routes 2>$null
+            Start-Sleep -Seconds 5
+            $TAILSCALE_IP = (& tailscale ip -4 2>$null).Trim()
+            if ($TAILSCALE_IP) {
+                Ok "Remote access ready"
+                Info "Your companion is now reachable from anywhere."
+            }
+        } catch {
+            Warn "Remote access setup skipped (will work on home Wi-Fi)"
+        }
+    } else {
+        # No winget either — skip silently, local Wi-Fi still works
+        Warn "Remote access setup skipped (will work on home Wi-Fi)"
+    }
+}
+
+Write-Host ""
+
 # ─── Clone/Update ───
 if (Test-Path $FIRESIDE_DIR) {
     Info "Updating Fireside..."
@@ -423,6 +526,8 @@ plugins:
     - companion
     - browse
     - personality
+    - guardian
+    - social
 
 agent:
   name: "${AGENT_NAME}"
@@ -433,8 +538,13 @@ companion:
   name: "${PET_NAME}"
   owner: "${USER_NAME}"
 
+network:
+  tailscale_ip: "${TAILSCALE_IP}"
+  tailscale_hostname: "${TS_HOSTNAME}"
+
 pipeline:
   git_branching: false
+
 "@ | Out-File -FilePath (Join-Path $FIRESIDE_DIR "valhalla.yaml") -Encoding UTF8
 
 New-Item -ItemType Directory -Path $VALHALLA_DIR -Force | Out-Null

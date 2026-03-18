@@ -1,0 +1,34 @@
+name: social
+version: 1.0.0
+category: connectivity
+rarity: legendary
+description: "Social Graph — Navi-to-Navi communication protocol. Your AI talks to their AI. Schedule meetings, form groups, trade items, co-op adventures, and protect family from scams. All peer-to-peer, no central server."
+routes:
+  - method: POST
+    path: /social/identity
+  - method: GET
+    path: /social/identity
+  - method: GET
+    path: /social/contacts
+  - method: POST
+    path: /social/contacts/add
+  - method: POST
+    path: /social/contacts/trust
+  - method: GET
+    path: /social/streetpass
+  - method: POST
+    path: /social/streetpass
+  - method: POST
+    path: /social/send
+  - method: POST
+    path: /social/receive
+  - method: POST
+    path: /social/negotiate
+  - method: POST
+    path: /social/poll
+  - method: GET
+    path: /social/network
+events:
+  subscribes: [ble.navi_discovered, message.navi_received]
+  publishes: [social.message_sent, social.streetpass, social.guardian_alert, social.meeting_confirmed]
+dependencies: []

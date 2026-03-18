@@ -1823,3 +1823,70 @@ def _push_config_to_mesh(yaml_content: str) -> None:
                 daemon=True, name=f"config-push-{name}",
             )
             t.start()
+
+
+    # ═══════════════════════════════════════════════════════════════
+    # Tools — Execution Layer
+    # ═══════════════════════════════════════════════════════════════
+
+    @router.get("/tools")
+    async def list_tools():
+        """List all registered tools with their descriptions and parameters."""
+        try:
+            from bot.tools import get_tool_definitions, TOOLS
+            return {
+                "tools": [
+                    {
+                        "name": name,
+                        "description": t["description"],
+                        "parameters": t["parameters"],
+                    }
+                    for name, t in TOOLS.items()
+                ],
+                "count": len(TOOLS),
+            }
+        except ImportError:
+            return {"tools": [], "count": 0, "error": "Tool module not available"}
+
+    @router.post("/tools/execute")
+    async def execute_tool_endpoint(request: Request):
+        """Execute a specific tool by name with provided arguments.
+
+        Body: { "tool": "send_email", "args": { "to": "...", "subject": "...", "body": "..." } }
+        """
+        body = await request.json()
+        tool_name = body.get("tool", "")
+        args = body.get("args", {})
+
+        if not tool_name:
+            raise HTTPException(400, "Missing 'tool' field")
+
+        try:
+            from bot.tools import execute_tool
+            result = execute_tool(tool_name, args)
+            return result
+        except ImportError:
+            raise HTTPException(500, "Tool module not available")
+
+    @router.post("/tools/task")
+    async def execute_task_endpoint(request: Request):
+        """Execute a full ad-hoc task with LLM planning + tool execution.
+
+        Body: { "task": "Create a PowerPoint about Q1 results", "tools": ["create_document"] }
+
+        The AI planner will break the task into steps and use registered tools.
+        """
+        body = await request.json()
+        task = body.get("task", "")
+        tools = body.get("tools")
+
+        if not task:
+            raise HTTPException(400, "Missing 'task' field")
+
+        try:
+            from orchestrator import execute_ad_hoc
+            result = execute_ad_hoc(task, tools_needed=tools)
+            return result
+        except ImportError:
+            raise HTTPException(500, "Orchestrator not available")
+

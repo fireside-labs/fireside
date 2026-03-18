@@ -1,27 +1,23 @@
-# start-node.ps1 -- Full mesh node startup: Ollama -> OpenClaw gateway -> Bifrost
-# Launches all three in the correct order with health checks between each step.
-# Safe to run at any time -- skips anything already running.
+# start-node.ps1 -- Full mesh node startup: Bifrost (with auto brain manager)
+# Bifrost now auto-starts llama-server via brain_manager — no separate OpenClaw
+# gateway needed. This script just ensures Bifrost is running with health checks.
 #
 # Usage:  .\scripts\start-node.ps1
-#         .\scripts\start-node.ps1 -SkipOllama   (if Ollama is managed separately)
 #
-# All three services stay running in background windows after this script exits.
+# Bifrost stays running in a background window after this script exits.
+# llama-server is managed internally by Bifrost's brain_manager.
 
 param(
-    [switch]$SkipLlamaServer
+    [switch]$SkipBrainAutoStart
 )
 
 $ErrorActionPreference = "Stop"
 $BIFROST_PORT     = 8765
-$GATEWAY_PORT     = 18789
-$LLAMA_PORT       = 11434
-$llamaCmd = Get-Command llama-server -ErrorAction SilentlyContinue
-$LLAMA_SERVER_CMD = if ($llamaCmd) { $llamaCmd.Source } else { "$env:USERPROFILE\.fireside\llama-server\llama-server.exe" }
 
-# Locate the bot directory relative to this script
+# Locate the project directory relative to this script
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
-$BOT_DIR    = Join-Path (Split-Path -Parent $SCRIPT_DIR) "bot"
-$BIFROST    = Join-Path $BOT_DIR "bifrost.py"
+$PROJECT_DIR = Split-Path -Parent $SCRIPT_DIR
+$BIFROST    = Join-Path $PROJECT_DIR "bifrost.py"
 $PYTHON     = (Get-Command python -ErrorAction SilentlyContinue)?.Source
 if (-not $PYTHON) { $PYTHON = "C:\Users\Jorda\AppData\Local\Programs\Python\Python312\python.exe" }
 
@@ -48,37 +44,8 @@ Write-Host ""
 Write-Host "=== Valhalla Mesh Node Startup ===" -ForegroundColor Cyan
 Write-Host ""
 
-# ── Step 1: llama-server (replaces Ollama) ──────────────────────────────────
-if (-not $SkipLlamaServer) {
-    Write-Host "[1/3] llama-server..." -ForegroundColor Yellow
-    if (Test-Port $LLAMA_PORT) {
-        Write-Host "  [OK] llama-server already running on port $LLAMA_PORT" -ForegroundColor Green
-    } else {
-        if (-not (Test-Path $LLAMA_SERVER_CMD)) {
-            Write-Host "  [ERROR] $LLAMA_SERVER_CMD not found -- run the llama-server setup first" -ForegroundColor Red
-            exit 1
-        }
-        Write-Host "  Starting llama-server (160K ctx, flash attn, q8_0 KV)..." -ForegroundColor Gray
-        Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$LLAMA_SERVER_CMD`"" -WindowStyle Minimized
-        # llama-server takes ~10-15s to load the model before it starts listening
-        if (-not (Wait-Port $LLAMA_PORT "llama-server" 60)) { exit 1 }
-    }
-} else {
-    Write-Host "[1/3] llama-server -- skipped (-SkipLlamaServer flag)" -ForegroundColor Gray
-}
-
-# ── Step 2: OpenClaw Gateway ─────────────────────────────────────────────────
-Write-Host "[2/3] OpenClaw gateway..." -ForegroundColor Yellow
-if (Test-Port $GATEWAY_PORT) {
-    Write-Host "  [OK] Gateway already running on port $GATEWAY_PORT" -ForegroundColor Green
-} else {
-    Write-Host "  Starting openclaw gateway..." -ForegroundColor Gray
-    Start-Process -FilePath "openclaw" -ArgumentList "gateway" -WindowStyle Minimized
-    if (-not (Wait-Port $GATEWAY_PORT "OpenClaw gateway" 15)) { exit 1 }
-}
-
-# ── Step 3: Bifrost ──────────────────────────────────────────────────────────
-Write-Host "[3/3] Bifrost..." -ForegroundColor Yellow
+# ── Step 1: Bifrost (auto-starts llama-server via brain_manager) ─────────────
+Write-Host "[1/1] Bifrost..." -ForegroundColor Yellow
 if (Test-Port $BIFROST_PORT) {
     Write-Host "  [OK] Bifrost already running on port $BIFROST_PORT" -ForegroundColor Green
 } else {
@@ -98,16 +65,19 @@ if (Test-Port $BIFROST_PORT) {
         $userEnvKey.Close()
     }
     Write-Host "  Starting Bifrost ($BIFROST)..." -ForegroundColor Gray
+    Write-Host "  (brain_manager will auto-start llama-server if a model is configured)" -ForegroundColor DarkGray
     Start-Process -FilePath $PYTHON -ArgumentList $BIFROST `
-        -WorkingDirectory $BOT_DIR -WindowStyle Minimized
+        -WorkingDirectory $PROJECT_DIR -WindowStyle Minimized
     if (-not (Wait-Port $BIFROST_PORT "Bifrost" 20)) { exit 1 }
 }
 
 # ── All up ───────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "=== Node is READY ===" -ForegroundColor Cyan
-Write-Host "  llama-server: http://localhost:$LLAMA_PORT (generation)" -ForegroundColor White
-Write-Host "  Ollama:       http://localhost:11435    (embeddings only)" -ForegroundColor White
-Write-Host "  Gateway:      http://localhost:$GATEWAY_PORT" -ForegroundColor White
 Write-Host "  Bifrost:      http://localhost:$BIFROST_PORT/health" -ForegroundColor White
+Write-Host "  Brain Lab:    http://localhost:$BIFROST_PORT/api/v1/brains/status" -ForegroundColor White
+Write-Host "  Dashboard:    http://localhost:3000" -ForegroundColor White
+Write-Host ""
+Write-Host "  Brain manager auto-starts llama-server when a model is installed." -ForegroundColor DarkGray
+Write-Host "  Use the Brain Lab (http://localhost:3000/brains) to download & equip models." -ForegroundColor DarkGray
 Write-Host ""

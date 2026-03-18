@@ -100,6 +100,9 @@ plugins:
   - task-persistence
   - context-compactor
   - companion
+  - browse
+  - guardian
+  - social
 soul:
   identity: mesh/souls/IDENTITY.odin.md
   personality: mesh/souls/SOUL.odin.md

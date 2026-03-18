@@ -89,29 +89,29 @@ const POWER_MAP: Record<string, number> = {
 
 // Full plugin list — used when backend is offline (no platform plugins)
 const ALL_PLUGINS: SkillPlugin[] = [
-  { name: "adaptive-thinking", version: "1.0.0", description: "Chain-of-thought reasoning. Slower but significantly smarter on hard questions.", author: "valhalla-core", category: "intelligence", rarity: "rare", installed: true },
-  { name: "alerts", version: "1.0.0", description: "Proactive notifications — your AI reaches out when it has something for you.", author: "valhalla-core", category: "communication", rarity: "common", installed: false },
-  { name: "belief-shadows", version: "1.0.0", description: "Confidence calibration — detects blind spots in the AI's knowledge.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
-  { name: "browse", version: "1.0.0", description: "Read and summarize web pages, search for current information.", author: "valhalla-core", category: "connectivity", rarity: "common", installed: false },
-  { name: "companion", version: "1.0.0", description: "Core companion logic — handles chat, presence, and interaction.", author: "valhalla-core", category: "communication", rarity: "rare", installed: true },
-  { name: "context-compactor", version: "1.0.0", description: "Smart context window compression — never loses important details.", author: "valhalla-core", category: "memory", rarity: "rare", installed: false },
-  { name: "crucible", version: "1.0.0", description: "AI stress testing — finds edge cases and breaks bad habits.", author: "valhalla-core", category: "automation", rarity: "legendary", installed: false },
-  { name: "hydra", version: "1.0.0", description: "Fracture resilience — when a node dies, another absorbs its role.", author: "valhalla-core", category: "connectivity", rarity: "legendary", installed: false },
-  { name: "hypotheses", version: "1.0.0", description: "Artificial Epistemology — dream cycles generate beliefs from memory.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
-  { name: "model-router", version: "1.0.0", description: "Smart model routing — picks the right model for each task type.", author: "valhalla-core", category: "connectivity", rarity: "rare", installed: false },
-  { name: "model-switch", version: "1.0.0", description: "Switch LLM models via API or chat alias.", author: "valhalla-core", category: "connectivity", rarity: "common", installed: false },
-  { name: "personality", version: "1.0.0", description: "Personality adapts based on interactions, developing unique traits.", author: "valhalla-core", category: "memory", rarity: "rare", installed: true },
-  { name: "philosopher-stone", version: "1.0.0", description: "Nightly wisdom distillation — aggregates mesh knowledge into prompts.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
-  { name: "pipeline", version: "1.0.0", description: "Multi-stage pipeline orchestrator — iterative quality loop.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
-  { name: "predictions", version: "1.0.0", description: "Predictive processing — learns to anticipate your needs.", author: "valhalla-core", category: "intelligence", rarity: "rare", installed: false },
-  { name: "self-model", version: "1.0.0", description: "Reflects on its own strengths and weaknesses for calibrated responses.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: true },
-  { name: "socratic", version: "1.0.0", description: "Socratic Review — structured multi-perspective debate engine.", author: "valhalla-core", category: "automation", rarity: "legendary", installed: false },
-  { name: "task-persistence", version: "1.0.0", description: "Crash-resilient tasks — checkpoint pattern, resume on heal.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
-  { name: "telegram", version: "1.0.0", description: "Telegram bot — chat, commands, and push notifications from your mesh.", author: "valhalla-core", category: "communication", rarity: "uncommon", installed: false },
-  { name: "terminal", version: "1.0.0", description: "Run commands on your computer. Create files, install software, run scripts. Always asks permission first.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
-  { name: "voice", version: "1.0.0", description: "Voice I/O — Whisper STT + Kokoro TTS. Local processing, zero cloud.", author: "valhalla-core", category: "communication", rarity: "rare", installed: false },
-  { name: "watchdog", version: "1.0.0", description: "Health monitoring — polls mesh peers, auto-detects failures.", author: "valhalla-core", category: "connectivity", rarity: "uncommon", installed: false },
-  { name: "working-memory", version: "1.0.0", description: "Remembers past conversations and learns your preferences over time.", author: "valhalla-core", category: "memory", rarity: "rare", installed: true },
+  { name: "adaptive-thinking", version: "1.0.0", description: "Breaks hard questions into smaller steps before answering. Takes longer but gets tricky problems right.", author: "valhalla-core", category: "intelligence", rarity: "rare", installed: true },
+  { name: "alerts", version: "1.0.0", description: "Your AI pings you when something needs attention — like a reminder or a finished task. Works via dashboard and Telegram.", author: "valhalla-core", category: "communication", rarity: "common", installed: false },
+  { name: "belief-shadows", version: "1.0.0", description: "Flags when your AI isn't sure about something instead of guessing. Shows confidence levels on answers.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
+  { name: "browse", version: "1.0.0", description: "Lets your AI read any webpage, search the web, and pull current information. All done locally.", author: "valhalla-core", category: "connectivity", rarity: "common", installed: true },
+  { name: "companion", version: "1.0.0", description: "The core companion system — your AI's personality, mood, and chat. This is what makes your companion feel alive.", author: "valhalla-core", category: "communication", rarity: "rare", installed: true },
+  { name: "context-compactor", version: "1.0.0", description: "Compresses long conversations so your AI remembers more without slowing down. Great for deep research sessions.", author: "valhalla-core", category: "memory", rarity: "rare", installed: false },
+  { name: "crucible", version: "1.0.0", description: "Stress-tests your AI overnight — finds bad habits and fixes them. Like a sparring partner that makes it sharper.", author: "valhalla-core", category: "automation", rarity: "legendary", installed: false },
+  { name: "hydra", version: "1.0.0", description: "If one of your devices goes offline, another picks up the work automatically. Keeps your mesh running 24/7.", author: "valhalla-core", category: "connectivity", rarity: "legendary", installed: false },
+  { name: "hypotheses", version: "1.0.0", description: "Your AI generates theories while you sleep, based on what it has learned. Surfaces insights you didn't ask for.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
+  { name: "model-router", version: "1.0.0", description: "Automatically picks the best AI model for each task — fast model for chat, smart model for research.", author: "valhalla-core", category: "connectivity", rarity: "rare", installed: false },
+  { name: "model-switch", version: "1.0.0", description: "Switch between AI models mid-conversation. Type 'use gpt4' or 'use local' to change on the fly.", author: "valhalla-core", category: "connectivity", rarity: "common", installed: true },
+  { name: "personality", version: "1.0.0", description: "Your companion develops unique personality traits over time based on how you interact. No two are alike.", author: "valhalla-core", category: "memory", rarity: "rare", installed: true },
+  { name: "philosopher-stone", version: "1.0.0", description: "Runs nightly — distills everything your AI learned into a concentrated wisdom prompt. Makes it smarter each day.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: false },
+  { name: "pipeline", version: "1.0.0", description: "Run multi-step tasks like 'research competitors then write a report'. Chains steps together automatically.", author: "valhalla-core", category: "automation", rarity: "rare", installed: true },
+  { name: "predictions", version: "1.0.0", description: "Learns your patterns and starts preparing answers before you ask. Gets faster the more you use it.", author: "valhalla-core", category: "intelligence", rarity: "rare", installed: false },
+  { name: "self-model", version: "1.0.0", description: "Your AI tracks what it's good and bad at, and adjusts. If it keeps getting math wrong, it slows down on math.", author: "valhalla-core", category: "intelligence", rarity: "legendary", installed: true },
+  { name: "socratic", version: "1.0.0", description: "Before giving an answer, your AI debates itself from multiple angles. Catches mistakes before you see them.", author: "valhalla-core", category: "automation", rarity: "legendary", installed: false },
+  { name: "task-persistence", version: "1.0.0", description: "If your computer crashes mid-task, it picks up exactly where it left off. No lost work.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
+  { name: "telegram", version: "1.0.0", description: "Chat with your AI from Telegram. Ask questions, get alerts, run commands — all from your phone.", author: "valhalla-core", category: "communication", rarity: "uncommon", installed: false },
+  { name: "terminal", version: "1.0.0", description: "Lets your AI run commands on your computer — create files, install software, run scripts. Always asks permission first.", author: "valhalla-core", category: "automation", rarity: "rare", installed: false },
+  { name: "voice", version: "1.0.0", description: "Talk to your AI and hear it talk back. Uses Whisper for listening and Kokoro for speaking — all local, no cloud.", author: "valhalla-core", category: "communication", rarity: "rare", installed: false },
+  { name: "watchdog", version: "1.0.0", description: "Monitors all your connected devices and alerts you if something goes down. Auto-restarts crashed services.", author: "valhalla-core", category: "connectivity", rarity: "uncommon", installed: true },
+  { name: "working-memory", version: "1.0.0", description: "Remembers your past conversations, preferences, and context. The more you chat, the better it knows you.", author: "valhalla-core", category: "memory", rarity: "rare", installed: true },
 ];
 
 export default function SkillsPage() {
@@ -197,18 +197,11 @@ export default function SkillsPage() {
       <h1 className="sk-page-title">✦ Skills Marketplace</h1>
       <p className="sk-page-sub">Equip your AI with abilities. Toggle skills on and off anytime.</p>
 
-      {/* Power Level */}
+      {/* Skills count summary — clean, no XP */}
       <div className="sk-power-card">
         <div className="sk-power-header">
-          <span className="sk-power-label">Power Level</span>
-          <span className="sk-power-value" style={{ color: powerColor }}>{powerTier} · {powerXP.toLocaleString()} XP</span>
-        </div>
-        <div className="sk-power-bar">
-          <div className="sk-power-fill" style={{ width: `${Math.min(tierProgress, 100)}%`, background: `linear-gradient(90deg, ${powerColor}44, ${powerColor})` }} />
-        </div>
-        <div className="sk-power-stats">
-          <span>{equipped.length}/{allPlugins.length} skills equipped</span>
-          <span>{equipped.filter(p => p.rarity === "legendary").length} legendary</span>
+          <span className="sk-power-label">{equipped.length} skills active</span>
+          <span style={{ fontSize: 11, color: '#5A4D40' }}>{allPlugins.length} available</span>
         </div>
       </div>
 

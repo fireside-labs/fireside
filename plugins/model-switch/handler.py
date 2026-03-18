@@ -41,30 +41,41 @@ SwitchResponse.model_rebuild()
 
 
 def _do_switch(model_id: str) -> None:
-    """Background: set openclaw config + restart gateway."""
-    try:
-        subprocess.run(
-            ["openclaw", "config", "set",
-             "agents.defaults.model.primary", model_id],
-            check=True, capture_output=True, timeout=10,
-        )
-        log.info("[model-switch] Config set → %s", model_id)
-    except Exception as e:
-        log.error("[model-switch] config set failed: %s", e)
-        return
+    """Background: switch model via brain_manager (replaces OpenClaw gateway)."""
+    from pathlib import Path
 
-    time.sleep(1)
     try:
-        subprocess.run(["pkill", "-f", "openclaw-gateway"], capture_output=True)
-        time.sleep(2)
-        subprocess.Popen(
-            ["nohup", "openclaw", "gateway", "run"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        log.info("[model-switch] Gateway restarted with model: %s", model_id)
+        from bot.brain_manager import switch_model, get_status
+
+        # Resolve model_id to a GGUF path
+        # Check common locations for a matching .gguf file
+        model_path = None
+        search_dirs = [
+            Path.home() / ".fireside" / "models",
+            Path(".") / "models",
+        ]
+        for d in search_dirs:
+            if d.exists():
+                for f in d.glob("*.gguf"):
+                    if model_id.replace("/", "_") in f.stem.lower() or \
+                       model_id.split("/")[-1].lower() in f.stem.lower():
+                        model_path = f
+                        break
+            if model_path:
+                break
+
+        if model_path:
+            switch_model(model_path)
+            log.info("[model-switch] Switched to %s via brain_manager", model_path.name)
+        else:
+            log.warning("[model-switch] No GGUF found for model_id '%s' — "
+                        "download it from the Brain Lab first", model_id)
+
+    except ImportError:
+        log.error("[model-switch] brain_manager not available")
     except Exception as e:
-        log.error("[model-switch] Gateway restart failed: %s", e)
+        log.error("[model-switch] switch failed: %s", e)
+
 
 
 def get_current_model() -> str:

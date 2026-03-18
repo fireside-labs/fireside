@@ -34,35 +34,61 @@ interface ModelDef {
 }
 
 const MODELS: ModelDef[] = [
-  // ── Speed ──
+
+  // ── SPEED: Fast, runs on any laptop ──────────────────────────────────────────
+
   {
-    id: "phi-3-mini", name: "Phi-3 Mini", family: "Microsoft",
-    params: "3.8B", speed: "~80 tok/s", category: "speed",
-    tags: ["compact", "efficient"], recommended: false,
-    desc: "Microsoft\u2019s ultra-compact model. Surprisingly capable for its size \u2014 trained on high-quality textbook data. Great for quick Q&A and simple tasks when you need instant responses.",
+    id: "qwen3-0.6b", name: "Qwen 3 0.6B", family: "Alibaba",
+    params: "0.6B", speed: "~200 tok/s", category: "speed",
+    tags: ["tiny", "instant"], recommended: false,
+    desc: "Impossibly small. Half a billion parameters that run on basically anything with a CPU. Think of it as the \"always-on\" model when your companion just needs to reply to a single sentence instantly.",
     quants: [
-      { label: "Low", bits: "4-bit", intel: 25, spd: 95, sizeGB: 2.2, size: "2.2 GB" },
-      { label: "Medium", bits: "6-bit", intel: 30, spd: 90, sizeGB: 2.9, size: "2.9 GB" },
-      { label: "High", bits: "8-bit", intel: 32, spd: 80, sizeGB: 3.8, size: "3.8 GB" },
+      { label: "High", bits: "8-bit", intel: 12, spd: 99, sizeGB: 0.6, size: "0.6 GB" },
     ],
   },
   {
-    id: "llama-3.1-8b", name: "Llama 3.1 8B", family: "Meta",
-    params: "8B", speed: "~45 tok/s", category: "speed",
-    tags: ["general", "reliable"], recommended: true,
-    desc: "Meta\u2019s open-source workhorse. Llama 3.1 set the standard for open models \u2014 reliable across every task from writing to analysis. The 8B version is the sweet spot of speed and smarts.",
+    id: "qwen3-1.7b", name: "Qwen 3 1.7B", family: "Alibaba",
+    params: "1.7B", speed: "~160 tok/s", category: "speed",
+    tags: ["tiny", "fast"], recommended: false,
+    desc: "Remarkably smart for its size. Qwen 3's architecture squeezes genuine reasoning ability into 1.7B parameters. A huge upgrade over older small models for the same hardware.",
     quants: [
-      { label: "Low", bits: "4-bit", intel: 45, spd: 70, sizeGB: 4.9, size: "4.9 GB" },
-      { label: "Medium", bits: "6-bit", intel: 50, spd: 60, sizeGB: 6.6, size: "6.6 GB" },
-      { label: "High", bits: "8-bit", intel: 55, spd: 50, sizeGB: 8.5, size: "8.5 GB" },
-      { label: "Ultra", bits: "16-bit", intel: 58, spd: 35, sizeGB: 16, size: "16 GB" },
+      { label: "High", bits: "8-bit", intel: 20, spd: 97, sizeGB: 1.7, size: "1.7 GB" },
     ],
   },
   {
-    id: "qwen-3.5-7b", name: "Qwen 3.5 7B", family: "Alibaba",
-    params: "7B", speed: "~50 tok/s", category: "speed",
-    tags: ["versatile", "thinking"], recommended: false,
-    desc: "Alibaba\u2019s latest thinking model. Qwen 3.5 introduced hybrid reasoning \u2014 it can \u2018think step by step\u2019 for hard problems or respond instantly for simple ones. Multilingual powerhouse.",
+    id: "llama-3.2-3b", name: "Llama 3.2 3B", family: "Meta",
+    params: "3B", speed: "~90 tok/s", category: "speed",
+    tags: ["ultra-light", "mobile"], recommended: false,
+    desc: "Meta's newest ultra-lightweight open model. Unbelievably fast and perfect for running in the background on a laptop without draining the battery. Instant responses for everyday tasks.",
+    quants: [
+      { label: "High", bits: "8-bit", intel: 30, spd: 95, sizeGB: 3.2, size: "3.2 GB" },
+    ],
+  },
+  {
+    id: "qwen3-4b", name: "Qwen 3 4B", family: "Alibaba",
+    params: "4B", speed: "~80 tok/s", category: "speed",
+    tags: ["fast", "smart"], recommended: false,
+    desc: "The sweet spot if you only have 4-8 GB of VRAM. Matches or beats models twice its size from 2023, with the added bonus of Qwen 3's new hybrid thinking mode.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 38, spd: 85, sizeGB: 3.3, size: "3.3 GB" },
+    ],
+  },
+  {
+    id: "qwen3-8b", name: "Qwen 3 8B", family: "Alibaba",
+    params: "8B", speed: "~55 tok/s", category: "speed",
+    tags: ["thinking", "fast"], recommended: true,
+    desc: "Alibaba's 2025 flagship small model. Has a hybrid 'thinking' mode that switches between instant replies and deep step-by-step reasoning depending on the difficulty of the question. Genuinely impressive.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 60, spd: 70, sizeGB: 5.2, size: "5.2 GB" },
+      { label: "Medium", bits: "6-bit", intel: 65, spd: 60, sizeGB: 6.7, size: "6.7 GB" },
+      { label: "High", bits: "8-bit", intel: 68, spd: 48, sizeGB: 8.5, size: "8.5 GB" },
+    ],
+  },
+  {
+    id: "qwen-2.5-7b", name: "Qwen 2.5 7B", family: "Alibaba",
+    params: "7B", speed: "~60 tok/s", category: "speed",
+    tags: ["smart", "punchy"], recommended: false,
+    desc: "The previous pound-for-pound champion of small models. Still excellent — more mature and stable than Qwen 3 if you don't want thinking mode.",
     quants: [
       { label: "Low", bits: "4-bit", intel: 50, spd: 75, sizeGB: 4.4, size: "4.4 GB" },
       { label: "Medium", bits: "6-bit", intel: 55, spd: 65, sizeGB: 5.6, size: "5.6 GB" },
@@ -70,80 +96,346 @@ const MODELS: ModelDef[] = [
     ],
   },
   {
+    id: "llama-3.1-8b", name: "Llama 3.1 8B", family: "Meta",
+    params: "8B", speed: "~45 tok/s", category: "speed",
+    tags: ["general", "reliable"], recommended: false,
+    desc: "The open-source gold standard. Battle-tested and reliable for writing, summarizing, and brainstorming. Enormous ecosystem of fine-tunes on top of it.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 45, spd: 70, sizeGB: 4.9, size: "4.9 GB" },
+      { label: "Medium", bits: "6-bit", intel: 50, spd: 60, sizeGB: 6.6, size: "6.6 GB" },
+      { label: "High", bits: "8-bit", intel: 55, spd: 50, sizeGB: 8.5, size: "8.5 GB" },
+    ],
+  },
+  {
+    id: "dolphin-2.9-llama3-8b", name: "Dolphin Llama-3 8B", family: "Community",
+    params: "8B", speed: "~45 tok/s", category: "speed",
+    tags: ["uncensored", "rebel"], recommended: false,
+    desc: "Eric Hartford's famous rogue model. Corporate safety filters stripped out entirely. Highly compliant, completely uncensored, and built for gritty creative writing or unfiltered brainstorming.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 52, spd: 60, sizeGB: 6.6, size: "6.6 GB" },
+    ],
+  },
+  {
+    id: "hermes-3-8b", name: "Hermes 3 Llama-3.1 8B", family: "Nous Research",
+    params: "8B", speed: "~45 tok/s", category: "speed",
+    tags: ["agent", "uncensored", "functions"], recommended: false,
+    desc: "Nous Research's agent specialist. Trained to perfectly follow system prompts, call functions, and stay in character indefinitely without breaking. The ideal brain for AI workflows that need to take real computer actions.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 58, spd: 60, sizeGB: 6.6, size: "6.6 GB" },
+    ],
+  },
+  {
     id: "gemma-2-9b", name: "Gemma 2 9B", family: "Google",
     params: "9B", speed: "~40 tok/s", category: "speed",
     tags: ["balanced", "modern"], recommended: false,
-    desc: "Google\u2019s open model built on Gemini research. Clean, balanced, and efficient. Punches above its weight on benchmarks. Great all-rounder with strong instruction following.",
+    desc: "Google's open model built on Gemini research. Clean, balanced, and surprisingly witty. A great all-rounder with strong instruction following.",
     quants: [
-      { label: "Low", bits: "4-bit", intel: 50, spd: 65, sizeGB: 5.5, size: "5.5 GB" },
       { label: "Medium", bits: "6-bit", intel: 55, spd: 55, sizeGB: 7.0, size: "7.0 GB" },
-      { label: "High", bits: "8-bit", intel: 58, spd: 45, sizeGB: 9.1, size: "9.1 GB" },
     ],
   },
-  // ── Power ──
   {
-    id: "qwen-2.5-14b", name: "Qwen 2.5 14B", family: "Alibaba",
-    params: "14B", speed: "~25 tok/s", category: "power",
-    tags: ["deep", "reasoning"], recommended: true,
-    desc: "The thinking powerhouse. Alibaba\u2019s 14B model rivals GPT-4 on many benchmarks at a fraction of the size. Exceptional at reasoning, math, and complex multi-step tasks.",
+    id: "mistral-nemo-12b", name: "Mistral Nemo 12B", family: "Mistral",
+    params: "12B", speed: "~35 tok/s", category: "speed",
+    tags: ["long-context", "capable"], recommended: false,
+    desc: "Built jointly by Mistral and Nvidia. Features a massive 128k context window — perfect for dropping in entire legal documents or codebase diffs for analysis.",
     quants: [
-      { label: "Low", bits: "4-bit", intel: 70, spd: 50, sizeGB: 9.0, size: "9.0 GB" },
-      { label: "Medium", bits: "6-bit", intel: 75, spd: 40, sizeGB: 11.4, size: "11.4 GB" },
-      { label: "High", bits: "8-bit", intel: 80, spd: 30, sizeGB: 14.5, size: "14.5 GB" },
-      { label: "Ultra", bits: "16-bit", intel: 85, spd: 18, sizeGB: 28, size: "28 GB" },
+      { label: "Low", bits: "4-bit", intel: 55, spd: 60, sizeGB: 7.1, size: "7.1 GB" },
+      { label: "Medium", bits: "6-bit", intel: 60, spd: 45, sizeGB: 9.2, size: "9.2 GB" },
+    ],
+  },
+
+  // ── POWER: Heavy hitters and cloud APIs ──────────────────────────────────────
+
+  {
+    id: "qwen3-14b", name: "Qwen 3 14B", family: "Alibaba",
+    params: "14B", speed: "~28 tok/s", category: "power",
+    tags: ["thinking", "reasoning"], recommended: true,
+    desc: "Qwen 3's 14B is a serious proposition — real-time, deep step-by-step reasoning in a model that still runs on a single 16 GB GPU. Handles nearly everything a power user needs without cloud API costs.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 75, spd: 50, sizeGB: 9.0, size: "9.0 GB" },
+      { label: "Medium", bits: "6-bit", intel: 79, spd: 38, sizeGB: 11.4, size: "11.4 GB" },
+    ],
+  },
+  {
+    id: "qwen3-30b-a3b", name: "Qwen 3 30B-A3B (MoE)", family: "Alibaba",
+    params: "30B (3B active)", speed: "~45 tok/s", category: "power",
+    tags: ["MoE", "efficient", "fast"], recommended: false,
+    desc: "A Mixture-of-Experts model with 30B total parameters but only 3B active at once. Achieves 30B-level intelligence at 8B-level speed. A brilliant architecture that runs surprisingly fast.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 82, spd: 48, sizeGB: 18.9, size: "18.9 GB" },
+    ],
+  },
+  {
+    id: "qwen3-32b", name: "Qwen 3 32B", family: "Alibaba",
+    params: "32B", speed: "~18 tok/s", category: "power",
+    tags: ["thinking", "frontier-local"], recommended: false,
+    desc: "The flagship of local models. Qwen 3 32B with thinking mode enabled is genuinely frontier-level — it destroys many cloud APIs in coding and math benchmarks while running completely offline.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 88, spd: 35, sizeGB: 19.5, size: "19.5 GB" },
+      { label: "Medium", bits: "6-bit", intel: 91, spd: 22, sizeGB: 26.0, size: "26.0 GB" },
+    ],
+  },
+  {
+    id: "qwq-32b", name: "QwQ 32B (Reasoning)", family: "Alibaba",
+    params: "32B", speed: "~18 tok/s", category: "power",
+    tags: ["reasoning", "math", "logic"], recommended: false,
+    desc: "Alibaba's original answer to DeepSeek R1 and OpenAI o1. Thinks quietly for several minutes before answering. Will crack logic puzzles, proof-read math derivations, and debug cryptic code failures.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 85, spd: 35, sizeGB: 19.5, size: "19.5 GB" },
+      { label: "Medium", bits: "6-bit", intel: 88, spd: 25, sizeGB: 26.0, size: "26.0 GB" },
+    ],
+  },
+  {
+    id: "qwen-2.5-32b", name: "Qwen 2.5 32B", family: "Alibaba",
+    params: "32B", speed: "~20 tok/s", category: "power",
+    tags: ["deep", "reasoning"], recommended: false,
+    desc: "Alibaba's previous generation 32B. Still excellent — very mature and stable for writing, analysis, and complex instructions. A great choice if you find Qwen 3 32B too slow.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 80, spd: 40, sizeGB: 19.5, size: "19.5 GB" },
+      { label: "Medium", bits: "6-bit", intel: 83, spd: 30, sizeGB: 26.0, size: "26.0 GB" },
+    ],
+  },
+  {
+    id: "gemma-2-27b", name: "Gemma 2 27B", family: "Google",
+    params: "27B", speed: "~22 tok/s", category: "power",
+    tags: ["big", "google"], recommended: false,
+    desc: "Google's heavyweight open model. Not the strongest 27B available, but benefits from incredible instruction-following finesse inherited from Gemini. Needs ~24 GB VRAM.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 76, spd: 38, sizeGB: 16.4, size: "16.4 GB" },
+    ],
+  },
+  {
+    id: "yi-1.5-34b", name: "Yi 1.5 34B", family: "01.AI",
+    params: "34B", speed: "~14 tok/s", category: "power",
+    tags: ["bilingual", "long-context"], recommended: false,
+    desc: "Made by Kai-Fu Lee's 01.AI. Outstanding at switching between Chinese and English without losing a beat. Extremely long context window (200k tokens). Underrated by the western AI community.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 82, spd: 28, sizeGB: 20.6, size: "20.6 GB" },
+    ],
+  },
+  {
+    id: "command-r-35b", name: "Command R 35B", family: "Cohere",
+    params: "35B", speed: "~15 tok/s", category: "power",
+    tags: ["RAG", "roleplay", "grounded"], recommended: false,
+    desc: "Built for enterprise, secretly loved by novelists. Never repeats itself, has remarkable emotional intelligence, and cites real-world sources accurately. Great at long-form creative writing.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 82, spd: 22, sizeGB: 27, size: "27 GB" },
     ],
   },
   {
     id: "llama-3.1-70b", name: "Llama 3.1 70B", family: "Meta",
     params: "70B", speed: "~8 tok/s", category: "power",
-    tags: ["frontier", "powerful"], recommended: false,
-    desc: "Meta\u2019s flagship open model. 70 billion parameters of raw intelligence. Closest thing to GPT-4 you can run locally \u2014 if you have the VRAM. Slow but brilliant.",
+    tags: ["frontier", "heavy"], recommended: false,
+    desc: "70 billion parameters of raw intelligence. The closest thing to GPT-4 that runs fully local. Requires a 48 GB GPU or dual-GPU rig, but the results are worth it.",
     quants: [
       { label: "Low", bits: "4-bit", intel: 90, spd: 18, sizeGB: 40, size: "40 GB" },
       { label: "Medium", bits: "6-bit", intel: 93, spd: 10, sizeGB: 55, size: "55 GB" },
     ],
   },
   {
-    id: "command-r-35b", name: "Command R 35B", family: "Cohere",
-    params: "35B", speed: "~15 tok/s", category: "power",
-    tags: ["RAG", "enterprise"], recommended: false,
-    desc: "Built by Cohere specifically for enterprise RAG workflows. Excels at grounded generation \u2014 citing sources accurately and following complex instructions in business contexts.",
+    id: "nemotron-70b", name: "Nemotron 70B", family: "Nvidia",
+    params: "70B", speed: "~8 tok/s", category: "power",
+    tags: ["compliant", "roleplay"], recommended: false,
+    desc: "Nvidia took Meta's Llama 3.1 70B and fine-tuned it for near-perfect compliance. It almost never refuses, almost never hallucinates a refusal, and executes complex system prompts flawlessly. A power user's dream.",
     quants: [
-      { label: "Low", bits: "4-bit", intel: 78, spd: 30, sizeGB: 20, size: "20 GB" },
-      { label: "Medium", bits: "6-bit", intel: 82, spd: 22, sizeGB: 27, size: "27 GB" },
-      { label: "High", bits: "8-bit", intel: 85, spd: 15, sizeGB: 35, size: "35 GB" },
+      { label: "Low", bits: "4-bit", intel: 92, spd: 17, sizeGB: 40, size: "40 GB" },
+    ],
+  },
+  {
+    id: "midnight-miqu-70b", name: "Midnight Miqu 70B", family: "Community",
+    params: "70B", speed: "~8 tok/s", category: "power",
+    tags: ["roleplay", "creative", "writing"], recommended: false,
+    desc: "An absolute legend in the AI roleplay and fiction writing community. Writes like a bestselling author with flawless character voice consistency and zero moralizing.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 88, spd: 18, sizeGB: 41.5, size: "41.5 GB" },
+    ],
+  },
+  {
+    id: "glm-4.7", name: "GLM-4.7", family: "Zhipu AI",
+    params: "32B-A32B", speed: "~12 tok/s", category: "power",
+    tags: ["reasoning", "bilingual", "thinking"], recommended: false,
+    desc: "Zhipu's December 2025 flagship. A large Mixture-of-Experts reasoning model with genuine chain-of-thought thinking — trained like China's answer to o1. Handles complex math, legal text, and deep bilingual reasoning that smaller models fumble.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 90, spd: 15, sizeGB: 20, size: "~20 GB" },
+    ],
+  },
+  // Cloud giants
+  {
+    id: "cloud-deepseek-r1", name: "DeepSeek R1 (Cloud)", family: "DeepSeek",
+    params: "671B", speed: "~50 tok/s", category: "power",
+    tags: ["cloud", "reasoning", "frontier"], recommended: true,
+    desc: "The frontier model that shocked the world and rattled OpenAI stocks. Rivals o1 in math and coding via pure Reinforcement Learning. API costs a fraction of OpenAI. Requires a free API key.",
+    quants: [
+      { label: "Cloud", bits: "API", intel: 99, spd: 65, sizeGB: 0, size: "0 GB" },
+    ],
+  },
+  {
+    id: "cloud-deepseek-v3", name: "DeepSeek V3 (Cloud)", family: "DeepSeek",
+    params: "671B", speed: "~60 tok/s", category: "power",
+    tags: ["cloud", "fast", "cheap"], recommended: false,
+    desc: "DeepSeek's general-purpose frontier model. Matching GPT-4o's capability at roughly 1/10th the API cost. Exceptionally fast, excellent at chat and coding. One of the best value APIs available.",
+    quants: [
+      { label: "Cloud", bits: "API", intel: 97, spd: 80, sizeGB: 0, size: "0 GB" },
+    ],
+  },
+  {
+    id: "cloud-claude-3-5", name: "Claude 3.5 Sonnet (Cloud)", family: "Anthropic",
+    params: "~200B+", speed: "~70 tok/s", category: "power",
+    tags: ["cloud", "coding", "writing"], recommended: false,
+    desc: "Anthropic's masterpiece. The undisputed champion for coding and nuanced creative writing. Produces the most human-feeling text of any AI available today. Cloud API only.",
+    quants: [
+      { label: "Cloud", bits: "API", intel: 98, spd: 90, sizeGB: 0, size: "0 GB" },
     ],
   },
   {
     id: "cloud-gpt4", name: "GPT-4o (Cloud)", family: "OpenAI",
     params: "~200B+", speed: "~60 tok/s", category: "power",
-    tags: ["cloud", "best"], recommended: false,
-    desc: "OpenAI\u2019s multimodal flagship. The gold standard in AI \u2014 handles text, vision, and audio. Requires an API key and internet connection. Unmatched quality, but data leaves your machine.",
+    tags: ["cloud", "multimodal"], recommended: false,
+    desc: "OpenAI's multimodal flagship. The gold standard in general intelligence — handles text, vision, and audio. Huge plugin ecosystem. No local option; data leaves your machine.",
     quants: [
       { label: "Cloud", bits: "API", intel: 98, spd: 85, sizeGB: 0, size: "0 GB" },
     ],
   },
-  // ── Specialist ──
   {
-    id: "qwen-2.5-coder-14b", name: "Qwen 2.5 Coder 14B", family: "Alibaba",
-    params: "14B", speed: "~25 tok/s", category: "specialist",
-    tags: ["code", "autocomplete"], recommended: true,
-    desc: "Purpose-built for developers. Alibaba\u2019s coding specialist handles autocomplete, code review, debugging, and generation across 90+ languages. Top-tier on coding benchmarks.",
+    id: "cloud-grok2", name: "Grok 2 (Cloud)", family: "xAI",
+    params: "Unknown", speed: "~70 tok/s", category: "power",
+    tags: ["cloud", "rebel", "uncensored"], recommended: false,
+    desc: "Elon Musk's xAI model. Famous for abandoning the overly cautious safety filters of OpenAI and Anthropic. Has a sarcastic, rebellious personality baked in. Will tackle topics others decline. Cloud API required.",
     quants: [
-      { label: "Low", bits: "4-bit", intel: 72, spd: 50, sizeGB: 9.0, size: "9.0 GB" },
-      { label: "Medium", bits: "6-bit", intel: 78, spd: 40, sizeGB: 11.4, size: "11.4 GB" },
-      { label: "High", bits: "8-bit", intel: 82, spd: 30, sizeGB: 14.5, size: "14.5 GB" },
+      { label: "Cloud", bits: "API", intel: 95, spd: 88, sizeGB: 0, size: "0 GB" },
+    ],
+  },
+  {
+    id: "cloud-mistral-large", name: "Mistral Large 2 (Cloud)", family: "Mistral",
+    params: "123B", speed: "~55 tok/s", category: "power",
+    tags: ["cloud", "european", "multilingual"], recommended: false,
+    desc: "Mistral's heavyweight cloud model. 128k context, outstanding multilingual (French, German, Spanish, etc.), and one of the best non-US options for privacy-conscious European users.",
+    quants: [
+      { label: "Cloud", bits: "API", intel: 96, spd: 80, sizeGB: 0, size: "0 GB" },
+    ],
+  },
+  {
+    id: "cloud-kimi", name: "Kimi k1.5 (Cloud)", family: "Moonshot AI",
+    params: "Unknown", speed: "~45 tok/s", category: "power",
+    tags: ["cloud", "long-context", "reasoning"], recommended: false,
+    desc: "Moonshot AI's long-context reasoning model. You can feed it millions of tokens — entire books, entire codebases — and it won't lose a single detail. Kimi k1.5 also has an o1-style reasoning mode for hard problems.",
+    quants: [
+      { label: "Cloud", bits: "API", intel: 93, spd: 70, sizeGB: 0, size: "0 GB" },
+    ],
+  },
+  {
+    id: "cloud-minimax", name: "MiniMax abab6.5 (Cloud)", family: "MiniMax",
+    params: "Unknown", speed: "~50 tok/s", category: "power",
+    tags: ["cloud", "roleplay", "character"], recommended: false,
+    desc: "MiniMax's frontier model. Specifically fine-tuned for deep, long-form character interactions without breaking persona. The best cloud option if you want your AI companion to feel like a real personality.",
+    quants: [
+      { label: "Cloud", bits: "API", intel: 91, spd: 75, sizeGB: 0, size: "0 GB" },
+    ],
+  },
+
+  // ── SPECIALIST: Code, Vision, Bilingual ──────────────────────────────────────
+
+  {
+    id: "qwen3-coder-8b", name: "Qwen 3 Coder 8B", family: "Alibaba",
+    params: "8B", speed: "~55 tok/s", category: "specialist",
+    tags: ["code", "fast"], recommended: true,
+    desc: "The latest from Alibaba's Qwen 3 Coder series. Excellent autocomplete and code generation across 90+ languages at 8B speed. The best option for coding on mid-range hardware.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 72, spd: 58, sizeGB: 6.7, size: "6.7 GB" },
+    ],
+  },
+  {
+    id: "qwen-2.5-coder-32b", name: "Qwen 2.5 Coder 32B", family: "Alibaba",
+    params: "32B", speed: "~20 tok/s", category: "specialist",
+    tags: ["code", "autocomplete", "review"], recommended: false,
+    desc: "Your personal Senior Staff Engineer. Handles autocomplete, code review, entire repo overhauls, and generation across 90+ programming languages with superb accuracy.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 85, spd: 35, sizeGB: 19.5, size: "19.5 GB" },
+      { label: "Medium", bits: "6-bit", intel: 88, spd: 25, sizeGB: 26.0, size: "26.0 GB" },
+    ],
+  },
+  {
+    id: "codestral-22b", name: "Codestral 22B", family: "Mistral",
+    params: "22B", speed: "~25 tok/s", category: "specialist",
+    tags: ["code", "fill-in-middle"], recommended: false,
+    desc: "Mistral's dedicated coding model. Blazing fast fill-in-the-middle for every IDE plugin. Exceptionally strong on C++, Rust, and Go — languages where other models struggle.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 80, spd: 42, sizeGB: 13.2, size: "13.2 GB" },
+      { label: "Medium", bits: "6-bit", intel: 84, spd: 30, sizeGB: 17.2, size: "17.2 GB" },
     ],
   },
   {
     id: "deepseek-coder-v2", name: "DeepSeek Coder V2", family: "DeepSeek",
     params: "16B", speed: "~22 tok/s", category: "specialist",
-    tags: ["code", "math", "reasoning"], recommended: false,
-    desc: "DeepSeek\u2019s coding + math hybrid. Uses Mixture-of-Experts architecture for efficiency. Exceptional at mathematical reasoning and complex code generation. Strong open-source contender.",
+    tags: ["code", "math", "MoE"], recommended: false,
+    desc: "A Mixture-of-Experts model that excels at hunting down deep codebase bugs and complex math proofs. Brilliant architecture — acts like a 236B model but runs at 16B speed.",
     quants: [
       { label: "Low", bits: "4-bit", intel: 75, spd: 45, sizeGB: 9.5, size: "9.5 GB" },
       { label: "Medium", bits: "6-bit", intel: 80, spd: 35, sizeGB: 12, size: "12 GB" },
-      { label: "High", bits: "8-bit", intel: 85, spd: 25, sizeGB: 16, size: "16 GB" },
+    ],
+  },
+  {
+    id: "hermes-3-70b", name: "Hermes 3 Llama-3.1 70B", family: "Nous Research",
+    params: "70B", speed: "~8 tok/s", category: "specialist",
+    tags: ["agent", "functions", "roleplay"], recommended: false,
+    desc: "The 70B version of Nous Research's agent specialist. Perfectly follows system prompts, handles multi-turn tool calling, and holds deep, coherent roleplay for hours without breaking character. The gold standard for agentic workflows.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 92, spd: 17, sizeGB: 40, size: "40 GB" },
+    ],
+  },
+  {
+    id: "glm-4-9b", name: "GLM-4 9B Chat", family: "Zhipu AI",
+    params: "9B", speed: "~35 tok/s", category: "specialist",
+    tags: ["bilingual", "chinese"], recommended: false,
+    desc: "Zhipu AI's classic bilingual open model. Phenomenal English/Chinese reasoning that runs on a laptop. Great for tasks that span both languages.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 65, spd: 45, sizeGB: 8.0, size: "8.0 GB" },
+    ],
+  },
+  {
+    id: "glm-4v-9b", name: "GLM-4V 9B (Vision)", family: "Zhipu AI",
+    params: "9B", speed: "~30 tok/s", category: "specialist",
+    tags: ["vision", "bilingual", "ocr"], recommended: false,
+    desc: "Sees images in two languages. Reads documents, screenshots and UI layouts in both Chinese and English. Best bilingual vision model you can run locally.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 66, spd: 38, sizeGB: 9.5, size: "9.5 GB" },
+    ],
+  },
+  {
+    id: "glm-z1-9b", name: "GLM-Z1 9B (Reasoning)", family: "Zhipu AI",
+    params: "9B", speed: "~33 tok/s", category: "specialist",
+    tags: ["reasoning", "math", "thinking"], recommended: false,
+    desc: "Zhipu's dedicated reasoning model. Has a deep-thinking mode that shines on math proofs, logic puzzles and code debugging. Same size as GLM-4 9B but trained specifically to reason step by step.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 70, spd: 40, sizeGB: 8.0, size: "8.0 GB" },
+    ],
+  },
+  {
+    id: "glm-4.7-flash", name: "GLM-4.7 Flash", family: "Zhipu AI",
+    params: "30B-A3B", speed: "~55 tok/s", category: "specialist",
+    tags: ["fast", "bilingual", "MoE"], recommended: false,
+    desc: "The fast lane of the GLM-4.7 family. A 30B Mixture-of-Experts model that only activates 3B params per token — so it's lightning fast while still pulling in the full knowledge of a much larger model. Excellent for bilingual tasks on standard hardware.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 68, spd: 65, sizeGB: 10.5, size: "10.5 GB" },
+      { label: "Medium", bits: "6-bit", intel: 72, spd: 55, sizeGB: 14, size: "14 GB" },
+    ],
+  },
+  {
+    id: "qwen2-vl-7b", name: "Qwen2-VL 7B (Vision)", family: "Alibaba",
+    params: "7B", speed: "~40 tok/s", category: "specialist",
+    tags: ["vision", "ocr", "screen"], recommended: true,
+    desc: "The current king of open-source vision. Unbelievably good at reading text in images and understanding UI layouts. Let your companion actually 'see' your screen and describe what's on it.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 65, spd: 50, sizeGB: 6.2, size: "6.2 GB" },
+    ],
+  },
+  {
+    id: "pixtral-12b", name: "Pixtral 12B (Vision)", family: "Mistral",
+    params: "12B", speed: "~32 tok/s", category: "specialist",
+    tags: ["vision", "multimodal"], recommended: false,
+    desc: "Mistral's multimodal model that can see. Strong at document understanding and reading complex image layouts. A solid alternative to Qwen2-VL for Western languages.",
+    quants: [
+      { label: "Medium", bits: "6-bit", intel: 68, spd: 40, sizeGB: 9.5, size: "9.5 GB" },
     ],
   },
 ];
@@ -384,7 +676,7 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
                 <span className="bs-dp-stat-icon">⚡</span>
                 <span className="bs-dp-stat-name">Speed</span>
                 <div className="bs-dp-stat-bar-bg"><div className="bs-dp-stat-fill bs-dp-speed" style={{ width: `${detailQuantData.spd}%` }} /></div>
-                <span className="bs-dp-stat-value">{detailModelData.speed}</span>
+                <span className="bs-dp-stat-value">~{Math.round(detailQuantData.spd * 1.1)} tok/s</span>
               </div>
               <div className="bs-dp-stat-row">
                 <span className="bs-dp-stat-icon">💾</span>

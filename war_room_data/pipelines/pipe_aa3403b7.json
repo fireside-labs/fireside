@@ -1,0 +1,53 @@
+{
+  "id": "pipe_aa3403b7",
+  "title": "Research the pros and cons of React vs Vue, then write a comprehensive comparison report with a reco",
+  "description": "Research the pros and cons of React vs Vue, then write a comprehensive comparison report with a recommendation",
+  "stages": [
+    {
+      "name": "gather",
+      "agent": "local",
+      "task_type": "spec",
+      "system_prompt": "You are a research specialist. You find relevant information from multiple angles, evaluate source credibility, and organize findings systematically. You cite your sources.",
+      "prompt": "Task: Research the pros and cons of React vs Vue, then write a comprehensive comparison report with a recommendation\n\nYour part: Research the topic thoroughly. Collect key facts, data points, and different perspectives. Cite sources.",
+      "chain_context": false,
+      "on_fail": "retry",
+      "debate": false
+    },
+    {
+      "name": "analyze",
+      "agent": "local",
+      "task_type": "spec",
+      "system_prompt": "You are a strategic analyst. You identify patterns, trends, and insights in information. You think critically, spot contradictions, and distinguish correlation from causation.",
+      "prompt": "Task: Research the pros and cons of React vs Vue, then write a comprehensive comparison report with a recommendation\n\nYour part: Analyze the gathered information. Identify patterns, contradictions, and key insights. Be objective.",
+      "chain_context": true,
+      "on_fail": "goto:gather",
+      "debate": false
+    },
+    {
+      "name": "write",
+      "agent": "local",
+      "task_type": "build",
+      "system_prompt": "You are a writing specialist. You produce clear, well-structured content. You lead with key takeaways, use concrete examples, and keep prose concise. You match tone to audience.",
+      "prompt": "Task: Research the pros and cons of React vs Vue, then write a comprehensive comparison report with a recommendation\n\nYour part: Write a clear, well-structured summary of findings. Include key takeaways at the top. End with VERDICT: SHIP.",
+      "chain_context": true,
+      "on_fail": "retry",
+      "debate": false
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 0,
+  "max_iterations": 2,
+  "status": "error",
+  "created_at": 1773852241,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "gather",
+      "iteration": 0,
+      "verdict": "error",
+      "feedback": "Model call failed \u2014 no response",
+      "ts": 1773852243
+    }
+  ],
+  "results": {}
+}

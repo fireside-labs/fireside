@@ -43,8 +43,9 @@ export default function OnboardingGate({ children }: { children: React.ReactNode
         }
 
         // Fast path: already onboarded
+        // In Tauri mode, always verify with backend (localStorage may be stale from dev)
         const onboarded = localStorage.getItem("fireside_onboarded");
-        if (onboarded) {
+        if (onboarded && !isTauri()) {
             setLoading(false);
             return;
         }
