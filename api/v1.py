@@ -1073,23 +1073,51 @@ async def post_chat(req: ChatRequest):
             except Exception as e:
                 log.debug("[chat] Memory recall skipped: %s", e)
 
-    # 3. Complex task → auto-create pipeline from chat
+    # 6. Orchestration intent: "spawn agents", "use 3 agents", "start a pipeline"
+    orchestrate_signals = [
+        "spawn", "sub-agent", "subagent", "start a pipeline",
+        "use agents", "run agents", "create a pipeline", "create agents",
+        "orchestrate", "multi-agent", "use a team", "assign agents",
+        "start a coding", "start a research", "start a project",
+        "build me a full", "build me an entire", "build a complete",
+    ]
     pipeline_created = None
-    if classification == "complex":
+    explicit_orchestrate = any(sig in msg_lower for sig in orchestrate_signals)
+
+    if explicit_orchestrate or classification == "complex":
+        import threading
         try:
             import orchestrator as orch_mod
-            pipeline_result = orch_mod.create_task_pipeline(req.message, mode="auto")
-            if pipeline_result:
-                pipeline_created = pipeline_result
-                pid = pipeline_result.get("id", pipeline_result.get("task_id", ""))
-                tool_context += (
-                    f"\n\n[I've started a background pipeline (ID: {pid}) to work on this "
-                    f"task properly. I'll break it into stages and work through it. "
-                    f"You can check progress on the Pipeline page.]\n"
-                )
-                log.info("[chat] Auto-created pipeline %s for complex task", pid)
+
+            # Detect template from message
+            from pipeline_templates import classify_template
+            template_name = classify_template(req.message)
+
+            def _run_bg_pipeline():
+                try:
+                    orch_mod.create_task_pipeline(req.message, mode="pipeline",
+                                                  template_name=template_name)
+                except Exception as ex:
+                    log.error("[chat] Background pipeline failed: %s", ex)
+
+            # Start in background so chat responds instantly
+            t = threading.Thread(target=_run_bg_pipeline, daemon=True)
+            t.start()
+
+            # Tell the model what's happening
+            pipeline_created = {"template": template_name, "status": "starting"}
+            tool_context += (
+                f"\n\n[ORCHESTRATING: I've spawned a background pipeline using the "
+                f"'{template_name}' template to work on this task. The pipeline has "
+                f"specialized sub-agents (planner, builder, tester, reviewer) that "
+                f"will work through it stage by stage. Let the user know the pipeline "
+                f"is running and they can check progress on the Pipeline page. "
+                f"Meanwhile, give them a brief overview of how you'll approach the task.]\n"
+            )
+            log.info("[chat] Pipeline spawned: template=%s, trigger=%s",
+                     template_name, "explicit" if explicit_orchestrate else "auto-complex")
         except Exception as e:
-            log.debug("[chat] Pipeline auto-create skipped: %s", e)
+            log.debug("[chat] Pipeline spawn skipped: %s", e)
 
     # Inject tool context into system prompt
     if tool_context:
@@ -1222,6 +1250,21 @@ async def post_chat(req: ChatRequest):
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_pipeline",
+                "description": "Spawn a multi-agent pipeline for complex tasks. Sub-agents (planner, builder, tester, reviewer) work through it stage by stage.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task": {"type": "string", "description": "Full description of what to build/research/analyze"},
+                        "template": {"type": "string", "description": "Pipeline template: 'coding', 'research', 'analysis', 'drafting', 'presentation', 'general'", "default": ""},
+                    },
+                    "required": ["task"],
+                },
+            },
+        },
     ]
 
     # ── Tool executor: runs a tool call against real APIs ──
@@ -1329,6 +1372,21 @@ async def post_chat(req: ChatRequest):
                     data = json.loads(resp.read())
                 sched = data.get("schedule", {})
                 return f"Scheduled: {sched.get('description', 'unknown')} — Task ID: {data.get('task_id', 'unknown')}"
+
+            elif name == "create_pipeline":
+                payload = json.dumps({
+                    "task": arguments.get("task", ""),
+                    "template": arguments.get("template", ""),
+                }).encode()
+                r = urllib.request.Request(f"{base}/api/v1/pipeline/start", data=payload,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(r, timeout=15) as resp:
+                    data = json.loads(resp.read())
+                return (
+                    f"Pipeline created! Template: {data.get('template', 'auto')} "
+                    f"Status: {data.get('status', 'starting')}. "
+                    f"Sub-agents are working through it stage by stage."
+                )
 
             else:
                 return f"Unknown tool: {name}"
