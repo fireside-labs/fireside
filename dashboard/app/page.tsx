@@ -31,15 +31,7 @@ interface Conversation {
   pinned?: boolean;
 }
 
-const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: "1", title: "Analytics Report Progress", preview: "Let's continue with the competitor analysis...", date: new Date("2026-03-17T09:14:00"), pinned: true },
-  { id: "2", title: "Pricing Strategy Brainstorm", preview: "I think the three-tier model works best because...", date: new Date("2026-03-16T15:30:00") },
-  { id: "3", title: "Product Launch Checklist", preview: "Here's what we still need to prepare...", date: new Date("2026-03-16T10:00:00") },
-  { id: "4", title: "Code Review: API Routes", preview: "The middleware chain looks solid, but...", date: new Date("2026-03-15T18:45:00"), folder: "Dev" },
-  { id: "5", title: "Morning Brief — March 15", preview: "Good morning! Here's what happened overnight...", date: new Date("2026-03-15T09:00:00") },
-  { id: "6", title: "Model Comparison Notes", preview: "Qwen 2.5 14B vs Llama 3.1 8B for our use case...", date: new Date("2026-03-14T14:20:00"), folder: "Dev" },
-  { id: "7", title: "Weekend Planning", preview: "I can help organize your tasks for the weekend...", date: new Date("2026-03-14T09:00:00") },
-];
+const MOCK_CONVERSATIONS: Conversation[] = [];
 
 export default function CampfireHub() {
   const [message, setMessage] = useState("");

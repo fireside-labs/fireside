@@ -1193,59 +1193,66 @@ async def post_chat(req: ChatRequest):
         base = f"http://127.0.0.1:{port}"
         try:
             if name == "files_list":
-                # No path restriction — reading dir listings is non-destructive
-                payload = json.dumps(arguments).encode()
-                r = urllib.request.Request(f"{base}/api/v1/files/list", data=payload,
-                                          headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(r, timeout=15) as resp:
-                    data = json.loads(resp.read())
-                entries = data.get("entries", [])
+                import os
+                dir_path = arguments.get("path", str(Path.home()))
+                p = Path(dir_path)
+                if not p.exists():
+                    return f"Directory not found: {dir_path}"
+                if not p.is_dir():
+                    return f"Not a directory: {dir_path}"
+                entries = []
+                for item in sorted(p.iterdir()):
+                    try:
+                        if item.is_dir():
+                            entries.append(f"DIR  {item.name}")
+                        else:
+                            size = item.stat().st_size
+                            entries.append(f"     {item.name} ({size} bytes)")
+                    except PermissionError:
+                        entries.append(f"     {item.name} (access denied)")
+                    if len(entries) >= 50:
+                        break
                 if not entries:
-                    return "Directory is empty or not found."
-                lines = [f"{'DIR ' if e['type'] == 'dir' else ''}{e['name']}"
-                         + (f" ({e['size']} bytes)" if e.get('size') else "")
-                         for e in entries[:50]]
-                return f"Contents of {arguments.get('path', '.')}:\n" + "\n".join(lines)
+                    return f"Directory is empty: {dir_path}"
+                return f"Contents of {dir_path}:\n" + "\n".join(entries)
 
             elif name == "files_read":
-                # No path restriction — reading files is non-destructive
-                payload = json.dumps({"path": arguments["path"]}).encode()
-                r = urllib.request.Request(f"{base}/api/v1/files/read", data=payload,
-                                          headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(r, timeout=15) as resp:
-                    data = json.loads(resp.read())
-                content = data.get("content", "")
-                return f"File: {arguments['path']} ({data.get('size', 0)} bytes, {data.get('lines', 0)} lines)\n\n{content[:3000]}"
+                filepath = arguments.get("path", "")
+                p = Path(filepath)
+                if not p.exists():
+                    return f"File not found: {filepath}"
+                if not p.is_file():
+                    return f"Not a file: {filepath}"
+                try:
+                    content = p.read_text(encoding="utf-8", errors="replace")
+                    lines = content.count("\n") + 1
+                    size = p.stat().st_size
+                    return f"File: {filepath} ({size} bytes, {lines} lines)\n\n{content[:3000]}"
+                except Exception as e:
+                    return f"Error reading {filepath}: {e}"
 
             elif name == "files_write":
-                # Path safety: restrict to user home
                 req_path = arguments.get("path", "")
                 home = str(Path.home()).replace("\\", "/")
                 req_norm = req_path.replace("\\", "/")
                 if not req_norm.startswith(home):
                     return f"BLOCKED: Can only write files within your home directory ({home})"
-                # Block writes to Fireside code dirs (config files like valhalla.yaml are OK)
                 protected = [".fireside/api/", ".fireside/plugins/",
                              ".fireside/bot/", ".fireside/middleware/"]
                 if any(p in req_norm for p in protected):
                     return "BLOCKED: Cannot write to Fireside code directories (api/, plugins/, bot/)."
-                # Content size cap: 500KB
                 content = arguments.get("content", "")
                 if len(content) > 5_242_880:
                     return f"BLOCKED: File content too large ({len(content)} bytes). Max 5MB."
-                payload = json.dumps({
-                    "path": arguments["path"],
-                    "content": content,
-                    "create_dirs": True,
-                }).encode()
-                r = urllib.request.Request(f"{base}/api/v1/files/write", data=payload,
-                                          headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(r, timeout=15) as resp:
-                    data = json.loads(resp.read())
-                return f"File saved: {data.get('path', arguments['path'])} ({data.get('size', 0)} bytes)"
+                p = Path(req_path)
+                try:
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_text(content, encoding="utf-8")
+                    return f"File saved: {req_path} ({len(content.encode('utf-8'))} bytes)"
+                except Exception as e:
+                    return f"Error writing {req_path}: {e}"
 
             elif name == "files_delete":
-                # Safety: require explicit confirmed=true from the model
                 if not arguments.get("confirmed"):
                     return (
                         f"SAFETY CHECK: Delete requires confirmation. "
@@ -1253,20 +1260,26 @@ async def post_chat(req: ChatRequest):
                         f"Please describe exactly what will be deleted and ask the user to confirm. "
                         f"If they say yes, call files_delete again with confirmed=true."
                     )
-                # User confirmed — execute the delete
                 req_path = arguments.get("path", "")
                 home = str(Path.home()).replace("\\", "/")
                 req_norm = req_path.replace("\\", "/")
                 if not req_norm.startswith(home):
                     return f"BLOCKED: Can only delete files within your home directory ({home})"
-                payload = json.dumps({"path": req_path}).encode()
-                r = urllib.request.Request(f"{base}/api/v1/files/delete", data=payload,
-                                          headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(r, timeout=15) as resp:
-                    data = json.loads(resp.read())
-                return f"Deleted: {data.get('path', req_path)}"
+                p = Path(req_path)
+                if not p.exists():
+                    return f"File not found: {req_path}"
+                try:
+                    if p.is_file():
+                        p.unlink()
+                    elif p.is_dir():
+                        import shutil
+                        shutil.rmtree(p)
+                    return f"Deleted: {req_path}"
+                except Exception as e:
+                    return f"Error deleting {req_path}: {e}"
 
             elif name == "terminal_exec":
+                import subprocess as _sp
                 cmd = arguments.get("command", "")
                 cmd_lower = cmd.lower()
 
@@ -1283,15 +1296,13 @@ async def post_chat(req: ChatRequest):
                         f"This command is never allowed."
                     )
 
-                # PATH-AWARE check: destructive commands allowed in home dir,
-                # blocked if targeting system directories
+                # PATH-AWARE check: destructive commands blocked for system dirs
                 destructive_cmds = [
                     "rm ", "rm -", "rmdir", "del ", "erase",
                     "remove-item", "rd ", "rd/",
                     "cmd /c del", "cmd /c rd",
                 ]
                 if any(d in cmd_lower for d in destructive_cmds):
-                    # Extract paths from the command (rough heuristic)
                     system_paths = [
                         "c:\\windows", "c:/windows", "/windows",
                         "c:\\program files", "c:/program files",
@@ -1301,42 +1312,32 @@ async def post_chat(req: ChatRequest):
                         ".fireside\\plugins", ".fireside/plugins",
                         ".fireside\\bot", ".fireside/bot",
                     ]
-                    hits_system = any(sp in cmd_lower for sp in system_paths)
-
-                    # Also block wildcard at root level
-                    # NOTE: String matching is a speed bump, not a wall.
-                    # Real sandboxing requires OS-level isolation (Docker/chroot).
                     root_patterns = [
                         "c:\\*", "c:/*",
                         "remove-item c:\\",
                         "rm -rf /", "rm -rf /*",
                     ]
-                    hits_root = any(rp in cmd_lower for rp in root_patterns)
-
-                    if hits_system or hits_root:
+                    if any(sp in cmd_lower for sp in system_paths) or any(rp in cmd_lower for rp in root_patterns):
                         return (
                             f"BLOCKED: Destructive command targets system files: {cmd}\n"
                             f"Destructive commands are only allowed within your project directories."
                         )
-                    # Allowed: destructive command within user space (e.g. rm node_modules)
-                payload = json.dumps({
-                    "command": cmd,
-                    "reason": arguments.get("reason", "User request via chat"),
-                }).encode()
-                r = urllib.request.Request(f"{base}/api/v1/terminal/exec", data=payload,
-                                          headers={"Content-Type": "application/json"}, method="POST")
-                with urllib.request.urlopen(r, timeout=35) as resp:
-                    data = json.loads(resp.read())
-                result = data.get("result", {})
-                stdout = result.get("stdout", "")[:2000]
-                stderr = result.get("stderr", "")[:500]
-                rc = result.get("returncode", -1)
-                out = f"Exit code: {rc}\n"
-                if stdout:
-                    out += f"Output:\n{stdout}\n"
-                if stderr:
-                    out += f"Errors:\n{stderr}\n"
-                return out
+
+                try:
+                    result = _sp.run(
+                        cmd, shell=True, capture_output=True, text=True,
+                        timeout=30, cwd=str(Path.home()),
+                    )
+                    out = f"Exit code: {result.returncode}\n"
+                    if result.stdout:
+                        out += f"Output:\n{result.stdout[:2000]}\n"
+                    if result.stderr:
+                        out += f"Errors:\n{result.stderr[:500]}\n"
+                    return out
+                except _sp.TimeoutExpired:
+                    return f"Command timed out after 30 seconds: {cmd}"
+                except Exception as e:
+                    return f"Error running command: {e}"
 
             elif name == "web_search":
                 from plugins.browse.handler import web_search as _ws
