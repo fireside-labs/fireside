@@ -931,6 +931,7 @@ async def post_chat(req: ChatRequest):
             "what is the weather", "what's the weather",
             "what is the temperature", "what's the temperature",
             "current price of", "how much does",
+            "stock price", "share price", "market cap", "exchange rate",
             "news about", "latest news",
         ]
         msg_lower = req.message.lower()
@@ -1280,6 +1281,31 @@ async def post_chat(req: ChatRequest):
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "cancel_schedule",
+                "description": "Cancel an active scheduled task by its ID or description.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {"type": "string", "description": "The task ID to cancel"},
+                    },
+                    "required": ["task_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_schedules",
+                "description": "List all active scheduled tasks. Use when user asks what's scheduled.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                },
+            },
+        },
     ]
 
     # ── Tool executor: runs a tool call against real APIs ──
@@ -1341,12 +1367,26 @@ async def post_chat(req: ChatRequest):
                 return f"File saved: {data.get('path', arguments['path'])} ({data.get('size', 0)} bytes)"
 
             elif name == "files_delete":
-                # Safety: require explicit user confirmation
-                return (
-                    f"BLOCKED: Delete operation requires user confirmation. "
-                    f"Please ask the user to confirm deleting: {arguments.get('path', 'unknown')}. "
-                    f"Do NOT call files_delete again until the user explicitly says yes."
-                )
+                # Safety: require explicit confirmed=true from the model
+                if not arguments.get("confirmed"):
+                    return (
+                        f"SAFETY CHECK: Delete requires confirmation. "
+                        f"TARGET: {arguments.get('path', 'unknown')}. "
+                        f"Please describe exactly what will be deleted and ask the user to confirm. "
+                        f"If they say yes, call files_delete again with confirmed=true."
+                    )
+                # User confirmed — execute the delete
+                req_path = arguments.get("path", "")
+                home = str(Path.home()).replace("\\", "/")
+                req_norm = req_path.replace("\\", "/")
+                if not req_norm.startswith(home):
+                    return f"BLOCKED: Can only delete files within your home directory ({home})"
+                payload = json.dumps({"path": req_path}).encode()
+                r = urllib.request.Request(f"{base}/api/v1/files/delete", data=payload,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(r, timeout=15) as resp:
+                    data = json.loads(resp.read())
+                return f"Deleted: {data.get('path', req_path)}"
 
             elif name == "terminal_exec":
                 cmd = arguments.get("command", "")
@@ -1462,6 +1502,29 @@ async def post_chat(req: ChatRequest):
                     f"Status: {data.get('status', 'starting')}. "
                     f"Sub-agents are working through it stage by stage."
                 )
+
+            elif name == "cancel_schedule":
+                task_id = arguments.get("task_id", "")
+                r = urllib.request.Request(f"{base}/api/v1/scheduler/{task_id}",
+                                          method="DELETE")
+                with urllib.request.urlopen(r, timeout=10) as resp:
+                    data = json.loads(resp.read())
+                if data.get("ok"):
+                    return f"Schedule cancelled: {task_id}"
+                return f"Failed to cancel: {data.get('error', 'unknown')}"
+
+            elif name == "list_schedules":
+                r = urllib.request.Request(f"{base}/api/v1/scheduler", method="GET")
+                with urllib.request.urlopen(r, timeout=10) as resp:
+                    data = json.loads(resp.read())
+                tasks = data.get("tasks", [])
+                if not tasks:
+                    return "No active scheduled tasks."
+                lines = []
+                for t in tasks:
+                    sched = t.get("schedule", {}).get("description", "")
+                    lines.append(f"• [{t.get('id', '?')}] {t.get('task', '')[:60]} — {sched}")
+                return f"Active schedules ({len(tasks)}):\n" + "\n".join(lines)
 
             else:
                 return f"Unknown tool: {name}"
