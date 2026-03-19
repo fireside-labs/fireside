@@ -901,15 +901,29 @@ async def post_chat(req: ChatRequest):
     import platform as _platform
     now = _dt.now()
     home_dir = str(Path.home()).replace("\\", "/")
-    desktop = str(Path.home() / "Desktop").replace("\\", "/")
+    # Detect OneDrive-redirected Desktop (common on Windows)
+    onedrive_desktop = Path.home() / "OneDrive" / "Desktop"
+    normal_desktop = Path.home() / "Desktop"
+    if onedrive_desktop.exists():
+        desktop = str(onedrive_desktop).replace("\\", "/")
+    elif normal_desktop.exists():
+        desktop = str(normal_desktop).replace("\\", "/")
+    else:
+        desktop = str(normal_desktop).replace("\\", "/")
+    # Detect Documents path (also may be under OneDrive)
+    onedrive_docs = Path.home() / "OneDrive" / "Documents"
+    normal_docs = Path.home() / "Documents"
+    documents = str(onedrive_docs if onedrive_docs.exists() else normal_docs).replace("\\", "/")
+    downloads = str(Path.home() / "Downloads").replace("\\", "/")
     system_prompt += (
         f"\n\nCurrent date and time: {now.strftime('%A, %B %d, %Y at %I:%M %p')}"
         f"\nOperating system: {_platform.system()} ({_platform.release()})"
         f"\nUser home directory: {home_dir}"
         f"\nDesktop path: {desktop}"
-        f"\n\nIMPORTANT: When using tools like files_list, use the full Windows path "
-        f"(e.g. '{desktop}'), NOT Unix paths like '/Users'. "
-        f"Do NOT output raw XML tool_call tags — use the function calling API. "
+        f"\nDocuments path: {documents}"
+        f"\nDownloads path: {downloads}"
+        f"\n\nIMPORTANT: When using tools, use the exact paths listed above. "
+        f"Do NOT guess paths. Do NOT output raw XML tool_call tags. "
         f"Be concise: answer directly after a tool returns, do not call more tools than necessary."
     )
 
