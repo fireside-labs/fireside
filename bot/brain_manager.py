@@ -69,6 +69,15 @@ def get_status() -> dict:
             else:
                 _status["running"] = True
                 _status["pid"] = _proc.pid
+        # Detect externally started llama-server (e.g. manual terminal launch)
+        if not _status["running"]:
+            port = _status.get("port", 8080)
+            if _is_port_open(port):
+                _status["running"] = True
+                _status["error"] = None
+                if not _status.get("model") or _status["model"] == "(external)":
+                    # Try to get real model name from the running server
+                    _status["model"] = _query_model_name(port) or "(external)"
         return dict(_status)
 
 
@@ -113,6 +122,7 @@ def start(model_path: Path, config: dict = None) -> bool:
             "--threads", str(threads),
             "--no-mmap",                         # Load fully into memory
             "--flash-attn",                    # Flash attention (requires compatible GPU)
+            "--jinja",                           # REQUIRED for tool/function calling support
         ]
 
         # Disable thinking for small models (< 3B) — they waste tokens on garbage
@@ -122,21 +132,31 @@ def start(model_path: Path, config: dict = None) -> bool:
             log.info("[brain] Small model detected, disabling thinking mode")
 
         # Auto-detect chat template from model name
-        if "qwen" in model_name:
-            cmd.extend(["--chat-template", "chatml"])
-            log.info("[brain] Qwen model detected — using chatml template")
-        elif "llama" in model_name or "meta" in model_name:
-            cmd.extend(["--chat-template", "llama3"])
-            log.info("[brain] Llama model detected — using llama3 template")
-        elif "mistral" in model_name:
-            cmd.extend(["--chat-template", "mistral-v7"])
-            log.info("[brain] Mistral model detected — using mistral-v7 template")
-        elif "gemma" in model_name:
-            cmd.extend(["--chat-template", "gemma"])
-            log.info("[brain] Gemma model detected — using gemma template")
-        elif "phi" in model_name:
-            cmd.extend(["--chat-template", "chatml"])
-            log.info("[brain] Phi model detected — using chatml template")
+        # NOTE: When --jinja is set, the GGUF-embedded template handles
+        # everything including tool/function calling. Do NOT add
+        # --chat-template — it overrides the Jinja template and breaks tools.
+        #
+        # Only add --chat-template as a fallback if --jinja is NOT in the cmd.
+        # (Currently --jinja is always added above, so this block is inactive
+        #  but kept for reference if --jinja is ever made conditional.)
+        if "--jinja" not in cmd:
+            if "qwen" in model_name:
+                cmd.extend(["--chat-template", "chatml"])
+                log.info("[brain] Qwen model detected — using chatml template (no jinja)")
+            elif "llama" in model_name or "meta" in model_name:
+                cmd.extend(["--chat-template", "llama3"])
+                log.info("[brain] Llama model detected — using llama3 template")
+            elif "mistral" in model_name:
+                cmd.extend(["--chat-template", "mistral-v7"])
+                log.info("[brain] Mistral model detected — using mistral-v7 template")
+            elif "gemma" in model_name:
+                cmd.extend(["--chat-template", "gemma"])
+                log.info("[brain] Gemma model detected — using gemma template")
+            elif "phi" in model_name:
+                cmd.extend(["--chat-template", "chatml"])
+                log.info("[brain] Phi model detected — using chatml template")
+        else:
+            log.info("[brain] --jinja active — using GGUF-embedded template (supports tool calling)")
         # else: let llama-server auto-detect from GGUF metadata
 
         log.info("[brain] Starting llama-server: %s", " ".join(cmd))
@@ -340,6 +360,36 @@ def _wait_ready(port: int, timeout: float = 8.0) -> bool:
         except Exception:
             time.sleep(0.5)
     return False
+
+
+def _is_port_open(port: int) -> bool:
+    """Quick check if something is listening on a port."""
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return True
+    except (OSError, ConnectionRefusedError):
+        return False
+
+
+def _query_model_name(port: int) -> Optional[str]:
+    """Query running llama-server for its loaded model name."""
+    import urllib.request
+    import json as _json
+    try:
+        url = f"http://127.0.0.1:{port}/v1/models"
+        with urllib.request.urlopen(url, timeout=2) as resp:
+            data = _json.loads(resp.read())
+            models = data.get("data", [])
+            if models:
+                model_id = models[0].get("id", "")
+                # Clean up the model ID (often a file path)
+                if "/" in model_id or "\\" in model_id:
+                    model_id = Path(model_id).stem
+                return model_id or None
+    except Exception:
+        pass
+    return None
 
 
 def _tail_logs(proc: subprocess.Popen) -> None:

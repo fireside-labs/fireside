@@ -1,0 +1,71 @@
+﻿python : 08:13:09 
+\u2502 
+valhalla.config       
+       \u2502 INFO  
+\u2502 Loading config 
+from C:\Users\Jorda\.f
+ireside\valhalla.yaml
+At line:1 char:1
++ python "$env:USERPRO
+FILE\.fireside\bifrost
+.py" 2>&1 | Out-File 
+"C:\Us ...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (08:13:09 \   
+ u2502...e\valhall    
+a.yaml:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+Traceback (most 
+recent call last):
+  File "C:\Users\Jorda
+\.fireside\bifrost.py"
+, line 204, in 
+<module>
+    main()
+  File "C:\Users\Jorda
+\.fireside\bifrost.py"
+, line 190, in main
+    app = create_app(a
+rgs.config)
+          ^^^^^^^^^^^^
+^^^^^^^^^^^
+  File "C:\Users\Jorda
+\.fireside\bifrost.py"
+, line 48, in 
+create_app
+    config = get_confi
+g(config_path)
+             ^^^^^^^^^
+^^^^^^^^^^^^^^
+  File "C:\Users\Jorda
+\.fireside\config_load
+er.py", line 139, in 
+get_config
+    _config = 
+load_config(path)
+              
+^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jorda
+\.fireside\config_load
+er.py", line 122, in 
+load_config
+    _validate(config)
+  File "C:\Users\Jorda
+\.fireside\config_load
+er.py", line 69, in 
+_validate
+    raise 
+ConfigError(f"Missing 
+required config keys: 
+{missing}")
+config_loader.ConfigEr
+ror: Missing required 
+config keys: {'mesh'}

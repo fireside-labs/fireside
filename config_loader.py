@@ -24,7 +24,7 @@ log = logging.getLogger("valhalla.config")
 _BASE_DIR = Path(__file__).parent
 _DEFAULT_CONFIG_PATH = _BASE_DIR / "valhalla.yaml"
 
-_REQUIRED_KEYS = {"node", "mesh", "models", "plugins"}
+_REQUIRED_KEYS = {"node", "plugins"}
 
 # Singleton
 _config: dict | None = None
@@ -74,20 +74,29 @@ def _validate(config: dict) -> None:
         raise ConfigError("'node' must be a mapping")
     if "name" not in node:
         raise ConfigError("'node.name' is required")
-    if "port" not in node:
-        raise ConfigError("'node.port' is required")
+    node.setdefault("port", 8765)
 
-    # mesh.nodes
-    mesh = config["mesh"]
-    if not isinstance(mesh, dict) or "nodes" not in mesh:
-        raise ConfigError("'mesh.nodes' is required")
+    # mesh — optional for single-node installs
+    if "mesh" in config:
+        mesh = config["mesh"]
+        if not isinstance(mesh, dict):
+            raise ConfigError("'mesh' must be a mapping")
+    else:
+        config["mesh"] = {"nodes": {}, "auth_token": ""}
 
-    # models
-    models = config["models"]
-    if not isinstance(models, dict):
-        raise ConfigError("'models' must be a mapping")
-    if "default" not in models:
-        raise ConfigError("'models.default' is required")
+    # models — optional, default to local llama
+    if "models" in config:
+        models = config["models"]
+        if not isinstance(models, dict):
+            raise ConfigError("'models' must be a mapping")
+    else:
+        config["models"] = {
+            "default": "llama/local",
+            "providers": {
+                "llama": {"url": "http://127.0.0.1:8080/v1", "key": "local", "api": "openai-completions"}
+            },
+            "aliases": {},
+        }
 
     # plugins
     plugins = config["plugins"]
