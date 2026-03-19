@@ -125,7 +125,6 @@ export default function CampfireHub() {
                 ...chatHistory.map(m => ({ role: m.role, content: m.content })),
                 { role: "user", content: userMessage },
               ],
-              max_tokens: thinkingEnabled ? 4096 : 1024,
               temperature: 0.7,
             }),
           });
