@@ -895,6 +895,13 @@ async def post_chat(req: ChatRequest):
     if orch_ctx.get("enriched_system_additions"):
         system_prompt += orch_ctx["enriched_system_additions"]
 
+    # Inject current date/time so the model knows when it is
+    from datetime import datetime as _dt
+    now = _dt.now()
+    system_prompt += (
+        f"\n\nCurrent date and time: {now.strftime('%A, %B %d, %Y at %I:%M %p')}"
+    )
+
     # ── Tool dispatch: browse, search, pipeline (invisible to user) ──
     tool_context = ""
     classification = orch_ctx.get("classification", "simple")
@@ -1084,7 +1091,15 @@ async def post_chat(req: ChatRequest):
     pipeline_created = None
     explicit_orchestrate = any(sig in msg_lower for sig in orchestrate_signals)
 
-    if explicit_orchestrate or classification == "complex":
+    # Don't pipeline simple single-file creation ("write me a script")
+    # Only pipeline multi-component projects ("build a full app with API and frontend")
+    simple_creation_signals = [
+        "write me a", "write a script", "make me a program",
+        "create a file", "write a file", "make a simple",
+    ]
+    is_simple_creation = any(sig in msg_lower for sig in simple_creation_signals)
+
+    if (explicit_orchestrate or classification == "complex") and not is_simple_creation:
         import threading
         try:
             import orchestrator as orch_mod
