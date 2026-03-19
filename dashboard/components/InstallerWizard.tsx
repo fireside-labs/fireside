@@ -316,6 +316,15 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       setBrainProgress(100);
       setBrainDownloadInfo(prev => ({ ...prev, status: 'complete' }));
       localStorage.setItem("fireside_model", model);
+
+      // Auto-start the Python backend so it loads the downloaded model
+      try {
+        await tauriInvoke("restart_backend");
+        console.log("[Installer] Backend restarted with new brain");
+      } catch (e) {
+        console.warn("[Installer] Backend restart failed (may need manual start):", e);
+      }
+
       setTimeout(() => goTo(8), 600);
     } catch (err) {
       setBrainDownloading(false);

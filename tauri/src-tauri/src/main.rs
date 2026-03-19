@@ -646,6 +646,58 @@ fn get_backend_status() -> serde_json::Value {
     })
 }
 
+/// Restart the Python backend (bifrost.py) so it picks up a newly downloaded model.
+/// Kills the old process if running, then spawns a fresh one.
+#[tauri::command]
+fn restart_backend(state: tauri::State<'_, Arc<Mutex<BackendState>>>) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("Cannot find home directory")?;
+    let fireside_dir = home.join(".fireside");
+
+    // Find the repo directory
+    let repo_dir = if fireside_dir.join("bifrost.py").exists() {
+        fireside_dir
+    } else {
+        // Dev mode: try current dir or parent dirs
+        let cwd = std::env::current_dir().unwrap_or(fireside_dir.clone());
+        if cwd.join("bifrost.py").exists() {
+            cwd
+        } else if cwd.join("..").join("bifrost.py").exists() {
+            cwd.join("..").canonicalize().unwrap_or(fireside_dir)
+        } else {
+            return Err("bifrost.py not found in ~/.fireside or current directory".into());
+        }
+    };
+
+    // Kill existing backend
+    {
+        let mut s = state.lock().map_err(|e| format!("Lock error: {}", e))?;
+        if let Some(ref mut child) = s.child {
+            println!("[fireside] Killing old backend (pid={:?})", child.id());
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        s.child = None;
+        s.running = false;
+        s.restart_count = 0;
+    }
+
+    // Brief delay to let port free up
+    thread::sleep(std::time::Duration::from_millis(500));
+
+    // Spawn new backend
+    match spawn_backend(&repo_dir) {
+        Some(child) => {
+            let pid = child.id();
+            let mut s = state.lock().map_err(|e| format!("Lock error: {}", e))?;
+            s.child = Some(child);
+            s.running = true;
+            println!("[fireside] Backend restarted (pid={:?})", pid);
+            Ok(format!("Backend restarted (pid={:?})", pid))
+        }
+        None => Err("Failed to spawn backend process".into()),
+    }
+}
+
 fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
     let python_cmd = if cfg!(target_os = "windows") {
         "python"
@@ -960,7 +1012,9 @@ fn main() {
             get_backend_status,
             download_brain,
             test_connection,
+            restart_backend,
         ])
+        .manage(backend_state.clone())
         .setup(move |_app| {
             // Auto-start backend if ~/.fireside exists
             let home = dirs::home_dir().unwrap_or_default();
