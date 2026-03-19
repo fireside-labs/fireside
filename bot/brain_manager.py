@@ -84,7 +84,13 @@ def get_status() -> dict:
 def start(model_path: Path, config: dict = None) -> bool:
     """Start llama-server with the given GGUF model.
 
-    All layers loaded to GPU (-ngl 99). Model stays hot in VRAM.
+    Uses graceful degradation — if the first launch fails, retries with
+    progressively safer flags so it works on any hardware:
+      Attempt 1: Full GPU + flash-attn + no-mmap  (fastest, needs modern GPU)
+      Attempt 2: Full GPU, no flash-attn           (works on older CUDA GPUs)
+      Attempt 3: Full GPU, no flash-attn, no no-mmap (less RAM needed)
+      Attempt 4: Half GPU layers                    (fallback for low VRAM)
+      Attempt 5: CPU only                           (absolute last resort)
     Returns True if started successfully.
     """
     global _proc, _current_model_path, _start_time
@@ -107,109 +113,148 @@ def start(model_path: Path, config: dict = None) -> bool:
         log.error("[brain] llama-server not found in PATH")
         return False
 
-    with _proc_lock:
-        # Kill any existing process
-        _stop_locked()
+    model_name = model_path.name.lower()
 
-        cmd = [
-            binary,
-            "--model", str(model_path),
-            "--port", str(port),
-            "--host", "127.0.0.1",
-            "--ctx-size", str(context),
-            "--n-gpu-layers", str(gpu_layers),  # ALL layers on GPU
-            "--keep", "-1",                      # Keep all tokens in KV cache
-            "--threads", str(threads),
-            "--no-mmap",                         # Load fully into memory
-            "--flash-attn",                    # Flash attention (requires compatible GPU)
-            "--jinja",                           # REQUIRED for tool/function calling support
-        ]
+    # Disable thinking for small models (< 3B) — they waste tokens on garbage
+    extra_flags = []
+    if re.search(r'[-_\.](0\.5b|0\.6b|1b|1\.5b|2b)[-_\.]', model_name):
+        extra_flags.extend(["--reasoning-budget", "0"])
+        log.info("[brain] Small model detected, disabling thinking mode")
 
-        # Disable thinking for small models (< 3B) — they waste tokens on garbage
-        model_name = model_path.name.lower()
-        if re.search(r'[-_\.](0\.5b|0\.6b|1b|1\.5b|2b)[-_\.]', model_name):
-            cmd.extend(["--reasoning-budget", "0"])
-            log.info("[brain] Small model detected, disabling thinking mode")
+    # --jinja is REQUIRED for tool/function calling — always include it.
+    # Do NOT add --chat-template when --jinja is active (they conflict).
+    extra_flags.append("--jinja")
+    log.info("[brain] --jinja active — using GGUF-embedded template (supports tool calling)")
 
-        # Auto-detect chat template from model name
-        # NOTE: When --jinja is set, the GGUF-embedded template handles
-        # everything including tool/function calling. Do NOT add
-        # --chat-template — it overrides the Jinja template and breaks tools.
-        #
-        # Only add --chat-template as a fallback if --jinja is NOT in the cmd.
-        # (Currently --jinja is always added above, so this block is inactive
-        #  but kept for reference if --jinja is ever made conditional.)
-        if "--jinja" not in cmd:
-            if "qwen" in model_name:
-                cmd.extend(["--chat-template", "chatml"])
-                log.info("[brain] Qwen model detected — using chatml template (no jinja)")
-            elif "llama" in model_name or "meta" in model_name:
-                cmd.extend(["--chat-template", "llama3"])
-                log.info("[brain] Llama model detected — using llama3 template")
-            elif "mistral" in model_name:
-                cmd.extend(["--chat-template", "mistral-v7"])
-                log.info("[brain] Mistral model detected — using mistral-v7 template")
-            elif "gemma" in model_name:
-                cmd.extend(["--chat-template", "gemma"])
-                log.info("[brain] Gemma model detected — using gemma template")
-            elif "phi" in model_name:
-                cmd.extend(["--chat-template", "chatml"])
-                log.info("[brain] Phi model detected — using chatml template")
-        else:
-            log.info("[brain] --jinja active — using GGUF-embedded template (supports tool calling)")
-        # else: let llama-server auto-detect from GGUF metadata
+    # ── Degradation ladder: try aggressive → safe ──
+    attempts = [
+        {
+            "label": "Full GPU + flash-attn",
+            "ngl": gpu_layers,
+            "flags": ["--no-mmap", "--flash-attn"],
+        },
+        {
+            "label": "Full GPU (no flash-attn)",
+            "ngl": gpu_layers,
+            "flags": ["--no-mmap"],
+        },
+        {
+            "label": "Full GPU (mmap enabled)",
+            "ngl": gpu_layers,
+            "flags": [],
+        },
+        {
+            "label": "Half GPU layers",
+            "ngl": max(1, gpu_layers // 2),
+            "flags": [],
+        },
+        {
+            "label": "CPU only (last resort)",
+            "ngl": 0,
+            "flags": [],
+        },
+    ]
 
-        log.info("[brain] Starting llama-server: %s", " ".join(cmd))
+    for i, attempt in enumerate(attempts):
+        with _proc_lock:
+            _stop_locked()
 
-        try:
-            # Start process, redirect output to log
-            kwargs = dict(
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-            # Hide console window on Windows
-            import sys
-            if sys.platform == "win32":
-                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-            _proc = subprocess.Popen(cmd, **kwargs)
-            _current_model_path = model_path
-            _start_time = time.time()
+            cmd = [
+                binary,
+                "--model", str(model_path),
+                "--port", str(port),
+                "--host", "127.0.0.1",
+                "--ctx-size", str(context),
+                "--n-gpu-layers", str(attempt["ngl"]),
+                "--keep", "-1",
+                "--threads", str(threads),
+            ] + attempt["flags"] + extra_flags
 
-            _status.update({
-                "running": True,
-                "model": model_path.stem,
-                "model_path": str(model_path),
-                "pid": _proc.pid,
-                "port": port,
-                "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "error": None,
-                "gpu_layers": gpu_layers,
-            })
+            log.info("[brain] Attempt %d/%d: %s — %s",
+                     i + 1, len(attempts), attempt["label"], " ".join(cmd))
 
-            # Background thread to forward llama-server logs
-            threading.Thread(
-                target=_tail_logs, args=(_proc,),
-                daemon=True, name="brain-logs"
-            ).start()
+            try:
+                kwargs = dict(
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+                import sys
+                if sys.platform == "win32":
+                    kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-            # Wait up to 8s for server to be ready
-            if _wait_ready(port, timeout=8):
-                log.info("[brain] ✓ llama-server ready on port %d (pid=%d)", port, _proc.pid)
-                return True
-            else:
-                log.warning("[brain] llama-server started but not responding yet on :%d — continuing", port)
-                return True  # Still return True, it may still be loading
+                _proc = subprocess.Popen(cmd, **kwargs)
+                _current_model_path = model_path
+                _start_time = time.time()
 
-        except FileNotFoundError:
-            _status["error"] = f"Binary not found: {binary}"
-            log.error("[brain] Binary not found: %s", binary)
-            return False
-        except Exception as e:
-            _status["error"] = str(e)
-            log.error("[brain] Failed to start: %s", e)
-            return False
+                _status.update({
+                    "running": True,
+                    "model": model_path.stem,
+                    "model_path": str(model_path),
+                    "pid": _proc.pid,
+                    "port": port,
+                    "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "error": None,
+                    "gpu_layers": attempt["ngl"],
+                })
+
+                # Background thread to forward llama-server logs
+                threading.Thread(
+                    target=_tail_logs, args=(_proc,),
+                    daemon=True, name="brain-logs"
+                ).start()
+
+                # Wait for the server to become ready.
+                # Larger models need more time — scale timeout with model size.
+                model_size_mb = model_path.stat().st_size / (1024 * 1024)
+                timeout = max(15, min(120, model_size_mb / 200))  # 15s–120s
+                log.info("[brain] Waiting up to %.0fs for server (model=%.0f MB)...",
+                         timeout, model_size_mb)
+
+                if _wait_ready(port, timeout=timeout):
+                    log.info("[brain] ✓ llama-server ready on port %d (pid=%d, %s)",
+                             port, _proc.pid, attempt["label"])
+                    return True
+
+                # Check if process crashed during startup
+                if _proc.poll() is not None:
+                    exit_code = _proc.returncode
+                    log.warning("[brain] llama-server crashed (exit=%d) on attempt %d (%s)",
+                                exit_code, i + 1, attempt["label"])
+                    _proc = None
+                    _status["running"] = False
+                    _status["pid"] = None
+
+                    if i < len(attempts) - 1:
+                        log.info("[brain] Retrying with safer config...")
+                        time.sleep(1)  # Brief pause before retry
+                        continue
+                    else:
+                        _status["error"] = (
+                            f"All {len(attempts)} startup attempts failed. "
+                            f"Last exit code: {exit_code}. "
+                            f"Check GPU drivers or try a smaller model."
+                        )
+                        return False
+                else:
+                    # Process is alive but not responding yet — give it more time
+                    log.warning("[brain] llama-server started but slow on :%d — continuing", port)
+                    return True
+
+            except FileNotFoundError:
+                _status["error"] = f"Binary not found: {binary}"
+                log.error("[brain] Binary not found: %s", binary)
+                return False
+            except Exception as e:
+                _status["error"] = str(e)
+                log.error("[brain] Failed to start (attempt %d): %s", i + 1, e)
+                if i < len(attempts) - 1:
+                    continue
+                return False
+
+    return False
+
 
 
 def stop() -> None:
@@ -304,7 +349,13 @@ def _find_binary() -> Optional[str]:
 
 
 def _resolve_model(config: dict, base_dir: Path) -> Optional[Path]:
-    """Find the configured GGUF model file."""
+    """Find the configured GGUF model file.
+
+    Resolution order:
+      1. onboarding.json → explicit model_file path
+      2. valhalla.yaml → node.model_path
+      3. Scan known model directories for .gguf files (prefer largest = most capable)
+    """
     import json
 
     models_dir = Path.home() / ".fireside" / "models"
@@ -331,19 +382,24 @@ def _resolve_model(config: dict, base_dir: Path) -> Optional[Path]:
         if p.exists():
             return p
 
-    # 3. Scan ~/.fireside/models/ for any .gguf — use the newest
-    if models_dir.exists():
-        ggufs = sorted(models_dir.glob("*.gguf"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if ggufs:
-            log.info("[brain] Found GGUF in models dir: %s", ggufs[0])
-            return ggufs[0]
+    # 3. Scan all known model directories — prefer largest file (= most capable)
+    scan_dirs = [
+        models_dir,                                  # ~/.fireside/models/
+        Path.home() / ".openclaw" / "models",        # ~/.openclaw/models/ (external installs)
+        base_dir / "models",                         # project-local models/
+    ]
 
-    # 4. Scan base_dir/models/
-    local_models = base_dir / "models"
-    if local_models.exists():
-        ggufs = sorted(local_models.glob("*.gguf"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if ggufs:
-            return ggufs[0]
+    all_ggufs: list[Path] = []
+    for d in scan_dirs:
+        if d.exists():
+            all_ggufs.extend(d.glob("*.gguf"))
+
+    if all_ggufs:
+        # Sort by file size descending — largest model is usually the most capable
+        best = sorted(all_ggufs, key=lambda f: f.stat().st_size, reverse=True)[0]
+        log.info("[brain] Auto-selected model: %s (%.1f GB, from %s)",
+                 best.name, best.stat().st_size / (1024**3), best.parent)
+        return best
 
     return None
 
