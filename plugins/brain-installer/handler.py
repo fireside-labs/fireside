@@ -106,7 +106,7 @@ _active_brain: dict | None = None
 def _load_state():
     """Load installed brains from disk."""
     global _installed_brains, _active_brain
-    state_file = Path.home() / ".valhalla" / "brains_state.json"
+    state_file = Path.home() / ".fireside" / "brains_state.json"
     if state_file.exists():
         try:
             data = json.loads(state_file.read_text(encoding="utf-8"))
@@ -118,7 +118,7 @@ def _load_state():
 
 def _save_state():
     """Save installed brains to disk."""
-    state_file = Path.home() / ".valhalla" / "brains_state.json"
+    state_file = Path.home() / ".fireside" / "brains_state.json"
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(json.dumps({
         "installed": _installed_brains,
@@ -155,9 +155,32 @@ def register_routes(app, config: dict) -> None:
 
     @router.get("/api/v1/brains/status")
     async def api_brain_status():
-        """Current brain installation status."""
+        """Current brain status — merges live process info with install state.
+
+        Returns both the BrainControlPanel fields (running, model, pid, port)
+        AND the installer fields (installed, active, count).
+        """
         runtime = _detect_runtime()
+
+        # Get live process info from brain_manager
+        live = {}
+        try:
+            from bot.brain_manager import get_status
+            live = get_status()
+        except Exception:
+            live = {"running": False, "model": None, "pid": None, "port": 8080}
+
         return {
+            # Fields expected by BrainControlPanel
+            "running": live.get("running", False),
+            "model": live.get("model"),
+            "model_path": live.get("model_path"),
+            "pid": live.get("pid"),
+            "port": live.get("port", 8080),
+            "started_at": live.get("started_at"),
+            "error": live.get("error"),
+            "gpu_layers": live.get("gpu_layers", 0),
+            # Installer fields
             "installed": _installed_brains,
             "active": _active_brain,
             "count": len(_installed_brains),
