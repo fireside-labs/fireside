@@ -832,6 +832,7 @@ async def delete_key(provider: str):
 class ChatRequest(BaseModel):
     message: str = Field(max_length=4096)
     context: list = []
+    stream: bool = True
 
 
 @router.post("/chat")
@@ -1620,6 +1621,22 @@ async def post_chat(req: ChatRequest):
                 )
             except Exception as ex:
                 log.debug("[chat] Orchestrator post-inference skipped: %s", ex)
+
+    if not req.stream:
+        # Client requested a synchronous JSON response instead of SSE
+        async def _collect():
+            full_text = []
+            async for chunk in stream_response():
+                if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
+                    try:
+                        obj = json.loads(chunk[6:].strip())
+                        full_text.append(obj.get("content", ""))
+                    except Exception:
+                        pass
+            return "".join(full_text)
+        
+        content = await _collect()
+        return {"response": content}
 
     return StreamingResponse(
         stream_response(),

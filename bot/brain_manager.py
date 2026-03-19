@@ -75,9 +75,13 @@ def get_status() -> dict:
             if _is_port_open(port):
                 _status["running"] = True
                 _status["error"] = None
-                if not _status.get("model") or _status["model"] == "(external)":
-                    # Try to get real model name from the running server
-                    _status["model"] = _query_model_name(port) or "(external)"
+                if not _status.get("model"):
+                    _status["model"] = "(external_or_loading)"
+                # Critical fix: DO NOT make synchronous HTTP requests here to query the model name.
+                # When a large model (like 35B) is loading into VRAM, llama-server accepts TCP connections 
+                # but hangs on HTTP requests. Doing this inside get_status() while the dashboard
+                # is rapidly polling `/api/v1/brains/status` exhausts all FastAPI worker threads and
+                # completely deadlocks Bifrost.
         return dict(_status)
 
 
