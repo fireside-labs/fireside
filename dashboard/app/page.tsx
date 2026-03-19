@@ -254,6 +254,8 @@ export default function CampfireHub() {
           // Strip leaked template tokens (ChatML, Llama, think tags, etc.)
           raw = raw
             .replace(/<\/?think>/g, "")
+            .replace(/Thinking Process[\s\S]*?(?=\n\n|\n[A-Z]|$)/i, "")
+            .replace(/Thought Process[\s\S]*?(?=\n\n|\n[A-Z]|$)/i, "")
             .replace(/<\|im_start\|>[^\n]*/g, "")
             .replace(/<\|im_end\|>/g, "")
             .replace(/<\|end\|>/g, "")

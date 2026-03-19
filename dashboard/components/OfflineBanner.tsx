@@ -15,7 +15,8 @@ export default function OfflineBanner() {
     useEffect(() => {
         const check = async () => {
             try {
-                const res = await fetch(`${API_BASE}/api/v1/status`, { signal: AbortSignal.timeout(3000) });
+                // Increased timeout to 10s because local 35B models can cause random CPU lockups
+                const res = await fetch(`${API_BASE}/api/v1/status`, { signal: AbortSignal.timeout(10000) });
                 setOffline(!res.ok);
             } catch {
                 setOffline(true);

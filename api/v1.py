@@ -982,6 +982,13 @@ async def post_chat(req: ChatRequest):
     if tool_context:
         system_prompt += tool_context
 
+    system_prompt += (
+        "\n\n[CRITICAL: YOU HAVE TOOLS AVAILABLE. If the user asks for current information, "
+        "news, or to browse a website, YOU MUST USE YOUR TOOLS. "
+        "Do not say you cannot browse the internet. You CAN browse the internet using the web_search and browse_url tools. "
+        "Do not output raw 'Thinking Process:' blocks to the user. Use your tools immediately.]\n"
+    )
+
     # ── Build OpenAI-compatible messages array ──
     messages = [{"role": "system", "content": system_prompt}]
     for msg in (req.context or [])[-10:]:
@@ -1543,10 +1550,17 @@ async def post_chat(req: ChatRequest):
                     continue
 
                 else:
-                    # No tool calls — this is the final text response. Stream it.
-                    for chunk_text in response_chunks:
-                        full_response.append(chunk_text)
-                        yield f"data: {json.dumps({'content': chunk_text})}\n\n"
+                    # No tool calls — this is the final text response. 
+                    # Filter out reasoning blocks before streaming.
+                    full_text = "".join(response_chunks)
+                    import re
+                    full_text = re.sub(r'<\/?think>', '', full_text)
+                    full_text = re.sub(r'(?i)Thinking Process:?[\s\S]*?(?=\n\n|\n[A-Z]|$)', '', full_text)
+                    full_text = re.sub(r'(?i)Thought Process:?[\s\S]*?(?=\n\n|\n[A-Z]|$)', '', full_text)
+                    full_text = full_text.strip()
+                    
+                    # Yield the cleaned text
+                    yield f"data: {json.dumps({'content': full_text})}\n\n"
                     yield "data: [DONE]\n\n"
                     break
 
