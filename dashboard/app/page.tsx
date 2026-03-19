@@ -47,6 +47,8 @@ export default function CampfireHub() {
   const [agentName, setAgentName] = useState("Atlas");
   const [species, setSpecies] = useState("fox");
   const [companionName, setCompanionName] = useState("");
+  const [brainLabel, setBrainLabel] = useState("");
+  const [brainQuant, setBrainQuant] = useState("");
   const mascotSrc = `/hub/mascot_${species}.png`;
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string; memory?: string; skills?: string[]; ts?: Date }[]>([]);
   const [hasBrain, setHasBrain] = useState(true);
@@ -74,6 +76,8 @@ export default function CampfireHub() {
     } catch { /* no companion yet */ }
     const model = localStorage.getItem("fireside_model");
     setHasBrain(!!model);
+    setBrainLabel(localStorage.getItem("fireside_brain_label") || localStorage.getItem("fireside_model") || "");
+    setBrainQuant(localStorage.getItem("fireside_brain_quant") || "");
   }, []);
 
   useEffect(() => {
@@ -165,7 +169,7 @@ export default function CampfireHub() {
               <div className="fs-speech">
                 <p>
                   {userName ? `Hey ${userName}! ` : "Hey! "}
-                  {greeting} 🦊
+                  {greeting}
                 </p>
               </div>
               <img className="fs-fox" src={mascotSrc} alt={species} />
@@ -173,7 +177,11 @@ export default function CampfireHub() {
             </div>
 
             <div className="fs-model-badge">
-              Active: <strong>Qwen 2.5 14B</strong> · Medium (6-bit) · 🟢 Ready
+              {brainLabel ? (
+                <>Active: <strong>{brainLabel}</strong>{brainQuant ? ` · ${brainQuant}` : ''} · 🟢 Ready</>
+              ) : (
+                <>⚠ No brain installed · <Link href="/brains" style={{color:'#F59E0B'}}>Set up →</Link></>
+              )}
             </div>
           </div>
 
@@ -346,7 +354,7 @@ export default function CampfireHub() {
                   {isTyping ? "thinking..." : "Online · at the fireside"}
                 </p>
               </div>
-              <span className="fs-chat-model">Qwen 2.5 14B · 6-bit</span>
+              <span className="fs-chat-model">{brainLabel || 'No model'}{brainQuant ? ` · ${brainQuant}` : ''}</span>
             </div>
 
             {/* Messages */}
