@@ -2,8 +2,8 @@
  * 📋 Tasks Tab — Queued tasks from phone → home PC.
  *
  * Sprint 2 additions:
- * - Pull-to-refresh (Valkyrie #4)
- * - New task creation button (Valkyrie #6)
+ * - Pull-to-refresh (Sprint #4)
+ * - New task creation button (Sprint #6)
  * - Haptic feedback
  */
 import { useState, useEffect, useCallback } from "react";
@@ -13,6 +13,7 @@ import {
     TextInput,
     TouchableOpacity,
     FlatList,
+    ScrollView,
     StyleSheet,
     RefreshControl,
     Modal,
@@ -312,13 +313,18 @@ export default function TasksTab() {
 
             {/* Task List */}
             {tasks.length === 0 ? (
-                <View style={styles.emptyState}>
+                <ScrollView
+                    contentContainerStyle={styles.emptyState}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.neon} colors={[colors.neon]} />
+                    }
+                >
                     <Text style={styles.emptyEmoji}>📭</Text>
                     <Text style={styles.emptyTitle}>No tasks yet</Text>
                     <Text style={styles.emptySubtitle}>
                         Tap the + button to create a task{"\n"}for your companion to run at home.
                     </Text>
-                </View>
+                </ScrollView>
             ) : (
                 <FlatList
                     data={tasks}

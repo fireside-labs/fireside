@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { API_BASE } from "@/lib/api";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -38,6 +38,9 @@ export default function BrainControlPanel() {
   const [thinkingEnabled, setThinkingEnabled] = useState(true);
   const [responseLength, setResponseLength] = useState("normal"); // short|normal|long|unlimited
 
+  const pollDelay = useRef(4000);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchStatus = useCallback(async () => {
     try {
       const [brainRes, statusRes] = await Promise.all([
@@ -48,18 +51,31 @@ export default function BrainControlPanel() {
       const sys = await statusRes.json();
       setStatus(brain);
       setGpu(sys.gpu || null);
+      // Reset to fast polling when brain is reachable
+      pollDelay.current = 4000;
     } catch (e) {
       console.warn("[BrainControlPanel] fetch failed:", e);
+      // Exponential backoff: 4s → 8s → 16s → 30s max
+      pollDelay.current = Math.min(pollDelay.current * 2, 30000);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Poll every 4s
+  // Adaptive polling with exponential backoff
   useEffect(() => {
-    fetchStatus();
-    const id = setInterval(fetchStatus, 4000);
-    return () => clearInterval(id);
+    let cancelled = false;
+    const schedule = async () => {
+      await fetchStatus();
+      if (!cancelled) {
+        pollTimer.current = setTimeout(schedule, pollDelay.current);
+      }
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
   }, [fetchStatus]);
 
   // Load saved brain config from localStorage
@@ -195,11 +211,17 @@ export default function BrainControlPanel() {
           ) : (
             <button
               className="bcp-btn bcp-btn-start"
-              onClick={handleRestart}
+              onClick={async () => {
+                setActionPending("start");
+                try {
+                  await fetch(`${API_BASE}/api/v1/brains/restart`, { method: "POST" });
+                  setTimeout(fetchStatus, 2000);
+                } finally { setActionPending(null); }
+              }}
               disabled={actionPending !== null}
               title="Start Brain"
             >
-              {actionPending === "restart" ? "⏳" : "▶"} START
+              {actionPending === "start" ? "⏳" : "▶"} START
             </button>
           )}
         </div>

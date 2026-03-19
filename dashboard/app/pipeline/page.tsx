@@ -193,6 +193,48 @@ export default function PipelinePage() {
   const [showFeed, setShowFeed] = useState(true);
   const [interveneText, setInterveneText] = useState("");
   const [showIntervene, setShowIntervene] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submitTask = async () => {
+    if (!taskInput.trim() || !detected || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/pipeline/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task: taskInput.trim(), mode: "auto" }),
+      });
+      const data = await res.json();
+      if (data.pipeline_id || data.ok) {
+        const newId = data.pipeline_id || `p${Date.now()}`;
+        const newPipeline: Pipeline = {
+          id: newId,
+          title: taskInput.trim(),
+          template: detected.name,
+          templateIcon: detected.icon,
+          status: "running",
+          iteration: 1,
+          maxIterations: 10,
+          stages: detected.stages.map((s, i) => ({
+            name: s.replace(/^.\s/, ""),
+            emoji: s.charAt(0),
+            status: i === 0 ? "active" : "pending",
+            role: "system",
+          })),
+          startedAt: new Date(),
+          eta: "estimating...",
+          mode: "local",
+        };
+        setPipelines(prev => [newPipeline, ...prev]);
+        setActivePipeline(newId);
+        setTaskInput("");
+      }
+    } catch (e) {
+      console.error("Pipeline start failed:", e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
 
 
@@ -267,7 +309,7 @@ export default function PipelinePage() {
                   value={taskInput}
                   onChange={(e) => setTaskInput(e.target.value)}
                   placeholder="Build a REST API with user auth..."
-                  onKeyDown={(e) => { if (e.key === "Enter" && detected) { /* TODO: submit */ } }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && detected) submitTask(); }}
                 />
               </div>
 
@@ -286,7 +328,9 @@ export default function PipelinePage() {
                     ))}
                   </div>
 
-                  <button className="fp-start-btn">⚡ Start</button>
+                  <button className="fp-start-btn" onClick={submitTask} disabled={submitting}>
+                    {submitting ? "⏳ Starting..." : "⚡ Start"}
+                  </button>
 
                   <button className="fp-customize-toggle" onClick={() => setShowAdvanced(!showAdvanced)}>
                     {showAdvanced ? "Hide options ▾" : "Want to customize? ▸"}

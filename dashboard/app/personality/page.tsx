@@ -136,6 +136,7 @@ export default function PersonalityPage() {
         // Save to localStorage (instant)
         localStorage.setItem("fireside_agent_name", aiName);
         localStorage.setItem("fireside_personality_prompt", personalityText);
+        localStorage.setItem("fireside_soul_identity", personalityText);
         localStorage.setItem("fireside_personality_traits", JSON.stringify(traits));
         localStorage.setItem("fireside_communication_style", communicationStyle);
         if (userRole) localStorage.setItem("fireside_user_role", userRole);

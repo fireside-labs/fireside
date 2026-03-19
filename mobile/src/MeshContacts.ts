@@ -1,7 +1,7 @@
 /**
  * 🌐 MeshContacts — Cross-companion mesh contact book.
  *
- * Sprint 5: "Net Navis" — enables companions on the same Valhalla Mesh
+ * Sprint 5: "Net Navis" — enables companions on the same Fireside Mesh
  * network to discover and communicate with each other.
  *
  * Each companion registers on the mesh with its owner's consent.

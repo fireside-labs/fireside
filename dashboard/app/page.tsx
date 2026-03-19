@@ -50,12 +50,25 @@ export default function CampfireHub() {
   const [brainLabel, setBrainLabel] = useState("");
   const [brainQuant, setBrainQuant] = useState("");
   const mascotSrc = `/hub/mascot_${species}.png`;
-  const [chatHistory, setChatHistory] = useState<{ role: string; content: string; memory?: string; skills?: string[]; ts?: Date }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ role: string; content: string; memory?: string; skills?: string[]; ts?: Date }[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = sessionStorage.getItem("fireside_chat_session");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [hasBrain, setHasBrain] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(true);
   const [activeView, setActiveView] = useState<"hub" | "chat">("hub");
   const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+
+  // Persist chat history to sessionStorage on every change
+  useEffect(() => {
+    if (chatHistory.length > 0) {
+      sessionStorage.setItem("fireside_chat_session", JSON.stringify(chatHistory));
+    }
+  }, [chatHistory]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeConvo, setActiveConvo] = useState<string | null>(null);
@@ -194,12 +207,6 @@ export default function CampfireHub() {
       // Try Python backend first (port 8765)
       let responseText = "";
 
-      // Auto-compact history if it's getting long
-      const compactedHistory = await compactHistory(chatHistory);
-      if (compactedHistory.length < chatHistory.length) {
-        setChatHistory([...compactedHistory, { role: "user", content: userMessage, ts: new Date() }]);
-      }
-
       // Recall relevant memories
       const recalled = recallMemories(userMessage);
       const memoryContext = recalled ? `\n\n[Remembered from past conversations] ${recalled}` : "";
@@ -217,17 +224,23 @@ export default function CampfireHub() {
       } catch {
         // Fallback: try llama-server directly (port 8080, OpenAI-compatible)
         try {
-          const systemPrompt = `You are a helpful AI companion named ${displayName}. Be friendly, concise, and helpful.${memoryContext}`;
+          // Build system prompt — use personality from localStorage if available
+          const soulIdentity = typeof window !== "undefined" ? localStorage.getItem("fireside_soul_identity") : null;
+          const systemPrompt = soulIdentity
+            ? `${soulIdentity}\n\nYour name is ${displayName}.${memoryContext}`
+            : `You are a helpful AI companion named ${displayName}. Be friendly, concise, and helpful.${memoryContext}`;
+          const thinkingEnabled = typeof window !== "undefined" ? localStorage.getItem("fireside_thinking_enabled") !== "false" : true;
           const payload: Record<string, unknown> = {
             model: "local",
             messages: [
               { role: "system", content: systemPrompt },
-              ...compactedHistory.map(m => ({ role: m.role, content: m.content })),
+              ...chatHistory.map(m => ({ role: m.role, content: m.content })),
               { role: "user", content: userMessage },
             ],
             temperature: parseFloat(localStorage.getItem("fireside_temperature") || "0.7"),
           };
           if (maxTokens) payload.max_tokens = maxTokens;
+          if (!thinkingEnabled) payload.reasoning_effort = "none";
           const res = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -266,6 +279,16 @@ export default function CampfireHub() {
       }]);
     } finally {
       setIsTyping(false);
+      // Auto-compact history after response (non-blocking, fire-and-forget)
+      setTimeout(async () => {
+        try {
+          const current = chatHistory;
+          const compacted = await compactHistory(current);
+          if (compacted.length < current.length) {
+            setChatHistory(compacted);
+          }
+        } catch { /* compaction is best-effort */ }
+      }, 0);
     }
   };
 
@@ -335,7 +358,6 @@ export default function CampfireHub() {
           {/* RIGHT: Nav Cards */}
           <div className="fs-right">
             <button className="fs-nav-card fs-c1" onClick={() => { playTick(); setActiveView("chat"); }}>
-              <div className="fs-nc-notif">NEW</div>
               <div className="fs-nc-icon"><img src="/hub/nav_chat.png" alt="Chat" /></div>
               <div className="fs-nc-text">
                 <div className="fs-nc-title">Chat</div>
@@ -419,7 +441,7 @@ export default function CampfireHub() {
             <div className="fs-convo-header">
               <button className="fs-back-hub" onClick={() => { setActiveView("hub"); playWhoosh(); }} title="Back to Hub">🔥 Hub</button>
               <span className="fs-convo-title">Conversations</span>
-              <button className="fs-new-chat" onClick={() => { setChatHistory([]); setActiveConvo(null); }} title="New chat">＋</button>
+              <button className="fs-new-chat" onClick={() => { setChatHistory([]); setActiveConvo(null); sessionStorage.removeItem("fireside_chat_session"); }} title="New chat">＋</button>
             </div>
 
             <div className="fs-convo-search-wrap">

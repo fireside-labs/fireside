@@ -1,4 +1,4 @@
-// Types for the Valhalla Companion mobile app.
+// Types for the Fireside Companion mobile app.
 // Mirrors patterns from dashboard/components/CompanionSim.tsx, CompanionChat.tsx, etc.
 
 export type PetSpecies = "cat" | "dog" | "penguin" | "fox" | "owl" | "dragon";

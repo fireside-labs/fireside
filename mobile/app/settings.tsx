@@ -57,10 +57,10 @@ export default function SettingsScreen() {
                     text: "Re-pair",
                     style: "destructive",
                     onPress: async () => {
-                        await AsyncStorage.removeItem("valhalla_host");
-                        await AsyncStorage.removeItem("valhalla_tailscale_ip");
-                        await AsyncStorage.removeItem("valhalla_conn_pref");
-                        await AsyncStorage.removeItem("pairingToken");
+                        await AsyncStorage.removeItem("fireside_host");
+                        await AsyncStorage.removeItem("fireside_tailscale_ip");
+                        await AsyncStorage.removeItem("fireside_conn_pref");
+                        await AsyncStorage.removeItem("fireside_pair_token");
                         await AsyncStorage.removeItem("connectionMode");
                         router.replace("/onboarding");
                     },

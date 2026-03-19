@@ -645,6 +645,8 @@ pipeline:
 }
 
 /// Start the Fireside backend + dashboard as background processes.
+static DASHBOARD_PID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
 #[tauri::command]
 async fn start_fireside(fireside_dir: String) -> Result<(), String> {
     let dir = PathBuf::from(&fireside_dir);
@@ -664,11 +666,13 @@ async fn start_fireside(fireside_dir: String) -> Result<(), String> {
     // Start dashboard
     let dashboard_dir = dir.join("dashboard");
     if dashboard_dir.exists() {
-        silent_cmd("npm")
+        if let Ok(child) = silent_cmd("npm")
             .args(["run", "dev"])
             .current_dir(&dashboard_dir)
             .spawn()
-            .map_err(|e| format!("Failed to start dashboard: {}", e))?;
+        {
+            DASHBOARD_PID.store(child.id(), std::sync::atomic::Ordering::SeqCst);
+        }
     }
 
     Ok(())
@@ -1456,6 +1460,15 @@ fn main() {
                         println!("[fireside] Backend process killed");
                     }
                     s.running = false;
+                }
+                // Kill dashboard if it was started by start_fireside
+                let dash_pid = DASHBOARD_PID.load(std::sync::atomic::Ordering::SeqCst);
+                if dash_pid > 0 {
+                    #[cfg(windows)]
+                    { let _ = silent_cmd("taskkill").args(["/F", "/T", "/PID", &dash_pid.to_string()]).status(); }
+                    #[cfg(not(windows))]
+                    { let _ = silent_cmd("kill").arg(dash_pid.to_string()).status(); }
+                    println!("[fireside] Dashboard process killed (PID: {})", dash_pid);
                 }
             }
         });

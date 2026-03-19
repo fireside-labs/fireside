@@ -48,14 +48,76 @@ async function probeHost(host: string): Promise<number | null> {
 }
 
 /**
+ * Discover the Fireside backend via mDNS/Zeroconf (zero-config).
+ * Falls back gracefully if react-native-zeroconf is not installed.
+ * Returns host:port or null.
+ */
+export async function discoverViaMDNS(timeoutMs = 5000): Promise<string | null> {
+    try {
+        // Dynamic require — won't crash if not installed
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Zeroconf = require("react-native-zeroconf").default as new () => any;
+        const zc = new Zeroconf();
+
+        return new Promise<string | null>((resolve) => {
+            const timer = setTimeout(() => {
+                zc.stop();
+                resolve(null);
+            }, timeoutMs);
+
+            zc.on("resolved", (service: any) => {
+                if (service.name?.includes("fireside")) {
+                    clearTimeout(timer);
+                    zc.stop();
+                    const host = service.host || service.addresses?.[0];
+                    const port = service.port || 8765;
+                    if (host) {
+                        resolve(`${host}:${port}`);
+                    } else {
+                        resolve(null);
+                    }
+                }
+            });
+
+            zc.on("error", () => {
+                clearTimeout(timer);
+                resolve(null);
+            });
+
+            // Browse for Fireside TCP service
+            zc.scan("fireside", "tcp", "local.");
+        });
+    } catch {
+        // react-native-zeroconf not installed — that's fine
+        return null;
+    }
+}
+
+/**
  * Determine the best route to the backend.
- * Tries LAN first (faster, more private), then Tailscale.
+ * Priority: mDNS → LAN probe → Tailscale probe → Offline.
  */
 export async function detectBestRoute(): Promise<RouteInfo> {
+    // 1. Try mDNS discovery first (instant, zero-config)
+    const mdnsHost = await discoverViaMDNS(3000);
+    if (mdnsHost) {
+        const latency = await probeHost(mdnsHost);
+        if (latency !== null) {
+            return {
+                route: "local",
+                host: mdnsHost,
+                latency,
+                privacyBadge: "🏠 Processing on your PC (LAN)",
+                processingLocation: "Your PC (LAN)",
+                emoji: "🏠",
+            };
+        }
+    }
+
+    // 2. Try stored LAN host (fast if already known)
     const lanHost = await getHost();
     const tsIP = await getTailscaleIP();
 
-    // Try LAN first (fastest, most private)
     if (lanHost) {
         const latency = await probeHost(lanHost);
         if (latency !== null) {
@@ -70,7 +132,7 @@ export async function detectBestRoute(): Promise<RouteInfo> {
         }
     }
 
-    // Try Tailscale (works from anywhere)
+    // 3. Try Tailscale (works from anywhere)
     if (tsIP) {
         const latency = await probeHost(`${tsIP}:8000`);
         if (latency !== null) {
@@ -85,7 +147,7 @@ export async function detectBestRoute(): Promise<RouteInfo> {
         }
     }
 
-    // Offline
+    // 4. Offline
     return {
         route: "offline",
         host: null,

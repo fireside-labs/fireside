@@ -16,7 +16,6 @@ import {
     Inter_600SemiBold,
     Inter_700Bold,
 } from "@expo-google-fonts/inter";
-import { getHost } from "../src/api";
 import { hasOnboarded } from "./onboarding";
 import { registerForPushNotifications, getNotificationRoute } from "../src/notifications";
 import { ModeProvider } from "../src/ModeContext";
@@ -32,7 +31,6 @@ export default function RootLayout() {
     });
 
     const [isReady, setIsReady] = useState(false);
-    const [needsSetup, setNeedsSetup] = useState(false);
     const [needsOnboarding, setNeedsOnboarding] = useState(false);
     const router = useRouter();
     const segments = useSegments();
@@ -40,18 +38,16 @@ export default function RootLayout() {
     useEffect(() => {
         (async () => {
             const onboarded = await hasOnboarded();
-            const host = await getHost();
             setNeedsOnboarding(!onboarded);
-            setNeedsSetup(!host);
             setIsReady(true);
         })();
     }, []);
 
-    // Register for push notifications after setup
+    // Register for push notifications after onboarding
     useEffect(() => {
-        if (!isReady || needsSetup || needsOnboarding) return;
+        if (!isReady || needsOnboarding) return;
         registerForPushNotifications();
-    }, [isReady, needsSetup, needsOnboarding]);
+    }, [isReady, needsOnboarding]);
 
     // Handle notification tap — navigate to relevant tab
     useEffect(() => {
@@ -63,19 +59,16 @@ export default function RootLayout() {
         return () => sub.remove();
     }, [router]);
 
-    // Redirect to setup if no host configured
+    // Redirect to onboarding if needed
     useEffect(() => {
         if (!isReady || !fontsLoaded) return;
-        const inSetup = segments[0] === "setup";
         const inOnboarding = segments[0] === "onboarding";
         if (needsOnboarding && !inOnboarding) {
             router.replace("/onboarding");
-        } else if (!needsOnboarding && needsSetup && !inSetup) {
-            router.replace("/setup");
-        } else if (!needsSetup && !needsOnboarding && (inSetup || inOnboarding)) {
+        } else if (!needsOnboarding && inOnboarding) {
             router.replace("/(tabs)/care");
         }
-    }, [isReady, fontsLoaded, needsSetup, needsOnboarding, segments, router]);
+    }, [isReady, fontsLoaded, needsOnboarding, segments, router]);
 
     if (!fontsLoaded || !isReady) {
         return (

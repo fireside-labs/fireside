@@ -3,7 +3,7 @@
  *
  * Entry points:
  *   Android: Share menu → ACTION_SEND text/plain → opens this screen
- *   iOS:     Action Extension → deep links valhalla://translate?text=...
+ *   iOS:     Action Extension → deep links fireside://translate?text=...
  *   In-app:  Navigation from tools tab
  *
  * Flow: source text → auto-detect language → pick target → NLLB → copy
@@ -26,6 +26,7 @@ import * as Clipboard from "expo-clipboard";
 import * as Linking from "expo-linking";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { companionAPI } from "../src/api";
+import { translateLocal } from "../src/LocalTranslator";
 import { colors, spacing, borderRadius, fontSize, shadows } from "../src/theme";
 import { useConnection } from "../src/hooks/useConnection";
 
@@ -76,6 +77,8 @@ export default function TranslateScreen() {
     const [copied, setCopied] = useState(false);
     const [showAllLangs, setShowAllLangs] = useState(false);
     const [langSearch, setLangSearch] = useState("");
+    /** Where the translation came from */
+    const [translationSource, setTranslationSource] = useState<"pc" | "local" | null>(null);
 
     // Fox mascot animation
     const foxBounce = useRef(new Animated.Value(0)).current;
@@ -90,7 +93,7 @@ export default function TranslateScreen() {
 
     // ── Receive shared text ──
     useEffect(() => {
-        // From deep link params (iOS extension → valhalla://translate?text=...)
+        // From deep link params (iOS extension → fireside://translate?text=...)
         if (params.text) {
             setInputText(params.text);
             return;
@@ -123,24 +126,44 @@ export default function TranslateScreen() {
         }
     };
 
-    // ── Translate via NLLB ──
+    // ── Translate: PC first → local fallback ──
     const handleTranslate = async () => {
         if (!inputText.trim() || translating) return;
         setTranslating(true);
         setCopied(false);
         setDetectedLang(null);
+        setTranslationSource(null);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+        // Try PC first (NLLB-200, best quality)
+        if (isOnline) {
+            try {
+                const res = await companionAPI.translate(
+                    inputText.trim(),
+                    "auto",
+                    targetLang.code
+                );
+                setResult(res.translated || "Translation failed");
+                if (res.source_lang) setDetectedLang(res.source_lang);
+                setTranslationSource("pc");
+                setTranslating(false);
+                return;
+            } catch {
+                // PC failed — fall through to local
+            }
+        }
+
+        // Fallback: on-device translation
         try {
-            const res = await companionAPI.translate(
-                inputText.trim(),
-                "auto",
-                targetLang.code
-            );
-            setResult(res.translated || "Translation failed");
-            if (res.source_lang) setDetectedLang(res.source_lang);
+            const local = await translateLocal(inputText.trim(), targetLang.code);
+            if (local.ok) {
+                setResult(local.translated);
+                setTranslationSource("local");
+            } else {
+                setResult("⚠️ Offline — connect to your home PC for full translation");
+            }
         } catch {
-            setResult("⚠️ Couldn't reach your home PC. Is it online?");
+            setResult("⚠️ Translation unavailable right now");
         }
         setTranslating(false);
     };
@@ -306,10 +329,10 @@ export default function TranslateScreen() {
                 <TouchableOpacity
                     style={[
                         styles.translateBtn,
-                        (translating || !inputText.trim() || !isOnline) && styles.translateBtnDisabled,
+                        (translating || !inputText.trim()) && styles.translateBtnDisabled,
                     ]}
                     onPress={handleTranslate}
-                    disabled={translating || !inputText.trim() || !isOnline}
+                    disabled={translating || !inputText.trim()}
                     activeOpacity={0.7}
                 >
                     {translating ? (
@@ -331,9 +354,19 @@ export default function TranslateScreen() {
                                     {detectedLang} → {targetLang.label}
                                 </Text>
                             )}
-                            <Text style={styles.resultLangBadge}>
-                                {targetLang.flag} {targetLang.label}
-                            </Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                {translationSource && (
+                                    <Text style={[
+                                        styles.resultBadge,
+                                        translationSource === "pc" ? { color: "#22c55e" } : { color: "#F59E0B" },
+                                    ]}>
+                                        {translationSource === "pc" ? "🏠 Home PC" : "📱 On-device"}
+                                    </Text>
+                                )}
+                                <Text style={styles.resultLangBadge}>
+                                    {targetLang.flag} {targetLang.label}
+                                </Text>
+                            </View>
                         </View>
 
                         <Text style={styles.resultText} selectable>{result}</Text>

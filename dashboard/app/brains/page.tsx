@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import BrainSelectScreen from "@/components/BrainSelectScreen";
 import BrainControlPanel from "@/components/BrainControlPanel";
 import { DiscoveryCard } from "@/components/GuidedTour";
+import { API_BASE } from "@/lib/api";
 
 export default function BrainsPage() {
     const router = useRouter();
@@ -14,7 +16,7 @@ export default function BrainsPage() {
 
     useEffect(() => {
         // Fetch real VRAM from backend
-        fetch("/api/v1/status")
+        fetch(`${API_BASE}/api/v1/status`)
             .then(r => r.json())
             .then(data => {
                 const vram = data.gpu?.vram_total_gb || 0;
@@ -40,7 +42,7 @@ export default function BrainsPage() {
 
         // Call backend to trigger download + auto-start
         try {
-            const res = await fetch("/api/v1/brains/install", {
+            const res = await fetch(`${API_BASE}/api/v1/brains/install`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ model_id: modelId === "llama-3.1-8b" ? "fast" : "deep" }),
@@ -56,6 +58,10 @@ export default function BrainsPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: '#080810' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800, color: '#C4A882', textDecoration: 'none', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.12)', fontFamily: "'Outfit', system-ui" }}>🔥 Hub</Link>
+                <span style={{ fontSize: 12, color: '#3A3530', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: 1 }}>Brain Lab</span>
+            </div>
             <DiscoveryCard pageKey="/brains" />
 
             {/* ─── Brain Control Panel (live status + controls) ─── */}

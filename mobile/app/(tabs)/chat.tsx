@@ -15,11 +15,13 @@ import {
     StyleSheet,
     KeyboardAvoidingView,
     Platform,
+    Animated,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { useConnection } from "../../src/hooks/useConnection";
 import { companionAPI } from "../../src/api";
+import { getSocket } from "../../src/FiresideSocket";
 import { colors, spacing, borderRadius, fontSize } from "../../src/theme";
 import { playSound } from "../../src/sounds";
 import GuardianModal from "../../src/GuardianModal";
@@ -30,8 +32,68 @@ import SearchAll from "../../src/SearchAll";
 import { useAgent } from "../../src/AgentContext";
 import type { Message, PetSpecies } from "../../src/types";
 
-const CHAT_HISTORY_KEY = "valhalla_chat_history";
+const CHAT_HISTORY_KEY = "fireside_chat_history";
 const MAX_HISTORY = 100;
+
+/** Format timestamp to relative time ("just now", "2m", "1h", "yesterday"). */
+function relativeTime(ts?: number): string {
+    if (!ts) return "";
+    const diff = Date.now() - ts;
+    if (diff < 60_000) return "just now";
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
+    if (diff < 172_800_000) return "yesterday";
+    return `${Math.floor(diff / 86_400_000)}d`;
+}
+
+/** Get a contextual greeting based on time of day. */
+function getGreeting(petName: string): string {
+    const h = new Date().getHours();
+    if (h < 6) return `🌙 ${petName} is up late with you. What's on your mind?`;
+    if (h < 12) return `☀️ Good morning! ${petName} here. How can I help today?`;
+    if (h < 17) return `👋 Hey! ${petName} at your service. What's up?`;
+    if (h < 21) return `🌆 Good evening! ${petName} here. How's your day been?`;
+    return `🌙 It's getting late. ${petName} is here if you need anything.`;
+}
+
+// ── Animated Typing Dots ──
+function TypingIndicator({ petName }: { petName: string }) {
+    const dot1 = useRef(new Animated.Value(0)).current;
+    const dot2 = useRef(new Animated.Value(0)).current;
+    const dot3 = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const animate = (dot: Animated.Value, delay: number) =>
+            Animated.loop(
+                Animated.sequence([
+                    Animated.delay(delay),
+                    Animated.timing(dot, { toValue: -6, duration: 300, useNativeDriver: true }),
+                    Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+                    Animated.delay(600 - delay),
+                ])
+            );
+        animate(dot1, 0).start();
+        animate(dot2, 150).start();
+        animate(dot3, 300).start();
+    }, [dot1, dot2, dot3]);
+
+    return (
+        <View style={[styles.bubble, styles.petBubble, { paddingVertical: spacing.sm + 4 }]}>
+            <Text style={styles.petLabel}>{petName}</Text>
+            <View style={styles.typingRow}>
+                {[dot1, dot2, dot3].map((dot, i) => (
+                    <Animated.View
+                        key={i}
+                        style={[
+                            styles.typingDot,
+                            { transform: [{ translateY: dot }] },
+                        ]}
+                    />
+                ))}
+            </View>
+        </View>
+    );
+}
 
 const OFFLINE_RESPONSES: Record<PetSpecies, string[]> = {
     cat: [
@@ -92,7 +154,7 @@ async function loadHistory(): Promise<Message[]> {
 }
 
 export default function ChatTab() {
-    const { isOnline, companionData, queueAction } = useConnection();
+    const { isOnline, companionData, queueAction, connectionPhase } = useConnection();
     const { agent } = useAgent();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
@@ -104,6 +166,24 @@ export default function ChatTab() {
     const species = (companionData?.companion?.species || "cat") as PetSpecies;
     const mood = companionData?.companion?.happiness ?? 50;
 
+    // Bidirectional chat sync: listen for messages from desktop via WebSocket
+    useEffect(() => {
+        const socket = getSocket();
+        const unsub = socket.onEvent((event) => {
+            if (event.type === "chat_message" && event.data) {
+                const msg = event.data;
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        role: msg.role === "user" ? "user" : "pet",
+                        content: msg.message || msg.content || "",
+                    },
+                ]);
+            }
+        });
+        return unsub;
+    }, []);
+
     // Load chat history from AsyncStorage on mount
     useEffect(() => {
         (async () => {
@@ -111,9 +191,9 @@ export default function ChatTab() {
             if (history.length > 0) {
                 setMessages(history);
             } else {
-                const prefix = companionData?.mood_prefix || "";
+                const greeting = getGreeting(petName);
                 setMessages([
-                    { role: "pet", content: `${prefix}Hey! I'm ${petName}. What's up?` },
+                    { role: "pet", content: greeting, timestamp: Date.now() } as any,
                 ]);
             }
             setHistoryLoaded(true);
@@ -136,31 +216,107 @@ export default function ChatTab() {
     const [searchVisible, setSearchVisible] = useState(false);
 
     const actualSend = useCallback(async (text: string) => {
-        setMessages((prev) => [...prev, { role: "user", content: text }]);
+        setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() } as any]);
         setInput("");
         setTyping(true);
 
         if (isOnline) {
+            // Build context from recent messages for the agentic loop
+            const recentContext = messages.slice(-10).map((m) => ({
+                role: m.role === "user" ? "user" : "assistant",
+                content: m.content,
+            }));
+
+            // Add a placeholder pet message that we'll stream into
+            const streamMsgId = Date.now();
+            setMessages((prev) => [
+                ...prev,
+                { role: "pet", content: "", _streamId: streamMsgId, timestamp: Date.now() } as any,
+            ]);
+
             try {
-                const res = await companionAPI.chat(text);
-                // Add relay flavor text
-                const relayPrefix = `Let me check with ${agent.name}... `;
-                const petMsg: Message = { role: "pet", content: relayPrefix + res.reply };
-                if (res.action) petMsg.action = res.action;
-                setMessages((prev) => [...prev, petMsg]);
+                await companionAPI.chatStream(text, recentContext, {
+                    onToken: (token) => {
+                        // Append token to the streaming message in real-time
+                        setMessages((prev) =>
+                            prev.map((m) =>
+                                (m as any)._streamId === streamMsgId
+                                    ? { ...m, content: m.content + token }
+                                    : m
+                            )
+                        );
+                    },
+                    onToolStatus: (status) => {
+                        // Show tool execution indicator inline
+                        setMessages((prev) =>
+                            prev.map((m) =>
+                                (m as any)._streamId === streamMsgId
+                                    ? { ...m, content: m.content + "\n" + status + "\n" }
+                                    : m
+                            )
+                        );
+                    },
+                    onDone: (fullText) => {
+                        // Finalize: remove stream ID, add relay prefix
+                        const relayPrefix = ``;
+                        setMessages((prev) =>
+                            prev.map((m) => {
+                                if ((m as any)._streamId === streamMsgId) {
+                                    const { _streamId, ...clean } = m as any;
+                                    return { ...clean, content: relayPrefix + (fullText || m.content) };
+                                }
+                                return m;
+                            })
+                        );
+                        setTyping(false);
+                    },
+                    onError: (error) => {
+                        console.warn("Stream chat failed:", error);
+                        // Fallback: try legacy non-streaming endpoint
+                        companionAPI
+                            .chat(text)
+                            .then((res) => {
+                                const reply = res.reply || (res as any).response || "I couldn't process that.";
+                                setMessages((prev) =>
+                                    prev.map((m) =>
+                                        (m as any)._streamId === streamMsgId
+                                            ? { role: "pet", content: reply }
+                                            : m
+                                    )
+                                );
+                            })
+                            .catch(() => {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                                setMessages((prev) =>
+                                    prev.map((m) =>
+                                        (m as any)._streamId === streamMsgId
+                                            ? { role: "pet", content: getOfflineResponse(species) }
+                                            : m
+                                    )
+                                );
+                            })
+                            .finally(() => setTyping(false));
+                    },
+                });
             } catch {
-                const reply = getOfflineResponse(species);
-                setMessages((prev) => [...prev, { role: "pet", content: reply }]);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        (m as any)._streamId === streamMsgId
+                            ? { role: "pet", content: getOfflineResponse(species) }
+                            : m
+                    )
+                );
+                setTyping(false);
             }
         } else {
             queueAction({ type: "chat", payload: text, timestamp: Date.now() });
             await new Promise((r) => setTimeout(r, 800 + Math.random() * 700));
             const reply = `${agent.name} is resting right now, but I'll remember this for when we're home. ` + getOfflineResponse(species);
             setMessages((prev) => [...prev, { role: "pet", content: reply }]);
+            setTyping(false);
         }
-
-        setTyping(false);
-    }, [isOnline, species, queueAction]);
+    }, [isOnline, species, queueAction, agent, messages]);
 
     const handleSend = useCallback(async () => {
         const text = input.trim();
@@ -204,15 +360,25 @@ export default function ChatTab() {
         setInput(pendingMessage);
     }, [pendingMessage]);
 
-    const renderMessage = ({ item }: { item: Message }) => {
+    const renderMessage = ({ item, index }: { item: Message; index: number }) => {
         const isUser = item.role === "user";
+        const ts = (item as any).timestamp;
+        const prevTs = index > 0 ? (messages[index - 1] as any).timestamp : 0;
+        // Show timestamp if >5 min gap or first message
+        const showTime = !prevTs || (ts && prevTs && ts - prevTs > 300_000);
+
         return (
-            <View style={[styles.bubble, isUser ? styles.userBubble : styles.petBubble]}>
-                {!isUser && <Text style={styles.petLabel}>{petName}</Text>}
-                <Text style={[styles.messageText, isUser && styles.userText]}>
-                    {item.content}
-                </Text>
-                {!isUser && item.action && <ActionCard action={item.action} />}
+            <View>
+                {showTime && ts ? (
+                    <Text style={styles.timestamp}>{relativeTime(ts)}</Text>
+                ) : null}
+                <View style={[styles.bubble, isUser ? styles.userBubble : styles.petBubble]}>
+                    {!isUser && <Text style={styles.petLabel}>{petName}</Text>}
+                    <Text style={[styles.messageText, isUser && styles.userText]}>
+                        {item.content}
+                    </Text>
+                    {!isUser && item.action && <ActionCard action={item.action} />}
+                </View>
             </View>
         );
     };
@@ -231,16 +397,37 @@ export default function ChatTab() {
                         <View
                             style={[
                                 styles.statusDot,
-                                { backgroundColor: isOnline ? colors.onlineDot : colors.offlineDot },
+                                {
+                                    backgroundColor:
+                                        connectionPhase === "connected" ? colors.onlineDot
+                                        : connectionPhase === "reconnecting" ? "#F59E0B"
+                                        : connectionPhase === "connecting" || connectionPhase === "discovering" ? "#60A5FA"
+                                        : colors.offlineDot,
+                                },
                             ]}
                         />
                         <Text style={styles.statusText}>
-                            {isOnline ? "Home PC connected" : "Offline — local mode"}
+                            {connectionPhase === "connected" ? "Home PC connected"
+                                : connectionPhase === "reconnecting" ? "Reconnecting..."
+                                : connectionPhase === "connecting" ? "Connecting..."
+                                : connectionPhase === "discovering" ? "Finding home PC..."
+                                : "Offline — local mode"}
                         </Text>
                     </View>
                 </View>
                 <TouchableOpacity onPress={() => setSearchVisible(true)} activeOpacity={0.7} style={{ padding: spacing.sm }}>
                     <Text style={{ fontSize: 20 }}>🔍</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={() => {
+                        const greeting = getGreeting(petName);
+                        setMessages([{ role: "pet", content: greeting, timestamp: Date.now() } as any]);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    activeOpacity={0.7}
+                    style={{ padding: spacing.sm }}
+                >
+                    <Text style={{ fontSize: 18 }}>🗑️</Text>
                 </TouchableOpacity>
                 {mood < 30 && <Text style={styles.moodEmoji}>😢</Text>}
             </View>
@@ -248,7 +435,10 @@ export default function ChatTab() {
             {/* Proactive Guardian */}
             <ProactiveGuardian
                 isOnline={isOnline}
-                onHoldMessages={() => { }}
+                onHoldMessages={() => {
+                    setInput("");
+                    setMessages((prev) => [...prev, { role: "pet", content: "🌙 I'll hold messages until morning. Sleep well! 💤" }]);
+                }}
             />
 
             {/* Messages */}
@@ -263,9 +453,7 @@ export default function ChatTab() {
                 }
                 ListFooterComponent={
                     typing ? (
-                        <View style={[styles.bubble, styles.petBubble]}>
-                            <Text style={styles.typingDots}>• • •</Text>
-                        </View>
+                        <TypingIndicator petName={petName} />
                     ) : null
                 }
             />
@@ -288,7 +476,7 @@ export default function ChatTab() {
                     disabled={!input.trim() || typing}
                     activeOpacity={0.7}
                 >
-                    <Text style={styles.sendText}>{typing ? "⏳" : "Send"}</Text>
+                    <Text style={styles.sendText}>{typing ? "⏳" : "↑"}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -371,75 +559,107 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.md,
     },
+    // ── Timestamp ──
+    timestamp: {
+        fontFamily: "Inter_400Regular",
+        fontSize: 10,
+        color: colors.textDim,
+        textAlign: "center",
+        marginVertical: spacing.sm,
+        letterSpacing: 0.5,
+        textTransform: "uppercase",
+    },
+    // ── Bubbles ──
     bubble: {
         maxWidth: "80%",
-        borderRadius: borderRadius.lg,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm + 2,
-        marginBottom: spacing.sm,
+        borderRadius: 18,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.sm + 4,
+        marginBottom: spacing.xs + 2,
     },
     userBubble: {
         alignSelf: "flex-end",
-        backgroundColor: colors.neonGlow,
-        borderWidth: 1,
-        borderColor: colors.neonBorder,
+        backgroundColor: colors.neon,
+        borderBottomRightRadius: 4,
     },
     petBubble: {
         alignSelf: "flex-start",
         backgroundColor: colors.bgCard,
         borderWidth: 1,
         borderColor: colors.glassBorder,
+        borderBottomLeftRadius: 4,
     },
     petLabel: {
-        fontFamily: "Inter_400Regular",
-        fontSize: fontSize.tiny,
+        fontFamily: "Inter_500Medium",
+        fontSize: 10,
         color: colors.textDim,
-        marginBottom: 2,
+        marginBottom: 3,
+        letterSpacing: 0.3,
     },
     messageText: {
         fontFamily: "Inter_400Regular",
         fontSize: fontSize.sm,
         color: colors.textSecondary,
-        lineHeight: 18,
+        lineHeight: 20,
     },
     userText: {
-        color: colors.neon,
+        color: colors.bgPrimary,
+        fontFamily: "Inter_500Medium",
     },
-    typingDots: {
-        color: colors.textDim,
-        fontSize: fontSize.lg,
-        letterSpacing: 2,
+    // ── Animated Typing ──
+    typingRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        height: 20,
+        paddingTop: 2,
     },
+    typingDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+        backgroundColor: colors.textDim,
+    },
+    // ── Input Bar ──
     inputBar: {
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.md,
+        paddingVertical: spacing.sm,
         borderTopWidth: 1,
         borderTopColor: colors.glassBorder,
         backgroundColor: colors.bgSecondary,
-        paddingBottom: 30,
+        paddingBottom: Platform.OS === "ios" ? 30 : spacing.md,
     },
     input: {
         flex: 1,
         fontFamily: "Inter_400Regular",
         fontSize: fontSize.md,
         color: colors.textPrimary,
-        paddingVertical: spacing.sm,
+        backgroundColor: colors.bgCard,
+        borderRadius: 20,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.sm + 2,
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+        maxHeight: 100,
     },
     sendBtn: {
         backgroundColor: colors.neon,
-        borderRadius: borderRadius.sm,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: "center",
+        justifyContent: "center",
         marginLeft: spacing.sm,
     },
     sendBtnDisabled: {
         opacity: 0.3,
     },
     sendText: {
-        fontFamily: "Inter_600SemiBold",
-        fontSize: fontSize.sm,
+        fontFamily: "Inter_700Bold",
+        fontSize: 18,
         color: colors.bgPrimary,
+        marginTop: -1,
     },
 });

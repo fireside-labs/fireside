@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import VoiceSettings from "@/components/VoiceSettings";
+import { API_BASE } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { DiscoveryCard } from "@/components/GuidedTour";
 
@@ -40,12 +41,27 @@ export default function SettingsPage() {
     );
 
     const saveGeneral = () => {
-        localStorage.setItem("fireside_agent_name", aiName);
+        const trimmed = aiName.trim();
+        if (!trimmed) { toast("AI name can't be empty", "error"); return; }
+        if (trimmed.length > 40) { toast("Name must be 40 characters or less", "error"); return; }
+        setAiName(trimmed);
+        localStorage.setItem("fireside_agent_name", trimmed);
         toast("Settings saved!", "success");
     };
 
-    const saveApiKey = (providerId: string) => {
-        toast(`${API_PROVIDERS.find(p => p.id === providerId)?.name} key saved`, "success");
+    const saveApiKey = async (providerId: string) => {
+        const key = apiKeys[providerId];
+        if (!key) { toast("Enter a key first", "error"); return; }
+        try {
+            await fetch(`${API_BASE}/api/v1/config/keys`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ provider: providerId, key }),
+            });
+            toast(`${API_PROVIDERS.find(p => p.id === providerId)?.name} key saved`, "success");
+        } catch {
+            toast("Failed to save — is the backend running?", "error");
+        }
     };
 
     return (

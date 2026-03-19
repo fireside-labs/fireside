@@ -16,6 +16,7 @@ const MODE_KEY = "fireside_companion_mode";
 interface ModeContextType {
     mode: CompanionMode;
     setMode: (mode: CompanionMode) => void;
+    toggleMode: () => void;
     isPetMode: boolean;
     isToolMode: boolean;
 }
@@ -23,6 +24,7 @@ interface ModeContextType {
 const ModeContext = createContext<ModeContextType>({
     mode: "pet",
     setMode: () => { },
+    toggleMode: () => { },
     isPetMode: true,
     isToolMode: false,
 });
@@ -41,11 +43,17 @@ export function ModeProvider({ children }: { children: ReactNode }) {
         AsyncStorage.setItem(MODE_KEY, newMode);
     };
 
+    const toggleMode = () => {
+        const next = mode === "pet" ? "tool" : "pet";
+        setMode(next as CompanionMode);
+    };
+
     return (
         <ModeContext.Provider
             value={{
                 mode,
                 setMode,
+                toggleMode,
                 isPetMode: mode === "pet",
                 isToolMode: mode === "tool",
             }}

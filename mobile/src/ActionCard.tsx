@@ -14,8 +14,8 @@ import {
     StyleSheet,
     Animated,
     Linking,
-    Clipboard,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, borderRadius, fontSize, shadows } from "./theme";
 import type { ActionData } from "./types";
@@ -195,7 +195,7 @@ function TranslationResultCard({ action }: { action: ActionData }) {
 
     const handleCopy = () => {
         if (action.translated) {
-            Clipboard.setString(action.translated);
+            Clipboard.setStringAsync(action.translated);
             setCopied(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setTimeout(() => setCopied(false), 2000);
@@ -272,7 +272,7 @@ function CalendarEventCard({ action }: { action: ActionData }) {
 
             <TouchableOpacity style={styles.prepBtn} activeOpacity={0.7}
                 onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-                <Text style={styles.prepBtnText}>Prep with Atlas →</Text>
+                <Text style={styles.prepBtnText}>Help me prep →</Text>
             </TouchableOpacity>
         </View>
     );

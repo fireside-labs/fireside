@@ -1,24 +1,32 @@
 /**
  * useConnection — Manages connectivity & power state.
  *
- * Power States:
- *   🔥 home        — connected via LAN to PC
- *   ⚡ connected   — connected via Tailscale bridge
- *   🕯️ offline     — no connection, running on pocket power
- *   🔥 reconnected — just came back online (briefly, then → home/connected)
+ * Architecture: WebSocket-first with HTTP fallback.
  *
- * - On mount: attempts /mobile/sync. On fail, loads cached state.
- * - Polls every 30s to detect connection changes.
- * - Queues offline actions and replays on reconnect.
+ * Connection Phases:
+ *   🔍 discovering   — looking for the home PC (mDNS / subnet scan)
+ *   🔗 connecting    — WebSocket handshake in progress
+ *   🟢 connected     — live WebSocket, real-time push from desktop
+ *   🟡 reconnecting  — connection lost, auto-retrying with backoff
+ *   ⚫ offline       — no connection, pocket mode
+ *
+ * - On mount: connects FiresideSocket to the backend
+ * - WebSocket pushes replace the old 30s HTTP polling
+ * - Queues offline actions and replays on reconnect
+ * - Falls back to HTTP sync if WebSocket is unavailable
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { companionAPI, testConnection, getHost, getConnectionPref } from "../api";
+import {
+    getSocket,
+    ConnectionPhase,
+    FiresideEvent,
+} from "../FiresideSocket";
 import type { MobileSyncResponse, CompanionState } from "../types";
 
-const CACHE_KEY = "valhalla_cache";
-const LAST_SEEN_KEY = "valhalla_last_seen";
-const POLL_INTERVAL = 30_000;
+const CACHE_KEY = "fireside_cache";
+const LAST_SEEN_KEY = "fireside_last_seen";
 const RECONNECT_FLASH_MS = 3_000;
 
 /** Format a duration in ms to human-readable string. */
@@ -45,6 +53,8 @@ interface ConnectionState {
     isOnline: boolean;
     isConfigured: boolean;
     powerState: PowerState;
+    /** Granular connection phase from the WebSocket state machine. */
+    connectionPhase: ConnectionPhase;
     companionData: MobileSyncResponse | null;
     offlineActions: OfflineAction[];
     isLoading: boolean;
@@ -59,6 +69,7 @@ export function useConnection() {
         isOnline: false,
         isConfigured: false,
         powerState: "offline",
+        connectionPhase: "idle",
         companionData: null,
         offlineActions: [],
         isLoading: true,
@@ -66,7 +77,6 @@ export function useConnection() {
         lastSeen: null,
     });
 
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const wasOfflineRef = useRef(true);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,7 +128,16 @@ export function useConnection() {
                             await companionAPI.walk();
                             break;
                         case "chat":
-                            if (action.payload) await companionAPI.chat(action.payload);
+                            // Use WebSocket for chat replay (avoids SSE parsing issues)
+                            if (action.payload) {
+                                const socket = getSocket();
+                                if (socket.isConnected) {
+                                    socket.sendChat(action.payload, "user");
+                                } else {
+                                    // Fallback to legacy chat if WS not available
+                                    await companionAPI.chat(action.payload);
+                                }
+                            }
                             break;
                     }
                 } catch { }
@@ -127,7 +146,7 @@ export function useConnection() {
         []
     );
 
-    /** Attempt to sync with the backend. */
+    /** HTTP fallback sync — used for initial data load and recovery. */
     const sync = useCallback(async () => {
         try {
             const data = await companionAPI.sync();
@@ -148,16 +167,14 @@ export function useConnection() {
                     isOnline: true,
                     powerState: justReconnected ? "reconnected" : power,
                     companionData: data,
-                    offlineActions: [],
+                    offlineActions: justReconnected ? [] : prev.offlineActions,
                     isLoading: false,
                     lastSeen: Date.now(),
                     awayDuration: null,
                 };
             });
 
-            // If reconnected, flash then settle
             if (wasOfflineRef.current === false) {
-                // Check if we need to flash (state was just set to reconnected above)
                 setState((prev) => {
                     if (prev.powerState === "reconnected") {
                         flashReconnected();
@@ -165,6 +182,12 @@ export function useConnection() {
                     return prev;
                 });
             }
+
+            // Sync phone sensor data (contacts, calendar, device) to PC brain
+            try {
+                const { syncPhoneContext } = await import("../PhoneContextSync");
+                syncPhoneContext(); // Fire-and-forget, rate-limited internally
+            } catch { }
 
             return true;
         } catch {
@@ -208,41 +231,142 @@ export function useConnection() {
         [cacheData]
     );
 
-    /** Boot: check if configured and sync. */
+    // ---------------------------------------------------------------------------
+    // WebSocket integration
+    // ---------------------------------------------------------------------------
+
     useEffect(() => {
+        const socket = getSocket();
+
+        // Listen for connection phase changes
+        const unsubPhase = socket.onPhaseChange((phase) => {
+            setState((prev) => {
+                const isOnline = phase === "connected";
+                const powerState: PowerState =
+                    phase === "connected"
+                        ? prev.powerState === "offline" || prev.powerState === "reconnected"
+                            ? "reconnected"
+                            : "home"
+                        : phase === "reconnecting"
+                            ? prev.powerState // keep current while retrying
+                            : "offline";
+
+                return {
+                    ...prev,
+                    connectionPhase: phase,
+                    isOnline,
+                    powerState,
+                };
+            });
+
+            // On reconnect: replay offline actions and flash
+            if (phase === "connected") {
+                setState((prev) => {
+                    if (prev.offlineActions.length > 0) {
+                        replayOfflineActions(prev.offlineActions);
+                    }
+                    return {
+                        ...prev,
+                        offlineActions: [],
+                        lastSeen: Date.now(),
+                        awayDuration: null,
+                        isLoading: false,
+                    };
+                });
+
+                if (wasOfflineRef.current) {
+                    wasOfflineRef.current = false;
+                    flashReconnected();
+                }
+            } else if (phase === "offline" || phase === "reconnecting") {
+                wasOfflineRef.current = true;
+            }
+        });
+
+        // Listen for real-time events from the desktop
+        const unsubEvent = socket.onEvent((event: FiresideEvent) => {
+            switch (event.type) {
+                case "companion_state_update":
+                    // Real-time companion state push — no polling needed!
+                    setState((prev) => {
+                        if (!prev.companionData) return prev;
+                        const updated = {
+                            ...prev.companionData,
+                            companion: {
+                                ...prev.companionData.companion,
+                                ...event.data.companion,
+                            },
+                            mood_prefix: event.data.mood_prefix || prev.companionData.mood_prefix,
+                        };
+                        cacheData(updated);
+                        return { ...prev, companionData: updated, lastSeen: Date.now() };
+                    });
+                    break;
+
+                case "task_completed":
+                    // A task in the queue finished — update pending tasks
+                    setState((prev) => {
+                        if (!prev.companionData) return prev;
+                        const pending = prev.companionData.pending_tasks || [];
+                        return {
+                            ...prev,
+                            companionData: {
+                                ...prev.companionData,
+                                pending_tasks: [...pending, event.data],
+                            },
+                        };
+                    });
+                    break;
+
+                case "notification":
+                    // Desktop pushed a notification — could trigger a local notification
+                    break;
+
+                case "chat_message":
+                    // Bidirectional chat sync — message from desktop appears on mobile
+                    // This is handled by chat.tsx listening to the same socket
+                    break;
+
+                case "full_sync":
+                    // Initial sync payload sent on WebSocket connect
+                    if (event.data) {
+                        const syncData = event.data as MobileSyncResponse;
+                        cacheData(syncData);
+                        setState((prev) => ({
+                            ...prev,
+                            companionData: syncData,
+                            isOnline: true,
+                            isLoading: false,
+                            lastSeen: Date.now(),
+                        }));
+                    }
+                    break;
+            }
+        });
+
+        // Boot: check if configured and connect
         (async () => {
             const host = await getHost();
             setState((prev) => ({ ...prev, isConfigured: !!host }));
+
             if (host) {
+                // Try WebSocket first
+                socket.connect();
+
+                // Also do an HTTP sync for initial data (WS might not send full_sync)
                 await sync();
             } else {
                 setState((prev) => ({ ...prev, isLoading: false }));
             }
         })();
-    }, [sync]);
-
-    /** Background polling — detects reconnection. */
-    useEffect(() => {
-        pollRef.current = setInterval(async () => {
-            const host = await getHost();
-            if (!host) return;
-            const online = await testConnection();
-            if (online) {
-                setState((prev) => {
-                    if (!prev.isOnline) sync();
-                    return prev;
-                });
-            } else {
-                wasOfflineRef.current = true;
-                setState((prev) => ({ ...prev, isOnline: false, powerState: "offline" }));
-            }
-        }, POLL_INTERVAL);
 
         return () => {
-            if (pollRef.current) clearInterval(pollRef.current);
+            unsubPhase();
+            unsubEvent();
             if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+            // Don't destroy the socket on unmount — it's a singleton that persists
         };
-    }, [sync]);
+    }, []); // Empty deps — socket is a singleton
 
     return {
         ...state,

@@ -267,6 +267,33 @@ def register_routes(app, config: dict) -> None:
         # Sprint 5 Task 3: Platform activity
         platform_info = _get_platform_activity()
 
+        # Generate or retrieve a permanent device token for WebSocket auth
+        device_token = None
+        try:
+            import secrets as _secrets
+            from pathlib import Path as _DTPath
+            dt_file = _DTPath.home() / ".valhalla" / "device_tokens.json"
+            dt_file.parent.mkdir(parents=True, exist_ok=True)
+            existing_tokens = []
+            if dt_file.exists():
+                try:
+                    existing_tokens = json.loads(dt_file.read_text(encoding="utf-8"))
+                except Exception:
+                    existing_tokens = []
+            if existing_tokens:
+                device_token = existing_tokens[0].get("token", "")
+            if not device_token:
+                device_token = _secrets.token_urlsafe(32)
+                existing_tokens.append({
+                    "token": device_token,
+                    "created_at": _time.time(),
+                    "device": "mobile",
+                })
+                dt_file.write_text(json.dumps(existing_tokens), encoding="utf-8")
+                log.info("[companion/sync] Generated permanent device token for mobile")
+        except Exception as e:
+            log.debug("[companion/sync] Device token generation failed: %s", e)
+
         return {
             "ok": True,
             "adopted": True,
@@ -287,6 +314,7 @@ def register_routes(app, config: dict) -> None:
             "daily_gift_available": daily_gift_available,
             "adventure_available": adventure_available,
             "platform": platform_info,
+            "device_token": device_token,
         }
 
     @router.post("/api/v1/companion/mobile/pair")
@@ -1239,9 +1267,28 @@ def register_routes(app, config: dict) -> None:
     _WS_MAX_CONNECTIONS = 5
 
     def _verify_ws_token(token: str) -> bool:
-        """Verify WebSocket token against stored pairing token."""
+        """Verify WebSocket token against stored pairing token OR device tokens.
+
+        Accepts:
+          - Dashboard pair token (from mobile_token.json, 15-min TTL)
+          - Device token (from device_tokens.json, permanent)
+        """
         import hmac
         from pathlib import Path as _Path
+
+        # Check permanent device tokens first (most common for WebSocket)
+        dt_file = _Path.home() / ".valhalla" / "device_tokens.json"
+        if dt_file.exists():
+            try:
+                tokens = json.loads(dt_file.read_text(encoding="utf-8"))
+                for entry in tokens:
+                    stored = entry.get("token", "")
+                    if stored and hmac.compare_digest(stored, token):
+                        return True
+            except Exception:
+                pass
+
+        # Fall back to dashboard pair token (15-min TTL)
         token_path = _Path.home() / ".valhalla" / "mobile_token.json"
         if not token_path.exists():
             return False
@@ -1264,12 +1311,20 @@ def register_routes(app, config: dict) -> None:
 
         Requires ?token= query param matching stored pairing token.
         Max 5 concurrent connections.
+        Optionally accepts ?session_id= for cross-device context.
 
-        Events:
+        Events pushed from server:
+          - full_sync: complete sync payload on connection (same as /mobile/sync)
           - companion_state_update: happiness, XP, level changes
           - task_completed: task queue item finished
-          - chat_message: message from desktop chat
+          - chat_message: message from desktop chat (bidirectional sync)
           - notification: push notification content
+
+        Messages accepted from client:
+          - "ping" → responds with {"type": "pong"}
+          - "sync" → responds with companion_state_update
+          - JSON {"type": "chat_message", "data": {...}} → broadcast + store
+          - JSON {"type": "teach", "data": {"fact": "..."}} → store as memory
         """
         from fastapi import WebSocket
 
@@ -1285,14 +1340,92 @@ def register_routes(app, config: dict) -> None:
             await websocket.close(code=4029, reason="Too many connections")
             return
 
+        # Track session ID for cross-device context
+        session_id = websocket.query_params.get("session_id", "unknown")
+
         await websocket.accept()
         _ws_connections.append(websocket)
+        log.info("[companion/ws] Client connected (session=%s, total=%d)",
+                 session_id, len(_ws_connections))
+
+        # Send initial full sync payload on connect
+        try:
+            import time as _time
+            from plugins.companion.sim import load_state, get_status, get_mood_prefix
+
+            state = load_state()
+            if state:
+                companion_status = get_status(state)
+                personality = {}
+                try:
+                    from plugins.agent_profiles.leveling import load_profile
+                    profile = load_profile(state.get("name", "companion"))
+                    personality = profile.get("personality", {})
+                except Exception:
+                    pass
+
+                try:
+                    from plugins.companion.queue import get_queue
+                    pending_tasks = get_queue(status="completed")
+                except Exception:
+                    pending_tasks = []
+
+                await websocket.send_json({
+                    "type": "full_sync",
+                    "data": {
+                        "ok": True,
+                        "adopted": True,
+                        "companion": companion_status,
+                        "personality": personality,
+                        "mood_prefix": get_mood_prefix(state),
+                        "pending_tasks": pending_tasks,
+                        "synced_at": _time.time(),
+                        "features": {
+                            "adventures": True,
+                            "daily_gift": True,
+                            "guardian": True,
+                            "teach_me": True,
+                            "translation": True,
+                            "morning_briefing": True,
+                        },
+                    },
+                })
+        except Exception as e:
+            log.debug("[companion/ws] Initial sync failed: %s", e)
+
         try:
             while True:
                 data = await websocket.receive_text()
+
+                # Plain text commands
                 if data == "ping":
                     await websocket.send_json({"type": "pong"})
-                elif data == "sync":
+                    continue
+
+                # JSON messages
+                try:
+                    msg = json.loads(data)
+                except (json.JSONDecodeError, ValueError):
+                    # Legacy: "sync" as plain text
+                    if data == "sync":
+                        import time as _time
+                        from plugins.companion.sim import load_state, get_status, get_mood_prefix
+                        state = load_state()
+                        if state:
+                            await websocket.send_json({
+                                "type": "companion_state_update",
+                                "data": {
+                                    "companion": get_status(state),
+                                    "mood_prefix": get_mood_prefix(state),
+                                    "synced_at": _time.time(),
+                                },
+                            })
+                    continue
+
+                msg_type = msg.get("type", "")
+                msg_data = msg.get("data", {})
+
+                if msg_type == "sync":
                     import time as _time
                     from plugins.companion.sim import load_state, get_status, get_mood_prefix
                     state = load_state()
@@ -1305,11 +1438,88 @@ def register_routes(app, config: dict) -> None:
                                 "synced_at": _time.time(),
                             },
                         })
+
+                elif msg_type == "chat_message":
+                    # Bidirectional chat sync — broadcast to all other WS clients
+                    for ws in _ws_connections:
+                        if ws is not websocket:
+                            try:
+                                await ws.send_json({
+                                    "type": "chat_message",
+                                    "data": msg_data,
+                                })
+                            except Exception:
+                                pass
+
+                    # Also store in chat history
+                    try:
+                        role = msg_data.get("role", "user")
+                        content = msg_data.get("message", "")
+                        if content and role in ("user", "companion"):
+                            from pathlib import Path as _Path
+                            import time as _time
+                            history_dir = _Path.home() / ".valhalla"
+                            history_dir.mkdir(parents=True, exist_ok=True)
+                            history_file = history_dir / "chat_history.json"
+                            messages = []
+                            if history_file.exists():
+                                try:
+                                    messages = json.loads(
+                                        history_file.read_text(encoding="utf-8"))
+                                except Exception:
+                                    messages = []
+                            messages.append({
+                                "role": role,
+                                "content": content,
+                                "timestamp": msg_data.get("timestamp", _time.time()),
+                                "session": session_id,
+                            })
+                            if len(messages) > 500:
+                                messages = messages[-500:]
+                            history_file.write_text(
+                                json.dumps(messages, ensure_ascii=False),
+                                encoding="utf-8",
+                            )
+                    except Exception as e:
+                        log.debug("[companion/ws] Chat store failed: %s", e)
+
+                elif msg_type == "teach":
+                    # Store a fact in the orchestrator's memory
+                    fact = msg_data.get("fact", "")
+                    if fact:
+                        try:
+                            import orchestrator as orch_mod
+                            orch_mod.observe(
+                                f"User taught via mobile: {fact}",
+                                importance=0.8,
+                                source="mobile_teach",
+                            )
+                            await websocket.send_json({
+                                "type": "teach_ack",
+                                "data": {"ok": True, "fact": fact[:100]},
+                            })
+                        except Exception:
+                            await websocket.send_json({
+                                "type": "teach_ack",
+                                "data": {"ok": False, "error": "Memory system unavailable"},
+                            })
+
+                elif msg_type == "phone_context":
+                    # Phone sensor data — raw pipe from contacts/calendar/device
+                    # Store for the big brain to use in conversations
+                    _store_phone_context(msg_data, session_id)
+                    await websocket.send_json({
+                        "type": "context_ack",
+                        "data": {"ok": True, "stored": len(msg_data)},
+                    })
+
         except Exception:
             pass
         finally:
             if websocket in _ws_connections:
                 _ws_connections.remove(websocket)
+            log.info("[companion/ws] Client disconnected (session=%s, remaining=%d)",
+                     session_id, len(_ws_connections))
 
     async def broadcast_ws_event(event_type: str, data: dict):
         """Broadcast an event to all connected WebSocket clients."""
@@ -1893,10 +2103,373 @@ def register_routes(app, config: dict) -> None:
             "bridge_active": bridge_active,
         }
 
-    # --- Sprint 11 Task 3: Bifrost listener ---
-    # bifrost.py already binds to 0.0.0.0 (line 113: --host default="0.0.0.0")
-    # CORS regex already matches Tailscale 100.x.x.x IPs (line 80)
-    # No changes needed — verified in sprint review.
+    # --- Missing Mobile Endpoints ---
+
+    # ── Phone Context Sync (sensor layer → brain layer) ────────────────────────
+
+    def _store_phone_context(data: dict, session_id: str = ""):
+        """Store phone sensor data for the big brain to use.
+
+        The phone is a dumb sensor pipe — contacts, calendar, device info.
+        This function stores the raw data and injects key facts into working memory.
+        """
+        import time as _time
+        from pathlib import Path as _Path
+
+        context_file = _Path.home() / ".valhalla" / "phone_context.json"
+        context_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing context
+        existing = {}
+        if context_file.exists():
+            try:
+                existing = json.loads(context_file.read_text(encoding="utf-8"))
+            except Exception:
+                existing = {}
+
+        # Merge new data (don't overwrite fields that weren't sent)
+        if "contacts" in data:
+            existing["contacts"] = data["contacts"]
+            existing["contacts_updated_at"] = _time.time()
+        if "calendar" in data:
+            existing["calendar"] = data["calendar"]
+            existing["calendar_updated_at"] = _time.time()
+        if "device" in data:
+            existing["device"] = data["device"]
+        existing["last_sync"] = _time.time()
+        existing["session_id"] = session_id
+
+        context_file.write_text(
+            json.dumps(existing, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        # Inject key facts into working memory for the big brain
+        try:
+            import orchestrator as orch_mod
+
+            # Calendar context — so AI knows user's schedule
+            cal = data.get("calendar", {})
+            if cal.get("next_event"):
+                evt = cal["next_event"]
+                loc = f" at {evt['location']}" if evt.get('location') else ""
+                orch_mod.observe(
+                    f"User's next calendar event: \"{evt['title']}\" starting {evt['start']}{loc}",
+                    importance=0.6,
+                    source="phone_calendar",
+                )
+            if cal.get("event_count", 0) > 0:
+                orch_mod.observe(
+                    f"User has {cal['event_count']} events today on their calendar",
+                    importance=0.4,
+                    source="phone_calendar",
+                )
+
+            # Device context — timezone, time of day
+            device = data.get("device", {})
+            if device.get("time_zone"):
+                orch_mod.observe(
+                    f"User's phone timezone: {device['time_zone']}, current hour: {device.get('hour', '?')}",
+                    importance=0.2,
+                    source="phone_device",
+                )
+
+            # Contact count (not individual contacts — that's stored in the file)
+            contacts = data.get("contacts", [])
+            if contacts:
+                orch_mod.observe(
+                    f"Phone synced {len(contacts)} contacts to working memory",
+                    importance=0.3,
+                    source="phone_contacts",
+                )
+        except Exception as e:
+            log.debug("[companion/context] Working memory inject failed: %s", e)
+
+        log.info("[companion/context] Phone context synced (contacts=%s, calendar=%s, device=%s)",
+                 "contacts" in data, "calendar" in data, "device" in data)
+
+    @router.post("/api/v1/companion/context/sync")
+    async def api_context_sync(request: "Request"):
+        """HTTP fallback for phone context sync (when WebSocket unavailable)."""
+        body = await request.json()
+        _store_phone_context(body)
+        return {"ok": True, "stored": len(body)}
+
+    @router.get("/api/v1/companion/context")
+    async def api_context_get():
+        """Return stored phone context (for dashboard/debug)."""
+        from pathlib import Path as _Path
+        context_file = _Path.home() / ".valhalla" / "phone_context.json"
+        if not context_file.exists():
+            return {"ok": True, "context": {}, "synced": False}
+        try:
+            data = json.loads(context_file.read_text(encoding="utf-8"))
+            return {"ok": True, "context": data, "synced": True}
+        except Exception:
+            return {"ok": True, "context": {}, "synced": False}
+
+    # ── Skills (RPG toggle cards) ──────────────────────────────────────────────
+
+    @router.get("/api/v1/companion/skills")
+    async def api_companion_skills():
+        """Return available companion skills with XP and toggle state."""
+        from pathlib import Path as _Path
+
+        skills_file = _Path.home() / ".valhalla" / "companion_skills.json"
+
+        # Default skills if none saved
+        default_skills = [
+            {"id": "research",    "name": "Research",       "description": "Search the web and summarize findings",       "emoji": "🔍", "enabled": True,  "level": 1, "xp_cost": 100},
+            {"id": "code",        "name": "Code",           "description": "Write, debug, and review code",              "emoji": "💻", "enabled": True,  "level": 1, "xp_cost": 150},
+            {"id": "translate",   "name": "Translation",    "description": "Translate between 200+ languages",           "emoji": "🌍", "enabled": True,  "level": 1, "xp_cost": 75},
+            {"id": "browse",      "name": "Web Browse",     "description": "Read and extract data from web pages",       "emoji": "🌐", "enabled": True,  "level": 1, "xp_cost": 100},
+            {"id": "file_ops",    "name": "File Operations","description": "Read, write, and organize files on your PC", "emoji": "📁", "enabled": True,  "level": 1, "xp_cost": 125},
+            {"id": "voice",       "name": "Voice",          "description": "Speech-to-text and text-to-speech",          "emoji": "🎤", "enabled": True,  "level": 1, "xp_cost": 100},
+            {"id": "guardian",    "name": "Guardian",       "description": "Message safety filter and sleep mode",       "emoji": "🛡️", "enabled": True,  "level": 1, "xp_cost": 50},
+            {"id": "memory",      "name": "Memory",         "description": "Remember facts, preferences, and context",   "emoji": "🧠", "enabled": True,  "level": 1, "xp_cost": 200},
+            {"id": "pipeline",    "name": "Pipeline",       "description": "Multi-step automated task execution",        "emoji": "⚡", "enabled": False, "level": 0, "xp_cost": 300},
+            {"id": "debate",      "name": "Debate",         "description": "Generate multiple perspectives on a topic",  "emoji": "⚖️", "enabled": False, "level": 0, "xp_cost": 250},
+        ]
+
+        if skills_file.exists():
+            try:
+                saved = json.loads(skills_file.read_text(encoding="utf-8"))
+                # Merge saved toggle/level state into defaults
+                saved_map = {s["id"]: s for s in saved}
+                for skill in default_skills:
+                    if skill["id"] in saved_map:
+                        skill["enabled"] = saved_map[skill["id"]].get("enabled", skill["enabled"])
+                        skill["level"] = saved_map[skill["id"]].get("level", skill["level"])
+            except Exception:
+                pass
+
+        return {"skills": default_skills}
+
+    @router.post("/api/v1/companion/skills/toggle")
+    async def api_companion_skill_toggle(request: "Request"):
+        """Toggle a skill on/off."""
+        from pathlib import Path as _Path
+        body = await request.json()
+        skill_id = body.get("skill_id", "")
+        enabled = body.get("enabled", True)
+
+        skills_file = _Path.home() / ".valhalla" / "companion_skills.json"
+        skills_file.parent.mkdir(parents=True, exist_ok=True)
+
+        existing = []
+        if skills_file.exists():
+            try:
+                existing = json.loads(skills_file.read_text(encoding="utf-8"))
+            except Exception:
+                existing = []
+
+        # Update or add the skill
+        found = False
+        for s in existing:
+            if s.get("id") == skill_id:
+                s["enabled"] = enabled
+                found = True
+                break
+        if not found:
+            existing.append({"id": skill_id, "enabled": enabled, "level": 1 if enabled else 0})
+
+        skills_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        return {"ok": True, "skill": {"id": skill_id, "enabled": enabled}}
+
+    # ── Personality (soul traits) ──────────────────────────────────────────────
+
+    @router.get("/api/v1/companion/personality")
+    async def api_companion_personality_get():
+        """Return companion personality traits from soul file."""
+        from pathlib import Path as _Path
+
+        soul_file = _Path.home() / ".valhalla" / "companion_soul.json"
+
+        default_personality = {
+            "traits": {
+                "warmth": "high",
+                "humor": "medium",
+                "formality": "low",
+                "curiosity": "high",
+                "empathy": "high",
+                "creativity": "medium",
+                "directness": "medium",
+                "patience": "high",
+                "enthusiasm": "high",
+                "sarcasm": "low",
+            },
+            "voice_style": "warm and conversational",
+            "greeting": "Hey there! What's on your mind?",
+            "bio": "Your private AI companion — lives on your PC, travels with your phone.",
+        }
+
+        if soul_file.exists():
+            try:
+                saved = json.loads(soul_file.read_text(encoding="utf-8"))
+                default_personality.update(saved)
+            except Exception:
+                pass
+
+        return default_personality
+
+    @router.post("/api/v1/companion/personality")
+    async def api_companion_personality_update(request: "Request"):
+        """Update personality traits."""
+        from pathlib import Path as _Path
+
+        body = await request.json()
+        new_traits = body.get("traits", {})
+
+        soul_file = _Path.home() / ".valhalla" / "companion_soul.json"
+        soul_file.parent.mkdir(parents=True, exist_ok=True)
+
+        existing = {}
+        if soul_file.exists():
+            try:
+                existing = json.loads(soul_file.read_text(encoding="utf-8"))
+            except Exception:
+                existing = {}
+
+        # Merge traits
+        if "traits" not in existing:
+            existing["traits"] = {}
+        existing["traits"].update(new_traits)
+
+        soul_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        log.info("[companion/personality] Traits updated: %s", list(new_traits.keys()))
+
+        return {"ok": True, "traits": existing.get("traits", {})}
+
+    # ── Teach (store user facts) ──────────────────────────────────────────────
+
+    @router.post("/api/v1/companion/teach")
+    async def api_companion_teach(request: "Request"):
+        """Store a fact the user teaches the companion."""
+        import time as _time
+        from pathlib import Path as _Path
+
+        body = await request.json()
+        fact = body.get("fact", "").strip()
+        if not fact:
+            raise HTTPException(400, "No fact provided")
+
+        facts_file = _Path.home() / ".valhalla" / "taught_facts.json"
+        facts_file.parent.mkdir(parents=True, exist_ok=True)
+
+        facts = []
+        if facts_file.exists():
+            try:
+                facts = json.loads(facts_file.read_text(encoding="utf-8"))
+            except Exception:
+                facts = []
+
+        facts.append({
+            "fact": fact,
+            "taught_at": _time.time(),
+            "source": "mobile",
+        })
+
+        # Keep last 500 facts
+        if len(facts) > 500:
+            facts = facts[-500:]
+
+        facts_file.write_text(json.dumps(facts, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        # Also store in working memory if available
+        try:
+            import orchestrator as orch_mod
+            orch_mod.observe(
+                f"User taught: {fact}",
+                importance=0.8,
+                source="mobile_teach",
+            )
+        except Exception:
+            pass
+
+        log.info("[companion/teach] Stored fact: %s", fact[:80])
+        return {
+            "ok": True,
+            "confirmation": f"Got it! I'll remember that.",
+            "fact_count": len(facts),
+        }
+
+    # ── Heartbeat (what companion is doing) ───────────────────────────────────
+
+    @router.get("/api/v1/companion/heartbeat")
+    async def api_companion_heartbeat():
+        """Return what the companion is currently doing."""
+        import time as _time
+
+        activity = "idle"
+        emoji = "😴"
+        detail = None
+        since = None
+
+        # Check for active pipelines
+        try:
+            from plugins.pipeline.handler import get_active_pipelines
+            active = get_active_pipelines()
+            if active:
+                activity = "building"
+                emoji = "⚡"
+                detail = active[0].get("name", "Working on a task")
+                since = active[0].get("started_at", "")
+        except (ImportError, Exception):
+            pass
+
+        # Check for active WebSocket connections (chatting)
+        if activity == "idle":
+            try:
+                if len(_ws_connections) > 0:
+                    activity = "chatting"
+                    emoji = "💬"
+                    detail = "Connected with mobile"
+            except Exception:
+                pass
+
+        # Check for active browse requests
+        if activity == "idle":
+            try:
+                from plugins.browse.parser import _active_requests
+                if _active_requests:
+                    activity = "researching"
+                    emoji = "🔍"
+                    detail = "Browsing the web"
+            except (ImportError, AttributeError):
+                pass
+
+        # Check companion mood
+        if activity == "idle":
+            try:
+                from plugins.companion.sim import load_state
+                state = load_state()
+                if state:
+                    happiness = state.get("happiness", 50)
+                    if happiness >= 80:
+                        activity = "happy"
+                        emoji = "😊"
+                        detail = "Feeling great!"
+                    elif happiness >= 50:
+                        activity = "content"
+                        emoji = "😌"
+                        detail = "Doing well"
+                    elif happiness >= 30:
+                        activity = "bored"
+                        emoji = "😐"
+                        detail = "Could use some attention"
+                    else:
+                        activity = "sad"
+                        emoji = "😢"
+                        detail = "Missing you..."
+            except Exception:
+                pass
+
+        return {
+            "activity": activity,
+            "emoji": emoji,
+            "detail": detail,
+            "since": since,
+        }
 
     app.include_router(router)
     log.info("[companion] Plugin loaded (Sprint 11: network status + bridge).")

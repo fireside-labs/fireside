@@ -97,6 +97,17 @@ export default function TabsLayout() {
                     ),
                 }}
             />
+
+            {/* ── Settings (both modes) ── */}
+            <Tabs.Screen
+                name="settings"
+                options={{
+                    title: "Settings",
+                    tabBarIcon: ({ focused }) => (
+                        <Text style={[styles.icon, focused && styles.iconActive]}>⚙️</Text>
+                    ),
+                }}
+            />
         </Tabs>
     );
 }

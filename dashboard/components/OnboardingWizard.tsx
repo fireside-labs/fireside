@@ -77,10 +77,10 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         return () => window.removeEventListener("keydown", handleEscape);
     }, [step]);
 
-    const finish = () => {
+    const finish = async () => {
         localStorage.setItem("fireside_onboarded", "1");
         if (userName) localStorage.setItem("fireside_user_name", userName);
-        const finalName = name || "Ember";
+        const finalName = name.trim() || "Ember";
         localStorage.setItem("fireside_companion_species", species);
         localStorage.setItem("fireside_companion_name", finalName);
         localStorage.setItem("fireside_companion", JSON.stringify({ name: finalName, species }));
@@ -92,6 +92,16 @@ export default function OnboardingWizard({ onComplete }: { onComplete: () => voi
         const brainId = vramNum >= 20 ? "deep" : "fast";
         localStorage.setItem("fireside_brain", brainId);
         localStorage.setItem("fireside_model", brainId === "deep" ? "qwen-2.5-35b-q4" : "llama-3.1-8b-q6");
+
+        // Actually kick off the brain download — onboarding was writing to localStorage only
+        try {
+            await fetch(`${API_BASE}/api/v1/brains/install`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model_id: brainId }),
+            });
+        } catch { /* fire-and-forget — brain lab will show progress */ }
+
         onComplete();
     };
 

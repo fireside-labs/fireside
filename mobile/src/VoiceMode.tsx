@@ -5,7 +5,7 @@
  * Whisper STT + Kokoro TTS via home PC.
  * Audio NEVER leaves local network — 🔒 privacy indicator.
  */
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import {
     View,
     Text,
@@ -115,14 +115,15 @@ export default function VoiceMode({ petName, species, isOnline, onChatMessage }:
             // Send to companion
             setPhase("thinking");
             const chatResult = await companionAPI.chat(transcription.text);
-            setReply(chatResult.reply);
+            const replyText = chatResult.reply || (chatResult as any).response || "I couldn't process that.";
+            setReply(replyText);
 
             // Play TTS response
             setPhase("speaking");
             startWave();
 
             try {
-                const ttsResult = await companionAPI.voiceSpeak(chatResult.reply);
+                const ttsResult = await companionAPI.voiceSpeak(replyText);
                 if (ttsResult.audio_url) {
                     const { sound } = await Audio.Sound.createAsync({ uri: ttsResult.audio_url });
                     await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
@@ -140,7 +141,7 @@ export default function VoiceMode({ petName, species, isOnline, onChatMessage }:
                 setPhase("idle");
             }
 
-            onChatMessage?.(transcription.text, chatResult.reply);
+            onChatMessage?.(transcription.text, replyText);
         } catch (err) {
             console.warn("Voice pipeline failed:", err);
             setPhase("idle");
@@ -156,6 +157,9 @@ export default function VoiceMode({ petName, species, isOnline, onChatMessage }:
     };
 
     const isActive = phase !== "idle";
+
+    // Pre-compute waveform heights so they don't change on re-render
+    const waveHeights = useMemo(() => Array.from({ length: 7 }, () => 0.3 + Math.random() * 0.7), []);
 
     return (
         <View style={styles.container}>
@@ -190,7 +194,7 @@ export default function VoiceMode({ petName, species, isOnline, onChatMessage }:
                                     transform: [{
                                         scaleY: waveAnim.interpolate({
                                             inputRange: [0, 1],
-                                            outputRange: [0.3, 0.3 + Math.random() * 0.7],
+                                            outputRange: [0.3, waveHeights[i]],
                                         }),
                                     }],
                                 },

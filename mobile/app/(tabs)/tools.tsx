@@ -5,7 +5,7 @@
  * DO NOT auto-translate. Users may speak multiple languages.
  * Contains: Platform card, URL summary, Translation, TeachMe.
  */
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
@@ -63,12 +63,12 @@ export default function ToolsTab() {
     const [teachConfirm, setTeachConfirm] = useState<string | null>(null);
     const [factCount, setFactCount] = useState(0);
 
-    // Load fact count
-    useState(() => {
+    // Load fact count on mount
+    useEffect(() => {
         AsyncStorage.getItem(TEACH_FACTS_KEY).then((v) => {
             if (v) try { setFactCount(JSON.parse(v).length); } catch { }
         });
-    });
+    }, []);
 
     const handleTeach = async () => {
         if (!teachInput.trim()) return;
@@ -181,7 +181,7 @@ export default function ToolsTab() {
 
             {/* ———— Translation (User-Initiated Action Menu) ———— */}
             <View style={styles.card}>
-                <Text style={styles.cardTitle}>🌐 Translate with Ember</Text>
+                <Text style={styles.cardTitle}>🌐 Translate with {petName}</Text>
                 <Text style={styles.cardSubtitle}>
                     200 languages · NLLB-200 · User-initiated only
                 </Text>

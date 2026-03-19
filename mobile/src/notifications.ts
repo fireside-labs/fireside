@@ -11,7 +11,7 @@ import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { companionAPI } from "./api";
 
-const PUSH_TOKEN_KEY = "valhalla_push_token";
+const PUSH_TOKEN_KEY = "fireside_push_token";
 
 // Configure foreground notification behavior
 Notifications.setNotificationHandler({

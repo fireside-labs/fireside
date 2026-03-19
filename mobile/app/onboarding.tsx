@@ -38,6 +38,21 @@ export async function hasOnboarded(): Promise<boolean> {
 
 type OnboardingStep = "welcome" | "connect" | "waitlist_done" | "orphan_save" | "companion_create" | "bridge" | "vpn_guide" | "mode" | "permissions" | "first_jump" | "done";
 
+const STEP_HISTORY: OnboardingStep[] = [];
+
+function pushStep(setStep: (s: OnboardingStep) => void, next: OnboardingStep) {
+    STEP_HISTORY.push(next);
+    setStep(next);
+}
+
+function goBack(setStep: (s: OnboardingStep) => void) {
+    if (STEP_HISTORY.length > 1) {
+        STEP_HISTORY.pop(); // remove current
+        const prev = STEP_HISTORY[STEP_HISTORY.length - 1];
+        setStep(prev);
+    }
+}
+
 const SPECIES_OPTIONS: Array<{ id: string; emoji: string; name: string; personality: string; greeting: string }> = [
     { id: "fox", emoji: "🦊", name: "Fox", personality: "Clever & curious", greeting: "Hmm, interesting place you've got here. I like it — cozy." },
     { id: "cat", emoji: "🐱", name: "Cat", personality: "Independent & witty", greeting: "*yawns* Oh, a phone. Let me get comfortable..." },
@@ -78,7 +93,7 @@ export default function OnboardingV2() {
                 </Text>
                 <TouchableOpacity
                     style={styles.primaryBtn}
-                    onPress={() => { setStep("connect"); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+                    onPress={() => { pushStep(setStep, "connect"); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
                     activeOpacity={0.8}
                 >
                     <Text style={styles.primaryBtnText}>Get Started</Text>
@@ -106,18 +121,30 @@ export default function OnboardingV2() {
             const ok = await testConnection();
             if (ok) {
                 await AsyncStorage.setItem("connectionMode", "selfhosted");
+
+                // Sync to get & store the device token for WebSocket auth
+                try {
+                    await companionAPI.sync();
+                } catch { }
+
+                // Initialize the WebSocket connection
+                try {
+                    const { getSocket } = await import("../src/FiresideSocket");
+                    getSocket().connect();
+                } catch { }
+
                 try {
                     const status = await companionAPI.companionStatus();
                     if (status.companion && Object.keys(status.companion).length > 0) {
                         setHasExistingCompanion(true);
                         setCompanionName((status.companion as any).name || "");
                         setSelectedSpecies((status.companion as any).species || "fox");
-                        setStep("bridge");
+                        pushStep(setStep, "bridge");
                     } else {
-                        setStep("companion_create");
+                        pushStep(setStep, "companion_create");
                     }
                 } catch {
-                    setStep("companion_create");
+                    pushStep(setStep, "companion_create");
                 }
             } else {
                 Alert.alert("Connection Failed", "Check the IP and make sure Fireside is running on your PC.");
@@ -144,11 +171,14 @@ export default function OnboardingV2() {
             await AsyncStorage.setItem("connectionMode", "waitlist");
             await AsyncStorage.setItem("waitlistEmail", waitlistEmail.trim());
             setWaitlistSubmitting(false);
-            setStep("orphan_save");
+            pushStep(setStep, "orphan_save");
         };
 
         return (
             <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>
+                <TouchableOpacity onPress={() => goBack(setStep)} activeOpacity={0.7} style={styles.backBtn}>
+                    <Text style={styles.backBtnText}>← Back</Text>
+                </TouchableOpacity>
                 <Text style={styles.stepTitle}>Connect to Fireside</Text>
                 <Text style={styles.stepSubtitle}>
                     {scanning ? "Scanning your network..." : discoveredHost ? "Found your PC!" : "Enter your PC's IP or we'll find it"}
@@ -194,7 +224,7 @@ export default function OnboardingV2() {
                         style={styles.ipInput}
                         value={manualIP}
                         onChangeText={setManualIP}
-                        placeholder="192.168.1.100:9099"
+                        placeholder="192.168.1.100:8765"
                         placeholderTextColor={colors.textMuted}
                         keyboardType="url"
                         autoCapitalize="none"
@@ -251,6 +281,9 @@ export default function OnboardingV2() {
     if (step === "orphan_save") {
         return (
             <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>
+                <TouchableOpacity onPress={() => goBack(setStep)} activeOpacity={0.7} style={styles.backBtn}>
+                    <Text style={styles.backBtnText}>← Back</Text>
+                </TouchableOpacity>
                 <Text style={styles.stepTitle}>Pick Your Companion</Text>
                 <Text style={styles.stepSubtitle}>
                     Choose who'll be waiting when you set up your desktop
@@ -295,7 +328,7 @@ export default function OnboardingV2() {
                         await AsyncStorage.setItem("saved_species", selectedSpecies);
                         await AsyncStorage.setItem("saved_name", companionName || SPECIES_OPTIONS.find(s => s.id === selectedSpecies)?.name || "Ember");
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        setStep("waitlist_done");
+                        pushStep(setStep, "waitlist_done");
                     }}
                     activeOpacity={0.8}
                 >
@@ -314,7 +347,7 @@ export default function OnboardingV2() {
             try {
                 await companionAPI.adopt(name, selectedSpecies);
                 setCompanionName(name);
-                setStep("bridge");
+                pushStep(setStep, "bridge");
             } catch {
                 Alert.alert("Adoption Failed", "Couldn't create your companion. Make sure your PC is running.");
             }
@@ -323,6 +356,9 @@ export default function OnboardingV2() {
 
         return (
             <ScrollView style={styles.scrollScreen} contentContainerStyle={styles.scrollContent}>
+                <TouchableOpacity onPress={() => goBack(setStep)} activeOpacity={0.7} style={styles.backBtn}>
+                    <Text style={styles.backBtnText}>← Back</Text>
+                </TouchableOpacity>
                 <Text style={styles.fireEmoji}>✨</Text>
                 <Text style={styles.stepTitle}>Create Your Companion</Text>
                 <Text style={styles.stepSubtitle}>
@@ -374,7 +410,7 @@ export default function OnboardingV2() {
         const handleLocalOnly = async () => {
             await setConnectionPref("local");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setStep("mode");
+            pushStep(setStep, "mode");
         };
 
         const handleBridge = async () => {
@@ -389,20 +425,23 @@ export default function OnboardingV2() {
                 } else {
                     // No Tailscale IP yet — show setup guide
                     await setConnectionPref("bridge");
-                    setStep("vpn_guide");
+                    pushStep(setStep, "vpn_guide");
                 }
             } catch {
                 // Can't reach network/status — show guide anyway
                 await setConnectionPref("bridge");
-                setStep("vpn_guide");
+                pushStep(setStep, "vpn_guide");
             }
             setFetchingBridge(false);
         };
 
         return (
             <View style={styles.screen}>
+                <TouchableOpacity onPress={() => goBack(setStep)} activeOpacity={0.7} style={[styles.backBtn, { position: "absolute" as const, top: 60, left: spacing.xl }]}>
+                    <Text style={styles.backBtnText}>← Back</Text>
+                </TouchableOpacity>
                 <Text style={styles.stepTitle}>How should your companion connect?</Text>
-                <Text style={styles.stepSubtitle}>Choose how Ember reaches Atlas when you leave home</Text>
+                <Text style={styles.stepSubtitle}>Choose how {companionName || "your companion"} reaches home when you leave</Text>
 
                 <TouchableOpacity
                     style={[styles.modeOption, { marginTop: spacing.xl }]}
@@ -474,13 +513,13 @@ export default function OnboardingV2() {
                             }
                         } catch { }
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        setStep("mode");
+                        pushStep(setStep, "mode");
                     }}
                     activeOpacity={0.8}
                 >
                     <Text style={styles.primaryBtnText}>I've installed Tailscale →</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setStep("mode")} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => pushStep(setStep, "mode")} activeOpacity={0.7}>
                     <Text style={styles.skipText}>Skip for now</Text>
                 </TouchableOpacity>
             </ScrollView>
@@ -539,7 +578,7 @@ export default function OnboardingV2() {
                     onPress={async () => {
                         await AsyncStorage.setItem("fireside_companion_mode", selectedMode);
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        setStep(hasExistingCompanion ? "permissions" : "permissions");
+                        pushStep(setStep, "first_jump");
                     }}
                     activeOpacity={0.8}
                 >
@@ -560,7 +599,7 @@ export default function OnboardingV2() {
             } catch { }
             // Apply smart routing (detect LAN vs Tailscale)
             try { await applyBestRoute(); } catch { }
-            setStep(hasExistingCompanion ? "first_jump" : "done");
+            pushStep(setStep, "first_jump");
         };
 
         return (
@@ -595,7 +634,7 @@ export default function OnboardingV2() {
                 <TouchableOpacity style={styles.primaryBtn} onPress={requestPermissions} activeOpacity={0.8}>
                     <Text style={styles.primaryBtnText}>Allow & Continue</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setStep(hasExistingCompanion ? "first_jump" : "done")} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => pushStep(setStep, hasExistingCompanion ? "first_jump" : "done")} activeOpacity={0.7}>
                     <Text style={styles.skipText}>Skip for now</Text>
                 </TouchableOpacity>
             </View>
@@ -654,7 +693,9 @@ export default function OnboardingV2() {
 const styles = StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bgPrimary, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.xl },
     scrollScreen: { flex: 1, backgroundColor: colors.bgPrimary },
-    scrollContent: { paddingHorizontal: spacing.xl, paddingTop: 80, paddingBottom: spacing.xxxl },
+    scrollContent: { paddingHorizontal: spacing.xl, paddingTop: 60, paddingBottom: spacing.xxxl },
+    backBtn: { marginBottom: spacing.lg },
+    backBtnText: { fontFamily: "Inter_500Medium", fontSize: fontSize.sm, color: colors.textDim },
     fireEmoji: { fontSize: 64, marginBottom: spacing.lg },
     heroTitle: { fontFamily: "Inter_700Bold", fontSize: 36, color: colors.textPrimary, marginBottom: spacing.xs },
     heroSubtitle: { fontFamily: "Inter_400Regular", fontSize: fontSize.lg, color: colors.neon, marginBottom: spacing.md },
