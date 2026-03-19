@@ -120,6 +120,24 @@ def start(model_path: Path, config: dict = None) -> bool:
             cmd.extend(["--reasoning-budget", "0"])
             log.info("[brain] Small model detected, disabling thinking mode")
 
+        # Auto-detect chat template from model name
+        if "qwen" in model_name:
+            cmd.extend(["--chat-template", "chatml"])
+            log.info("[brain] Qwen model detected — using chatml template")
+        elif "llama" in model_name or "meta" in model_name:
+            cmd.extend(["--chat-template", "llama3"])
+            log.info("[brain] Llama model detected — using llama3 template")
+        elif "mistral" in model_name:
+            cmd.extend(["--chat-template", "mistral-v7"])
+            log.info("[brain] Mistral model detected — using mistral-v7 template")
+        elif "gemma" in model_name:
+            cmd.extend(["--chat-template", "gemma"])
+            log.info("[brain] Gemma model detected — using gemma template")
+        elif "phi" in model_name:
+            cmd.extend(["--chat-template", "chatml"])
+            log.info("[brain] Phi model detected — using chatml template")
+        # else: let llama-server auto-detect from GGUF metadata
+
         log.info("[brain] Starting llama-server: %s", " ".join(cmd))
 
         try:

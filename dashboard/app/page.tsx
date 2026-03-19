@@ -234,8 +234,19 @@ export default function CampfireHub() {
           if (!res.ok) throw new Error(`llama-server error: ${res.status}`);
           const data = await res.json();
           const msg = data.choices?.[0]?.message;
-          // Show content first; fall back to reasoning_content (strip <think> tags)
-          responseText = msg?.content || (msg?.reasoning_content || "").replace(/<\/?think>/g, "").trim();
+          // Show content first; fall back to reasoning_content
+          let raw = msg?.content || (msg?.reasoning_content || "");
+          // Strip leaked template tokens (ChatML, Llama, think tags, etc.)
+          raw = raw
+            .replace(/<\/?think>/g, "")
+            .replace(/<\|im_start\|>[^\n]*/g, "")
+            .replace(/<\|im_end\|>/g, "")
+            .replace(/<\|end\|>/g, "")
+            .replace(/<\|eot_id\|>/g, "")
+            .replace(/<\|start_header_id\|>[^<]*<\|end_header_id\|>/g, "")
+            .replace(/\[INST\]|\[\/INST\]/g, "")
+            .trim();
+          responseText = raw;
         } catch {
           throw new Error("No backend available");
         }
