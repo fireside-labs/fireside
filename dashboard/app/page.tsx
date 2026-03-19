@@ -53,6 +53,7 @@ export default function CampfireHub() {
   const [chatHistory, setChatHistory] = useState<{ role: string; content: string; memory?: string; skills?: string[]; ts?: Date }[]>([]);
   const [hasBrain, setHasBrain] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(true);
   const [activeView, setActiveView] = useState<"hub" | "chat">("hub");
   const [greeting] = useState(() => GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -78,6 +79,9 @@ export default function CampfireHub() {
     setHasBrain(!!model);
     setBrainLabel(localStorage.getItem("fireside_brain_label") || localStorage.getItem("fireside_model") || "");
     setBrainQuant(localStorage.getItem("fireside_brain_quant") || "");
+    // Global thinking mode setting
+    const thinking = localStorage.getItem("fireside_thinking_enabled");
+    if (thinking !== null) setThinkingEnabled(thinking === "true");
   }, []);
 
   useEffect(() => {
@@ -121,14 +125,15 @@ export default function CampfireHub() {
                 ...chatHistory.map(m => ({ role: m.role, content: m.content })),
                 { role: "user", content: userMessage },
               ],
-              max_tokens: 1024,
+              max_tokens: thinkingEnabled ? 4096 : 1024,
               temperature: 0.7,
             }),
           });
           if (!res.ok) throw new Error(`llama-server error: ${res.status}`);
           const data = await res.json();
           const msg = data.choices?.[0]?.message;
-          responseText = msg?.content || msg?.reasoning_content || "";
+          // Show content first; fall back to reasoning_content (strip <think> tags)
+          responseText = msg?.content || (msg?.reasoning_content || "").replace(/<\/?think>/g, "").trim();
         } catch {
           throw new Error("No backend available");
         }
@@ -439,6 +444,19 @@ export default function CampfireHub() {
             <div className="fs-input-bar">
               <div className="fs-input-wrap">
                 <button className="fs-voice-btn" title="Voice mode">🎙</button>
+                <button
+                  className={`fs-think-btn ${thinkingEnabled ? 'active' : ''}`}
+                  onClick={() => {
+                    setThinkingEnabled(v => {
+                      const next = !v;
+                      localStorage.setItem('fireside_thinking_enabled', String(next));
+                      return next;
+                    });
+                  }}
+                  title={thinkingEnabled ? 'Thinking mode ON — model reasons before responding (global)' : 'Thinking mode OFF — direct responses (global)'}
+                >
+                  🧠
+                </button>
                 <input
                   ref={inputRef}
                   value={message}
@@ -921,6 +939,21 @@ const pageCSS = `
     transition: all 0.2s; flex-shrink: 0;
   }
   .fs-voice-btn:hover { color: #F59E0B; border-color: rgba(245,158,11,0.2); background: rgba(245,158,11,0.05); }
+
+  .fs-think-btn {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    color: #4A3D40; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s; flex-shrink: 0; opacity: 0.4;
+  }
+  .fs-think-btn:hover { opacity: 0.7; }
+  .fs-think-btn.active {
+    opacity: 1; color: #F59E0B;
+    border-color: rgba(245,158,11,0.3);
+    background: rgba(245,158,11,0.08);
+    box-shadow: 0 0 12px rgba(245,158,11,0.15);
+  }
 
   .fs-chat-input {
     flex: 1; padding: 12px 18px; border-radius: 14px;
