@@ -306,6 +306,98 @@ async def auto_browse_message(message: str) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Web Search — query DuckDuckGo and return structured results
+# ---------------------------------------------------------------------------
+
+async def web_search(query: str, max_results: int = 5) -> dict:
+    """
+    Search the web using DuckDuckGo HTML endpoint.
+    Returns structured results with title, URL, and snippet.
+
+    This is the function the chat handler calls when the user says
+    "search for X" or "what's the weather in Y" without providing a URL.
+    """
+    import urllib.parse
+
+    if not query or not query.strip():
+        return {"ok": False, "error": "Empty query"}
+
+    encoded = urllib.parse.quote_plus(query.strip()[:200])
+    search_url = f"https://html.duckduckgo.com/html/?q={encoded}"
+
+    try:
+        start = time.time()
+        page = await fetch_and_parse(search_url)
+        elapsed = round(time.time() - start, 2)
+
+        # Parse search results from the HTML — DuckDuckGo HTML results
+        # have a specific structure: each result is in a div with class 'result'
+        results = []
+        current_title = None
+        current_url = None
+
+        for el in page.elements:
+            text = el.text.strip()
+            if not text:
+                continue
+
+            # DuckDuckGo results: titles are link text, snippets follow
+            if el.role == "a" and hasattr(el, 'href') and el.href:
+                href = el.href
+                # Skip DuckDuckGo internal links
+                if 'duckduckgo.com' in href:
+                    continue
+                # Extract actual URL from DDG redirect
+                if '/l/?uddg=' in href:
+                    try:
+                        actual = urllib.parse.unquote(href.split('/l/?uddg=')[1].split('&')[0])
+                        href = actual
+                    except Exception:
+                        pass
+                if href.startswith(('http://', 'https://')):
+                    current_title = text
+                    current_url = href
+            elif current_title and current_url and len(text) > 20:
+                # This is likely the snippet for the previous result
+                results.append({
+                    "title": current_title,
+                    "url": current_url,
+                    "snippet": text[:300],
+                })
+                current_title = None
+                current_url = None
+                if len(results) >= max_results:
+                    break
+
+        # Fallback: if structured parsing didn't work well, use page text
+        if not results:
+            page_text = page.to_text(include_links=False)[:2000]
+            return {
+                "ok": True,
+                "query": query,
+                "results": [],
+                "raw_text": page_text,
+                "elapsed_seconds": elapsed,
+                "note": "Structured parsing failed, raw text provided",
+            }
+
+        log.info("[browse] Web search: %d results for '%s' in %.2fs",
+                 len(results), query[:50], elapsed)
+
+        return {
+            "ok": True,
+            "query": query,
+            "results": results,
+            "count": len(results),
+            "elapsed_seconds": elapsed,
+        }
+
+    except Exception as exc:
+        log.warning("[browse] Web search failed for '%s': %s", query[:50], exc)
+        return {"ok": False, "error": str(exc), "query": query}
+
+
+# ---------------------------------------------------------------------------
 # FastAPI route registration (called by plugin loader)
 # ---------------------------------------------------------------------------
 

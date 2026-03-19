@@ -895,55 +895,631 @@ async def post_chat(req: ChatRequest):
     if orch_ctx.get("enriched_system_additions"):
         system_prompt += orch_ctx["enriched_system_additions"]
 
-    # Build llama.cpp /completion payload
-    prompt_parts = [f"System: {system_prompt}"]
+    # ── Tool dispatch: browse, search, pipeline (invisible to user) ──
+    tool_context = ""
+    classification = orch_ctx.get("classification", "simple")
+
+    # 1. Auto-browse: if message contains a URL, fetch and inject it
+    try:
+        from plugins.browse.handler import auto_browse_message
+        browse_result = await auto_browse_message(req.message)
+        if browse_result:
+            page_text = browse_result.get("text", "")[:2000]
+            tool_context += (
+                f"\n\n[Web page content from {browse_result.get('title', 'page')}]\n"
+                f"URL: {browse_result.get('url', '')}\n"
+                f"{page_text}\n[End of web content]\n"
+            )
+            log.info("[chat] Auto-browsed URL: %s", browse_result.get("url"))
+    except Exception as e:
+        log.debug("[chat] Auto-browse skipped: %s", e)
+
+    # 2. Search intent: detect "search for X", "look up X", "find me X"
+    if not tool_context:
+        search_signals = [
+            "search for", "look up", "find me", "google",
+            "what's the latest", "what is the latest",
+            "find information", "search the web", "look online",
+            "can you find", "search online",
+            "what is the weather", "what's the weather",
+            "what is the temperature", "what's the temperature",
+            "current price of", "how much does",
+            "news about", "latest news",
+        ]
+        msg_lower = req.message.lower()
+        if any(sig in msg_lower for sig in search_signals):
+            try:
+                from plugins.browse.handler import web_search
+                search_result = await web_search(req.message, max_results=5)
+                if search_result.get("ok"):
+                    results = search_result.get("results", [])
+                    if results:
+                        result_lines = []
+                        for r in results:
+                            result_lines.append(
+                                f"• {r['title']}\n  {r['snippet']}\n  URL: {r['url']}"
+                            )
+                        tool_context += (
+                            f"\n\n[Web search results for: {req.message}]\n"
+                            + "\n\n".join(result_lines)
+                            + "\n[End of search results — use these to answer the user's question]\n"
+                        )
+                    elif search_result.get("raw_text"):
+                        tool_context += (
+                            f"\n\n[Web search results for: {req.message}]\n"
+                            f"{search_result['raw_text']}\n[End of search results]\n"
+                        )
+                    log.info("[chat] Web search: %d results", len(results))
+            except Exception as e:
+                log.debug("[chat] Web search skipped: %s", e)
+
+    # 3. Terminal/file intent: detect "run", "execute", "delete files", "make a program"
+    terminal_signals = [
+        "delete ", "remove ", "run ", "execute ", "create a file",
+        "make me a program", "make a program", "write a script",
+        "list files", "list my files", "show files", "open folder",
+        "create a folder", "make a folder", "show my desktop",
+        "find files", "search files", "rename ", "move ", "copy ",
+        "install ", "uninstall ", "what's on my",
+    ]
+    msg_lower = req.message.lower()
+    if any(sig in msg_lower for sig in terminal_signals):
+        # Detect if this is a DESTRUCTIVE operation
+        destructive_signals = [
+            "delete", "remove", "erase", "wipe", "format", "rmdir",
+            "rm ", "rm -", "del ", "uninstall",
+        ]
+        is_destructive = any(sig in msg_lower for sig in destructive_signals)
+
+        if is_destructive:
+            # SAFETY: For destructive ops, tell the model to describe + ask first
+            tool_context += (
+                "\n\n[TOOL CAPABILITY: You have access to the user's file system via API. "
+                "The user has asked for a DESTRUCTIVE operation (delete/remove/erase). "
+                "You MUST: (1) describe exactly what files/folders would be affected, "
+                "(2) estimate the count and total size, "
+                "(3) ask the user to confirm before proceeding. "
+                "NEVER execute destructive operations without explicit confirmation. "
+                "If they confirm, you can use POST /api/v1/files/delete with confirm=true, "
+                "or POST /api/v1/terminal/exec for shell commands.]\n"
+            )
+            log.info("[chat] Destructive terminal intent detected — safety prompt injected")
+        else:
+            # Safe operations: list, read, create, write, search
+            tool_context += (
+                "\n\n[TOOL CAPABILITY: You have access to the user's file system and terminal. "
+                "Available tools:\n"
+                "- POST /api/v1/files/list {path, recursive, pattern} — list files\n"
+                "- POST /api/v1/files/read {path} — read file contents\n"
+                "- POST /api/v1/files/write {path, content} — create/write files\n"
+                "- POST /api/v1/files/search {path, query, extensions} — search in files\n"
+                "- POST /api/v1/files/mkdir {path} — create directories\n"
+                "- POST /api/v1/files/copy {source, destination} — copy files\n"
+                "- POST /api/v1/terminal/exec {command, reason} — run shell commands\n"
+                "You can use these to help the user. For code creation, write the file "
+                "and tell the user where you saved it. Be helpful and proactive.]\n"
+            )
+            # For "make me a program" type requests, actually create the file
+            create_signals = ["make me a program", "make a program", "write a script",
+                              "create a file", "write a file", "build me"]
+            if any(sig in msg_lower for sig in create_signals):
+                # The model will respond with the code — we'll let the pipeline handle actual creation
+                # for complex multi-file projects, or just inject creation context
+                tool_context += (
+                    "\n[The user wants you to CREATE something. Write the code/content in your "
+                    "response. If it's a single file, use POST /api/v1/files/write to save it "
+                    "to their Desktop or Documents folder. Tell them where you saved it.]\n"
+                )
+            log.info("[chat] Terminal intent detected — tool prompt injected")
+
+    # 4. Voice intent: "read this to me", "say this out loud"
+    voice_signals = [
+        "read this", "say this", "speak", "read it to me",
+        "out loud", "read aloud", "tell me out loud",
+        "voice", "talk to me",
+    ]
+    if any(sig in msg_lower for sig in voice_signals):
+        tool_context += (
+            "\n\n[TOOL CAPABILITY: Voice is available via POST /api/v1/voice/enable "
+            "and the TTS system. If the user wants you to read something aloud, "
+            "include your response as normal text — the frontend will route it "
+            "through text-to-speech if voice mode is enabled. Let the user know "
+            "they can enable Voice mode in Skills to hear responses spoken.]\n"
+        )
+        log.info("[chat] Voice intent detected")
+
+    # 5. Memory intent: "remember this", "what did we talk about", "recall"
+    memory_signals = [
+        "remember this", "remember that", "don't forget",
+        "what did i tell you", "what did we talk about",
+        "do you remember", "recall ", "what do you know about me",
+        "what have i told you",
+    ]
+    if any(sig in msg_lower for sig in memory_signals):
+        # Check if user wants to STORE or RECALL
+        store_signals = ["remember this", "remember that", "don't forget"]
+        if any(sig in msg_lower for sig in store_signals):
+            try:
+                import orchestrator as orch_mod
+                orch_mod.observe(
+                    f"User asked to remember: {req.message}",
+                    importance=0.9, source="chat_explicit"
+                )
+                tool_context += (
+                    "\n\n[MEMORY STORED: The user explicitly asked you to remember "
+                    "something. It has been saved to long-term memory. Confirm that "
+                    "you'll remember it.]\n"
+                )
+                log.info("[chat] Explicit memory store: %s", req.message[:50])
+            except Exception as e:
+                log.debug("[chat] Memory store skipped: %s", e)
+        else:
+            # Recall — already done by orchestrator, but do an additional explicit search
+            try:
+                import orchestrator as orch_mod
+                extra_memories = orch_mod.recall_memories(req.message, top_k=5)
+                if extra_memories:
+                    mem_lines = [f"- {m.get('content', '')[:300]}" for m in extra_memories]
+                    tool_context += (
+                        "\n\n[RECALLED MEMORIES — the user is asking about past conversations]\n"
+                        + "\n".join(mem_lines) + "\n[End of memories]\n"
+                    )
+                    log.info("[chat] Explicit memory recall: %d results", len(extra_memories))
+                else:
+                    tool_context += (
+                        "\n\n[No relevant memories found. Let the user know you don't "
+                        "have specific memories about that topic yet.]\n"
+                    )
+            except Exception as e:
+                log.debug("[chat] Memory recall skipped: %s", e)
+
+    # 3. Complex task → auto-create pipeline from chat
+    pipeline_created = None
+    if classification == "complex":
+        try:
+            import orchestrator as orch_mod
+            pipeline_result = orch_mod.create_task_pipeline(req.message, mode="auto")
+            if pipeline_result:
+                pipeline_created = pipeline_result
+                pid = pipeline_result.get("id", pipeline_result.get("task_id", ""))
+                tool_context += (
+                    f"\n\n[I've started a background pipeline (ID: {pid}) to work on this "
+                    f"task properly. I'll break it into stages and work through it. "
+                    f"You can check progress on the Pipeline page.]\n"
+                )
+                log.info("[chat] Auto-created pipeline %s for complex task", pid)
+        except Exception as e:
+            log.debug("[chat] Pipeline auto-create skipped: %s", e)
+
+    # Inject tool context into system prompt
+    if tool_context:
+        system_prompt += tool_context
+
+    # ── Build OpenAI-compatible messages array ──
+    messages = [{"role": "system", "content": system_prompt}]
     for msg in (req.context or [])[-10:]:
         role = msg.get("role", "user") if isinstance(msg, dict) else "user"
         content = msg.get("content", "") if isinstance(msg, dict) else str(msg)
-        prompt_parts.append(f"{role.capitalize()}: {content}")
-    prompt_parts.append(f"User: {req.message}")
-    prompt_parts.append("Assistant:")
-    full_prompt = "\n".join(prompt_parts)
+        messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": req.message})
 
-    payload = json.dumps({
-        "prompt": full_prompt,
-        "stream": True,
-        "n_predict": 512,
-        "temperature": 0.7,
-        "stop": ["User:", "System:"],
-    }).encode()
+    # ── Tool schemas (OpenAI format) ──
+    TOOL_SCHEMAS = [
+        {
+            "type": "function",
+            "function": {
+                "name": "files_list",
+                "description": "List files and directories at a path. Use to see what files exist.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Directory path to list, e.g. 'C:/Users/Jordan/Desktop'"},
+                        "recursive": {"type": "boolean", "description": "Whether to list recursively", "default": False},
+                        "pattern": {"type": "string", "description": "Glob pattern to filter, e.g. '*.py'", "default": "*"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "files_read",
+                "description": "Read the contents of a file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Absolute path to the file to read"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "files_write",
+                "description": "Create or write content to a file. Creates parent directories automatically.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Absolute path where the file should be saved"},
+                        "content": {"type": "string", "description": "The content to write to the file"},
+                    },
+                    "required": ["path", "content"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "files_delete",
+                "description": "Delete a file. DANGEROUS — only call after the user has explicitly confirmed.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Absolute path to the file to delete"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_exec",
+                "description": "Run a shell command on the user's computer. Use for installing packages, running scripts, etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {"type": "string", "description": "The shell command to execute"},
+                        "reason": {"type": "string", "description": "Brief reason why this command is needed"},
+                    },
+                    "required": ["command"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": "Search the web for information. Returns titles, snippets, and URLs.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The search query"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "browse_url",
+                "description": "Fetch and read the contents of a URL. Returns the page text.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "The URL to fetch"},
+                    },
+                    "required": ["url"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_schedule",
+                "description": "Create a scheduled/recurring task. Use for reminders, daily checks, periodic monitoring.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task": {"type": "string", "description": "What to do when triggered"},
+                        "schedule": {"type": "string", "description": "When to run: 'every hour', 'every morning', 'in 30 minutes', 'every day at 9am'"},
+                    },
+                    "required": ["task", "schedule"],
+                },
+            },
+        },
+    ]
+
+    # ── Tool executor: runs a tool call against real APIs ──
+    async def _execute_tool(name: str, arguments: dict) -> str:
+        """Execute a tool call and return the result as a string."""
+        port = 8765
+        base = f"http://127.0.0.1:{port}"
+        try:
+            if name == "files_list":
+                payload = json.dumps(arguments).encode()
+                r = urllib.request.Request(f"{base}/api/v1/files/list", data=payload,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(r, timeout=15) as resp:
+                    data = json.loads(resp.read())
+                entries = data.get("entries", [])
+                if not entries:
+                    return "Directory is empty or not found."
+                lines = [f"{'DIR ' if e['type'] == 'dir' else ''}{e['name']}"
+                         + (f" ({e['size']} bytes)" if e.get('size') else "")
+                         for e in entries[:50]]
+                return f"Contents of {arguments.get('path', '.')}:\n" + "\n".join(lines)
+
+            elif name == "files_read":
+                payload = json.dumps({"path": arguments["path"]}).encode()
+                r = urllib.request.Request(f"{base}/api/v1/files/read", data=payload,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(r, timeout=15) as resp:
+                    data = json.loads(resp.read())
+                content = data.get("content", "")
+                return f"File: {arguments['path']} ({data.get('size', 0)} bytes, {data.get('lines', 0)} lines)\n\n{content[:3000]}"
+
+            elif name == "files_write":
+                payload = json.dumps({
+                    "path": arguments["path"],
+                    "content": arguments["content"],
+                    "create_dirs": True,
+                }).encode()
+                r = urllib.request.Request(f"{base}/api/v1/files/write", data=payload,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(r, timeout=15) as resp:
+                    data = json.loads(resp.read())
+                return f"File saved: {data.get('path', arguments['path'])} ({data.get('size', 0)} bytes)"
+
+            elif name == "files_delete":
+                # Safety: require explicit user confirmation
+                return (
+                    f"BLOCKED: Delete operation requires user confirmation. "
+                    f"Please ask the user to confirm deleting: {arguments.get('path', 'unknown')}. "
+                    f"Do NOT call files_delete again until the user explicitly says yes."
+                )
+
+            elif name == "terminal_exec":
+                # Safety check for destructive commands
+                cmd = arguments.get("command", "")
+                cmd_lower = cmd.lower()
+                destructive = ["rm ", "rm -", "del ", "rmdir", "format", "erase"]
+                if any(d in cmd_lower for d in destructive):
+                    return (
+                        f"BLOCKED: Destructive command detected: {cmd}\n"
+                        f"Ask the user to confirm before running this command."
+                    )
+                payload = json.dumps({
+                    "command": cmd,
+                    "reason": arguments.get("reason", "User request via chat"),
+                }).encode()
+                r = urllib.request.Request(f"{base}/api/v1/terminal/exec", data=payload,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(r, timeout=35) as resp:
+                    data = json.loads(resp.read())
+                result = data.get("result", {})
+                stdout = result.get("stdout", "")[:2000]
+                stderr = result.get("stderr", "")[:500]
+                rc = result.get("returncode", -1)
+                out = f"Exit code: {rc}\n"
+                if stdout:
+                    out += f"Output:\n{stdout}\n"
+                if stderr:
+                    out += f"Errors:\n{stderr}\n"
+                return out
+
+            elif name == "web_search":
+                from plugins.browse.handler import web_search as _ws
+                result = await _ws(arguments.get("query", ""), max_results=5)
+                if result.get("ok") and result.get("results"):
+                    lines = [f"• {r['title']}: {r['snippet']}" for r in result["results"]]
+                    return "\n".join(lines)
+                return result.get("raw_text", "No results found.")
+
+            elif name == "browse_url":
+                from plugins.browse.handler import browse as _browse
+                result = await _browse(arguments.get("url", ""))
+                if result.get("ok"):
+                    return f"Page: {result.get('title', 'Untitled')}\n\n{result.get('text', '')[:2000]}"
+                return f"Failed to fetch: {result.get('error', 'unknown error')}"
+
+            elif name == "create_schedule":
+                payload = json.dumps({
+                    "task": arguments.get("task", ""),
+                    "schedule": arguments.get("schedule", "in 1 hour"),
+                    "action": "chat",
+                }).encode()
+                r = urllib.request.Request(f"{base}/api/v1/scheduler/create", data=payload,
+                                          headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(r, timeout=10) as resp:
+                    data = json.loads(resp.read())
+                sched = data.get("schedule", {})
+                return f"Scheduled: {sched.get('description', 'unknown')} — Task ID: {data.get('task_id', 'unknown')}"
+
+            else:
+                return f"Unknown tool: {name}"
+
+        except Exception as e:
+            log.warning("[chat] Tool execution failed (%s): %s", name, e)
+            return f"Tool error: {str(e)}"
 
     query_hash = orch_ctx.get("query_hash")
-    classification = orch_ctx.get("classification", "simple")
 
     async def stream_response():
         full_response = []
-        try:
-            http_req = urllib.request.Request(
-                "http://127.0.0.1:8080/completion",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(http_req, timeout=60) as resp:
-                for line in resp:
-                    decoded = line.decode("utf-8", errors="ignore").strip()
-                    if decoded.startswith("data: "):
+        current_messages = list(messages)  # copy for the agentic loop
+        max_tool_rounds = 25
+
+        for tool_round in range(max_tool_rounds + 1):
+            try:
+                # Build payload for /v1/chat/completions
+                chat_payload = {
+                    "messages": current_messages,
+                    "stream": True,
+                    "max_tokens": 1024,
+                    "temperature": 0.7,
+                }
+                # Only include tools on first few rounds (not the final forced text response)
+                if tool_round < max_tool_rounds:
+                    chat_payload["tools"] = TOOL_SCHEMAS
+
+                payload_bytes = json.dumps(chat_payload).encode()
+                http_req = urllib.request.Request(
+                    "http://127.0.0.1:8080/v1/chat/completions",
+                    data=payload_bytes,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+
+                # Collect the full streamed response (we need to check for tool_calls)
+                response_chunks = []
+                tool_calls_accumulated = {}  # id → {name, arguments_str}
+
+                with urllib.request.urlopen(http_req, timeout=120) as resp:
+                    for line in resp:
+                        decoded = line.decode("utf-8", errors="ignore").strip()
+                        if not decoded.startswith("data: "):
+                            continue
                         chunk = decoded[6:]
                         if chunk == "[DONE]":
-                            yield f"data: [DONE]\n\n"
                             break
                         try:
                             obj = json.loads(chunk)
-                            content = obj.get("content", "")
+                            delta = obj.get("choices", [{}])[0].get("delta", {})
+
+                            # Accumulate text content
+                            content = delta.get("content", "")
                             if content:
-                                full_response.append(content)
-                                yield f"data: {json.dumps({'content': content})}\n\n"
+                                response_chunks.append(content)
+                                # Only stream text to user if this is the final round (no tool calls pending)
+                                # We'll check after the full response
+
+                            # Accumulate tool calls
+                            if delta.get("tool_calls"):
+                                for tc in delta["tool_calls"]:
+                                    idx = tc.get("index", 0)
+                                    if idx not in tool_calls_accumulated:
+                                        tool_calls_accumulated[idx] = {
+                                            "id": tc.get("id", f"call_{idx}"),
+                                            "name": "",
+                                            "arguments": "",
+                                        }
+                                    fn = tc.get("function", {})
+                                    if fn.get("name"):
+                                        tool_calls_accumulated[idx]["name"] = fn["name"]
+                                    if fn.get("arguments"):
+                                        tool_calls_accumulated[idx]["arguments"] += fn["arguments"]
+
                         except json.JSONDecodeError:
                             pass
-        except Exception as e:
-            log.warning("[chat] llama.cpp unreachable: %s", e)
-            yield f"data: {json.dumps({'content': f'{agent_name} is thinking... but the brain is offline right now. Start the backend first!'})}\n\n"
+
+                # Did the model emit tool calls?
+                if tool_calls_accumulated:
+                    log.info("[chat] Tool round %d: %d tool call(s)", tool_round + 1,
+                             len(tool_calls_accumulated))
+
+                    # Send the user a subtle status indicator
+                    tool_names = [tc["name"] for tc in tool_calls_accumulated.values()]
+                    status_msg = "🔧 " + ", ".join(tool_names) + "..."
+                    yield f"data: {json.dumps({'content': status_msg + chr(10)})}\n\n"
+
+                    # Build assistant message with tool_calls for context
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": "".join(response_chunks) if response_chunks else None,
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tc["name"],
+                                    "arguments": tc["arguments"],
+                                },
+                            }
+                            for tc in tool_calls_accumulated.values()
+                        ],
+                    }
+                    current_messages.append(assistant_msg)
+
+                    # Execute each tool call and feed results back
+                    for tc in tool_calls_accumulated.values():
+                        try:
+                            args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                        except json.JSONDecodeError:
+                            args = {}
+
+                        result_str = await _execute_tool(tc["name"], args)
+                        log.info("[chat] Tool %s → %s", tc["name"], result_str[:80])
+
+                        current_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc["id"],
+                            "content": result_str,
+                        })
+
+                    # Continue the loop — model will see tool results and respond again
+                    continue
+
+                else:
+                    # No tool calls — this is the final text response. Stream it.
+                    for chunk_text in response_chunks:
+                        full_response.append(chunk_text)
+                        yield f"data: {json.dumps({'content': chunk_text})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    break
+
+            except urllib.error.URLError as e:
+                # /v1/chat/completions might not be available — fall back to old /completion
+                log.info("[chat] /v1/chat/completions unavailable (%s), falling back to /completion", e)
+                prompt_parts = [f"System: {system_prompt}"]
+                for msg in (req.context or [])[-10:]:
+                    role_fb = msg.get("role", "user") if isinstance(msg, dict) else "user"
+                    content_fb = msg.get("content", "") if isinstance(msg, dict) else str(msg)
+                    prompt_parts.append(f"{role_fb.capitalize()}: {content_fb}")
+                prompt_parts.append(f"User: {req.message}")
+                prompt_parts.append("Assistant:")
+                fallback_prompt = "\n".join(prompt_parts)
+
+                fallback_payload = json.dumps({
+                    "prompt": fallback_prompt,
+                    "stream": True,
+                    "n_predict": 512,
+                    "temperature": 0.7,
+                    "stop": ["User:", "System:"],
+                }).encode()
+
+                try:
+                    fb_req = urllib.request.Request(
+                        "http://127.0.0.1:8080/completion",
+                        data=fallback_payload,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(fb_req, timeout=60) as fb_resp:
+                        for fb_line in fb_resp:
+                            fb_decoded = fb_line.decode("utf-8", errors="ignore").strip()
+                            if fb_decoded.startswith("data: "):
+                                fb_chunk = fb_decoded[6:]
+                                if fb_chunk == "[DONE]":
+                                    yield "data: [DONE]\n\n"
+                                    break
+                                try:
+                                    fb_obj = json.loads(fb_chunk)
+                                    fb_content = fb_obj.get("content", "")
+                                    if fb_content:
+                                        full_response.append(fb_content)
+                                        yield f"data: {json.dumps({'content': fb_content})}\n\n"
+                                except json.JSONDecodeError:
+                                    pass
+                except Exception as fb_e:
+                    log.warning("[chat] Fallback /completion also failed: %s", fb_e)
+                    yield f"data: {json.dumps({'content': f'{agent_name} is thinking... but the brain is offline right now. Start the backend first!'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                break
+
+            except Exception as e:
+                log.warning("[chat] llama-server error: %s", e)
+                yield f"data: {json.dumps({'content': f'{agent_name} is thinking... but the brain is offline right now. Start the backend first!'})}\n\n"
+                yield "data: [DONE]\n\n"
+                break
+
+        else:
+            # Hit max tool rounds — force a final response
+            yield f"data: {json.dumps({'content': '(Reached tool limit, finishing up...)'})}\n\n"
             yield "data: [DONE]\n\n"
 
         # --- Orchestrator: post-inference ---
@@ -1025,6 +1601,55 @@ async def post_orchestrate(req: OrchestrateRequest):
         raise HTTPException(500, f"Orchestration failed: {e}")
 
 
+class PipelineStartRequest(BaseModel):
+    task: str = Field(max_length=4096)
+    mode: str = "auto"
+    template: str = ""
+
+
+@router.post("/pipeline/start")
+async def post_pipeline_start(req: PipelineStartRequest):
+    """Start a pipeline from the dashboard or chat. Runs in background.
+
+    This is the endpoint the frontend Star button hits.
+    Pipeline stages execute asynchronously in a background thread.
+    """
+    import threading
+
+    try:
+        import orchestrator
+
+        def _run_pipeline():
+            try:
+                orchestrator.create_task_pipeline(
+                    req.task, mode="pipeline",
+                    template_name=req.template or None,
+                )
+            except Exception as ex:
+                log.error("[pipeline/start] Background execution failed: %s", ex)
+
+        # Classify first to get template info for the response
+        from pipeline_templates import classify_template
+        template_name = req.template or classify_template(req.task)
+
+        # Start pipeline in background thread
+        t = threading.Thread(target=_run_pipeline, daemon=True)
+        t.start()
+
+        pipeline_id = f"pipe_pending_{int(time.time())}"
+        return {
+            "ok": True,
+            "pipeline_id": pipeline_id,
+            "template": template_name,
+            "status": "starting",
+            "message": f"Pipeline created for: {req.task[:100]}",
+        }
+
+    except Exception as e:
+        log.error("[pipeline/start] Failed: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 @router.get("/pipeline/templates")
 async def get_pipeline_templates():
     """List available pipeline templates (built-in + user custom)."""
@@ -1052,9 +1677,9 @@ class BrainInstallRequest(BaseModel):
     url: str
 
 
-@router.post("/brains/install")
-async def post_brains_install(req: BrainInstallRequest):
-    """Download a GGUF model to ~/.fireside/models/. Stream progress via SSE."""
+@router.post("/brains/download")
+async def post_brains_download(req: BrainInstallRequest):
+    """Download a GGUF model from URL to ~/.fireside/models/. Stream progress via SSE."""
     import urllib.request
     from urllib.parse import urlparse
     from fastapi.responses import StreamingResponse
