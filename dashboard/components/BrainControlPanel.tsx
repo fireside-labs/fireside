@@ -30,6 +30,13 @@ export default function BrainControlPanel() {
   const [gpu, setGpu] = useState<GpuInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState<string | null>(null);
+  const [showStats, setShowStats] = useState(false);
+
+  // Brain config (JRPG stats)
+  const [ctxSize, setCtxSize] = useState(8192);
+  const [temperature, setTemperature] = useState(0.7);
+  const [thinkingEnabled, setThinkingEnabled] = useState(true);
+  const [gpuLayers, setGpuLayers] = useState(99);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -55,6 +62,18 @@ export default function BrainControlPanel() {
     return () => clearInterval(id);
   }, [fetchStatus]);
 
+  // Load saved brain config from localStorage
+  useEffect(() => {
+    const ctx = localStorage.getItem("fireside_ctx_size");
+    if (ctx) setCtxSize(parseInt(ctx));
+    const temp = localStorage.getItem("fireside_temperature");
+    if (temp) setTemperature(parseFloat(temp));
+    const think = localStorage.getItem("fireside_thinking_enabled");
+    if (think !== null) setThinkingEnabled(think === "true");
+    const gpu = localStorage.getItem("fireside_gpu_layers");
+    if (gpu) setGpuLayers(parseInt(gpu));
+  }, []);
+
   const handleStop = async () => {
     setActionPending("stop");
     try {
@@ -74,6 +93,10 @@ export default function BrainControlPanel() {
     } finally {
       setActionPending(null);
     }
+  };
+
+  const saveStat = (key: string, value: string) => {
+    localStorage.setItem(key, value);
   };
 
   if (loading) {
@@ -104,9 +127,9 @@ export default function BrainControlPanel() {
           {/* Pulsing status dot */}
           <div className={`bcp-dot ${isOnline ? "bcp-dot-online" : "bcp-dot-offline"}`} />
 
-          {/* Model name */}
-          <div className="bcp-model-info">
-            <div className="bcp-label">ACTIVE BRAIN</div>
+          {/* Model name — CLICK TO OPEN STATS */}
+          <div className="bcp-model-info" onClick={() => setShowStats(v => !v)} style={{ cursor: "pointer" }}>
+            <div className="bcp-label">ACTIVE BRAIN <span style={{ opacity: 0.4, fontSize: 8 }}>{showStats ? "▼" : "▶"} STATS</span></div>
             <div className={`bcp-model-name ${isOnline ? "bcp-name-glow" : ""}`}>
               {isOnline ? `⚡ ${modelName}` : `☠ ${modelName}`}
             </div>
@@ -191,6 +214,61 @@ export default function BrainControlPanel() {
       {status?.error && !isOnline && (
         <div className="bcp-error">
           <span>⚠</span> {status.error}
+        </div>
+      )}
+
+      {/* ─── JRPG STAT SHEET ─── */}
+      {showStats && (
+        <div className="bcp-stats-sheet">
+          <div className="bcp-sheet-title">⚔ BRAIN CONFIGURATION</div>
+
+          {/* Context Window */}
+          <div className="bcp-stat-row">
+            <div className="bcp-stat-header">
+              <span className="bcp-stat-name">📜 Context Window</span>
+              <span className="bcp-stat-val">{(ctxSize / 1024).toFixed(0)}K tokens</span>
+            </div>
+            <input type="range" className="bcp-slider" min={2048} max={32768} step={1024}
+              value={ctxSize} onChange={e => { const v = parseInt(e.target.value); setCtxSize(v); saveStat("fireside_ctx_size", String(v)); }} />
+            <div className="bcp-stat-range"><span>2K</span><span>32K</span></div>
+          </div>
+
+          {/* Temperature */}
+          <div className="bcp-stat-row">
+            <div className="bcp-stat-header">
+              <span className="bcp-stat-name">🔥 Temperature</span>
+              <span className="bcp-stat-val">{temperature.toFixed(2)}</span>
+            </div>
+            <input type="range" className="bcp-slider bcp-slider-fire" min={0} max={150} step={5}
+              value={Math.round(temperature * 100)} onChange={e => { const v = parseInt(e.target.value) / 100; setTemperature(v); saveStat("fireside_temperature", String(v)); }} />
+            <div className="bcp-stat-range"><span>Precise</span><span>Creative</span></div>
+          </div>
+
+          {/* GPU Layers */}
+          <div className="bcp-stat-row">
+            <div className="bcp-stat-header">
+              <span className="bcp-stat-name">🎮 GPU Layers</span>
+              <span className="bcp-stat-val">{gpuLayers === 99 ? "ALL" : gpuLayers}</span>
+            </div>
+            <input type="range" className="bcp-slider bcp-slider-gpu" min={0} max={99} step={1}
+              value={gpuLayers} onChange={e => { const v = parseInt(e.target.value); setGpuLayers(v); saveStat("fireside_gpu_layers", String(v)); }} />
+            <div className="bcp-stat-range"><span>CPU only</span><span>Full GPU</span></div>
+          </div>
+
+          {/* Thinking Mode Toggle */}
+          <div className="bcp-stat-row bcp-toggle-row">
+            <span className="bcp-stat-name">🧠 Thinking Mode</span>
+            <button
+              className={`bcp-toggle ${thinkingEnabled ? "bcp-toggle-on" : ""}`}
+              onClick={() => { const next = !thinkingEnabled; setThinkingEnabled(next); saveStat("fireside_thinking_enabled", String(next)); }}
+            >
+              {thinkingEnabled ? "ON" : "OFF"}
+            </button>
+          </div>
+
+          <div className="bcp-sheet-hint">
+            ⚠ Context & GPU changes take effect after restart
+          </div>
         </div>
       )}
     </div>
@@ -469,5 +547,130 @@ const panelCSS = `
       width: 100%;
       justify-content: flex-end;
     }
+  }
+
+  /* ═══ JRPG STAT SHEET ═══ */
+  .bcp-stats-sheet {
+    margin-top: 8px;
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(245,158,11,0.03), rgba(139,92,246,0.02));
+    border: 1.5px solid rgba(245,158,11,0.12);
+    backdrop-filter: blur(10px);
+    animation: bcpSheetIn 0.3s ease-out;
+  }
+  @keyframes bcpSheetIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .bcp-sheet-title {
+    font-size: 10px;
+    font-weight: 800;
+    color: #F59E0B;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(245,158,11,0.1);
+  }
+
+  .bcp-stat-row {
+    margin-bottom: 14px;
+  }
+  .bcp-stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .bcp-stat-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #9A8A7A;
+  }
+  .bcp-stat-val {
+    font-size: 13px;
+    font-weight: 800;
+    color: #F59E0B;
+    font-variant-numeric: tabular-nums;
+  }
+  .bcp-stat-range {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #4A3D30;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  /* Custom RPG slider */
+  .bcp-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.06);
+    outline: none;
+    cursor: pointer;
+  }
+  .bcp-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    box-shadow: 0 0 10px rgba(245,158,11,0.4), 0 2px 4px rgba(0,0,0,0.3);
+    cursor: grab;
+    transition: box-shadow 0.2s;
+  }
+  .bcp-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 16px rgba(245,158,11,0.6), 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .bcp-slider-fire::-webkit-slider-thumb {
+    background: linear-gradient(135deg, #EF4444, #F97316);
+    box-shadow: 0 0 10px rgba(239,68,68,0.4), 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .bcp-slider-gpu::-webkit-slider-thumb {
+    background: linear-gradient(135deg, #10B981, #059669);
+    box-shadow: 0 0 10px rgba(16,185,129,0.4), 0 2px 4px rgba(0,0,0,0.3);
+  }
+
+  /* Thinking mode toggle */
+  .bcp-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .bcp-toggle {
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: rgba(255,255,255,0.04);
+    border: 1.5px solid rgba(255,255,255,0.08);
+    color: #4A3D30;
+  }
+  .bcp-toggle-on {
+    background: rgba(245,158,11,0.1);
+    border-color: rgba(245,158,11,0.3);
+    color: #F59E0B;
+    box-shadow: 0 0 12px rgba(245,158,11,0.15);
+  }
+  .bcp-toggle:hover {
+    border-color: rgba(245,158,11,0.4);
+  }
+
+  .bcp-sheet-hint {
+    font-size: 10px;
+    color: #4A3D30;
+    font-weight: 600;
+    text-align: center;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.04);
   }
 `;

@@ -125,7 +125,7 @@ export default function CampfireHub() {
                 ...chatHistory.map(m => ({ role: m.role, content: m.content })),
                 { role: "user", content: userMessage },
               ],
-              temperature: 0.7,
+              temperature: parseFloat(localStorage.getItem("fireside_temperature") || "0.7"),
             }),
           });
           if (!res.ok) throw new Error(`llama-server error: ${res.status}`);
