@@ -166,6 +166,17 @@ const MODELS: ModelDef[] = [
     ],
   },
   {
+    id: "qwen3.5-35b-a3b", name: "Qwen 3.5 35B-A3B (MoE)", family: "Alibaba",
+    params: "35B (3B active)", speed: "~40 tok/s", category: "power",
+    tags: ["MoE", "tool-calling", "efficient", "recommended"], recommended: true,
+    desc: "The next-gen Mixture-of-Experts upgrade — 35B total parameters with only 3B active per token, delivering frontier-class intelligence at near-8B speeds. Specifically trained for tool calling and function use. The ideal brain for Fireside's agentic features (browsing, file access, pipelines) on a single 24+ GB GPU.",
+    quants: [
+      { label: "Low", bits: "4-bit", intel: 85, spd: 55, sizeGB: 20.0, size: "20.0 GB" },
+      { label: "Medium", bits: "6-bit", intel: 89, spd: 42, sizeGB: 28.0, size: "28.0 GB" },
+      { label: "High", bits: "8-bit", intel: 92, spd: 35, sizeGB: 35.0, size: "35.0 GB" },
+    ],
+  },
+  {
     id: "qwen3-32b", name: "Qwen 3 32B", family: "Alibaba",
     params: "32B", speed: "~18 tok/s", category: "power",
     tags: ["thinking", "frontier-local"], recommended: false,
