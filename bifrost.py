@@ -124,6 +124,10 @@ def create_app(config_path: str | None = None) -> FastAPI:
     cors_origins = dash_cfg.get("cors_origins", [
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:8765",
+        "http://127.0.0.1:8765",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
     ])
     # Dynamic matching for Tailscale (100.x.x.x) and local network IPs
     # This covers mobile app connections from any Tailscale or LAN IP
