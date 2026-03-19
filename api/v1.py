@@ -1440,7 +1440,7 @@ async def post_chat(req: ChatRequest):
     async def stream_response():
         full_response = []
         current_messages = list(messages)  # copy for the agentic loop
-        max_tool_rounds = 25
+        max_tool_rounds = 3
 
         for tool_round in range(max_tool_rounds + 1):
             try:
@@ -1510,10 +1510,9 @@ async def post_chat(req: ChatRequest):
                     log.info("[chat] Tool round %d: %d tool call(s)", tool_round + 1,
                              len(tool_calls_accumulated))
 
-                    # Send the user a subtle status indicator
+                    # Log tool activity (don't yield as visible chat text)
                     tool_names = [tc["name"] for tc in tool_calls_accumulated.values()]
-                    status_msg = "🔧 " + ", ".join(tool_names) + "..."
-                    yield f"data: {json.dumps({'content': status_msg + chr(10)})}\n\n"
+                    log.info("[chat] Using tools: %s", ", ".join(tool_names))
 
                     # Build assistant message with tool_calls for context
                     assistant_msg = {
