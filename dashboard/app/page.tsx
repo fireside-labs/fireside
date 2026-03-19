@@ -127,7 +127,8 @@ export default function CampfireHub() {
           });
           if (!res.ok) throw new Error(`llama-server error: ${res.status}`);
           const data = await res.json();
-          responseText = data.choices?.[0]?.message?.content || "";
+          const msg = data.choices?.[0]?.message;
+          responseText = msg?.content || msg?.reasoning_content || "";
         } catch {
           throw new Error("No backend available");
         }
