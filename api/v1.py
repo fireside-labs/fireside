@@ -1289,12 +1289,7 @@ async def post_chat(req: ChatRequest):
         base = f"http://127.0.0.1:{port}"
         try:
             if name == "files_list":
-                # Path safety: restrict to user home
-                req_path = arguments.get("path", ".")
-                home = str(Path.home()).replace("\\", "/")
-                req_norm = req_path.replace("\\", "/")
-                if not req_norm.startswith(home) and not req_norm.startswith("."):
-                    return f"BLOCKED: Can only access files within your home directory ({home})"
+                # No path restriction — reading dir listings is non-destructive
                 payload = json.dumps(arguments).encode()
                 r = urllib.request.Request(f"{base}/api/v1/files/list", data=payload,
                                           headers={"Content-Type": "application/json"}, method="POST")
@@ -1309,12 +1304,7 @@ async def post_chat(req: ChatRequest):
                 return f"Contents of {arguments.get('path', '.')}:\n" + "\n".join(lines)
 
             elif name == "files_read":
-                # Path safety
-                req_path = arguments.get("path", "")
-                home = str(Path.home()).replace("\\", "/")
-                req_norm = req_path.replace("\\", "/")
-                if not req_norm.startswith(home):
-                    return f"BLOCKED: Can only read files within your home directory ({home})"
+                # No path restriction — reading files is non-destructive
                 payload = json.dumps({"path": arguments["path"]}).encode()
                 r = urllib.request.Request(f"{base}/api/v1/files/read", data=payload,
                                           headers={"Content-Type": "application/json"}, method="POST")
@@ -1330,15 +1320,15 @@ async def post_chat(req: ChatRequest):
                 req_norm = req_path.replace("\\", "/")
                 if not req_norm.startswith(home):
                     return f"BLOCKED: Can only write files within your home directory ({home})"
-                # Block writes to Fireside system dirs
-                protected = [".fireside/api", ".fireside/plugins", ".fireside/bot",
-                             ".fireside/middleware", ".fireside/bifrost"]
+                # Block writes to Fireside code dirs (config files like valhalla.yaml are OK)
+                protected = [".fireside/api/", ".fireside/plugins/",
+                             ".fireside/bot/", ".fireside/middleware/"]
                 if any(p in req_norm for p in protected):
-                    return "BLOCKED: Cannot write to Fireside system directories."
+                    return "BLOCKED: Cannot write to Fireside code directories (api/, plugins/, bot/)."
                 # Content size cap: 500KB
                 content = arguments.get("content", "")
-                if len(content) > 512_000:
-                    return f"BLOCKED: File content too large ({len(content)} bytes). Max 500KB."
+                if len(content) > 5_242_880:
+                    return f"BLOCKED: File content too large ({len(content)} bytes). Max 5MB."
                 payload = json.dumps({
                     "path": arguments["path"],
                     "content": content,
@@ -1359,29 +1349,58 @@ async def post_chat(req: ChatRequest):
                 )
 
             elif name == "terminal_exec":
-                # Safety check for destructive commands
                 cmd = arguments.get("command", "")
                 cmd_lower = cmd.lower()
-                destructive = [
-                    # Unix
-                    "rm ", "rm -", "rmdir", "dd if=",
-                    # Windows CMD
-                    "del ", "erase", "format ", "rd ", "rd/",
-                    # PowerShell
-                    "remove-item", "clear-content", "invoke-expression",
-                    "start-process", "iex ", "iex(",
-                    # Shell injection
-                    "cmd /c del", "cmd /c rd", "cmd /c erase",
-                    "powershell -c remove", "powershell -command",
-                    # Dangerous system commands
+
+                # ALWAYS block: system-level danger regardless of path
+                always_block = [
                     "shutdown", "restart-computer", "stop-computer",
-                    "format-volume", "clear-disk",
+                    "format-volume", "clear-disk", "dd if=",
+                    "invoke-expression", "iex ", "iex(",
+                    "powershell -encodedcommand", "powershell -e ",
                 ]
-                if any(d in cmd_lower for d in destructive):
+                if any(d in cmd_lower for d in always_block):
                     return (
-                        f"BLOCKED: Destructive command detected: {cmd}\n"
-                        f"Ask the user to confirm before running this command."
+                        f"BLOCKED: Dangerous system command: {cmd}\n"
+                        f"This command is never allowed."
                     )
+
+                # PATH-AWARE check: destructive commands allowed in home dir,
+                # blocked if targeting system directories
+                destructive_cmds = [
+                    "rm ", "rm -", "rmdir", "del ", "erase",
+                    "remove-item", "rd ", "rd/",
+                    "cmd /c del", "cmd /c rd",
+                ]
+                if any(d in cmd_lower for d in destructive_cmds):
+                    # Extract paths from the command (rough heuristic)
+                    system_paths = [
+                        "c:\\windows", "c:/windows", "/windows",
+                        "c:\\program files", "c:/program files",
+                        "/usr", "/bin", "/sbin", "/etc", "/boot",
+                        "system32", "syswow64",
+                        ".fireside\\api", ".fireside/api",
+                        ".fireside\\plugins", ".fireside/plugins",
+                        ".fireside\\bot", ".fireside/bot",
+                    ]
+                    hits_system = any(sp in cmd_lower for sp in system_paths)
+
+                    # Also block wildcard at root level
+                    # NOTE: String matching is a speed bump, not a wall.
+                    # Real sandboxing requires OS-level isolation (Docker/chroot).
+                    root_patterns = [
+                        "c:\\*", "c:/*",
+                        "remove-item c:\\",
+                        "rm -rf /", "rm -rf /*",
+                    ]
+                    hits_root = any(rp in cmd_lower for rp in root_patterns)
+
+                    if hits_system or hits_root:
+                        return (
+                            f"BLOCKED: Destructive command targets system files: {cmd}\n"
+                            f"Destructive commands are only allowed within your project directories."
+                        )
+                    # Allowed: destructive command within user space (e.g. rm node_modules)
                 payload = json.dumps({
                     "command": cmd,
                     "reason": arguments.get("reason", "User request via chat"),
