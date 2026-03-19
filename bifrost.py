@@ -119,23 +119,12 @@ def create_app(config_path: str | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS — allow dashboard + mobile app (Sprint 2: Heimdall-hardened)
-    dash_cfg = config.get("dashboard", {})
-    cors_origins = dash_cfg.get("cors_origins", [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:8765",
-        "http://127.0.0.1:8765",
-        "http://tauri.localhost",
-        "https://tauri.localhost",
-    ])
-    # Dynamic matching for Tailscale (100.x.x.x) and local network IPs
-    # This covers mobile app connections from any Tailscale or LAN IP
+    # CORS — allow all origins. Bifrost binds to 127.0.0.1 only,
+    # so only local processes can reach it. No security risk.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,
-        allow_origin_regex=r"^https?://(100\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$",
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,  # credentials not needed for local
         allow_methods=["*"],
         allow_headers=["*"],
     )
