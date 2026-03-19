@@ -1515,7 +1515,7 @@ async def post_chat(req: ChatRequest):
                         except json.JSONDecodeError:
                             pass
 
-                # Did the model emit tool calls?
+                # Did the model emit tool calls via OpenAI format?
                 if tool_calls_accumulated:
                     log.info("[chat] Tool round %d: %d tool call(s)", tool_round + 1,
                              len(tool_calls_accumulated))
@@ -1561,14 +1561,69 @@ async def post_chat(req: ChatRequest):
                     # Continue the loop — model will see tool results and respond again
                     continue
 
+                # Fallback: check for XML-style <tool_call> tags in text content
+                # Some models (Qwen 3.5) output tool calls as XML text instead of
+                # using the OpenAI function-calling API
+                full_text = "".join(response_chunks)
+                import re as _re
+                xml_tool_pattern = _re.compile(
+                    r'<tool_call>\s*<function=(\w+)>(.*?)</function>\s*</tool_call>',
+                    _re.DOTALL
+                )
+                xml_matches = xml_tool_pattern.findall(full_text)
+
+                if xml_matches and tool_round < max_tool_rounds:
+                    log.info("[chat] Tool round %d: %d XML tool call(s) (fallback parser)",
+                             tool_round + 1, len(xml_matches))
+
+                    # Strip XML tool calls from visible text
+                    clean_text = xml_tool_pattern.sub('', full_text).strip()
+
+                    # Parse and execute each XML tool call
+                    current_messages.append({
+                        "role": "assistant",
+                        "content": clean_text or None,
+                    })
+
+                    param_pattern = _re.compile(
+                        r'<parameter=(\w+)>\s*(.*?)\s*</parameter>',
+                        _re.DOTALL
+                    )
+
+                    for func_name, func_body in xml_matches:
+                        # Parse <parameter=key>value</parameter> pairs
+                        params = {}
+                        for key, value in param_pattern.findall(func_body):
+                            value = value.strip()
+                            # Try to parse as JSON (bools, numbers), fall back to string
+                            try:
+                                params[key] = json.loads(value)
+                            except (json.JSONDecodeError, ValueError):
+                                params[key] = value
+
+                        log.info("[chat] XML tool: %s(%s)", func_name, params)
+                        result_str = await _execute_tool(func_name, params)
+                        log.info("[chat] Tool %s → %s", func_name, result_str[:80])
+
+                        tool_id = f"xmlcall_{tool_round}_{func_name}"
+                        current_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_id,
+                            "content": result_str,
+                        })
+
+                    continue
+
                 else:
-                    # No tool calls — this is the final text response. 
+                    # No tool calls (neither format) — this is the final text response.
                     # Filter out reasoning blocks before streaming.
-                    full_text = "".join(response_chunks)
                     import re
                     full_text = re.sub(r'<\/?think>', '', full_text)
                     full_text = re.sub(r'(?i)Thinking Process:?[\s\S]*?(?=\n\n|\n[A-Z]|$)', '', full_text)
                     full_text = re.sub(r'(?i)Thought Process:?[\s\S]*?(?=\n\n|\n[A-Z]|$)', '', full_text)
+                    # Also strip any leftover XML tool tags
+                    full_text = re.sub(r'</?tool_call>', '', full_text)
+                    full_text = re.sub(r'<function=\w+>.*?</function>', '', full_text, flags=re.DOTALL)
                     full_text = full_text.strip()
                     
                     # Yield the cleaned text
