@@ -88,6 +88,94 @@ export default function CampfireHub() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
+  // ═══ Smart Chat Compaction ═══
+  const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+
+  const getContextLimit = () => {
+    const ctx = parseInt(localStorage.getItem("fireside_ctx_size") || "8192");
+    return Math.floor(ctx * 0.6); // compact at 60% of context
+  };
+
+  const getResponseLimit = () => {
+    const preset = localStorage.getItem("fireside_response_length") || "normal";
+    const limits: Record<string, number | undefined> = {
+      short: 256, normal: 1024, long: 4096, unlimited: undefined,
+    };
+    return limits[preset];
+  };
+
+  const saveMemory = (summary: string) => {
+    try {
+      const memories = JSON.parse(localStorage.getItem("fireside_memories") || "[]");
+      memories.push({ summary, timestamp: new Date().toISOString() });
+      // Keep last 50 memories
+      if (memories.length > 50) memories.splice(0, memories.length - 50);
+      localStorage.setItem("fireside_memories", JSON.stringify(memories));
+    } catch { /* ignore */ }
+  };
+
+  const recallMemories = (currentMessage: string): string => {
+    try {
+      const memories = JSON.parse(localStorage.getItem("fireside_memories") || "[]");
+      if (memories.length === 0) return "";
+      // Simple keyword matching — find memories relevant to current message
+      const words = currentMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const relevant = memories.filter((m: { summary: string }) =>
+        words.some(w => m.summary.toLowerCase().includes(w))
+      ).slice(-3); // max 3 recalled memories
+      if (relevant.length === 0) {
+        // If no keyword match, return the most recent memory for continuity
+        const recent = memories.slice(-1);
+        return recent.map((m: { summary: string }) => m.summary).join(" | ");
+      }
+      return relevant.map((m: { summary: string }) => m.summary).join(" | ");
+    } catch { return ""; }
+  };
+
+  const compactHistory = async (history: typeof chatHistory): Promise<typeof chatHistory> => {
+    const totalTokens = history.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+    const limit = getContextLimit();
+
+    if (totalTokens <= limit || history.length <= 4) return history;
+
+    // Split: keep the last 4 messages, summarize the rest
+    const toSummarize = history.slice(0, -4);
+    const toKeep = history.slice(-4);
+
+    const convoText = toSummarize.map(m => `${m.role}: ${m.content}`).join("\n");
+
+    try {
+      const res = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "local",
+          messages: [
+            { role: "system", content: "Summarize this conversation in 2-3 sentences. Focus on decisions made, key facts, and what the user wants. Be concise." },
+            { role: "user", content: convoText },
+          ],
+          temperature: 0.3,
+          max_tokens: 256,
+        }),
+      });
+      if (!res.ok) return history; // fallback: don't compact
+      const data = await res.json();
+      const summary = data.choices?.[0]?.message?.content || "";
+      if (!summary) return history;
+
+      // Save to long-term memory
+      saveMemory(summary);
+
+      // Replace old messages with a summary message
+      return [
+        { role: "system" as const, content: `[Previous conversation summary] ${summary}`, ts: new Date() },
+        ...toKeep,
+      ];
+    } catch {
+      return history; // Network error — don't compact
+    }
+  };
+
   const handleSend = async () => {
     if (!message.trim()) return;
     const userMessage = message.trim();
@@ -103,6 +191,18 @@ export default function CampfireHub() {
     try {
       // Try Python backend first (port 8765)
       let responseText = "";
+
+      // Auto-compact history if it's getting long
+      const compactedHistory = await compactHistory(chatHistory);
+      if (compactedHistory.length < chatHistory.length) {
+        setChatHistory([...compactedHistory, { role: "user", content: userMessage, ts: new Date() }]);
+      }
+
+      // Recall relevant memories
+      const recalled = recallMemories(userMessage);
+      const memoryContext = recalled ? `\n\n[Remembered from past conversations] ${recalled}` : "";
+      const maxTokens = getResponseLimit();
+
       try {
         const res = await fetch(`${API_BASE}/api/v1/chat`, {
           method: "POST",
@@ -115,18 +215,21 @@ export default function CampfireHub() {
       } catch {
         // Fallback: try llama-server directly (port 8080, OpenAI-compatible)
         try {
+          const systemPrompt = `You are a helpful AI companion named ${displayName}. Be friendly, concise, and helpful.${memoryContext}`;
+          const payload: Record<string, unknown> = {
+            model: "local",
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...compactedHistory.map(m => ({ role: m.role, content: m.content })),
+              { role: "user", content: userMessage },
+            ],
+            temperature: parseFloat(localStorage.getItem("fireside_temperature") || "0.7"),
+          };
+          if (maxTokens) payload.max_tokens = maxTokens;
           const res = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "local",
-              messages: [
-                { role: "system", content: "You are a helpful AI companion named " + displayName + ". Be friendly, concise, and helpful." },
-                ...chatHistory.map(m => ({ role: m.role, content: m.content })),
-                { role: "user", content: userMessage },
-              ],
-              temperature: parseFloat(localStorage.getItem("fireside_temperature") || "0.7"),
-            }),
+            body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error(`llama-server error: ${res.status}`);
           const data = await res.json();
