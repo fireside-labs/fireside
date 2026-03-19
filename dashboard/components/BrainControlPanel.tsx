@@ -32,11 +32,10 @@ export default function BrainControlPanel() {
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
 
-  // Brain config (JRPG stats)
-  const [ctxSize, setCtxSize] = useState(8192);
-  const [temperature, setTemperature] = useState(0.7);
+  // Brain config (user-friendly)
+  const [memorySize, setMemorySize] = useState("normal"); // short|normal|deep|max
   const [thinkingEnabled, setThinkingEnabled] = useState(true);
-  const [gpuLayers, setGpuLayers] = useState(99);
+  const [responseLength, setResponseLength] = useState("normal"); // short|normal|long|unlimited
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -64,15 +63,28 @@ export default function BrainControlPanel() {
 
   // Load saved brain config from localStorage
   useEffect(() => {
-    const ctx = localStorage.getItem("fireside_ctx_size");
-    if (ctx) setCtxSize(parseInt(ctx));
-    const temp = localStorage.getItem("fireside_temperature");
-    if (temp) setTemperature(parseFloat(temp));
+    const mem = localStorage.getItem("fireside_memory_size");
+    if (mem) setMemorySize(mem);
     const think = localStorage.getItem("fireside_thinking_enabled");
     if (think !== null) setThinkingEnabled(think === "true");
-    const gpu = localStorage.getItem("fireside_gpu_layers");
-    if (gpu) setGpuLayers(parseInt(gpu));
+    const resp = localStorage.getItem("fireside_response_length");
+    if (resp) setResponseLength(resp);
   }, []);
+
+  // Memory presets → actual context sizes
+  const memoryPresets: Record<string, { tokens: number; label: string; desc: string }> = {
+    short:  { tokens: 4096,  label: "Short",  desc: "Quick chats, saves resources" },
+    normal: { tokens: 8192,  label: "Normal", desc: "Good for most conversations" },
+    deep:   { tokens: 16384, label: "Deep",   desc: "Long discussions, more memory" },
+    max:    { tokens: 32768, label: "Max",    desc: "Full memory, uses more VRAM" },
+  };
+
+  const responseLengthPresets: Record<string, { label: string; desc: string }> = {
+    short:     { label: "Short",     desc: "Brief answers" },
+    normal:    { label: "Normal",    desc: "Balanced responses" },
+    long:      { label: "Long",      desc: "Detailed explanations" },
+    unlimited: { label: "Unlimited", desc: "No limit (model decides)" },
+  };
 
   const handleStop = async () => {
     setActionPending("stop");
@@ -222,42 +234,52 @@ export default function BrainControlPanel() {
         <div className="bcp-stats-sheet">
           <div className="bcp-sheet-title">⚔ BRAIN CONFIGURATION</div>
 
-          {/* Context Window */}
+          {/* Memory (Context Window) */}
           <div className="bcp-stat-row">
             <div className="bcp-stat-header">
-              <span className="bcp-stat-name">📜 Context Window</span>
-              <span className="bcp-stat-val">{(ctxSize / 1024).toFixed(0)}K tokens</span>
+              <span className="bcp-stat-name">📜 Memory</span>
+              <span className="bcp-stat-val">{memoryPresets[memorySize]?.label}</span>
             </div>
-            <input type="range" className="bcp-slider" min={2048} max={32768} step={1024}
-              value={ctxSize} onChange={e => { const v = parseInt(e.target.value); setCtxSize(v); saveStat("fireside_ctx_size", String(v)); }} />
-            <div className="bcp-stat-range"><span>2K</span><span>32K</span></div>
+            <div className="bcp-stat-desc">{memoryPresets[memorySize]?.desc}</div>
+            <div className="bcp-preset-row">
+              {Object.entries(memoryPresets).map(([key, preset]) => (
+                <button key={key}
+                  className={`bcp-preset-btn ${memorySize === key ? "bcp-preset-active" : ""}`}
+                  onClick={() => {
+                    setMemorySize(key);
+                    saveStat("fireside_memory_size", key);
+                    saveStat("fireside_ctx_size", String(preset.tokens));
+                  }}
+                >{preset.label}</button>
+              ))}
+            </div>
           </div>
 
-          {/* Temperature */}
+          {/* Response Length */}
           <div className="bcp-stat-row">
             <div className="bcp-stat-header">
-              <span className="bcp-stat-name">🔥 Temperature</span>
-              <span className="bcp-stat-val">{temperature.toFixed(2)}</span>
+              <span className="bcp-stat-name">💬 Max Response</span>
+              <span className="bcp-stat-val">{responseLengthPresets[responseLength]?.label}</span>
             </div>
-            <input type="range" className="bcp-slider bcp-slider-fire" min={0} max={150} step={5}
-              value={Math.round(temperature * 100)} onChange={e => { const v = parseInt(e.target.value) / 100; setTemperature(v); saveStat("fireside_temperature", String(v)); }} />
-            <div className="bcp-stat-range"><span>Precise</span><span>Creative</span></div>
-          </div>
-
-          {/* GPU Layers */}
-          <div className="bcp-stat-row">
-            <div className="bcp-stat-header">
-              <span className="bcp-stat-name">🎮 GPU Layers</span>
-              <span className="bcp-stat-val">{gpuLayers === 99 ? "ALL" : gpuLayers}</span>
+            <div className="bcp-stat-desc">{responseLengthPresets[responseLength]?.desc}</div>
+            <div className="bcp-preset-row">
+              {Object.entries(responseLengthPresets).map(([key, preset]) => (
+                <button key={key}
+                  className={`bcp-preset-btn ${responseLength === key ? "bcp-preset-active" : ""}`}
+                  onClick={() => { setResponseLength(key); saveStat("fireside_response_length", key); }}
+                >{preset.label}</button>
+              ))}
             </div>
-            <input type="range" className="bcp-slider bcp-slider-gpu" min={0} max={99} step={1}
-              value={gpuLayers} onChange={e => { const v = parseInt(e.target.value); setGpuLayers(v); saveStat("fireside_gpu_layers", String(v)); }} />
-            <div className="bcp-stat-range"><span>CPU only</span><span>Full GPU</span></div>
           </div>
 
           {/* Thinking Mode Toggle */}
           <div className="bcp-stat-row bcp-toggle-row">
-            <span className="bcp-stat-name">🧠 Thinking Mode</span>
+            <div>
+              <span className="bcp-stat-name">🧠 Thinking Mode</span>
+              <div className="bcp-stat-desc" style={{ marginTop: 2 }}>
+                {thinkingEnabled ? "AI reasons step-by-step before answering" : "Direct answers, faster responses"}
+              </div>
+            </div>
             <button
               className={`bcp-toggle ${thinkingEnabled ? "bcp-toggle-on" : ""}`}
               onClick={() => { const next = !thinkingEnabled; setThinkingEnabled(next); saveStat("fireside_thinking_enabled", String(next)); }}
@@ -267,7 +289,7 @@ export default function BrainControlPanel() {
           </div>
 
           <div className="bcp-sheet-hint">
-            ⚠ Context & GPU changes take effect after restart
+            ⚠ Memory changes take effect after restart
           </div>
         </div>
       )}
@@ -594,6 +616,12 @@ const panelCSS = `
     color: #F59E0B;
     font-variant-numeric: tabular-nums;
   }
+  .bcp-stat-desc {
+    font-size: 10px;
+    color: #5A4D40;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
   .bcp-stat-range {
     display: flex;
     justify-content: space-between;
@@ -604,36 +632,35 @@ const panelCSS = `
     margin-top: 2px;
   }
 
-  /* Custom RPG slider */
-  .bcp-slider {
-    -webkit-appearance: none;
-    width: 100%;
-    height: 6px;
-    border-radius: 3px;
-    background: rgba(255,255,255,0.06);
-    outline: none;
+  /* Preset buttons (JRPG style) */
+  .bcp-preset-row {
+    display: flex;
+    gap: 6px;
+  }
+  .bcp-preset-btn {
+    flex: 1;
+    padding: 8px 4px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'Outfit', 'Inter', system-ui, sans-serif;
     cursor: pointer;
+    transition: all 0.3s;
+    background: rgba(255,255,255,0.03);
+    border: 1.5px solid rgba(255,255,255,0.06);
+    color: #5A4D40;
+    text-align: center;
   }
-  .bcp-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #F59E0B, #D97706);
-    box-shadow: 0 0 10px rgba(245,158,11,0.4), 0 2px 4px rgba(0,0,0,0.3);
-    cursor: grab;
-    transition: box-shadow 0.2s;
+  .bcp-preset-btn:hover {
+    background: rgba(245,158,11,0.06);
+    border-color: rgba(245,158,11,0.2);
+    color: #9A8A7A;
   }
-  .bcp-slider::-webkit-slider-thumb:hover {
-    box-shadow: 0 0 16px rgba(245,158,11,0.6), 0 2px 6px rgba(0,0,0,0.4);
-  }
-  .bcp-slider-fire::-webkit-slider-thumb {
-    background: linear-gradient(135deg, #EF4444, #F97316);
-    box-shadow: 0 0 10px rgba(239,68,68,0.4), 0 2px 4px rgba(0,0,0,0.3);
-  }
-  .bcp-slider-gpu::-webkit-slider-thumb {
-    background: linear-gradient(135deg, #10B981, #059669);
-    box-shadow: 0 0 10px rgba(16,185,129,0.4), 0 2px 4px rgba(0,0,0,0.3);
+  .bcp-preset-active {
+    background: rgba(245,158,11,0.1) !important;
+    border-color: rgba(245,158,11,0.35) !important;
+    color: #F59E0B !important;
+    box-shadow: 0 0 10px rgba(245,158,11,0.12);
   }
 
   /* Thinking mode toggle */
@@ -654,6 +681,7 @@ const panelCSS = `
     background: rgba(255,255,255,0.04);
     border: 1.5px solid rgba(255,255,255,0.08);
     color: #4A3D30;
+    flex-shrink: 0;
   }
   .bcp-toggle-on {
     background: rgba(245,158,11,0.1);
