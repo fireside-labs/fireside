@@ -406,23 +406,63 @@ async fn connect_tailscale(auth_key: String, hostname: String) -> Result<String,
 #[tauri::command]
 async fn clone_repo(fireside_dir: String) -> Result<(), String> {
     let dir = PathBuf::from(&fireside_dir);
+
+    // Already have the repo? Just pull latest
     if dir.join("bifrost.py").exists() {
-        return Ok(()); // Already cloned
+        println!("[fireside] Repo already present, pulling latest...");
+        let _ = Command::new("git")
+            .args(["pull", "--ff-only"])
+            .current_dir(&dir)
+            .status();
+        return Ok(());
     }
 
-    let status = Command::new("git")
-        .args([
-            "clone",
-            "https://github.com/JordanFableFur/valhalla-mesh.git",
-            &fireside_dir,
-        ])
-        .status()
-        .map_err(|e| format!("git clone failed: {}", e))?;
+    fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {}", fireside_dir, e))?;
 
-    if status.success() {
+    // Backup existing user config files (write_config creates these BEFORE clone_repo)
+    let config_files = ["valhalla.yaml", "keys.json", "onboarding.json", "guardian_stats.json"];
+    let mut backups: Vec<(String, Vec<u8>)> = Vec::new();
+    for f in &config_files {
+        let path = dir.join(f);
+        if path.exists() {
+            if let Ok(data) = fs::read(&path) {
+                backups.push((f.to_string(), data));
+                let _ = fs::remove_file(&path);
+                println!("[fireside] Backed up {}", f);
+            }
+        }
+    }
+
+    if !dir.join(".git").exists() {
+        // Init fresh repo (can't use git clone — dir has models/, bin/, etc.)
+        println!("[fireside] Initializing repo in existing directory...");
+        let _ = Command::new("git").args(["init"]).current_dir(&dir).status();
+        let _ = Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/JordanFableFur/valhalla-mesh.git"])
+            .current_dir(&dir).status();
+    }
+
+    // Fetch latest and force checkout (safe — user configs are backed up above)
+    println!("[fireside] Fetching and checking out latest code...");
+    let _ = Command::new("git").args(["fetch", "origin"]).current_dir(&dir).status();
+    let _ = Command::new("git")
+        .args(["checkout", "-f", "origin/main", "-B", "main"])
+        .current_dir(&dir).status();
+
+    // Restore user config files (overwrite repo defaults with user's versions)
+    for (name, data) in &backups {
+        let path = dir.join(name);
+        if let Err(e) = fs::write(&path, data) {
+            eprintln!("[fireside] Failed to restore {}: {}", name, e);
+        } else {
+            println!("[fireside] Restored user config: {}", name);
+        }
+    }
+
+    if dir.join("bifrost.py").exists() {
         Ok(())
     } else {
-        Err(format!("git clone exited with code {:?}", status.code()))
+        Err("Repository clone completed but bifrost.py not found".into())
     }
 }
 
