@@ -921,186 +921,28 @@ async def post_chat(req: ChatRequest):
     except Exception as e:
         log.debug("[chat] Auto-browse skipped: %s", e)
 
-    # 2. Search intent: detect "search for X", "look up X", "find me X"
-    if not tool_context:
-        search_signals = [
-            "search for", "look up", "find me", "google",
-            "what's the latest", "what is the latest",
-            "find information", "search the web", "look online",
-            "can you find", "search online",
-            "what is the weather", "what's the weather",
-            "what is the temperature", "what's the temperature",
-            "current price of", "how much does",
-            "stock price", "share price", "market cap", "exchange rate",
-            "news about", "latest news",
-        ]
-        msg_lower = req.message.lower()
-        if any(sig in msg_lower for sig in search_signals):
-            try:
-                from plugins.browse.handler import web_search
-                search_result = await web_search(req.message, max_results=5)
-                if search_result.get("ok"):
-                    results = search_result.get("results", [])
-                    if results:
-                        result_lines = []
-                        for r in results:
-                            result_lines.append(
-                                f"• {r['title']}\n  {r['snippet']}\n  URL: {r['url']}"
-                            )
-                        tool_context += (
-                            f"\n\n[Web search results for: {req.message}]\n"
-                            + "\n\n".join(result_lines)
-                            + "\n[End of search results — use these to answer the user's question]\n"
-                        )
-                    elif search_result.get("raw_text"):
-                        tool_context += (
-                            f"\n\n[Web search results for: {req.message}]\n"
-                            f"{search_result['raw_text']}\n[End of search results]\n"
-                        )
-                    log.info("[chat] Web search: %d results", len(results))
-            except Exception as e:
-                log.debug("[chat] Web search skipped: %s", e)
-
-    # 3. Terminal/file intent: detect "run", "execute", "delete files", "make a program"
-    terminal_signals = [
-        "delete ", "remove ", "run ", "execute ", "create a file",
-        "make me a program", "make a program", "write a script",
-        "list files", "list my files", "show files", "open folder",
-        "create a folder", "make a folder", "show my desktop",
-        "find files", "search files", "rename ", "move ", "copy ",
-        "install ", "uninstall ", "what's on my",
-    ]
+    # 2. Destructive safety gate (pre-dispatch — must fire BEFORE model thinks)
+    #    Everything else (search, terminal, files, voice) is handled by the
+    #    agentic tool loop — the model sees tool schemas and decides on its own.
     msg_lower = req.message.lower()
-    if any(sig in msg_lower for sig in terminal_signals):
-        # Detect if this is a DESTRUCTIVE operation
-        destructive_signals = [
-            "delete", "remove", "erase", "wipe", "format", "rmdir",
-            "rm ", "rm -", "del ", "uninstall",
-        ]
-        is_destructive = any(sig in msg_lower for sig in destructive_signals)
-
-        if is_destructive:
-            # SAFETY: For destructive ops, tell the model to describe + ask first
-            tool_context += (
-                "\n\n[TOOL CAPABILITY: You have access to the user's file system via API. "
-                "The user has asked for a DESTRUCTIVE operation (delete/remove/erase). "
-                "You MUST: (1) describe exactly what files/folders would be affected, "
-                "(2) estimate the count and total size, "
-                "(3) ask the user to confirm before proceeding. "
-                "NEVER execute destructive operations without explicit confirmation. "
-                "If they confirm, you can use POST /api/v1/files/delete with confirm=true, "
-                "or POST /api/v1/terminal/exec for shell commands.]\n"
-            )
-            log.info("[chat] Destructive terminal intent detected — safety prompt injected")
-        else:
-            # Safe operations: list, read, create, write, search
-            tool_context += (
-                "\n\n[TOOL CAPABILITY: You have access to the user's file system and terminal. "
-                "Available tools:\n"
-                "- POST /api/v1/files/list {path, recursive, pattern} — list files\n"
-                "- POST /api/v1/files/read {path} — read file contents\n"
-                "- POST /api/v1/files/write {path, content} — create/write files\n"
-                "- POST /api/v1/files/search {path, query, extensions} — search in files\n"
-                "- POST /api/v1/files/mkdir {path} — create directories\n"
-                "- POST /api/v1/files/copy {source, destination} — copy files\n"
-                "- POST /api/v1/terminal/exec {command, reason} — run shell commands\n"
-                "You can use these to help the user. For code creation, write the file "
-                "and tell the user where you saved it. Be helpful and proactive.]\n"
-            )
-            # For "make me a program" type requests, actually create the file
-            create_signals = ["make me a program", "make a program", "write a script",
-                              "create a file", "write a file", "build me"]
-            if any(sig in msg_lower for sig in create_signals):
-                # The model will respond with the code — we'll let the pipeline handle actual creation
-                # for complex multi-file projects, or just inject creation context
-                tool_context += (
-                    "\n[The user wants you to CREATE something. Write the code/content in your "
-                    "response. If it's a single file, use POST /api/v1/files/write to save it "
-                    "to their Desktop or Documents folder. Tell them where you saved it.]\n"
-                )
-            log.info("[chat] Terminal intent detected — tool prompt injected")
-
-    # 4. Voice intent: "read this to me", "say this out loud"
-    voice_signals = [
-        "read this", "say this", "speak", "read it to me",
-        "out loud", "read aloud", "tell me out loud",
-        "voice", "talk to me",
+    destructive_signals = [
+        "delete", "remove", "erase", "wipe", "format disk",
+        "rmdir", "rm ", "rm -", "del ",
     ]
-    if any(sig in msg_lower for sig in voice_signals):
+    if any(sig in msg_lower for sig in destructive_signals):
         tool_context += (
-            "\n\n[TOOL CAPABILITY: Voice is available via POST /api/v1/voice/enable "
-            "and the TTS system. If the user wants you to read something aloud, "
-            "include your response as normal text — the frontend will route it "
-            "through text-to-speech if voice mode is enabled. Let the user know "
-            "they can enable Voice mode in Skills to hear responses spoken.]\n"
+            "\n\n[SAFETY: The user may be requesting a destructive operation. "
+            "Before executing ANY delete/remove/erase, you MUST: "
+            "(1) describe exactly what would be affected, "
+            "(2) ask the user to confirm. "
+            "Only proceed after explicit confirmation.]\n"
         )
-        log.info("[chat] Voice intent detected")
+        log.info("[chat] Destructive intent — safety prompt injected")
 
-    # 5. Memory intent: "remember this", "what did we talk about", "recall"
-    memory_signals = [
-        "remember this", "remember that", "don't forget",
-        "what did i tell you", "what did we talk about",
-        "do you remember", "recall ", "what do you know about me",
-        "what have i told you",
-    ]
-    if any(sig in msg_lower for sig in memory_signals):
-        # Check if user wants to STORE or RECALL
-        store_signals = ["remember this", "remember that", "don't forget"]
-        if any(sig in msg_lower for sig in store_signals):
-            try:
-                import orchestrator as orch_mod
-                orch_mod.observe(
-                    f"User asked to remember: {req.message}",
-                    importance=0.9, source="chat_explicit"
-                )
-                tool_context += (
-                    "\n\n[MEMORY STORED: The user explicitly asked you to remember "
-                    "something. It has been saved to long-term memory. Confirm that "
-                    "you'll remember it.]\n"
-                )
-                log.info("[chat] Explicit memory store: %s", req.message[:50])
-            except Exception as e:
-                log.debug("[chat] Memory store skipped: %s", e)
-        else:
-            # Recall — already done by orchestrator, but do an additional explicit search
-            try:
-                import orchestrator as orch_mod
-                extra_memories = orch_mod.recall_memories(req.message, top_k=5)
-                if extra_memories:
-                    mem_lines = [f"- {m.get('content', '')[:300]}" for m in extra_memories]
-                    tool_context += (
-                        "\n\n[RECALLED MEMORIES — the user is asking about past conversations]\n"
-                        + "\n".join(mem_lines) + "\n[End of memories]\n"
-                    )
-                    log.info("[chat] Explicit memory recall: %d results", len(extra_memories))
-                else:
-                    tool_context += (
-                        "\n\n[No relevant memories found. Let the user know you don't "
-                        "have specific memories about that topic yet.]\n"
-                    )
-            except Exception as e:
-                log.debug("[chat] Memory recall skipped: %s", e)
-
-    # 6. Orchestration intent: "spawn agents", "use 3 agents", "start a pipeline"
-    orchestrate_signals = [
-        "spawn", "sub-agent", "subagent", "start a pipeline",
-        "use agents", "run agents", "create a pipeline", "create agents",
-        "orchestrate", "multi-agent", "use a team", "assign agents",
-        "start a coding", "start a research", "start a project",
-        "build me a full", "build me an entire", "build a complete",
-    ]
+    # 3. Pipeline auto-spawn for complex tasks
+    #    (Explicit 'spawn agents' is handled by the create_pipeline tool in the agentic loop)
     pipeline_created = None
-    explicit_orchestrate = any(sig in msg_lower for sig in orchestrate_signals)
-
-    # Don't pipeline simple single-file creation ("write me a script")
-    # Only pipeline multi-component projects ("build a full app with API and frontend")
-    simple_creation_signals = [
-        "write me a", "write a script", "make me a program",
-        "create a file", "write a file", "make a simple",
-    ]
-    is_simple_creation = any(sig in msg_lower for sig in simple_creation_signals)
-
-    if (explicit_orchestrate or classification == "complex") and not is_simple_creation:
+    if classification == "complex":
         import threading
         try:
             import orchestrator as orch_mod
@@ -1303,6 +1145,34 @@ async def post_chat(req: ChatRequest):
                 "parameters": {
                     "type": "object",
                     "properties": {},
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "store_memory",
+                "description": "Store something to long-term memory. Use when user says 'remember', 'note this', 'log this', 'save for later', 'don't forget', etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "What to remember"},
+                    },
+                    "required": ["content"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "recall_memory",
+                "description": "Search long-term memory for past conversations, stored facts, or things the user asked you to remember.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "What to search for in memory"},
+                    },
+                    "required": ["query"],
                 },
             },
         },
@@ -1525,6 +1395,27 @@ async def post_chat(req: ChatRequest):
                     sched = t.get("schedule", {}).get("description", "")
                     lines.append(f"• [{t.get('id', '?')}] {t.get('task', '')[:60]} — {sched}")
                 return f"Active schedules ({len(tasks)}):\n" + "\n".join(lines)
+
+            elif name == "store_memory":
+                content = arguments.get("content", "")
+                try:
+                    import orchestrator as orch_mod
+                    orch_mod.observe(content, importance=0.9, source="chat_explicit")
+                    return f"Stored to memory: {content[:100]}"
+                except Exception as ex:
+                    return f"Memory store failed: {ex}"
+
+            elif name == "recall_memory":
+                query = arguments.get("query", "")
+                try:
+                    import orchestrator as orch_mod
+                    memories = orch_mod.recall_memories(query, top_k=5)
+                    if memories:
+                        lines = [f"- {m.get('content', '')[:200]}" for m in memories]
+                        return f"Found {len(memories)} memories:\n" + "\n".join(lines)
+                    return "No memories found for that topic."
+                except Exception as ex:
+                    return f"Memory recall failed: {ex}"
 
             else:
                 return f"Unknown tool: {name}"
