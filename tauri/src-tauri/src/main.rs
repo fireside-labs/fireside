@@ -765,7 +765,6 @@ fn start_llama_server(state: tauri::State<'_, Arc<Mutex<BackendState>>>) -> Resu
         "--ctx-size".to_string(), "8192".to_string(),
         "--n-gpu-layers".to_string(), "99".to_string(),
         "--flash-attn".to_string(), "on".to_string(),
-        "--reasoning-budget".to_string(), "0".to_string(),
     ];
 
     println!("[fireside] Starting llama-server: {} {}", binary, cmd_args.join(" "));
@@ -1346,7 +1345,6 @@ fn main() {
                             "--ctx-size", "8192",
                             "--n-gpu-layers", "99",
                             "--flash-attn", "on",
-                            "--reasoning-budget", "0",
                         ])
                         .spawn();
 
