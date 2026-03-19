@@ -758,7 +758,7 @@ fn start_llama_server(state: tauri::State<'_, Arc<Mutex<BackendState>>>) -> Resu
     thread::sleep(std::time::Duration::from_millis(300));
 
     // Start llama-server with full GPU offloading
-    let cmd_args = vec![
+    let mut cmd_args = vec![
         "--model".to_string(), model_path.to_string_lossy().to_string(),
         "--port".to_string(), "8080".to_string(),
         "--host".to_string(), "127.0.0.1".to_string(),
@@ -766,6 +766,17 @@ fn start_llama_server(state: tauri::State<'_, Arc<Mutex<BackendState>>>) -> Resu
         "--n-gpu-layers".to_string(), "99".to_string(),
         "--flash-attn".to_string(), "on".to_string(),
     ];
+
+    // Disable thinking for small models (< 3B) — they waste tokens on garbage thoughts
+    let model_name = model_path.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+    let is_small = model_name.contains("0.6b") || model_name.contains("0.5b")
+        || model_name.contains("1b") || model_name.contains("1.5b")
+        || model_name.contains("2b");
+    if is_small {
+        println!("[fireside] Small model detected, disabling thinking mode");
+        cmd_args.push("--reasoning-budget".to_string());
+        cmd_args.push("0".to_string());
+    }
 
     println!("[fireside] Starting llama-server: {} {}", binary, cmd_args.join(" "));
 
@@ -1337,15 +1348,28 @@ fn main() {
                         }
                     };
 
+                    // Build args — disable thinking for small models
+                    let model_name = model_path.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+                    let is_small = model_name.contains("0.6b") || model_name.contains("0.5b")
+                        || model_name.contains("1b") || model_name.contains("1.5b")
+                        || model_name.contains("2b");
+
+                    let mut args: Vec<String> = vec![
+                        "--model".into(), model_path.to_string_lossy().to_string(),
+                        "--port".into(), "8080".into(),
+                        "--host".into(), "127.0.0.1".into(),
+                        "--ctx-size".into(), "8192".into(),
+                        "--n-gpu-layers".into(), "99".into(),
+                        "--flash-attn".into(), "on".into(),
+                    ];
+                    if is_small {
+                        println!("[fireside] Small model detected, disabling thinking mode");
+                        args.push("--reasoning-budget".into());
+                        args.push("0".into());
+                    }
+
                     let child = Command::new(&binary)
-                        .args([
-                            "--model", &model_path.to_string_lossy(),
-                            "--port", "8080",
-                            "--host", "127.0.0.1",
-                            "--ctx-size", "8192",
-                            "--n-gpu-layers", "99",
-                            "--flash-attn", "on",
-                        ])
+                        .args(&args)
                         .spawn();
 
                     match child {
