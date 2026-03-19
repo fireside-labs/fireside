@@ -124,13 +124,17 @@ def start(model_path: Path, config: dict = None) -> bool:
 
         try:
             # Start process, redirect output to log
-            _proc = subprocess.Popen(
-                cmd,
+            kwargs = dict(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
             )
+            # Hide console window on Windows
+            import sys
+            if sys.platform == "win32":
+                kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+            _proc = subprocess.Popen(cmd, **kwargs)
             _current_model_path = model_path
             _start_time = time.time()
 

@@ -8,6 +8,8 @@ use tauri::Emitter;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 // ---------------------------------------------------------------------------
 // Data structures
@@ -640,19 +642,23 @@ async fn start_fireside(fireside_dir: String) -> Result<(), String> {
     } else {
         "python3"
     };
-    Command::new(python_cmd)
-        .args(["bifrost.py"])
-        .current_dir(&dir)
-        .spawn()
+    let mut cmd = Command::new(python_cmd);
+    cmd.args(["bifrost.py"])
+        .current_dir(&dir);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    cmd.spawn()
         .map_err(|e| format!("Failed to start backend: {}", e))?;
 
     // Start dashboard
     let dashboard_dir = dir.join("dashboard");
     if dashboard_dir.exists() {
-        Command::new("npm")
-            .args(["run", "dev"])
-            .current_dir(&dashboard_dir)
-            .spawn()
+        let mut cmd = Command::new("npm");
+        cmd.args(["run", "dev"])
+            .current_dir(&dashboard_dir);
+        #[cfg(windows)]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.spawn()
             .map_err(|e| format!("Failed to start dashboard: {}", e))?;
     }
 
@@ -745,10 +751,12 @@ fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
         "python3"
     };
 
-    match Command::new(python_cmd)
-        .args(["bifrost.py"])
-        .current_dir(fireside_dir)
-        .spawn()
+    let mut cmd = Command::new(python_cmd);
+    cmd.args(["bifrost.py"])
+        .current_dir(fireside_dir);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    match cmd.spawn()
     {
         Ok(child) => {
             println!("[fireside] Backend started (PID: {:?})", child.id());
