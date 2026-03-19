@@ -173,7 +173,6 @@ const MODELS: ModelDef[] = [
     quants: [
       { label: "Low", bits: "4-bit", intel: 85, spd: 55, sizeGB: 20.0, size: "20.0 GB" },
       { label: "Medium", bits: "6-bit", intel: 89, spd: 42, sizeGB: 28.0, size: "28.0 GB" },
-      { label: "High", bits: "8-bit", intel: 92, spd: 35, sizeGB: 35.0, size: "35.0 GB" },
     ],
   },
   {
@@ -663,7 +662,9 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
 
             <div className="bs-dp-section-title">Quality</div>
             <div className="bs-dp-quant-pills">
-              {detailModelData.quants.map((qo, j) => (
+              {detailModelData.quants.map((qo, j) => {
+                const qFits = qo.bits === "API" || detectedVram <= 0 || qo.sizeGB <= detectedVram;
+                return (
                 <button
                   key={j}
                   className={`bs-dp-qpill ${j === detailQuant ? "bs-dp-qpill-active" : ""}`}
@@ -671,8 +672,14 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
                 >
                   <span>{qo.label}</span>
                   <span className="bs-dp-qpill-bits">{qo.bits}</span>
+                  {detectedVram > 0 && qo.bits !== "API" && (
+                    <span className={`bs-dp-qpill-fit ${qFits ? "bs-dp-fit-ok" : "bs-dp-fit-warn"}`}>
+                      {qFits ? "✓ Fits" : "⚠ Big"}
+                    </span>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             <div className="bs-dp-section-title">Stats</div>
@@ -1043,6 +1050,17 @@ const css = `
     font-size: 11px; color: #EF4444; font-weight: 600;
     margin: 0 0 12px; padding: 8px 12px; border-radius: 8px;
     background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15);
+  }
+
+  .bs-dp-qpill-fit {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 2px 6px; border-radius: 4px; margin-left: 4px;
+  }
+  .bs-dp-fit-ok {
+    color: #10B981; background: rgba(16,185,129,0.1);
+  }
+  .bs-dp-fit-warn {
+    color: #F59E0B; background: rgba(245,158,11,0.1);
   }
 
   .bs-dp-select {
