@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { API_BASE } from "@/lib/api";
 
 /* ═══════════════════════════════════════════════════════════════════
    Brain Control Panel — RPG Equipment HUD
@@ -40,8 +41,8 @@ export default function BrainControlPanel() {
   const fetchStatus = useCallback(async () => {
     try {
       const [brainRes, statusRes] = await Promise.all([
-        fetch("/api/v1/brains/status"),
-        fetch("/api/v1/status"),
+        fetch(`${API_BASE}/api/v1/brains/status`),
+        fetch(`${API_BASE}/api/v1/status`),
       ]);
       const brain = await brainRes.json();
       const sys = await statusRes.json();
@@ -90,7 +91,7 @@ export default function BrainControlPanel() {
     setActionPending("stop");
     try {
       // Stop = restart with no model (we use the restart endpoint which re-checks)
-      await fetch("/api/v1/brains/restart", { method: "POST" });
+      await fetch(`${API_BASE}/api/v1/brains/restart`, { method: "POST" });
       await fetchStatus();
     } finally {
       setActionPending(null);
@@ -100,7 +101,7 @@ export default function BrainControlPanel() {
   const handleRestart = async () => {
     setActionPending("restart");
     try {
-      await fetch("/api/v1/brains/restart", { method: "POST" });
+      await fetch(`${API_BASE}/api/v1/brains/restart`, { method: "POST" });
       setTimeout(fetchStatus, 2000);
     } finally {
       setActionPending(null);

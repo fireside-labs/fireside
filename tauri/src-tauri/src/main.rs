@@ -12,6 +12,19 @@ use std::process::Command;
 use std::os::windows::process::CommandExt;
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Create a Command that won't show a console window on Windows.
+/// Use this EVERYWHERE instead of `silent_cmd()` directly.
+fn silent_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    cmd
+}
+
+// ---------------------------------------------------------------------------
 // Data structures
 // ---------------------------------------------------------------------------
 
@@ -45,7 +58,7 @@ fn get_system_info() -> SystemInfo {
     let ram_gb = {
         #[cfg(target_os = "windows")]
         {
-            let output = Command::new("powershell")
+            let output = silent_cmd("powershell")
                 .args(["-NoProfile", "-Command",
                     "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory"])
                 .output();
@@ -62,7 +75,7 @@ fn get_system_info() -> SystemInfo {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let output = Command::new("sysctl").args(["-n", "hw.memsize"]).output();
+            let output = silent_cmd("sysctl").args(["-n", "hw.memsize"]).output();
             match output {
                 Ok(o) => {
                     let s = String::from_utf8_lossy(&o.stdout);
@@ -82,7 +95,7 @@ fn get_system_info() -> SystemInfo {
         {
             // 1. Try nvidia-smi with absolute path first (most accurate for NVIDIA)
             let nvsmi_path = "C:\\Windows\\System32\\nvidia-smi.exe";
-            let nvidia_data = Command::new(nvsmi_path)
+            let nvidia_data = silent_cmd(nvsmi_path)
                 .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
                 .output()
                 .ok()
@@ -105,7 +118,7 @@ fn get_system_info() -> SystemInfo {
                 data
             } else {
                 // 2. Fallback to WMI, but find the BEST GPU (max AdapterRAM)
-                let wmi_data = Command::new("powershell")
+                let wmi_data = silent_cmd("powershell")
                     .args(["-NoProfile", "-Command",
                         "Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Json"])
                     .output()
@@ -136,7 +149,7 @@ fn get_system_info() -> SystemInfo {
         #[cfg(target_os = "macos")]
         {
             // Apple Silicon: detect chipset name + unified memory as VRAM
-            let gpu_name = Command::new("system_profiler")
+            let gpu_name = silent_cmd("system_profiler")
                 .args(["SPDisplaysDataType"])
                 .output()
                 .ok()
@@ -148,7 +161,7 @@ fn get_system_info() -> SystemInfo {
                 })
                 .unwrap_or_else(|| "Apple Silicon".into());
 
-            let vram = Command::new("sysctl")
+            let vram = silent_cmd("sysctl")
                 .args(["-n", "hw.memsize"])
                 .output()
                 .ok()
@@ -164,7 +177,7 @@ fn get_system_info() -> SystemInfo {
         #[cfg(target_os = "linux")]
         {
             // Try nvidia-smi for discrete GPU name + VRAM
-            let nvidia_data = Command::new("nvidia-smi")
+            let nvidia_data = silent_cmd("nvidia-smi")
                 .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
                 .output()
                 .ok()
@@ -187,7 +200,7 @@ fn get_system_info() -> SystemInfo {
                 data
             } else {
                 // Fallback: lspci for name, 0 for VRAM
-                let gpu_name = Command::new("lspci")
+                let gpu_name = silent_cmd("lspci")
                     .output()
                     .ok()
                     .and_then(|o| {
@@ -220,7 +233,7 @@ fn check_python() -> Option<String> {
         vec!["python3", "python"]
     };
     for cmd in cmds {
-        if let Ok(output) = Command::new(cmd).arg("--version").output() {
+        if let Ok(output) = silent_cmd(cmd).arg("--version").output() {
             if output.status.success() {
                 let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !version.is_empty() {
@@ -240,7 +253,7 @@ fn check_python() -> Option<String> {
 /// Check if Node.js is installed, return version string.
 #[tauri::command]
 fn check_node() -> Option<String> {
-    Command::new("node")
+    silent_cmd("node")
         .arg("--version")
         .output()
         .ok()
@@ -252,7 +265,7 @@ fn check_node() -> Option<String> {
 #[tauri::command]
 async fn install_python() -> Result<(), String> {
     let status = if cfg!(target_os = "windows") {
-        Command::new("winget")
+        silent_cmd("winget")
             .args([
                 "install",
                 "Python.Python.3.12",
@@ -261,11 +274,11 @@ async fn install_python() -> Result<(), String> {
             ])
             .status()
     } else if cfg!(target_os = "macos") {
-        Command::new("brew")
+        silent_cmd("brew")
             .args(["install", "python@3.12"])
             .status()
     } else {
-        Command::new("sudo")
+        silent_cmd("sudo")
             .args(["apt-get", "install", "-y", "python3", "python3-pip"])
             .status()
     };
@@ -281,7 +294,7 @@ async fn install_python() -> Result<(), String> {
 #[tauri::command]
 async fn install_node() -> Result<(), String> {
     let status = if cfg!(target_os = "windows") {
-        Command::new("winget")
+        silent_cmd("winget")
             .args([
                 "install",
                 "OpenJS.NodeJS.LTS",
@@ -290,9 +303,9 @@ async fn install_node() -> Result<(), String> {
             ])
             .status()
     } else if cfg!(target_os = "macos") {
-        Command::new("brew").args(["install", "node@20"]).status()
+        silent_cmd("brew").args(["install", "node@20"]).status()
     } else {
-        Command::new("sudo")
+        silent_cmd("sudo")
             .args(["apt-get", "install", "-y", "nodejs", "npm"])
             .status()
     };
@@ -309,10 +322,10 @@ async fn install_node() -> Result<(), String> {
 fn check_tailscale() -> serde_json::Value {
     // Check if tailscale CLI exists
     let installed = if cfg!(target_os = "windows") {
-        Command::new("where").arg("tailscale").output()
+        silent_cmd("where").arg("tailscale").output()
             .map(|o| o.status.success()).unwrap_or(false)
     } else {
-        Command::new("which").arg("tailscale").output()
+        silent_cmd("which").arg("tailscale").output()
             .map(|o| o.status.success()).unwrap_or(false)
     };
 
@@ -325,7 +338,7 @@ fn check_tailscale() -> serde_json::Value {
     }
 
     // Check status
-    let status = Command::new("tailscale")
+    let status = silent_cmd("tailscale")
         .args(["status", "--json"])
         .output();
 
@@ -338,7 +351,7 @@ fn check_tailscale() -> serde_json::Value {
     };
 
     // Get IP
-    let ip = Command::new("tailscale").args(["ip", "-4"]).output()
+    let ip = silent_cmd("tailscale").args(["ip", "-4"]).output()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
@@ -354,7 +367,7 @@ fn check_tailscale() -> serde_json::Value {
 #[tauri::command]
 async fn install_tailscale() -> Result<String, String> {
     let status = if cfg!(target_os = "windows") {
-        Command::new("winget")
+        silent_cmd("winget")
             .args([
                 "install",
                 "Tailscale.Tailscale",
@@ -364,12 +377,12 @@ async fn install_tailscale() -> Result<String, String> {
             ])
             .status()
     } else if cfg!(target_os = "macos") {
-        Command::new("brew")
+        silent_cmd("brew")
             .args(["install", "--cask", "tailscale"])
             .status()
     } else {
         // Linux: use the official install script
-        Command::new("sh")
+        silent_cmd("sh")
             .args(["-c", "curl -fsSL https://tailscale.com/install.sh | sh"])
             .status()
     };
@@ -384,7 +397,7 @@ async fn install_tailscale() -> Result<String, String> {
 /// Connect Tailscale with an auth key (for OAuth flow).
 #[tauri::command]
 async fn connect_tailscale(auth_key: String, hostname: String) -> Result<String, String> {
-    let status = Command::new("tailscale")
+    let status = silent_cmd("tailscale")
         .args(["up", &format!("--authkey={}", auth_key), &format!("--hostname={}", hostname), "--accept-routes"])
         .status()
         .map_err(|e| format!("tailscale up failed: {}", e))?;
@@ -395,7 +408,7 @@ async fn connect_tailscale(auth_key: String, hostname: String) -> Result<String,
 
     // Get the assigned IP
     std::thread::sleep(std::time::Duration::from_secs(3));
-    let ip = Command::new("tailscale").args(["ip", "-4"]).output()
+    let ip = silent_cmd("tailscale").args(["ip", "-4"]).output()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -412,7 +425,7 @@ async fn clone_repo(fireside_dir: String) -> Result<(), String> {
     // Already have the repo? Just pull latest
     if dir.join("bifrost.py").exists() {
         println!("[fireside] Repo already present, pulling latest...");
-        let _ = Command::new("git")
+        let _ = silent_cmd("git")
             .args(["pull", "--ff-only"])
             .current_dir(&dir)
             .status();
@@ -438,16 +451,16 @@ async fn clone_repo(fireside_dir: String) -> Result<(), String> {
     if !dir.join(".git").exists() {
         // Init fresh repo (can't use git clone — dir has models/, bin/, etc.)
         println!("[fireside] Initializing repo in existing directory...");
-        let _ = Command::new("git").args(["init"]).current_dir(&dir).status();
-        let _ = Command::new("git")
+        let _ = silent_cmd("git").args(["init"]).current_dir(&dir).status();
+        let _ = silent_cmd("git")
             .args(["remote", "add", "origin", "https://github.com/JordanFableFur/valhalla-mesh.git"])
             .current_dir(&dir).status();
     }
 
     // Fetch latest and force checkout (safe — user configs are backed up above)
     println!("[fireside] Fetching and checking out latest code...");
-    let _ = Command::new("git").args(["fetch", "origin"]).current_dir(&dir).status();
-    let _ = Command::new("git")
+    let _ = silent_cmd("git").args(["fetch", "origin"]).current_dir(&dir).status();
+    let _ = silent_cmd("git")
         .args(["checkout", "-f", "origin/main", "-B", "main"])
         .current_dir(&dir).status();
 
@@ -479,7 +492,7 @@ async fn install_deps(fireside_dir: String) -> Result<(), String> {
     } else {
         "pip3"
     };
-    let pip = Command::new(pip_cmd)
+    let pip = silent_cmd(pip_cmd)
         .args(["install", "-r", "requirements.txt"])
         .current_dir(&dir)
         .status()
@@ -492,7 +505,7 @@ async fn install_deps(fireside_dir: String) -> Result<(), String> {
     // npm install for dashboard
     let dashboard_dir = dir.join("dashboard");
     if dashboard_dir.exists() {
-        let npm = Command::new("npm")
+        let npm = silent_cmd("npm")
             .args(["install"])
             .current_dir(&dashboard_dir)
             .status()
@@ -642,23 +655,19 @@ async fn start_fireside(fireside_dir: String) -> Result<(), String> {
     } else {
         "python3"
     };
-    let mut cmd = Command::new(python_cmd);
-    cmd.args(["bifrost.py"])
-        .current_dir(&dir);
-    #[cfg(windows)]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    cmd.spawn()
+    silent_cmd(python_cmd)
+        .args(["bifrost.py"])
+        .current_dir(&dir)
+        .spawn()
         .map_err(|e| format!("Failed to start backend: {}", e))?;
 
     // Start dashboard
     let dashboard_dir = dir.join("dashboard");
     if dashboard_dir.exists() {
-        let mut cmd = Command::new("npm");
-        cmd.args(["run", "dev"])
-            .current_dir(&dashboard_dir);
-        #[cfg(windows)]
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        cmd.spawn()
+        silent_cmd("npm")
+            .args(["run", "dev"])
+            .current_dir(&dashboard_dir)
+            .spawn()
             .map_err(|e| format!("Failed to start dashboard: {}", e))?;
     }
 
@@ -751,12 +760,10 @@ fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
         "python3"
     };
 
-    let mut cmd = Command::new(python_cmd);
-    cmd.args(["bifrost.py"])
-        .current_dir(fireside_dir);
-    #[cfg(windows)]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    match cmd.spawn()
+    match silent_cmd(python_cmd)
+        .args(["bifrost.py"])
+        .current_dir(fireside_dir)
+        .spawn()
     {
         Ok(child) => {
             println!("[fireside] Backend started (PID: {:?})", child.id());
@@ -828,7 +835,7 @@ fn start_llama_server(state: tauri::State<'_, Arc<Mutex<BackendState>>>) -> Resu
 
     println!("[fireside] Starting llama-server: {} {}", binary, cmd_args.join(" "));
 
-    match Command::new(&binary)
+    match silent_cmd(&binary)
         .args(&cmd_args)
         .spawn()
     {
@@ -864,7 +871,7 @@ fn find_llama_server() -> Option<String> {
     }
 
     // 3. Try system PATH
-    if let Ok(output) = Command::new(if cfg!(target_os = "windows") { "where" } else { "which" })
+    if let Ok(output) = silent_cmd(if cfg!(target_os = "windows") { "where" } else { "which" })
         .arg("llama-server")
         .output()
     {
@@ -1232,12 +1239,12 @@ async fn test_connection() -> Result<String, String> {
             Ok(_) => {
                 // TCP connected — now try HTTP health check
                 let output = if cfg!(target_os = "windows") {
-                    Command::new("powershell")
+                    silent_cmd("powershell")
                         .args(["-NoProfile", "-Command",
                             "(Invoke-WebRequest -Uri 'http://127.0.0.1:8765/api/v1/status/agent' -UseBasicParsing).Content"])
                         .output()
                 } else {
-                    Command::new("curl")
+                    silent_cmd("curl")
                         .args(["-s", "http://127.0.0.1:8765/api/v1/status/agent"])
                         .output()
                 };
@@ -1416,7 +1423,7 @@ fn main() {
                         args.push("0".into());
                     }
 
-                    let child = Command::new(&binary)
+                    let child = silent_cmd(&binary)
                         .args(&args)
                         .spawn();
 
