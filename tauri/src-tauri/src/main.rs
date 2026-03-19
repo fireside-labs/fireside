@@ -786,7 +786,10 @@ async fn download_brain(
     };
 
     // Build HTTP request with optional Range header for resume
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .user_agent("Fireside/1.0 (AI Companion Installer)")
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
     let mut request = client.get(&url);
     if existing_bytes > 0 {
         request = request.header("Range", format!("bytes={}-", existing_bytes));
