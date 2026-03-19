@@ -111,8 +111,14 @@ def start(model_path: Path, config: dict = None) -> bool:
             "--keep", "-1",                      # Keep all tokens in KV cache
             "--threads", str(threads),
             "--no-mmap",                         # Load fully into memory
-            "--flash-attn",                      # Flash attention (RTX 5090)
+            "--flash-attn", "on",              # Flash attention (RTX 5090)
         ]
+
+        # Disable thinking for small models (< 3B) — they waste tokens on garbage
+        model_name = model_path.name.lower()
+        if any(s in model_name for s in ["0.5b", "0.6b", "1b", "1.5b", "2b"]):
+            cmd.extend(["--reasoning-budget", "0"])
+            log.info("[brain] Small model detected, disabling thinking mode")
 
         log.info("[brain] Starting llama-server: %s", " ".join(cmd))
 
@@ -223,11 +229,26 @@ def _find_binary() -> Optional[str]:
     binary = shutil.which("llama-server")
     if binary:
         return binary
+    binary = shutil.which("llama-server.exe")
+    if binary:
+        return binary
 
-    # Common Windows locations (llama.cpp release zips)
+    # Fireside/OpenClaw installer locations (most likely for end users)
+    home = Path.home()
+    installer_paths = [
+        home / ".openclaw" / "llama-server" / "llama-server.exe",
+        home / ".openclaw" / "llama-server" / "llama-server",
+        home / ".fireside" / "bin" / "llama-server.exe",
+        home / ".fireside" / "bin" / "llama-server",
+    ]
+    for p in installer_paths:
+        if p.exists():
+            return str(p)
+
+    # Common manual install locations
     common = [
-        Path.home() / "llama.cpp" / "llama-server.exe",
-        Path.home() / "llama.cpp" / "build" / "bin" / "llama-server.exe",
+        home / "llama.cpp" / "llama-server.exe",
+        home / "llama.cpp" / "build" / "bin" / "llama-server.exe",
         Path("C:/") / "llama.cpp" / "llama-server.exe",
         Path("C:/") / "Program Files" / "llama.cpp" / "llama-server.exe",
         Path("C:/") / "tools" / "llama-server.exe",
@@ -235,11 +256,6 @@ def _find_binary() -> Optional[str]:
     for p in common:
         if p.exists():
             return str(p)
-
-    # Also check for llama-server (no .exe) for WSL/cross-platform paths
-    binary = shutil.which("llama-server.exe")
-    if binary:
-        return binary
 
     return None
 
