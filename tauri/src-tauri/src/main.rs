@@ -764,7 +764,7 @@ fn start_llama_server(state: tauri::State<'_, Arc<Mutex<BackendState>>>) -> Resu
         "--host".to_string(), "127.0.0.1".to_string(),
         "--ctx-size".to_string(), "8192".to_string(),
         "--n-gpu-layers".to_string(), "99".to_string(),
-        "--flash-attn".to_string(),
+        "--flash-attn".to_string(), "on".to_string(),
     ];
 
     println!("[fireside] Starting llama-server: {} {}", binary, cmd_args.join(" "));
@@ -1243,25 +1243,15 @@ fn main() {
             // Auto-start backend if ~/.fireside exists
             let home = dirs::home_dir().unwrap_or_default();
             let fireside_dir = home.join(".fireside");
+            let models_dir = fireside_dir.join("models");
 
-            if fireside_dir.join("bifrost.py").exists()
-                || fireside_dir.join("valhalla.yaml").exists()
-            {
-                // Find the repo directory (could be ~/.fireside or the dev directory)
-                let repo_dir = if fireside_dir.join("bifrost.py").exists() {
-                    fireside_dir.clone()
-                } else {
-                    // Dev mode: look relative to the executable
-                    std::env::current_dir().unwrap_or(fireside_dir.clone())
-                };
-
+            // Strategy 1: Python backend (bifrost.py exists)
+            if fireside_dir.join("bifrost.py").exists() {
                 let state = state_for_setup.clone();
-                let dir = repo_dir.clone();
+                let dir = fireside_dir.clone();
 
                 thread::spawn(move || {
-                    // Give the window a moment to render
                     thread::sleep(std::time::Duration::from_millis(2000));
-
                     let max_restarts = 3;
 
                     loop {
@@ -1273,7 +1263,6 @@ fn main() {
                                 s.child = Some(child);
                             }
 
-                            // Wait for process to exit via polling
                             loop {
                                 let mut s = state.lock().unwrap();
                                 if let Some(ref mut c) = s.child {
@@ -1283,9 +1272,7 @@ fn main() {
                                             s.child = None;
                                             break;
                                         }
-                                        Ok(None) => {
-                                            // Process is still running
-                                        }
+                                        Ok(None) => {}
                                         Err(e) => {
                                             eprintln!("[fireside] Backend wait error: {}", e);
                                             s.child = None;
@@ -1293,7 +1280,6 @@ fn main() {
                                         }
                                     }
                                 } else {
-                                    // Process was deleted (e.g., by exit handler)
                                     break;
                                 }
                                 drop(s);
@@ -1303,26 +1289,75 @@ fn main() {
                             let mut s = state.lock().unwrap();
                             s.running = false;
                             s.restart_count += 1;
-
                             if s.restart_count > max_restarts {
-                                eprintln!(
-                                    "[fireside] Backend crashed {} times, giving up",
-                                    s.restart_count
-                                );
+                                eprintln!("[fireside] Backend crashed {} times, giving up", s.restart_count);
                                 break;
                             }
-
-                            println!(
-                                "[fireside] Restarting backend (attempt {}/{})",
-                                s.restart_count, max_restarts
-                            );
+                            println!("[fireside] Restarting backend (attempt {}/{})", s.restart_count, max_restarts);
                             drop(s);
-
-                            // Brief delay before restart
                             thread::sleep(std::time::Duration::from_secs(2));
                         } else {
                             eprintln!("[fireside] Could not spawn backend, aborting");
                             break;
+                        }
+                    }
+                });
+            }
+            // Strategy 2: Direct llama-server (no Python, but GGUF exists)
+            else if models_dir.exists() {
+                let state = state_for_setup.clone();
+
+                thread::spawn(move || {
+                    thread::sleep(std::time::Duration::from_millis(2000));
+
+                    // Find newest GGUF
+                    let mut ggufs: Vec<_> = fs::read_dir(&models_dir)
+                        .into_iter().flatten().filter_map(|e| e.ok())
+                        .filter(|e| e.path().extension().map_or(false, |ext| ext == "gguf"))
+                        .collect();
+
+                    if ggufs.is_empty() {
+                        println!("[fireside] No GGUF models found, skipping auto-start");
+                        return;
+                    }
+
+                    ggufs.sort_by_key(|e| std::cmp::Reverse(
+                        e.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                    ));
+
+                    let model_path = ggufs[0].path();
+                    println!("[fireside] Auto-starting llama-server with {}", model_path.display());
+
+                    // Find llama-server binary
+                    let binary = match find_llama_server() {
+                        Some(b) => b,
+                        None => {
+                            eprintln!("[fireside] llama-server not found, cannot auto-start");
+                            return;
+                        }
+                    };
+
+                    let child = Command::new(&binary)
+                        .args([
+                            "--model", &model_path.to_string_lossy(),
+                            "--port", "8080",
+                            "--host", "127.0.0.1",
+                            "--ctx-size", "8192",
+                            "--n-gpu-layers", "99",
+                            "--flash-attn", "on",
+                        ])
+                        .spawn();
+
+                    match child {
+                        Ok(child) => {
+                            let pid = child.id();
+                            let mut s = state.lock().unwrap();
+                            s.child = Some(child);
+                            s.running = true;
+                            println!("[fireside] llama-server started (pid={:?})", pid);
+                        }
+                        Err(e) => {
+                            eprintln!("[fireside] Failed to start llama-server: {}", e);
                         }
                     }
                 });
