@@ -97,16 +97,44 @@ export default function CampfireHub() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, stream: false }),
-      });
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data = await res.json();
+      // Try Python backend first (port 8765)
+      let responseText = "";
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: userMessage, stream: false }),
+        });
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        const data = await res.json();
+        responseText = data.response || data.content || "";
+      } catch {
+        // Fallback: try llama-server directly (port 8080, OpenAI-compatible)
+        try {
+          const res = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "local",
+              messages: [
+                { role: "system", content: "You are a helpful AI companion named " + displayName + ". Be friendly, concise, and helpful." },
+                ...chatHistory.map(m => ({ role: m.role, content: m.content })),
+                { role: "user", content: userMessage },
+              ],
+              max_tokens: 1024,
+              temperature: 0.7,
+            }),
+          });
+          if (!res.ok) throw new Error(`llama-server error: ${res.status}`);
+          const data = await res.json();
+          responseText = data.choices?.[0]?.message?.content || "";
+        } catch {
+          throw new Error("No backend available");
+        }
+      }
       setChatHistory(prev => [...prev, {
         role: "assistant",
-        content: data.response || data.content || "I received your message.",
+        content: responseText || "I received your message.",
         ts: new Date(),
       }]);
     } catch {

@@ -721,6 +721,221 @@ fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
     }
 }
 
+/// Start llama-server directly with the newest downloaded GGUF model.
+/// This bypasses the Python backend entirely — chat goes directly to llama-server.
+#[tauri::command]
+fn start_llama_server(state: tauri::State<'_, Arc<Mutex<BackendState>>>) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("Cannot find home directory")?;
+    let models_dir = home.join(".fireside").join("models");
+
+    // Find the newest GGUF file
+    let mut ggufs: Vec<_> = fs::read_dir(&models_dir)
+        .map_err(|e| format!("Cannot read models dir: {}", e))?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |ext| ext == "gguf"))
+        .collect();
+
+    ggufs.sort_by_key(|e| std::cmp::Reverse(e.metadata().map(|m| m.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)).unwrap_or(std::time::SystemTime::UNIX_EPOCH)));
+
+    let gguf = ggufs.first().ok_or("No GGUF models found in ~/.fireside/models/")?;
+    let model_path = gguf.path();
+
+    // Find llama-server binary
+    let binary = find_llama_server()
+        .ok_or("llama-server not found. Please install llama.cpp or place llama-server.exe in PATH.")?;
+
+    // Kill any existing backend/llama-server
+    {
+        let mut s = state.lock().map_err(|e| format!("Lock error: {}", e))?;
+        if let Some(ref mut child) = s.child {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        s.child = None;
+        s.running = false;
+    }
+
+    thread::sleep(std::time::Duration::from_millis(300));
+
+    // Start llama-server with full GPU offloading
+    let cmd_args = vec![
+        "--model".to_string(), model_path.to_string_lossy().to_string(),
+        "--port".to_string(), "8080".to_string(),
+        "--host".to_string(), "127.0.0.1".to_string(),
+        "--ctx-size".to_string(), "8192".to_string(),
+        "--n-gpu-layers".to_string(), "99".to_string(),
+        "--flash-attn".to_string(),
+    ];
+
+    println!("[fireside] Starting llama-server: {} {}", binary, cmd_args.join(" "));
+
+    match Command::new(&binary)
+        .args(&cmd_args)
+        .spawn()
+    {
+        Ok(child) => {
+            let pid = child.id();
+            let mut s = state.lock().map_err(|e| format!("Lock error: {}", e))?;
+            s.child = Some(child);
+            s.running = true;
+            let msg = format!("llama-server started (pid={:?}) with {}", pid, model_path.file_name().unwrap_or_default().to_string_lossy());
+            println!("[fireside] {}", msg);
+            Ok(msg)
+        }
+        Err(e) => Err(format!("Failed to start llama-server: {}", e)),
+    }
+}
+
+fn find_llama_server() -> Option<String> {
+    let exe = if cfg!(target_os = "windows") { "llama-server.exe" } else { "llama-server" };
+
+    // 1. Canonical location: ~/.fireside/bin/ (installed by the installer)
+    let home = dirs::home_dir().unwrap_or_default();
+    let canonical = home.join(".fireside").join("bin").join(exe);
+    if canonical.exists() {
+        return Some(canonical.to_string_lossy().to_string());
+    }
+
+    // 2. Also check nested inside extracted zip (llama.cpp zips have subdirs)
+    let bin_dir = home.join(".fireside").join("bin");
+    if bin_dir.exists() {
+        for entry in walkdir_find_exe(&bin_dir, exe) {
+            return Some(entry);
+        }
+    }
+
+    // 3. Try system PATH
+    if let Ok(output) = Command::new(if cfg!(target_os = "windows") { "where" } else { "which" })
+        .arg("llama-server")
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout)
+                .lines().next().unwrap_or("").trim().to_string();
+            if !path.is_empty() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+/// Recursively find an exe in a directory (handles zip extraction subdirs)
+fn walkdir_find_exe(dir: &PathBuf, exe_name: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_file() && path.file_name().map_or(false, |n| n == exe_name) {
+                results.push(path.to_string_lossy().to_string());
+            } else if path.is_dir() {
+                results.extend(walkdir_find_exe(&path, exe_name));
+            }
+        }
+    }
+    results
+}
+
+/// Download llama-server binary from GitHub releases to ~/.fireside/bin/.
+/// This is called during installation so new users get everything automatically.
+#[tauri::command]
+async fn download_llama_server(app: tauri::AppHandle) -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("Cannot find home directory")?;
+    let bin_dir = home.join(".fireside").join("bin");
+    fs::create_dir_all(&bin_dir).map_err(|e| format!("Cannot create bin dir: {}", e))?;
+
+    let exe = if cfg!(target_os = "windows") { "llama-server.exe" } else { "llama-server" };
+
+    // Check if already installed
+    if find_llama_server().is_some() {
+        return Ok("llama-server already installed".into());
+    }
+
+    // Determine download URL based on platform
+    let release = "b5460";
+    let url = if cfg!(target_os = "windows") {
+        format!("https://github.com/ggml-org/llama.cpp/releases/download/{}/llama-{}-bin-win-cuda-cu12.4-x64.zip", release, release)
+    } else if cfg!(target_os = "macos") {
+        format!("https://github.com/ggml-org/llama.cpp/releases/download/{}/llama-{}-bin-macos-arm64.zip", release, release)
+    } else {
+        format!("https://github.com/ggml-org/llama.cpp/releases/download/{}/llama-{}-bin-ubuntu-x64.zip", release, release)
+    };
+
+    let zip_path = bin_dir.join("llama-server.zip");
+
+    // Emit progress to frontend
+    let _ = app.emit("download-progress", DownloadProgress {
+        percent: 0.0, downloaded_mb: 0.0, total_mb: 0.0, speed_mbps: 0.0,
+        status: "downloading_runtime".to_string(),
+    });
+
+    println!("[fireside] Downloading llama-server from {}", url);
+
+    // Download the zip
+    let client = reqwest::Client::builder()
+        .user_agent("Fireside/1.0 (AI Companion Installer)")
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let response = client.get(&url).send().await
+        .map_err(|e| format!("Download failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}: Download failed", response.status()));
+    }
+
+    let bytes = response.bytes().await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    fs::write(&zip_path, &bytes)
+        .map_err(|e| format!("Failed to write zip: {}", e))?;
+
+    println!("[fireside] Downloaded {} MB, extracting...", bytes.len() / 1_048_576);
+
+    // Extract the zip
+    let file = fs::File::open(&zip_path)
+        .map_err(|e| format!("Cannot open zip: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("Invalid zip: {}", e))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)
+            .map_err(|e| format!("Zip entry error: {}", e))?;
+
+        let name = entry.name().to_string();
+        let out_path = bin_dir.join(&name);
+
+        if entry.is_dir() {
+            fs::create_dir_all(&out_path).ok();
+        } else {
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent).ok();
+            }
+            let mut outfile = fs::File::create(&out_path)
+                .map_err(|e| format!("Cannot create {}: {}", name, e))?;
+            std::io::copy(&mut entry, &mut outfile)
+                .map_err(|e| format!("Extract error: {}", e))?;
+        }
+    }
+
+    // Clean up zip
+    fs::remove_file(&zip_path).ok();
+
+    // Verify llama-server was extracted
+    match find_llama_server() {
+        Some(path) => {
+            println!("[fireside] llama-server installed at: {}", path);
+            let _ = app.emit("download-progress", DownloadProgress {
+                percent: 100.0, downloaded_mb: 0.0, total_mb: 0.0, speed_mbps: 0.0,
+                status: "runtime_ready".to_string(),
+            });
+            Ok(format!("llama-server installed: {}", path))
+        }
+        None => Err(format!("Extraction succeeded but {} not found in {:?}", exe, bin_dir)),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Sprint 21 — Brain download + connection test
 // ---------------------------------------------------------------------------
@@ -809,8 +1024,15 @@ async fn download_brain(
     let filename = format!("{}-{}.gguf", base, suffix);
     let url = format!("https://huggingface.co/{}/resolve/main/{}", repo, filename);
 
-    let dest_dir = PathBuf::from(&dest);
-    fs::create_dir_all(&dest_dir).map_err(|e| format!("Cannot create dir: {}", e))?;
+    // Expand ~ to home directory (PathBuf doesn't do this on Windows)
+    let dest_expanded = if dest.starts_with("~/") || dest.starts_with("~\\") {
+        let home = dirs::home_dir().ok_or("Cannot find home directory")?;
+        home.join(&dest[2..])
+    } else {
+        PathBuf::from(&dest)
+    };
+    let dest_dir = dest_expanded;
+    fs::create_dir_all(&dest_dir).map_err(|e| format!("Cannot create dir {}: {}", dest_dir.display(), e))?;
     let target = dest_dir.join(&filename);
     let part_file = dest_dir.join(format!("{}.part", filename));
 
@@ -1013,6 +1235,8 @@ fn main() {
             download_brain,
             test_connection,
             restart_backend,
+            start_llama_server,
+            download_llama_server,
         ])
         .manage(backend_state.clone())
         .setup(move |_app| {

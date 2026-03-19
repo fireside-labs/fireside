@@ -302,6 +302,17 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
     }
 
     try {
+      // Step 1: Ensure llama-server runtime is installed
+      setBrainDownloadInfo(prev => ({ ...prev, status: 'installing_runtime' }));
+      try {
+        await tauriInvoke("download_llama_server");
+        console.log("[Installer] llama-server runtime ready");
+      } catch (e) {
+        console.warn("[Installer] Runtime install skipped:", e);
+      }
+
+      // Step 2: Download the brain model
+      setBrainDownloadInfo(prev => ({ ...prev, status: 'downloading' }));
       const result = await tauriInvoke<string>("download_brain", { model, quant: config.brainModel || "6-bit", dest: "~/.fireside/models/" });
 
       // Cloud model — skip download
@@ -317,12 +328,19 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
       setBrainDownloadInfo(prev => ({ ...prev, status: 'complete' }));
       localStorage.setItem("fireside_model", model);
 
-      // Auto-start the Python backend so it loads the downloaded model
+      // Auto-start the inference server so chat works immediately
       try {
-        await tauriInvoke("restart_backend");
-        console.log("[Installer] Backend restarted with new brain");
-      } catch (e) {
-        console.warn("[Installer] Backend restart failed (may need manual start):", e);
+        // Try direct llama-server first (doesn't need Python)
+        await tauriInvoke("start_llama_server");
+        console.log("[Installer] llama-server started with new brain");
+      } catch (e1) {
+        console.warn("[Installer] llama-server start failed, trying Python backend:", e1);
+        try {
+          await tauriInvoke("restart_backend");
+          console.log("[Installer] Python backend restarted");
+        } catch (e2) {
+          console.warn("[Installer] Backend start failed (may need manual start):", e2);
+        }
       }
 
       setTimeout(() => goTo(8), 600);
