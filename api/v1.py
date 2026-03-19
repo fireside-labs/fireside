@@ -898,9 +898,19 @@ async def post_chat(req: ChatRequest):
 
     # Inject current date/time so the model knows when it is
     from datetime import datetime as _dt
+    import platform as _platform
     now = _dt.now()
+    home_dir = str(Path.home()).replace("\\", "/")
+    desktop = str(Path.home() / "Desktop").replace("\\", "/")
     system_prompt += (
         f"\n\nCurrent date and time: {now.strftime('%A, %B %d, %Y at %I:%M %p')}"
+        f"\nOperating system: {_platform.system()} ({_platform.release()})"
+        f"\nUser home directory: {home_dir}"
+        f"\nDesktop path: {desktop}"
+        f"\n\nIMPORTANT: When using tools like files_list, use the full Windows path "
+        f"(e.g. '{desktop}'), NOT Unix paths like '/Users'. "
+        f"Do NOT output raw XML tool_call tags — use the function calling API. "
+        f"Be concise: answer directly after a tool returns, do not call more tools than necessary."
     )
 
     # ── Tool dispatch: browse, search, pipeline (invisible to user) ──
