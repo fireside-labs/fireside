@@ -90,8 +90,8 @@ export default function BrainControlPanel() {
   const handleStop = async () => {
     setActionPending("stop");
     try {
-      // Stop = restart with no model (we use the restart endpoint which re-checks)
-      await fetch(`${API_BASE}/api/v1/brains/restart`, { method: "POST" });
+      // Actually stop the brain, not restart it
+      await fetch(`${API_BASE}/api/v1/brains/stop`, { method: "POST" });
       await fetchStatus();
     } finally {
       setActionPending(null);

@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import re
 import subprocess
 import threading
 import time
@@ -111,12 +112,12 @@ def start(model_path: Path, config: dict = None) -> bool:
             "--keep", "-1",                      # Keep all tokens in KV cache
             "--threads", str(threads),
             "--no-mmap",                         # Load fully into memory
-            "--flash-attn", "on",              # Flash attention (RTX 5090)
+            "--flash-attn",                    # Flash attention (requires compatible GPU)
         ]
 
         # Disable thinking for small models (< 3B) — they waste tokens on garbage
         model_name = model_path.name.lower()
-        if any(s in model_name for s in ["0.5b", "0.6b", "1b", "1.5b", "2b"]):
+        if re.search(r'[-_\.](0\.5b|0\.6b|1b|1\.5b|2b)[-_\.]', model_name):
             cmd.extend(["--reasoning-budget", "0"])
             log.info("[brain] Small model detected, disabling thinking mode")
 

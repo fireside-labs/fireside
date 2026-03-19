@@ -7,7 +7,7 @@
  * because the backend is unreachable. Prevents user confusion about what's real.
  */
 import { useState, useEffect } from "react";
-import { wasLastCallMock, API_BASE } from "@/lib/api";
+import { API_BASE } from "@/lib/api";
 
 export default function OfflineBanner() {
     const [offline, setOffline] = useState(false);
@@ -24,14 +24,6 @@ export default function OfflineBanner() {
         check();
         const interval = setInterval(check, 10000);
         return () => clearInterval(interval);
-    }, []);
-
-    // Also check if api.ts silently served mock data
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (wasLastCallMock()) setOffline(true);
-        }, 2000);
-        return () => clearTimeout(timer);
     }, []);
 
     if (!offline) return null;

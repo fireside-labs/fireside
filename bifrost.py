@@ -181,8 +181,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Valhalla Bifrost V2")
     parser.add_argument("--config", "-c", default=None,
                         help="Path to valhalla.yaml (default: ./valhalla.yaml)")
-    parser.add_argument("--host", default="0.0.0.0",
-                        help="Bind host (default: 0.0.0.0)")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", "-p", type=int, default=None,
                         help="Bind port (default: from config, fallback 8765)")
     args = parser.parse_args()

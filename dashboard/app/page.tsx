@@ -176,6 +176,8 @@ export default function CampfireHub() {
     }
   };
 
+  const displayName = companionName || agentName;
+
   const handleSend = async () => {
     if (!message.trim()) return;
     const userMessage = message.trim();
@@ -266,8 +268,6 @@ export default function CampfireHub() {
       setIsTyping(false);
     }
   };
-
-  const displayName = companionName || agentName;
 
   // Group conversations by date
   const groupedConvos = useMemo(() => {
