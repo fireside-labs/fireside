@@ -1289,6 +1289,12 @@ async def post_chat(req: ChatRequest):
         base = f"http://127.0.0.1:{port}"
         try:
             if name == "files_list":
+                # Path safety: restrict to user home
+                req_path = arguments.get("path", ".")
+                home = str(Path.home()).replace("\\", "/")
+                req_norm = req_path.replace("\\", "/")
+                if not req_norm.startswith(home) and not req_norm.startswith("."):
+                    return f"BLOCKED: Can only access files within your home directory ({home})"
                 payload = json.dumps(arguments).encode()
                 r = urllib.request.Request(f"{base}/api/v1/files/list", data=payload,
                                           headers={"Content-Type": "application/json"}, method="POST")
@@ -1303,6 +1309,12 @@ async def post_chat(req: ChatRequest):
                 return f"Contents of {arguments.get('path', '.')}:\n" + "\n".join(lines)
 
             elif name == "files_read":
+                # Path safety
+                req_path = arguments.get("path", "")
+                home = str(Path.home()).replace("\\", "/")
+                req_norm = req_path.replace("\\", "/")
+                if not req_norm.startswith(home):
+                    return f"BLOCKED: Can only read files within your home directory ({home})"
                 payload = json.dumps({"path": arguments["path"]}).encode()
                 r = urllib.request.Request(f"{base}/api/v1/files/read", data=payload,
                                           headers={"Content-Type": "application/json"}, method="POST")
@@ -1312,9 +1324,24 @@ async def post_chat(req: ChatRequest):
                 return f"File: {arguments['path']} ({data.get('size', 0)} bytes, {data.get('lines', 0)} lines)\n\n{content[:3000]}"
 
             elif name == "files_write":
+                # Path safety: restrict to user home
+                req_path = arguments.get("path", "")
+                home = str(Path.home()).replace("\\", "/")
+                req_norm = req_path.replace("\\", "/")
+                if not req_norm.startswith(home):
+                    return f"BLOCKED: Can only write files within your home directory ({home})"
+                # Block writes to Fireside system dirs
+                protected = [".fireside/api", ".fireside/plugins", ".fireside/bot",
+                             ".fireside/middleware", ".fireside/bifrost"]
+                if any(p in req_norm for p in protected):
+                    return "BLOCKED: Cannot write to Fireside system directories."
+                # Content size cap: 500KB
+                content = arguments.get("content", "")
+                if len(content) > 512_000:
+                    return f"BLOCKED: File content too large ({len(content)} bytes). Max 500KB."
                 payload = json.dumps({
                     "path": arguments["path"],
-                    "content": arguments["content"],
+                    "content": content,
                     "create_dirs": True,
                 }).encode()
                 r = urllib.request.Request(f"{base}/api/v1/files/write", data=payload,
@@ -1335,7 +1362,21 @@ async def post_chat(req: ChatRequest):
                 # Safety check for destructive commands
                 cmd = arguments.get("command", "")
                 cmd_lower = cmd.lower()
-                destructive = ["rm ", "rm -", "del ", "rmdir", "format", "erase"]
+                destructive = [
+                    # Unix
+                    "rm ", "rm -", "rmdir", "dd if=",
+                    # Windows CMD
+                    "del ", "erase", "format ", "rd ", "rd/",
+                    # PowerShell
+                    "remove-item", "clear-content", "invoke-expression",
+                    "start-process", "iex ", "iex(",
+                    # Shell injection
+                    "cmd /c del", "cmd /c rd", "cmd /c erase",
+                    "powershell -c remove", "powershell -command",
+                    # Dangerous system commands
+                    "shutdown", "restart-computer", "stop-computer",
+                    "format-volume", "clear-disk",
+                ]
                 if any(d in cmd_lower for d in destructive):
                     return (
                         f"BLOCKED: Destructive command detected: {cmd}\n"
