@@ -273,15 +273,26 @@ def _start_stage(pipeline_id: str, meta: dict) -> None:
     system = stage.get("system_prompt", f"You are executing stage '{stage_name}' of a pipeline.")
     prompt = stage.get("prompt", meta["description"])
 
-    # Add previous stage results as context
+    # Add previous stage results as context — structured and compressed
     prev_results = meta.get("results", {})
     if prev_results:
-        last_key = list(prev_results.keys())[-1]
-        last_result = prev_results[last_key]
-        if isinstance(last_result, list):
-            prompt += f"\n\nPrevious stage ({last_key}) output:\n" + "\n".join(str(r) for r in last_result[-2:])
-        elif isinstance(last_result, str):
-            prompt += f"\n\nPrevious stage ({last_key}) output:\n{last_result[:2000]}"
+        prompt += "\n\n--- CONTEXT FROM PREVIOUS STAGES ---"
+        for stage_key, stage_output in prev_results.items():
+            # Compress each stage's output: keep first 1500 chars and last 500 chars
+            if isinstance(stage_output, list):
+                text = "\n".join(str(r) for r in stage_output[-3:])
+            elif isinstance(stage_output, str):
+                text = stage_output
+            else:
+                text = str(stage_output)
+
+            # Smart truncation: keep beginning (spec/plan) and end (results/verdict)
+            if len(text) > 2000:
+                text = text[:1500] + "\n...[truncated]...\n" + text[-500:]
+
+            prompt += f"\n\n[Stage '{stage_key}' output:]\n{text}"
+
+        prompt += "\n--- END PREVIOUS CONTEXT ---\n"
 
     # Add iteration feedback if retrying
     if meta["current_iteration"] > 0:
@@ -292,8 +303,47 @@ def _start_stage(pipeline_id: str, meta: dict) -> None:
                       f"Previous verdict: {last.get('verdict', 'fail')}. " \
                       f"Feedback: {last.get('feedback', 'Fix the issues and try again.')}"
 
-    # Call the model
-    result = _call_model(prompt, system=system, task_type=task_type, timeout=120)
+    # Call the model — handle parallel sub-stages (e.g. backend + frontend)
+    if "parallel" in stage:
+        # Parallel sub-stages: run each sequentially on single-GPU,
+        # merge their outputs. On mesh, these dispatch to different nodes.
+        sub_results = []
+        for sub in stage["parallel"]:
+            sub_system = sub.get("system_prompt",
+                         f"You are a {sub.get('role', 'executor')} working on stage '{stage_name}'.")
+            sub_prompt = sub.get("prompt", meta["description"])
+
+            # Include the same previous context
+            if prev_results:
+                sub_prompt += "\n\n--- CONTEXT FROM PREVIOUS STAGES ---"
+                for sk, sv in prev_results.items():
+                    text = sv if isinstance(sv, str) else str(sv)
+                    if len(text) > 1500:
+                        text = text[:1000] + "\n...[truncated]...\n" + text[-500:]
+                    sub_prompt += f"\n\n[Stage '{sk}' output:]\n{text}"
+                sub_prompt += "\n--- END PREVIOUS CONTEXT ---\n"
+
+            sub_task_type = sub.get("task_type", task_type)
+            sub_result = _call_model(sub_prompt, system=sub_system,
+                                     task_type=sub_task_type, timeout=120)
+            if sub_result:
+                sub_results.append({
+                    "role": sub.get("role", "unknown"),
+                    "output": sub_result,
+                })
+                log.info("[pipeline] Sub-stage '%s/%s' complete (%d chars)",
+                         stage_name, sub.get("role", "?"), len(sub_result))
+
+        # Merge parallel results
+        if sub_results:
+            merged = "\n\n".join(
+                f"=== {r['role'].upper()} ===\n{r['output']}" for r in sub_results
+            )
+            result = merged
+        else:
+            result = None
+    else:
+        result = _call_model(prompt, system=system, task_type=task_type, timeout=120)
 
     if result:
         verdict = _parse_verdict(result)
