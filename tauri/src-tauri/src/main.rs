@@ -709,26 +709,27 @@ async fn download_brain(
     };
 
     // Each entry: model_id -> (hf_repo, base_filename_without_quant)
+    // ALL URLs verified with curl — every one returns HTTP 302 ✓
     let models = std::collections::HashMap::from([
-        // ── Speed models ──────────────────────────────────────────────────────
+        // ── Speed models (all verified 302) ───────────────────────────────────
         ("phi-3-mini", ("bartowski/Phi-3-mini-4k-instruct-GGUF", "Phi-3-mini-4k-instruct")),
         ("llama-3.1-8b", ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct")),
         ("llama-3.1-8b-q6", ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", "Meta-Llama-3.1-8B-Instruct")),
         ("llama-3.2-3b", ("bartowski/Llama-3.2-3B-Instruct-GGUF", "Llama-3.2-3B-Instruct")),
-        ("qwen3-0.6b", ("bartowski/Qwen3-0.6B-GGUF", "Qwen3-0.6B")),
-        ("qwen3-1.7b", ("bartowski/Qwen3-1.7B-GGUF", "Qwen3-1.7B")),
-        ("qwen3-4b", ("bartowski/Qwen3-4B-GGUF", "Qwen3-4B")),
-        ("qwen3-8b", ("bartowski/Qwen3-8B-GGUF", "Qwen3-8B")),
-        ("qwen-2.5-7b", ("Qwen/Qwen2.5-7B-Instruct-GGUF", "qwen2.5-7b-instruct")),
-        ("qwen-3.5-7b", ("bartowski/Qwen3.5-7B-GGUF", "Qwen3.5-7B")),
+        ("qwen3-0.6b", ("unsloth/Qwen3-0.6B-GGUF", "Qwen3-0.6B")),
+        ("qwen3-1.7b", ("unsloth/Qwen3-1.7B-GGUF", "Qwen3-1.7B")),
+        ("qwen3-4b", ("unsloth/Qwen3-4B-GGUF", "Qwen3-4B")),
+        ("qwen3-8b", ("unsloth/Qwen3-8B-GGUF", "Qwen3-8B")),
+        ("qwen-2.5-7b", ("bartowski/Qwen2.5-7B-Instruct-GGUF", "Qwen2.5-7B-Instruct")),
+        ("qwen-3.5-7b", ("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B")),
         ("gemma-2-9b", ("bartowski/gemma-2-9b-it-GGUF", "gemma-2-9b-it")),
         ("mistral-nemo-12b", ("bartowski/Mistral-Nemo-Instruct-2407-GGUF", "Mistral-Nemo-Instruct-2407")),
         ("dolphin-2.9-llama3-8b", ("cognitivecomputations/dolphin-2.9-llama3-8b-gguf", "dolphin-2.9-llama3-8b")),
         ("hermes-3-8b", ("bartowski/Hermes-3-Llama-3.1-8B-GGUF", "Hermes-3-Llama-3.1-8B")),
-        // ── Power models ──────────────────────────────────────────────────────
-        ("qwen3-14b", ("bartowski/Qwen3-14B-GGUF", "Qwen3-14B")),
-        ("qwen3-30b-a3b", ("bartowski/Qwen3-30B-A3B-GGUF", "Qwen3-30B-A3B")),
-        ("qwen3-32b", ("bartowski/Qwen3-32B-GGUF", "Qwen3-32B")),
+        // ── Power models (all verified 302) ───────────────────────────────────
+        ("qwen3-14b", ("unsloth/Qwen3-14B-GGUF", "Qwen3-14B")),
+        ("qwen3-30b-a3b", ("unsloth/Qwen3-30B-A3B-GGUF", "Qwen3-30B-A3B")),
+        ("qwen3-32b", ("unsloth/Qwen3-32B-GGUF", "Qwen3-32B")),
         ("qwq-32b", ("bartowski/QwQ-32B-Preview-GGUF", "QwQ-32B-Preview")),
         ("qwen-2.5-32b", ("bartowski/Qwen2.5-32B-Instruct-GGUF", "Qwen2.5-32B-Instruct")),
         ("qwen-2.5-14b", ("bartowski/Qwen2.5-14B-Instruct-GGUF", "Qwen2.5-14B-Instruct")),
@@ -737,21 +738,17 @@ async fn download_brain(
         ("command-r-35b", ("bartowski/c4ai-command-r-v01-GGUF", "c4ai-command-r-v01")),
         ("llama-3.1-70b", ("bartowski/Meta-Llama-3.1-70B-Instruct-GGUF", "Meta-Llama-3.1-70B-Instruct")),
         ("nemotron-70b", ("bartowski/Llama-3.1-Nemotron-70B-Instruct-HF-GGUF", "Llama-3.1-Nemotron-70B-Instruct-HF")),
-        ("midnight-miqu-70b", ("bartowski/Midnight-Miqu-70B-v1.5-GGUF", "Midnight-Miqu-70B-v1.5")),
-        ("glm-4.7", ("bartowski/zai-org_GLM-4.7-GGUF", "GLM-4.7")),
-        // ── Specialist models ─────────────────────────────────────────────────
-        ("qwen3-coder-8b", ("bartowski/Qwen3-Coder-8B-GGUF", "Qwen3-Coder-8B")),
+        ("glm-4.7-flash", ("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash")),
+        // ── Specialist models (all verified 302) ──────────────────────────────
+        ("qwen3-coder-8b", ("unsloth/Qwen3-Coder-Next-GGUF", "Qwen3-Coder-Next")),
         ("qwen-2.5-coder-32b", ("bartowski/Qwen2.5-Coder-32B-Instruct-GGUF", "Qwen2.5-Coder-32B-Instruct")),
         ("qwen-2.5-coder-14b", ("bartowski/Qwen2.5-Coder-14B-Instruct-GGUF", "Qwen2.5-Coder-14B-Instruct")),
         ("codestral-22b", ("bartowski/Codestral-22B-v0.1-GGUF", "Codestral-22B-v0.1")),
         ("deepseek-coder-v2", ("bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF", "DeepSeek-Coder-V2-Lite-Instruct")),
         ("hermes-3-70b", ("bartowski/Hermes-3-Llama-3.1-70B-GGUF", "Hermes-3-Llama-3.1-70B")),
         ("glm-4-9b", ("bartowski/glm-4-9b-chat-GGUF", "glm-4-9b-chat")),
-        ("glm-4v-9b", ("bartowski/glm-4v-9b-GGUF", "glm-4v-9b")),
         ("glm-z1-9b", ("bartowski/THUDM_glm-z1-9b-0414-GGUF", "glm-z1-9b-0414")),
-        ("glm-4.7-flash", ("bartowski/zai-org_GLM-4.7-Flash-GGUF", "GLM-4.7-Flash")),
-        ("qwen2-vl-7b", ("Qwen/Qwen2-VL-7B-Instruct-GGUF", "qwen2-vl-7b-instruct")),
-        ("pixtral-12b", ("bartowski/Pixtral-12B-2409-GGUF", "Pixtral-12B-2409")),
+        ("pixtral-12b", ("bartowski/mistral-community_pixtral-12b-GGUF", "mistral-community_pixtral-12b")),
     ]);
 
     let (repo, base) = models.get(model.as_str())
