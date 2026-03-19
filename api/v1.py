@@ -995,7 +995,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "files_list",
-                "description": "List files and directories at a path. Use to see what files exist.",
+                "description": "List files and folders. Use when the user says things like 'what's on my desktop', 'show me the project structure', 'what files are in this folder', 'show me what's in ~/projects'.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1011,7 +1011,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "files_read",
-                "description": "Read the contents of a file.",
+                "description": "Read a file's contents. Use when the user says 'show me that file', 'read the README', 'what's in config.yaml', 'open the error log', 'check the package.json'.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1025,7 +1025,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "files_write",
-                "description": "Create or write content to a file. Creates parent directories automatically.",
+                "description": "Create or save a file. Use when the user says 'write me a script', 'make a file', 'save this code', 'create a config', 'generate a component'. Creates parent directories automatically.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1040,7 +1040,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "files_delete",
-                "description": "Delete a file. DANGEROUS — only call after the user has explicitly confirmed.",
+                "description": "Delete a file or folder. Use when the user says 'delete that file', 'remove the old logs', 'clean up the temp folder'. Requires explicit user confirmation — ask first, then call with confirmed=true.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1054,7 +1054,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "terminal_exec",
-                "description": "Run a shell command on the user's computer. Use for installing packages, running scripts, etc.",
+                "description": "Run a command on the user's computer. Use when the user says 'run npm test', 'check disk space', 'find all TODO comments in the code', 'install the dependencies', 'start the dev server', 'check if port 3000 is in use', 'what version of node do I have'. Handles any shell command.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1069,7 +1069,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "web_search",
-                "description": "Search the web for information. Returns titles, snippets, and URLs.",
+                "description": "Search the internet for current information. Use when the user asks about news, weather, prices, 'what's the latest version of React', 'who won the game', 'stock price of AAPL', 'temperature in Phoenix', or anything requiring up-to-date info you don't know.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1083,7 +1083,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "browse_url",
-                "description": "Fetch and read the contents of a URL. Returns the page text.",
+                "description": "Open and read a specific webpage. Use when the user shares a URL or says 'check this article', 'read that page', 'what does this link say'.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1097,7 +1097,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "create_schedule",
-                "description": "Create a scheduled/recurring task. Use for reminders, daily checks, periodic monitoring.",
+                "description": "Set a reminder or recurring task. Use when the user says 'remind me at 3pm', 'every morning check the server', 'in 30 minutes tell me to stretch', 'schedule a daily report'.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1112,7 +1112,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "create_pipeline",
-                "description": "Spawn a multi-agent pipeline for complex tasks. Sub-agents (planner, builder, tester, reviewer) work through it stage by stage.",
+                "description": "Start a multi-step project with specialized agents. Use when the user says 'build me an app', 'create a full website', 'research and write a report', 'put together a presentation', 'spawn agents to work on this'. Breaks complex work into stages with different expert agents.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1127,7 +1127,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "cancel_schedule",
-                "description": "Cancel an active scheduled task by its ID or description.",
+                "description": "Stop a scheduled reminder or recurring task. Use when the user says 'cancel that reminder', 'stop the daily check', 'turn off the morning briefing'. Call list_schedules first to find the task ID.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1141,7 +1141,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "list_schedules",
-                "description": "List all active scheduled tasks. Use when user asks what's scheduled.",
+                "description": "Show all active reminders and scheduled tasks. Use when the user says 'what reminders do I have', 'what's scheduled', 'show my tasks', 'list my reminders'.",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -1152,7 +1152,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "store_memory",
-                "description": "Store something to long-term memory. Use when user says 'remember', 'note this', 'log this', 'save for later', 'don't forget', etc.",
+                "description": "Save something to long-term memory. Use when the user says 'remember this', 'note this down', 'log this', 'save this for later', 'don't forget', 'jot this down', 'keep track of this'. Stores facts, preferences, and important information.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1166,7 +1166,7 @@ async def post_chat(req: ChatRequest):
             "type": "function",
             "function": {
                 "name": "recall_memory",
-                "description": "Search long-term memory for past conversations, stored facts, or things the user asked you to remember.",
+                "description": "Search your memory for things the user told you before. Use when they say 'what did I tell you about', 'do you remember', 'what do you know about me', 'when is my meeting', 'what was that API key'. Searches all past stored facts and conversations.",
                 "parameters": {
                     "type": "object",
                     "properties": {
