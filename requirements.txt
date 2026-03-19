@@ -1,0 +1,40 @@
+# ============================================================================
+# Fireside — Python Dependencies
+# ============================================================================
+# The installer (install.ps1 / install.sh) runs:
+#   pip install -r requirements.txt
+#
+# This file MUST list every third-party package so that a fresh install
+# on a brand-new machine (with only Python 3.10+) works out of the box.
+# ============================================================================
+
+# ─── Core Server ───
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+pydantic>=2.0
+
+# ─── HTTP / Networking ───
+httpx>=0.24.0
+pyyaml>=6.0
+
+# ─── Browse & Web Search Plugin ───
+beautifulsoup4>=4.12.0
+
+# ─── Working Memory Plugin (vector DB + embeddings) ───
+lancedb>=0.4.0
+pyarrow>=14.0
+sentence-transformers>=2.2.0
+
+# ─── Mesh Discovery (LAN multi-node) ───
+zeroconf>=0.80.0
+
+# ─── AI / ML (torch is large — installed separately by brain-installer) ───
+numpy>=1.24.0
+# torch is NOT listed here because the brain-installer plugin handles
+# GPU-specific torch installation (CUDA vs CPU vs ROCm).
+
+# ─── Voice Plugin (optional — installed on-demand by the voice plugin) ───
+# piper-tts        — installed by voice plugin when TTS is first enabled
+# faster-whisper   — installed by voice plugin when STT is first enabled
+# soundfile        — installed by voice plugin
+# torchaudio       — installed by voice plugin

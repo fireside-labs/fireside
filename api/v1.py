@@ -1341,7 +1341,9 @@ async def post_chat(req: ChatRequest):
             elif name == "web_search":
                 from plugins.browse.handler import web_search as _ws
                 result = await _ws(arguments.get("query", ""), max_results=5)
-                if result.get("ok") and result.get("results"):
+                if not result.get("ok"):
+                    return f"Web search failed: {result.get('error', 'unknown error')}"
+                if result.get("results"):
                     lines = [f"• {r['title']}: {r['snippet']}" for r in result["results"]]
                     return "\n".join(lines)
                 return result.get("raw_text", "No results found.")
@@ -1349,9 +1351,9 @@ async def post_chat(req: ChatRequest):
             elif name == "browse_url":
                 from plugins.browse.handler import browse as _browse
                 result = await _browse(arguments.get("url", ""))
-                if result.get("ok"):
-                    return f"Page: {result.get('title', 'Untitled')}\n\n{result.get('text', '')[:2000]}"
-                return f"Failed to fetch: {result.get('error', 'unknown error')}"
+                if not result.get("ok"):
+                    return f"Failed to fetch: {result.get('error', 'unknown error')}"
+                return f"Page: {result.get('title', 'Untitled')}\n\n{result.get('text', '')[:2000]}"
 
             elif name == "create_schedule":
                 payload = json.dumps({
