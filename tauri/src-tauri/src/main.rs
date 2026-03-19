@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
+use tauri::Emitter;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -672,10 +673,28 @@ fn spawn_backend(fireside_dir: &PathBuf) -> Option<Child> {
 // Sprint 21 — Brain download + connection test
 // ---------------------------------------------------------------------------
 
-/// Download a brain model GGUF from HuggingFace CDN.
+/// Progress event payload sent to the frontend during model download.
+#[derive(Clone, Serialize)]
+struct DownloadProgress {
+    percent: f64,
+    downloaded_mb: f64,
+    total_mb: f64,
+    speed_mbps: f64,
+    status: String, // "downloading", "verifying", "complete", "resuming"
+}
+
+/// Download a brain model GGUF from HuggingFace CDN with real progress.
 /// `quant` should be one of: "4-bit", "6-bit", "8-bit", "API" (cloud, no download).
 #[tauri::command]
-async fn download_brain(model: String, quant: String, dest: String) -> Result<String, String> {
+async fn download_brain(
+    app: tauri::AppHandle,
+    model: String,
+    quant: String,
+    dest: String,
+) -> Result<String, String> {
+    use futures_util::StreamExt;
+    use std::io::Write;
+
     // Cloud models don't need downloads
     if quant == "API" || model.starts_with("cloud-") {
         return Ok("cloud_model:no_download_needed".to_string());
@@ -686,11 +705,10 @@ async fn download_brain(model: String, quant: String, dest: String) -> Result<St
         "4-bit" => "Q4_K_M",
         "6-bit" => "Q6_K",
         "8-bit" => "Q8_0",
-        _ => "Q6_K", // Default to medium quality
+        _ => "Q6_K",
     };
 
     // Each entry: model_id -> (hf_repo, base_filename_without_quant)
-    // Final filename is built as: {base}-{suffix}.gguf
     let models = std::collections::HashMap::from([
         // ── Speed models ──────────────────────────────────────────────────────
         ("phi-3-mini", ("bartowski/Phi-3-mini-4k-instruct-GGUF", "Phi-3-mini-4k-instruct")),
@@ -740,40 +758,135 @@ async fn download_brain(model: String, quant: String, dest: String) -> Result<St
         .ok_or_else(|| format!("Unknown model: {}", model))?;
 
     let filename = format!("{}-{}.gguf", base, suffix);
+    let url = format!("https://huggingface.co/{}/resolve/main/{}", repo, filename);
 
     let dest_dir = PathBuf::from(&dest);
     fs::create_dir_all(&dest_dir).map_err(|e| format!("Cannot create dir: {}", e))?;
     let target = dest_dir.join(&filename);
+    let part_file = dest_dir.join(format!("{}.part", filename));
 
-    // Already downloaded?
+    // Already fully downloaded?
     if target.exists() {
         let size = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
         if size > 100_000_000 {
+            let _ = app.emit("download-progress", DownloadProgress {
+                percent: 100.0, downloaded_mb: size as f64 / 1_048_576.0,
+                total_mb: size as f64 / 1_048_576.0, speed_mbps: 0.0,
+                status: "complete".to_string(),
+            });
             return Ok(format!("already_installed:{}", filename));
         }
     }
 
-    // Download via curl/wget (available on all platforms)
-    let url = format!("https://huggingface.co/{}/resolve/main/{}", repo, filename);
-
-    let status = if cfg!(target_os = "windows") {
-        Command::new("powershell")
-            .args(["-NoProfile", "-Command", &format!(
-                "Invoke-WebRequest -Uri '{}' -OutFile '{}' -UseBasicParsing",
-                url, target.display()
-            )])
-            .status()
+    // Check for existing partial download (resume support)
+    let existing_bytes = if part_file.exists() {
+        fs::metadata(&part_file).map(|m| m.len()).unwrap_or(0)
     } else {
-        Command::new("curl")
-            .args(["-L", "-o", &target.to_string_lossy(), &url])
-            .status()
+        0
     };
 
-    match status {
-        Ok(s) if s.success() => Ok(format!("downloaded:{}", filename)),
-        Ok(s) => Err(format!("Download exited with code {:?}", s.code())),
-        Err(e) => Err(format!("Download failed: {}", e)),
+    // Build HTTP request with optional Range header for resume
+    let client = reqwest::Client::new();
+    let mut request = client.get(&url);
+    if existing_bytes > 0 {
+        request = request.header("Range", format!("bytes={}-", existing_bytes));
+        let _ = app.emit("download-progress", DownloadProgress {
+            percent: 0.0, downloaded_mb: existing_bytes as f64 / 1_048_576.0,
+            total_mb: 0.0, speed_mbps: 0.0,
+            status: "resuming".to_string(),
+        });
     }
+
+    let response = request.send().await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    if !response.status().is_success() && response.status().as_u16() != 206 {
+        return Err(format!("HuggingFace returned HTTP {}", response.status()));
+    }
+
+    // Calculate total size (from Content-Length + existing bytes)
+    let content_length = response.content_length().unwrap_or(0);
+    let total_bytes = if existing_bytes > 0 && response.status().as_u16() == 206 {
+        content_length + existing_bytes
+    } else {
+        content_length
+    };
+    let total_mb = total_bytes as f64 / 1_048_576.0;
+
+    // Open file for writing (append if resuming)
+    let mut file = if existing_bytes > 0 && response.status().as_u16() == 206 {
+        std::fs::OpenOptions::new().append(true).open(&part_file)
+    } else {
+        std::fs::File::create(&part_file).map(|f| f)
+    }.map_err(|e| format!("Cannot open file for writing: {}", e))?;
+
+    // Stream the download with progress
+    let mut downloaded = existing_bytes;
+    let mut last_emit = std::time::Instant::now();
+    let start_time = std::time::Instant::now();
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| format!("Download stream error: {}", e))?;
+        file.write_all(&chunk).map_err(|e| format!("Write error: {}", e))?;
+        downloaded += chunk.len() as u64;
+
+        // Emit progress every 512KB or 500ms (whichever comes first)
+        if last_emit.elapsed().as_millis() > 500 || downloaded == total_bytes {
+            let elapsed = start_time.elapsed().as_secs_f64().max(0.1);
+            let dl_since_start = (downloaded - existing_bytes) as f64;
+            let speed_mbps = (dl_since_start / 1_048_576.0) / elapsed;
+            let percent = if total_bytes > 0 {
+                (downloaded as f64 / total_bytes as f64) * 100.0
+            } else {
+                0.0
+            };
+
+            let _ = app.emit("download-progress", DownloadProgress {
+                percent,
+                downloaded_mb: downloaded as f64 / 1_048_576.0,
+                total_mb,
+                speed_mbps,
+                status: "downloading".to_string(),
+            });
+            last_emit = std::time::Instant::now();
+        }
+    }
+
+    file.flush().map_err(|e| format!("Flush error: {}", e))?;
+    drop(file);
+
+    // Verify GGUF magic number (first 4 bytes should be 0x47475546 = "GGUF")
+    let _ = app.emit("download-progress", DownloadProgress {
+        percent: 99.5, downloaded_mb: total_mb, total_mb,
+        speed_mbps: 0.0, status: "verifying".to_string(),
+    });
+
+    let magic_ok = std::fs::File::open(&part_file)
+        .and_then(|mut f| {
+            use std::io::Read;
+            let mut buf = [0u8; 4];
+            f.read_exact(&mut buf)?;
+            Ok(buf)
+        })
+        .map(|buf| &buf == b"GGUF")
+        .unwrap_or(false);
+
+    if !magic_ok {
+        let _ = fs::remove_file(&part_file);
+        return Err("Downloaded file is not a valid GGUF model. The file may be corrupted or the URL may have changed.".to_string());
+    }
+
+    // Rename .part to final filename
+    fs::rename(&part_file, &target)
+        .map_err(|e| format!("Cannot rename .part file: {}", e))?;
+
+    let _ = app.emit("download-progress", DownloadProgress {
+        percent: 100.0, downloaded_mb: total_mb, total_mb,
+        speed_mbps: 0.0, status: "complete".to_string(),
+    });
+
+    Ok(format!("downloaded:{}", filename))
 }
 
 /// Test that the backend is reachable and can respond to a health check.

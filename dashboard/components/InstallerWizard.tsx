@@ -115,6 +115,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   const [brainProgress, setBrainProgress] = useState(0);
   const [brainDownloading, setBrainDownloading] = useState(false);
   const [brainError, setBrainError] = useState<string | null>(null);
+  const [brainDownloadInfo, setBrainDownloadInfo] = useState({ speed: 0, downloadedMb: 0, totalMb: 0, status: '' });
   const [connectionStatus, setConnectionStatus] = useState<"pending" | "testing" | "success" | "fail">("pending");
   const [installIntensity, setInstallIntensity] = useState(0);
   const [sparkBurst, setSparkBurst] = useState(false);
@@ -274,27 +275,56 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   const startBrainDownload = useCallback(async () => {
     setBrainDownloading(true);
     setBrainProgress(0);
+    setBrainDownloadInfo({ speed: 0, downloadedMb: 0, totalMb: 0, status: 'connecting' });
     const model = config.actualModel || "llama-3.1-8b-q6";
-    try {
-      // Simulate progress for development (Tauri will send real progress events)
-      const progressInterval = setInterval(() => {
-        setBrainProgress(prev => {
-          if (prev >= 95) { clearInterval(progressInterval); return prev; }
-          return prev + Math.random() * 3 + 1;
-        });
-      }, 300);
 
-      await tauriInvoke("download_brain", { model, quant: config.brainModel || "6-bit", dest: "~/.fireside/models/" });
-      clearInterval(progressInterval);
+    // Listen for real progress events from Rust backend
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    let unlisten: (() => void) | null = null;
+    if (w.__TAURI__?.event?.listen) {
+      unlisten = await w.__TAURI__.event.listen('download-progress', (event: { payload: { percent: number; downloaded_mb: number; total_mb: number; speed_mbps: number; status: string } }) => {
+        const { percent, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
+        setBrainProgress(percent);
+        setBrainDownloadInfo({ speed: speed_mbps, downloadedMb: downloaded_mb, totalMb: total_mb, status });
+      });
+    } else {
+      // Browser mock fallback — simulate progress
+      const fakeInterval = setInterval(() => {
+        setBrainProgress(prev => {
+          if (prev >= 95) { clearInterval(fakeInterval); return prev; }
+          return prev + Math.random() * 8 + 2;
+        });
+        setBrainDownloadInfo(prev => ({ ...prev, status: 'downloading', speed: 12 + Math.random() * 20, downloadedMb: prev.downloadedMb + 50, totalMb: 4900 }));
+      }, 400);
+      // Store cleanup in unlisten
+      unlisten = () => clearInterval(fakeInterval);
+    }
+
+    try {
+      const result = await tauriInvoke<string>("download_brain", { model, quant: config.brainModel || "6-bit", dest: "~/.fireside/models/" });
+
+      // Cloud model — skip download
+      if (result?.startsWith('cloud_model:')) {
+        setBrainProgress(100);
+        setBrainDownloadInfo(prev => ({ ...prev, status: 'complete' }));
+        localStorage.setItem("fireside_model", model);
+        setTimeout(() => goTo(8), 400);
+        return;
+      }
+
       setBrainProgress(100);
+      setBrainDownloadInfo(prev => ({ ...prev, status: 'complete' }));
       localStorage.setItem("fireside_model", model);
       setTimeout(() => goTo(8), 600);
     } catch (err) {
       setBrainDownloading(false);
       setBrainProgress(0);
       setBrainError(typeof err === 'string' ? err : 'Download failed. Check your internet connection.');
+    } finally {
+      if (unlisten) unlisten();
     }
-  }, [config.actualModel, goTo]);
+  }, [config.actualModel, config.brainModel, goTo]);
 
   // ── Step 8: Connection Test ──
   useEffect(() => {
@@ -665,7 +695,21 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                     />
                   </div>
                   <p style={{ textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
-                    {brainProgress < 100 ? `Downloading... ${Math.round(brainProgress)}%` : '✔ Download complete!'}
+                    {brainDownloadInfo.status === 'resuming' && '⏩ Resuming download...'}
+                    {brainDownloadInfo.status === 'verifying' && '🔍 Verifying file integrity...'}
+                    {brainDownloadInfo.status === 'complete' && '✔ Download complete!'}
+                    {brainDownloadInfo.status === 'connecting' && '🔗 Connecting to HuggingFace...'}
+                    {brainDownloadInfo.status === 'downloading' && (
+                      <>
+                        {brainDownloadInfo.totalMb > 0
+                          ? `${(brainDownloadInfo.downloadedMb / 1024).toFixed(1)} GB / ${(brainDownloadInfo.totalMb / 1024).toFixed(1)} GB`
+                          : `${(brainDownloadInfo.downloadedMb / 1024).toFixed(1)} GB`
+                        }
+                        {brainDownloadInfo.speed > 0 && ` — ${brainDownloadInfo.speed.toFixed(1)} MB/s`}
+                        {' · '}{Math.round(brainProgress)}%
+                      </>
+                    )}
+                    {!brainDownloadInfo.status && brainProgress < 100 && `Downloading... ${Math.round(brainProgress)}%`}
                   </p>
                 </div>
               )}
