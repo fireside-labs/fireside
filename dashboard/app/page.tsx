@@ -66,7 +66,7 @@ export default function CampfireHub() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeConvo, setActiveConvo] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const name = localStorage.getItem("fireside_user_name") || "";
@@ -586,14 +586,24 @@ export default function CampfireHub() {
                 >
                   🧠
                 </button>
-                <input
+                <textarea
                   ref={inputRef}
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
                   placeholder={`Message ${displayName}...`}
                   className="fs-chat-input"
                   autoFocus
+                  rows={1}
                 />
                 <button onClick={handleSend} disabled={!message.trim()} className="fs-send-btn">▶</button>
               </div>
