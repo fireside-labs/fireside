@@ -127,7 +127,8 @@ def send_email(to: str, subject: str, body: str, html: bool = False) -> dict:
         except Exception:
             pass
 
-    if not smtp_user:
+    # Fail fast if no credentials — don't try connecting
+    if not smtp_user or not smtp_pass:
         return {"sent": False, "error": "No SMTP credentials configured. "
                 "Set SMTP_USER/SMTP_PASS env vars or create ~/.fireside/smtp.json"}
 
@@ -141,11 +142,14 @@ def send_email(to: str, subject: str, body: str, html: bool = False) -> dict:
     else:
         msg.attach(MIMEText(body, "plain"))
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(from_addr, [to], msg.as_string())
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(from_addr, [to], msg.as_string())
+    except Exception as e:
+        return {"sent": False, "error": f"SMTP connection failed: {e}"}
 
     log.info("[tools] Email sent to %s: %s", to, subject)
     return {"sent": True, "to": to, "subject": subject}
@@ -403,25 +407,43 @@ def _create_docx(path: Path, title: str, content: str) -> dict:
 @register(
     name="run_command",
     description="Execute a shell command. Output is captured and returned. "
-                "Times out after 30 seconds. Dangerous commands are blocked.",
+                "Times out after 30 seconds. Potentially destructive commands "
+                "require user confirmation (pass confirmed=true after asking).",
     parameters={
         "type": "object",
         "properties": {
             "command": {"type": "string", "description": "Shell command to execute"},
             "cwd": {"type": "string", "description": "Working directory", "default": "."},
+            "confirmed": {"type": "boolean", "description": "Set to true after user has confirmed a dangerous command", "default": False},
         },
         "required": ["command"],
     },
 )
-def run_command(command: str, cwd: str = ".") -> dict:
-    """Execute a shell command with safety checks."""
-    # Block dangerous commands
-    BLOCKED = ["rm -rf /", "format c:", "del /s /q", ":(){ :|:& };:",
-               "mkfs", "dd if=", "shutdown", "reboot"]
+def run_command(command: str, cwd: str = ".", confirmed: bool = False) -> dict:
+    """Execute a shell command. Dangerous commands require user confirmation."""
+    # Patterns that look destructive — require user confirmation (not blocked)
+    DANGEROUS = [
+        "rm -rf", "rmdir /s", "del /s", "del /f", "format ",
+        "mkfs", "dd if=", "diskpart",
+        ":(){ :|:& };:",  # fork bomb
+        "shutdown", "reboot",
+        "reg delete", "reg add",
+        "> /dev/sda", "| dd ",
+        "drop database", "drop table",
+    ]
     cmd_lower = command.lower().strip()
-    for blocked in BLOCKED:
-        if blocked in cmd_lower:
-            return {"executed": False, "error": f"Blocked dangerous command: {blocked}"}
+
+    if not confirmed:
+        for pattern in DANGEROUS:
+            if pattern in cmd_lower:
+                return {
+                    "executed": False,
+                    "needs_confirmation": True,
+                    "command": command,
+                    "warning": f"This command contains '{pattern}' which could be destructive. "
+                               f"Please ask the user to confirm before running it. "
+                               f"If they confirm, call run_command again with confirmed=true.",
+                }
 
     try:
         result = subprocess.run(
