@@ -508,35 +508,65 @@ def http_request(url: str, method: str = "GET", body: str = None,
     },
 )
 def browse_and_act(url: str, goal: str) -> dict:
-    """Open a website and return the interactive action tree."""
-    import asyncio
+    """Open a website and return the interactive action tree.
 
+    Two-tier approach:
+      1. Try Playwright (full JS rendering, interactive navigation)
+      2. Fall back to HTTP fetch + BeautifulSoup parse_interactive (90% token reduction)
+    """
+    # ── Tier 1: Playwright (interactive, JS-rendered) ──
     try:
         from plugins.browse.actor import BrowserActor
-    except ImportError:
-        return {"ok": False, "error": "Browse actor not available. Install: pip install playwright && python -m playwright install chromium"}
+        import asyncio
 
-    async def _run():
-        actor = BrowserActor(headless=True)
-        try:
-            result = await actor.open(url)
-            if not result["ok"]:
+        async def _run():
+            actor = BrowserActor(headless=True)
+            try:
+                result = await actor.open(url)
+                if not result["ok"]:
+                    return result
+                result["goal"] = goal
                 return result
-            result["goal"] = goal
-            return result
-        finally:
-            await actor.close()
+            finally:
+                await actor.close()
 
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(lambda: asyncio.run(_run())).result(timeout=30)
+            else:
+                return asyncio.run(_run())
+        except Exception as e:
+            log.warning("[tools] Playwright browse failed: %s — falling back to HTTP", e)
+    except ImportError:
+        log.info("[tools] Playwright not installed — using HTTP + BeautifulSoup fallback")
+
+    # ── Tier 2: HTTP fetch + parse_interactive (lightweight, no JS) ──
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(lambda: asyncio.run(_run())).result(timeout=30)
-        else:
-            return asyncio.run(_run())
+        import urllib.request
+        from plugins.browse.parser import parse_interactive
+
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36 Fireside/1.0"}
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+
+        tree = parse_interactive(html, base_url=url)
+        return {
+            "ok": True,
+            "url": url,
+            "goal": goal,
+            "title": tree.title,
+            "action_tree": tree.to_action_text(),
+            "stats": tree.summary_stats(),
+            "mode": "http_fallback",
+            "note": "Fetched via HTTP (no JavaScript rendering). Install Playwright for full JS support.",
+        }
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        log.error("[tools] HTTP browse fallback failed: %s", e)
+        return {"ok": False, "error": f"Browse failed: {e}. Install Playwright for full support: pip install playwright && python -m playwright install chromium"}
 
 
 # ═══════════════════════════════════════════════════════════════
