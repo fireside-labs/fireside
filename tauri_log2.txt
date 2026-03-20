@@ -1,0 +1,352 @@
+﻿commit 1d7761a4a7968283f63e830ba4f17d35c667aec2
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Thu Mar 19 20:11:02 2026 -0700
+
+    fix: tauri.conf.json beforeBuildCommand path + rebuild exe
+    
+    Set beforeBuildCommand to empty (path with spaces in cmd.exe failed).
+    Dashboard is built separately via npm run build from the repo root.
+    Rebuilt NSIS installer with all today's fixes embedded.
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index 5da3c59..2e1b4c1 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -3,8 +3,8 @@
+     "version": "1.0.0",
+     "identifier": "ai.fireside.app",
+     "build": {
+-        "beforeBuildCommand": "cd ../dashboard && npm run build",
+-        "beforeDevCommand": "cd ../dashboard && npm run dev",
++        "beforeBuildCommand": "",
++        "beforeDevCommand": "cd ../../dashboard && npm run dev",
+         "frontendDist": "../../dashboard/out",
+         "devUrl": "http://localhost:3000"
+     },
+
+commit 4e519b9bfd6e1000daa1b1a38b260f298a2fc687
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Wed Mar 18 17:26:35 2026 -0700
+
+    fix: auto-build frontend before Tauri bundle, dynamic model/species in hub
+    
+    - Set beforeBuildCommand in tauri.conf.json to run 'npm run build'
+      (root cause of 'missing quant key' error ΓÇö stale frontend was bundled)
+    - Hub model badge now reads from localStorage instead of hardcoded Qwen 2.5
+    - Chat header model info now dynamic from localStorage
+    - Removed hardcoded fox emoji from greeting speech bubble
+    - Shows 'No brain installed' with setup link when no model configured
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index f0ef9f2..5da3c59 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -3,7 +3,7 @@
+     "version": "1.0.0",
+     "identifier": "ai.fireside.app",
+     "build": {
+-        "beforeBuildCommand": "",
++        "beforeBuildCommand": "cd ../dashboard && npm run build",
+         "beforeDevCommand": "cd ../dashboard && npm run dev",
+         "frontendDist": "../../dashboard/out",
+         "devUrl": "http://localhost:3000"
+
+commit 267ff9be3d55ae477341aea2173b8969404ddda6
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Tue Mar 17 15:32:14 2026 -0700
+
+    Tauri: fix CSP for dynamic ports, build v1.0.0 installer
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index dc785fa..f0ef9f2 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -23,7 +23,7 @@
+             }
+         ],
+         "security": {
+-            "csp": "default-src 'self'; connect-src 'self' http://localhost:8765 ws://localhost:8765 http://127.0.0.1:8765; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:"
++            "csp": "default-src 'self'; connect-src 'self' http://localhost:* ws://localhost:* http://127.0.0.1:* ws://127.0.0.1:*; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:"
+         }
+     },
+     "bundle": {
+
+commit 9915f2bc5638e6c7476b227419654209c5232b1a
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Mon Mar 16 10:37:04 2026 -0700
+
+    Sprint 17 Immersion: withGlobalTauri fix + polish sprint plan
+    
+    ROOT CAUSE FIX: Added withGlobalTauri:true to tauri.conf.json
+    - window.__TAURI__ was never injected, causing all detection to fail
+    - OnboardingGate now retries 10x for Tauri IPC bridge
+    - OnboardingWizard tries Tauri invoke -> backend API -> fallback
+    - nvidia-smi absolute path for accurate VRAM detection
+    
+    Sprint 17 plan: model picker, color consistency, tab locking, artwork
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index 0a4a52a..dc785fa 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -9,6 +9,7 @@
+         "devUrl": "http://localhost:3000"
+     },
+     "app": {
++        "withGlobalTauri": true,
+         "windows": [
+             {
+                 "title": "≡ƒöÑ Fireside Setup",
+
+commit 18e3f60e8ed487cf520e99659a7062f3f13af69c
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Sun Mar 15 22:21:40 2026 -0700
+
+    feat: all icon sizes + frontendDist path fix + generated Tauri schemas
+    
+    - Generated all icon sizes from 1024x1024 source (ico, icns, iOS, Android, Appx)
+    - Fixed frontendDist path: ../../dashboard/out (relative to src-tauri)
+    - Added Cargo.lock and Tauri-generated schema files
+    - Removed broken  URL and invalid 'title' from tauri.conf.json
+    - Build verified locally: Fireside_1.0.0_x64-setup.exe produced successfully
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index a58297c..0a4a52a 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -5,7 +5,7 @@
+     "build": {
+         "beforeBuildCommand": "",
+         "beforeDevCommand": "cd ../dashboard && npm run dev",
+-        "frontendDist": "../dashboard/out",
++        "frontendDist": "../../dashboard/out",
+         "devUrl": "http://localhost:3000"
+     },
+     "app": {
+
+commit bbf005fc3a986baaa6bdad0c1a612e9dc4ba1fa9
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Sun Mar 15 21:29:41 2026 -0700
+
+    fix: remove invalid 'title' from tauri.conf.json app section
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index cbbae98..a58297c 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -1,5 +1,4 @@
+ {
+-    "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/nicegui/json/tauri-v2.json",
+     "productName": "Fireside",
+     "version": "1.0.0",
+     "identifier": "ai.fireside.app",
+@@ -10,7 +9,6 @@
+         "devUrl": "http://localhost:3000"
+     },
+     "app": {
+-        "title": "Fireside",
+         "windows": [
+             {
+                 "title": "≡ƒöÑ Fireside Setup",
+
+commit 81b3661f5b2c2394dd4f7600aee5e1329f4f5273
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Sun Mar 15 19:19:14 2026 -0700
+
+    fix: Tauri build pipeline ΓÇö 4 root causes
+    
+    1. Added missing build.rs (required by tauri-build)
+    2. Next.js output: 'export' for static HTML (Tauri needs out/ dir)
+    3. CI: npm install + explicit build step (npm ci was fragile)
+    4. Cleared beforeBuildCommand in tauri.conf.json (CI handles it)
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index e399394..cbbae98 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -4,7 +4,7 @@
+     "version": "1.0.0",
+     "identifier": "ai.fireside.app",
+     "build": {
+-        "beforeBuildCommand": "cd ../dashboard && npm run build",
++        "beforeBuildCommand": "",
+         "beforeDevCommand": "cd ../dashboard && npm run dev",
+         "frontendDist": "../dashboard/out",
+         "devUrl": "http://localhost:3000"
+
+commit 762426ae4dc059f1892da6504543c1921d526057
+Author: Jordan <jordanloveafood@gmail.com>
+Date:   Sun Mar 15 18:46:16 2026 -0700
+
+    CI: GitHub Actions build pipeline for Fireside-Setup.exe/.dmg/.AppImage
+    
+    - Builds on Windows, macOS (Intel + Apple Silicon), Linux
+    - Triggered by version tags (v*) or manual dispatch
+    - Uploads artifacts per platform
+    - Creates draft GitHub Release with all binaries
+    
+    Usage: git tag v1.0.0 && git push --tags
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+index 9043ee4..e399394 100644
+--- a/tauri/src-tauri/tauri.conf.json
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -1,8 +1,8 @@
+ {
+     "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/nicegui/json/tauri-v2.json",
+-    "productName": "Valhalla",
+-    "version": "2.0.0",
+-    "identifier": "ai.valhalla.mesh",
++    "productName": "Fireside",
++    "version": "1.0.0",
++    "identifier": "ai.fireside.app",
+     "build": {
+         "beforeBuildCommand": "cd ../dashboard && npm run build",
+         "beforeDevCommand": "cd ../dashboard && npm run dev",
+@@ -10,10 +10,10 @@
+         "devUrl": "http://localhost:3000"
+     },
+     "app": {
+-        "title": "Valhalla",
++        "title": "Fireside",
+         "windows": [
+             {
+-                "title": "Valhalla",
++                "title": "≡ƒöÑ Fireside Setup",
+                 "width": 1280,
+                 "height": 800,
+                 "minWidth": 900,
+@@ -24,7 +24,7 @@
+             }
+         ],
+         "security": {
+-            "csp": "default-src 'self'; connect-src 'self' http://localhost:8337 ws://localhost:8337; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:"
++            "csp": "default-src 'self'; connect-src 'self' http://localhost:8765 ws://localhost:8765 http://127.0.0.1:8765; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:"
+         }
+     },
+     "bundle": {
+@@ -59,7 +59,7 @@
+     "plugins": {
+         "updater": {
+             "endpoints": [
+-                "https://releases.valhalla.ai/{{target}}/{{arch}}/{{current_version}}"
++                "https://releases.getfireside.ai/{{target}}/{{arch}}/{{current_version}}"
+             ],
+             "pubkey": ""
+         }
+
+commit 3ad21b82360b7e43a790ccb0a498ebb685bdbe53
+Author: Odin <hello@fablefur.com>
+Date:   Tue Mar 10 18:37:01 2026 -0700
+
+    ≡ƒÜÇ Valhalla Mesh V2 ΓÇö Complete Rewrite (9 Sprints)
+    
+    Built from scratch using 4 parallel AI agents (Thor, Freya, Heimdall, Valkyrie).
+    
+    PRODUCT:
+    - 24 plugins (cognitive engine, marketplace, voice, payments, brain installer)
+    - 20 dashboard pages (Next.js)
+    - 49 components
+    - 33 docs
+    - Tauri desktop app (.app/.exe/.AppImage)
+    - PWA mobile
+    - Telegram bot
+    - Voice (Whisper STT + Kokoro TTS, opt-in)
+    - Stripe payments
+    - Landing site
+    
+    KEY FEATURES:
+    - Overnight learning loop (Crucible + Philosopher's Stone + Dreams)
+    - Socratic Debate engine (multi-persona review)
+    - Agent Marketplace (data-only .valhalla packages, no executable code)
+    - Brain Installer (one-click oMLX/llama-server, auto hardware detection)
+    - RPG Agent Profiles (XP, leveling, achievements, opposing-pair personality sliders)
+    - Guild Hall (animated 2D scene, 5 swappable themes)
+    - Consumer UX (Grandma Test validated ΓÇö 'Brain' not 'Model')
+    - Universal model support (bring-your-own-key: OpenAI, Anthropic, Google)
+    - Proactive alerts (Telegram + desktop + mobile push)
+    - Zero inference cost business model (~95% margin)
+    
+    ARCHITECTURE:
+    - Plugin-based (every cognitive system is a plugin)
+    - Single config (valhalla.yaml replaces 9 V1 JSON files)
+    - Event bus (real-time WebSocket updates)
+    - Persona-based review (same agent, different hats)
+    - Local iteration + cloud review (model router)
+    
+    9 sprints ├ù 4 agents = 36 agent-tasks. Ship it. ≡ƒ¬╢
+
+diff --git a/tauri/src-tauri/tauri.conf.json b/tauri/src-tauri/tauri.conf.json
+new file mode 100644
+index 0000000..9043ee4
+--- /dev/null
++++ b/tauri/src-tauri/tauri.conf.json
+@@ -0,0 +1,67 @@
++{
++    "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/nicegui/json/tauri-v2.json",
++    "productName": "Valhalla",
++    "version": "2.0.0",
++    "identifier": "ai.valhalla.mesh",
++    "build": {
++        "beforeBuildCommand": "cd ../dashboard && npm run build",
++        "beforeDevCommand": "cd ../dashboard && npm run dev",
++        "frontendDist": "../dashboard/out",
++        "devUrl": "http://localhost:3000"
++    },
++    "app": {
++        "title": "Valhalla",
++        "windows": [
++            {
++                "title": "Valhalla",
++                "width": 1280,
++                "height": 800,
++                "minWidth": 900,
++                "minHeight": 600,
++                "center": true,
++                "resizable": true,
++                "fullscreen": false
++            }
++        ],
++        "security": {
++            "csp": "default-src 'self'; connect-src 'self' http://localhost:8337 ws://localhost:8337; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:"
++        }
++    },
++    "bundle": {
++        "active": true,
++        "targets": "all",
++        "icon": [
++            "icons/32x32.png",
++            "icons/128x128.png",
++            "icons/128x128@2x.png",
++            "icons/icon.icns",
++            "icons/icon.ico"
++        ],
++        "macOS": {
++            "frameworks": [],
++            "minimumSystemVersion": "10.15",
++            "signingIdentity": null
++        },
++        "windows": {
++            "certificateThumbprint": null,
++            "digestAlgorithm": "sha256",
++            "nsis": {
++                "installMode": "currentUser",
++                "displayLanguageSelector": false
++            }
++        },
++        "linux": {
++            "appimage": {
++                "bundleMediaFramework": false
++            }
++        }
++    },
++    "plugins": {
++        "updater": {
++            "endpoints": [
++                "https://releases.valhalla.ai/{{target}}/{{arch}}/{{current_version}}"
++            ],
++            "pubkey": ""
++        }
++    }
++}
+\ No newline at end of file

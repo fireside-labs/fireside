@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "identifier": "ai.fireside.app",
     "build": {
-        "beforeBuildCommand": "",
+        "beforeBuildCommand": "powershell -NoProfile -Command \"Push-Location '../../dashboard'; npm run build; Pop-Location\"",
         "beforeDevCommand": "cd ../../dashboard && npm run dev",
         "frontendDist": "../../dashboard/out",
         "devUrl": "http://localhost:3000"

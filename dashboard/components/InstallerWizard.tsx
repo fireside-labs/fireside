@@ -377,8 +377,6 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 
   return (
     <div className="installer-root">
-      <style>{installerCSS}</style>
-
       {/* Progress */}
       <div className="installer-progress">
         <div className="installer-progress-fill" style={{ width: `${progress}%` }} />

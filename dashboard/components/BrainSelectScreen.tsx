@@ -539,7 +539,6 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
 
   return (
     <div className={`bs-root ${fullscreen ? "bs-fullscreen" : ""}`} style={{ "--cat-color": catColor } as React.CSSProperties}>
-      <style>{css}</style>
 
       {/* ═══ SCREEN 1: CATEGORIES ═══ */}
       {screen === "categories" && (
