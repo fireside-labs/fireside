@@ -97,6 +97,7 @@ def parse_schedule(text: str) -> dict:
         multipliers = {"second": 1, "sec": 1, "minute": 60, "min": 60,
                        "hour": 3600, "hr": 3600, "day": 86400}
         seconds = n * multipliers.get(unit, 60)
+        seconds = max(seconds, 60)  # Minimum 60s to prevent CPU spin
         return {"type": "interval", "seconds": seconds,
                 "description": f"Every {n} {unit}(s)"}
 
@@ -140,6 +141,7 @@ def parse_schedule(text: str) -> dict:
         multipliers = {"second": 1, "sec": 1, "minute": 60, "min": 60,
                        "hour": 3600, "hr": 3600, "day": 86400}
         seconds = n * multipliers.get(unit, 60)
+        seconds = max(seconds, 30)  # Minimum 30s for one-shot
         return {"type": "once", "seconds": seconds,
                 "description": f"In {n} {unit}(s)"}
 
