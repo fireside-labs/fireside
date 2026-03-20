@@ -50,7 +50,7 @@ def _publish(topic: str, payload: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def _data_dir() -> Path:
-    d = Path.home() / ".valhalla" / "scheduler"
+    d = Path.home() / ".fireside" / "scheduler"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -114,12 +114,16 @@ def parse_schedule(text: str) -> dict:
             hour = int(time_match.group(1))
             minute = int(time_match.group(2) or 0)
             ampm = time_match.group(3)
-            if ampm == "pm" and hour < 12:
+            if ampm == "pm" and hour != 12:
                 hour += 12
-            if ampm == "am" and hour == 12:
+            elif ampm == "am" and hour == 12:
                 hour = 0
+            # Clamp hour to valid range
+            hour = hour % 24
+            desc_hour = hour % 12 or 12
+            desc_ampm = "AM" if hour < 12 else "PM"
             return {"type": "daily", "hour": hour, "minute": minute,
-                    "description": f"Every day at {hour}:{minute:02d}"}
+                    "description": f"Every day at {desc_hour}:{minute:02d} {desc_ampm}"}
         return {"type": "daily", "hour": 9, "minute": 0,
                 "description": "Every day at 9:00 AM"}
 
@@ -252,9 +256,9 @@ def _scheduler_loop():
                 elif stype == "daily":
                     hour = schedule.get("hour", 9)
                     minute = schedule.get("minute", 0)
-                    if now_dt.hour == hour and now_dt.minute == minute:
-                        # Don't run if already ran today
-                        if last_run == 0 or (now - last_run) > 3600:
+                    if now_dt.hour == hour and abs(now_dt.minute - minute) <= 1:
+                        # Don't run if already ran in the last 30 min
+                        if last_run == 0 or (now - last_run) > 1800:
                             should_run = True
 
                 elif stype == "once":

@@ -581,8 +581,26 @@ export default function PipelinePage() {
               <div className="fp-actions">
                 {current.status === "running" && (
                   <>
-                    <button className="fp-action-btn cancel">Cancel</button>
-                    <button className="fp-action-btn advance">Force Advance ▶</button>
+                    <button className="fp-action-btn cancel" onClick={() => {
+                      setPipelines(prev => prev.map(p =>
+                        p.id === current.id ? { ...p, status: "failed" as const } : p
+                      ));
+                      // Also try to cancel via API
+                      fetch(`${API_BASE}/api/v1/pipeline/${current.id}/cancel`, { method: "POST" }).catch(() => {});
+                    }}>Cancel</button>
+                    <button className="fp-action-btn advance" onClick={() => {
+                      setPipelines(prev => prev.map(p => {
+                        if (p.id !== current.id) return p;
+                        const newStages = p.stages.map((s, i) => {
+                          if (s.status === "active") return { ...s, status: "done" as const };
+                          const prevDone = i > 0 && p.stages[i - 1].status === "active";
+                          if (s.status === "pending" && prevDone) return { ...s, status: "active" as const };
+                          return s;
+                        });
+                        const allDone = newStages.every(s => s.status === "done");
+                        return { ...p, stages: newStages, status: allDone ? "complete" as const : "running" as const };
+                      }));
+                    }}>Force Advance ▶</button>
                   </>
                 )}
                 {current.status === "complete" && (
