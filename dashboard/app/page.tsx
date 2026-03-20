@@ -6,6 +6,7 @@ import Link from "next/link";
 import EmberParticles from "@/components/EmberParticles";
 import { playWhoosh, playTick } from "@/components/FiresideSounds";
 import { DiscoveryCard } from "@/components/GuidedTour";
+import ReactMarkdown from "react-markdown";
 
 /* ═══════════════════════════════════════════════════════════════════
    Fireside — Hub + Chat
@@ -544,7 +545,7 @@ export default function CampfireHub() {
                       <div className="fs-memory-pill">🧠 Recalled: {msg.memory}</div>
                     )}
                     <div className={`fs-bubble ${msg.role === "user" ? "fs-bubble-user" : "fs-bubble-ai"}`}>
-                      {msg.content}
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
                       {msg.skills && msg.skills.length > 0 && (
                         <div className="fs-skill-tag">✦ {msg.skills.join(" · ")}</div>
                       )}

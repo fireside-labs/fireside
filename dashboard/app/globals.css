@@ -2233,4 +2233,51 @@ h6 {
     transition: all 0.2s; box-shadow: 0 2px 12px rgba(245,158,11,0.2);
   }
   .fs-send-btn:hover { transform: scale(1.05); box-shadow: 0 4px 20px rgba(245,158,11,0.3); }
-  .fs-send-btn:disabled { opacity: 0.2; cursor: default; transform: none; }
+  .fs-send-btn:disabled { opacity: 0.2; cursor: default; transform: none; }
+
+/* ══════════════════════════════════════════════════════════════════
+   MARKDOWN IN CHAT BUBBLES
+   ══════════════════════════════════════════════════════════════════ */
+
+  .fs-bubble p { margin: 0 0 8px 0; }
+  .fs-bubble p:last-child { margin-bottom: 0; }
+  .fs-bubble strong { color: #F59E0B; font-weight: 700; }
+  .fs-bubble em { font-style: italic; color: #D4C4A8; }
+  .fs-bubble a { color: #60A5FA; text-decoration: underline; text-underline-offset: 2px; }
+  .fs-bubble a:hover { color: #93C5FD; }
+
+  .fs-bubble ul, .fs-bubble ol {
+    margin: 6px 0; padding-left: 20px;
+  }
+  .fs-bubble li { margin-bottom: 4px; line-height: 1.5; }
+  .fs-bubble li::marker { color: #F59E0B; }
+
+  .fs-bubble code {
+    background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.12);
+    border-radius: 5px; padding: 1px 6px; font-size: 12px;
+    font-family: 'Fira Code', 'Consolas', monospace; color: #FBBF24;
+  }
+  .fs-bubble pre {
+    background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 12px 16px; margin: 8px 0;
+    overflow-x: auto;
+  }
+  .fs-bubble pre code {
+    background: none; border: none; padding: 0;
+    font-size: 12px; color: #C4B098;
+  }
+  .fs-bubble blockquote {
+    border-left: 3px solid rgba(245,158,11,0.3);
+    padding-left: 12px; margin: 8px 0;
+    color: #8A7A6A; font-style: italic;
+  }
+  .fs-bubble h1, .fs-bubble h2, .fs-bubble h3 {
+    color: #F0DCC8; margin: 8px 0 4px; font-weight: 800;
+  }
+  .fs-bubble h1 { font-size: 18px; }
+  .fs-bubble h2 { font-size: 16px; }
+  .fs-bubble h3 { font-size: 14px; }
+  .fs-bubble hr {
+    border: none; border-top: 1px solid rgba(255,255,255,0.06);
+    margin: 10px 0;
+  }
