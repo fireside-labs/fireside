@@ -301,7 +301,6 @@ export default function CampfireHub() {
 
   return (
     <div className="fs-root">
-      <style>{pageCSS}</style>
       <EmberParticles intensity={activeView === "hub" ? 25 : 12} className="fs-embers" />
 
       {/* ═══ Stars ═══ */}
