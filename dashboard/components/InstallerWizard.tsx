@@ -856,7 +856,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 // ---------- Embedded CSS (scoped to installer) ----------------------------
 
 const installerCSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  /* Fonts loaded via layout.tsx <head> — no @import needed (breaks Tauri CSP) */
 
   .installer-root {
     position: fixed; inset: 0; z-index: 9999;

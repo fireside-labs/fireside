@@ -296,7 +296,7 @@ export default function SkillsPage() {
 
 // ════════════════════════════════════════════════════════════════════
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+  /* Fonts loaded via layout.tsx <head> — no @import needed (breaks Tauri CSP) */
 
   .sk-root {
     max-width: 720px; margin: 0 auto; padding: 20px 28px 60px;
