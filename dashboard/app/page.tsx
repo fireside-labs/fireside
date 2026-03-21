@@ -209,7 +209,11 @@ export default function CampfireHub() {
         const res = await fetch(`${API_BASE}/api/v1/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: userMessage, stream: false }),
+          body: JSON.stringify({
+            message: userMessage,
+            stream: false,
+            history: chatHistory.map(m => ({ role: m.role, content: m.content })),
+          }),
         });
         if (!res.ok) throw new Error(`API error: ${res.status}`);
         const data = await res.json();

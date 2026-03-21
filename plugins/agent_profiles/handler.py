@@ -56,6 +56,7 @@ class ChatRequest(BaseModel):
     message: str
     agent: Optional[str] = None
     stream: Optional[bool] = True
+    history: Optional[list] = None
 
 
 # Rebuild models to resolve forward references from `from __future__ import annotations`
@@ -194,7 +195,8 @@ def _get_active_brain() -> dict | None:
     return None
 
 
-async def _stream_chat(message: str, system_prompt: str, brain: dict):
+async def _stream_chat(message: str, system_prompt: str, brain: dict,
+                       history: list | None = None):
     """Stream chat response from active brain via SSE.
 
     Full tool-calling agent loop:
@@ -211,10 +213,15 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
     provider = brain.get("provider")
     port = brain.get("port", 8080)
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": message},
-    ]
+    messages = [{"role": "system", "content": system_prompt}]
+    # Include conversation history (last 10 messages to keep context manageable)
+    if history:
+        for h in history[-10:]:
+            role = h.get("role", "user")
+            content = h.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": message})
 
     # Load tool definitions — unified with pipeline (tool_defs.py)
     try:
@@ -541,7 +548,7 @@ def register_routes(app, config: dict) -> None:
         if req.stream:
             # SSE streaming mode
             return StreamingResponse(
-                _stream_chat(req.message, system_prompt, brain),
+                _stream_chat(req.message, system_prompt, brain, history=req.history),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
@@ -554,7 +561,7 @@ def register_routes(app, config: dict) -> None:
             response_text = ""
             tools_used = []
             try:
-                async for chunk in _stream_chat(req.message, system_prompt, brain):
+                async for chunk in _stream_chat(req.message, system_prompt, brain, history=req.history):
                     if not chunk.startswith("data:"):
                         continue
                     data_str = chunk[5:].strip()
