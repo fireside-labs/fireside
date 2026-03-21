@@ -340,6 +340,13 @@ def execute_tool(name: str, arguments: dict, api_port: int = 8765) -> str:
     try:
         if name == "files_list":
             dir_path = arguments.get("path", str(Path.home()))
+            # Resolve relative paths against user home
+            if dir_path.startswith("~/"):
+                dir_path = str(Path.home() / dir_path[2:])
+            elif dir_path.startswith("./"):
+                dir_path = str(Path.home() / dir_path[2:])
+            elif not Path(dir_path).is_absolute():
+                dir_path = str(Path.home() / dir_path)
             p = Path(dir_path)
             if not p.exists():
                 return f"Directory not found: {dir_path}"
@@ -363,6 +370,13 @@ def execute_tool(name: str, arguments: dict, api_port: int = 8765) -> str:
 
         elif name == "files_read":
             filepath = arguments.get("path", "")
+            # Resolve relative paths against user home
+            if filepath.startswith("~/"):
+                filepath = str(Path.home() / filepath[2:])
+            elif filepath.startswith("./"):
+                filepath = str(Path.home() / filepath[2:])
+            elif not Path(filepath).is_absolute():
+                filepath = str(Path.home() / filepath)
             p = Path(filepath)
             if not p.exists():
                 return f"File not found: {filepath}"
@@ -378,10 +392,23 @@ def execute_tool(name: str, arguments: dict, api_port: int = 8765) -> str:
 
         elif name == "files_write":
             req_path = arguments.get("path", "")
-            home = str(Path.home()).replace("\\", "/")
+            home = Path.home()
+            home_str = str(home).replace("\\", "/")
+
+            # Resolve relative and shorthand paths to absolute
+            # ./Desktop/foo.txt → C:/Users/Jorda/Desktop/foo.txt
+            # ~/Documents/foo.txt → C:/Users/Jorda/Documents/foo.txt
+            # Desktop/foo.txt → C:/Users/Jorda/Desktop/foo.txt
+            if req_path.startswith("~/"):
+                req_path = str(home / req_path[2:])
+            elif req_path.startswith("./"):
+                req_path = str(home / req_path[2:])
+            elif not Path(req_path).is_absolute():
+                req_path = str(home / req_path)
+
             req_norm = req_path.replace("\\", "/")
-            if not req_norm.startswith(home):
-                return f"BLOCKED: Can only write files within your home directory ({home})"
+            if not req_norm.startswith(home_str):
+                return f"BLOCKED: Can only write files within your home directory ({home_str})"
             protected = [".fireside/api/", ".fireside/plugins/",
                          ".fireside/bot/", ".fireside/middleware/"]
             if any(p in req_norm for p in protected):
