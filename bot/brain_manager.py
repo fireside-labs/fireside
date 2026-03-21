@@ -325,13 +325,14 @@ def _find_binary() -> Optional[str]:
     if binary:
         return binary
 
-    # Fireside/OpenClaw installer locations (most likely for end users)
+    # Fireside installer locations (most likely for end users)
     home = Path.home()
     installer_paths = [
-        home / ".openclaw" / "llama-server" / "llama-server.exe",
-        home / ".openclaw" / "llama-server" / "llama-server",
         home / ".fireside" / "bin" / "llama-server.exe",
         home / ".fireside" / "bin" / "llama-server",
+        # Legacy fallback — existing installs may have it here
+        home / ".openclaw" / "llama-server" / "llama-server.exe",
+        home / ".openclaw" / "llama-server" / "llama-server",
     ]
     for p in installer_paths:
         if p.exists():
@@ -386,10 +387,9 @@ def _resolve_model(config: dict, base_dir: Path) -> Optional[Path]:
         if p.exists():
             return p
 
-    # 3. Scan all known model directories — prefer largest file (= most capable)
+    # 3. Scan known model directories — prefer largest file (= most capable)
     scan_dirs = [
         models_dir,                                  # ~/.fireside/models/
-        Path.home() / ".openclaw" / "models",        # ~/.openclaw/models/ (external installs)
         base_dir / "models",                         # project-local models/
     ]
 
