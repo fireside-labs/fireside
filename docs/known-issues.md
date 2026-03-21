@@ -36,6 +36,18 @@
 - **Fix:** Added regex parser that detects `<tool_call>` tags, extracts function name + parameters, executes via `execute_tool()`, and strips leaked XML from final response
 - **Commit:** `fe9d571`
 
+### 6. Model refuses to use tools ("security rules")
+- **Symptom:** Ember says "I can't write to your hard drive" or "I don't have internet access"
+- **Cause:** System prompt (SOUL.md/IDENTITY.md) never mentioned tools — model invented restrictions
+- **Fix:** Added "Your Capabilities" section to `_load_system_prompt()` listing all 16 tool names + explicit instruction to USE them
+- **Commit:** `09d3b48`
+
+### 7. Empty response after successful tool execution
+- **Symptom:** Tools ran (files_write, terminal_exec) but response text was blank
+- **Cause:** Model's final text was all XML tool tags → stripped to empty string
+- **Fix:** Added fallback summary: if response is empty but tools ran, generate "Done! I used X, Y to complete your request"
+- **Commit:** `e7eed3c`
+
 ---
 
 ## brain_manager (`bot/brain_manager.py`)
