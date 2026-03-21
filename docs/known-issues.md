@@ -48,6 +48,18 @@
 - **Fix:** Added fallback summary: if response is empty but tools ran, generate "Done! I used X, Y to complete your request"
 - **Commit:** `e7eed3c`
 
+### 8. No conversation history — model had amnesia every message
+- **Symptom:** User asked "move the file you just wrote" → Ember said "which file?"
+- **Cause:** Dashboard sent only `{message}` to bifrost — no chat history. Each request was stateless
+- **Fix:** Dashboard now sends `history: chatHistory.map(...)`. Backend prepends up to 10 previous messages to llama-server call
+- **Note:** Ironically, `store_memory`/`recall_memory` (vector DB long-term memory) existed but the model had zero short-term memory
+- **Commit:** conversation history fix
+
+### 9. Context compaction existed but was never reachable
+- **Symptom:** Both dashboard (`compactHistory`) and backend (`context-compactor` plugin) had compaction code, but it never triggered
+- **Cause:** No history was sent → nothing to compact. Compaction at 60%/75% of context window requires messages to exist first
+- **Fix:** Same as #8 — now that history flows through, compaction kicks in automatically when conversations get long
+
 ---
 
 ## brain_manager (`bot/brain_manager.py`)
