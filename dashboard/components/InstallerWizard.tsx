@@ -770,10 +770,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 </div>
               )}
 
-              <div className="installer-install-companion" style={{ marginTop: 32 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/hub/mascot_${config.companionSpecies}.png`} alt="" style={{ width: 64, height: 64, objectFit: 'contain', filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.4))' }} />
-              </div>
+              {/* Mascot removed — clean design */}
             </div>
           </div>
         )}
@@ -814,18 +811,12 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
         {/* Step 9: Success */}
         {step === 9 && (
           <div className="installer-center">
-            <div className="installer-success-fire">🔥</div>
-            <h2 className="installer-success-title">Fireside is live.</h2>
-            <p className="installer-success-subtitle">
+            <h2 className="installer-success-title" style={{ marginBottom: 8 }}>Fireside is live.</h2>
+            <p className="installer-success-subtitle" style={{ marginBottom: 24 }}>
               {config.companionName || "Ember"} is ready.{"\n"}
               Download the app to take them with you.
             </p>
-            <div className="installer-success-scene">
-              <span className="installer-success-fire-emoji">🔥</span>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/hub/mascot_${config.companionSpecies}.png`} alt="" className="installer-success-companion" style={{ width: 80, height: 80, objectFit: 'contain', filter: 'drop-shadow(0 0 30px rgba(245,158,11,0.5))' }} />
-            </div>
-            <div className="installer-success-tips">
+            <div className="installer-success-tips" style={{ marginTop: 0 }}>
               <p className="installer-success-tip-title">Things to try:</p>
               <p className="installer-success-tip">1. Start a pipeline — ask {config.companionName || "Ember"} to &quot;Research competitors&quot;</p>
               <p className="installer-success-tip">2. Chat with {config.companionName || "Ember"} from the dashboard</p>
