@@ -266,6 +266,7 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
 
     # ── Tool-calling agent loop (max 5 rounds to prevent infinite loops) ──
     MAX_TOOL_ROUNDS = 5
+    tool_results_log = []  # Track what tools did for fallback summary
     for round_num in range(MAX_TOOL_ROUNDS):
         payload_dict = {
             "model": model_id,
@@ -350,6 +351,7 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
                                 result = execute_tool(tool_name, tool_args)
                                 # execute_tool from tool_defs returns a string
                                 result_str = result if isinstance(result, str) else json.dumps(result)
+                                tool_results_log.append((tool_name, tool_args, result_str[:200]))
 
                                 # Add tool result to conversation
                                 messages.append({
@@ -367,6 +369,13 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
                             clean = re.sub(r'</?tool_call>|<function=[^>]*>|</function>|<parameter=[^>]*>|</parameter>', '', content).strip()
                             if clean:
                                 yield f"data: {json.dumps({'choices': [{'delta': {'content': clean}}]})}\n\n"
+                            elif tool_results_log:
+                                # Model text was empty after XML strip — generate summary
+                                summary_parts = []
+                                for tn, ta, tr in tool_results_log:
+                                    summary_parts.append(f"✅ **{tn}**: {tr[:100]}")
+                                summary = "Here's what I did:\n" + "\n".join(summary_parts)
+                                yield f"data: {json.dumps({'choices': [{'delta': {'content': summary}}]})}\n\n"
                             yield "data: [DONE]\n\n"
                             return
                     except json.JSONDecodeError:
@@ -578,6 +587,9 @@ def register_routes(app, config: dict) -> None:
                 r'</?tool_call>|<function=[^>]*>|</function>|<parameter=[^>]*>|</parameter>',
                 '', response_text
             ).strip()
+            # If response is empty but tools ran, generate summary
+            if not response_text and tools_used:
+                response_text = f"Done! I used {', '.join(tools_used)} to complete your request."
             return {
                 "response": response_text,
                 "agent": agent,
