@@ -273,10 +273,41 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
   }, [step, brainDownloading]);
 
   const startBrainDownload = useCallback(async () => {
+    const model = config.actualModel || "llama-3.1-8b-q6";
+
+    // ── Check if model already exists before downloading ──────────────
+    try {
+      const checkRes = await fetch("http://127.0.0.1:8765/api/v1/brains/status");
+      if (checkRes.ok) {
+        const brainStatus = await checkRes.json();
+        // If a model is already loaded OR exists on disk, skip download
+        if (brainStatus.model || brainStatus.installed_models?.length > 0) {
+          console.log("[Installer] Model already exists — skipping download");
+          localStorage.setItem("fireside_model", model);
+          goTo(8);
+          return;
+        }
+      }
+    } catch {
+      // Backend not reachable — fall through to download
+    }
+
+    // Also check via Tauri if model files exist on disk
+    try {
+      const existing = await tauriInvoke<{ exists: boolean }>("check_brain_exists", { model });
+      if (existing?.exists) {
+        console.log("[Installer] Model file found on disk — skipping download");
+        localStorage.setItem("fireside_model", model);
+        goTo(8);
+        return;
+      }
+    } catch {
+      // Command may not exist in this build — fall through
+    }
+
     setBrainDownloading(true);
     setBrainProgress(0);
     setBrainDownloadInfo({ speed: 0, downloadedMb: 0, totalMb: 0, status: 'connecting' });
-    const model = config.actualModel || "llama-3.1-8b-q6";
 
     // Listen for real progress events from Rust backend
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -513,7 +544,6 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
             {/* Species name + dots indicator */}
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <span style={{ fontSize: 20, fontWeight: 800, color: '#F59E0B', letterSpacing: 2 }}>
-                {SPECIES.find(s => s.id === config.companionSpecies)?.emoji}{' '}
                 {SPECIES.find(s => s.id === config.companionSpecies)?.label}
               </span>
               <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 10 }}>
@@ -617,7 +647,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               <div className="installer-confirm-row">
                 <span className="installer-confirm-label">Companion</span>
                 <span className="installer-confirm-value">
-                  {speciesEmoji} {config.companionName || "Ember"} ({STYLES.find((s) => s.id === config.companionStyle)?.emoji})
+                  {config.companionName || "Ember"} the {SPECIES.find(s => s.id === config.companionSpecies)?.label} ({STYLES.find((s) => s.id === config.companionStyle)?.emoji})
                 </span>
               </div>
               <div className="installer-confirm-divider" />
@@ -649,7 +679,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
 
             <div style={{ position: 'relative', zIndex: 2 }}>
               <h2 className="installer-title">
-                {config.companionName || "Ember"} {speciesEmoji} is getting ready...
+                {config.companionName || "Ember"} is getting ready...
               </h2>
 
               {/* Fire-intensity bar */}
@@ -671,7 +701,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 ))}
               </div>
               <div className={`installer-install-companion ${installIntensity > 60 ? 'installer-companion-hot' : ''}`}>
-                {speciesEmoji}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/hub/mascot_${config.companionSpecies}.png`} alt="" style={{ width: 64, height: 64, objectFit: 'contain', filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.4))' }} />
               </div>
             </div>
           </div>
@@ -686,7 +717,7 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               style={{ position: 'fixed', inset: 0, zIndex: 0 }}
             />
             <div style={{ position: 'relative', zIndex: 2 }}>
-              <span style={{ fontSize: 48, display: 'block', marginBottom: 16, animation: 'float 3s ease-in-out infinite' }}>🧠</span>
+              {/* Removed brain emoji — looked cheap */}
               <h2 className="installer-title">Download your AI brain</h2>
               <p className="installer-subtitle" style={{ marginBottom: 24 }}>
                 {brainLabel} — {brainSize}
@@ -740,7 +771,8 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
               )}
 
               <div className="installer-install-companion" style={{ marginTop: 32 }}>
-                {speciesEmoji}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/hub/mascot_${config.companionSpecies}.png`} alt="" style={{ width: 64, height: 64, objectFit: 'contain', filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.4))' }} />
               </div>
             </div>
           </div>
@@ -786,11 +818,12 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
             <h2 className="installer-success-title">Fireside is live.</h2>
             <p className="installer-success-subtitle">
               {config.companionName || "Ember"} is ready.{"\n"}
-              Download the app to take {speciesEmoji} with you.
+              Download the app to take them with you.
             </p>
             <div className="installer-success-scene">
               <span className="installer-success-fire-emoji">🔥</span>
-              <span className="installer-success-companion">{speciesEmoji}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/hub/mascot_${config.companionSpecies}.png`} alt="" className="installer-success-companion" style={{ width: 80, height: 80, objectFit: 'contain', filter: 'drop-shadow(0 0 30px rgba(245,158,11,0.5))' }} />
             </div>
             <div className="installer-success-tips">
               <p className="installer-success-tip-title">Things to try:</p>
