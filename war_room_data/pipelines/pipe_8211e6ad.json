@@ -1,0 +1,24 @@
+{
+  "id": "pipe_8211e6ad",
+  "title": "Empty Stages Test",
+  "description": "",
+  "stages": [],
+  "current_stage": 0,
+  "current_iteration": 0,
+  "max_iterations": 1,
+  "status": "shipped",
+  "created_at": 1774063142,
+  "created_by": "odin",
+  "history": [],
+  "results": {},
+  "token_usage": {
+    "prompt": 0,
+    "completion": 0
+  },
+  "stage_times": [],
+  "files_created": [],
+  "completed_at": 1774063142,
+  "total_iterations": 0,
+  "eta_seconds": 0,
+  "eta_minutes": 0
+}

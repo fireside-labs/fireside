@@ -1,0 +1,49 @@
+{
+  "id": "pipe_3e967ac0",
+  "title": "Stress Test Basic",
+  "description": "Basic pipeline for stress testing",
+  "stages": [
+    {
+      "name": "Plan",
+      "role": "planner",
+      "prompt": "Plan it",
+      "system_prompt": "You are a planner"
+    },
+    {
+      "name": "Build",
+      "role": "executor",
+      "prompt": "Build it",
+      "system_prompt": "You are an executor"
+    }
+  ],
+  "current_stage": 1,
+  "current_iteration": 1,
+  "max_iterations": 3,
+  "status": "killed",
+  "created_at": 1774063142,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Build",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you build something, but I need more details about what you'd like me to create. Could you please clarify:\n\n- What type of project or file do you want to build? (e.g., code, document, spreadsheet, presentation, etc.)\n- What is the purpose or topic of what you're building?\n- Are there any specific requirements or content you'd like included?\n\nOnce you provide more context, I can help you create exactly what you need.",
+      "duration_s": 33,
+      "ts": 1774063175
+    }
+  ],
+  "results": {
+    "Build": "I'd be happy to help you build something, but I need more details about what you'd like me to create. Could you please clarify:\n\n- What type of project or file do you want to build? (e.g., code, document, spreadsheet, presentation, etc.)\n- What is the purpose or topic of what you're building?\n- Are there any specific requirements or content you'd like included?\n\nOnce you provide more context, I can help you create exactly what you need."
+  },
+  "token_usage": {
+    "prompt": 1410,
+    "completion": 177
+  },
+  "stage_times": [
+    33
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Pipeline pipe_3e967ac0 already killed: Iteration limit exceeded (4/3)"
+}

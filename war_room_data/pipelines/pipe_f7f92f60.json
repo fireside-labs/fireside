@@ -1,0 +1,43 @@
+{
+  "id": "pipe_f7f92f60",
+  "title": "Concurrent Pipeline 0",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Job 0",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 2,
+  "status": "killed",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'm not sure what you mean by \"Job 0\". Could you please clarify what you'd like me to do? For example:\n\n- Do you want me to run a specific command or script?\n- Are you referring to a job in a particular system or application?\n- Do you need help with a task related to \"Job 0\"?\n\nPlease provide more details so I can assist you properly.",
+      "duration_s": 22,
+      "ts": 1774063038
+    }
+  ],
+  "results": {
+    "Task": "I'm not sure what you mean by \"Job 0\". Could you please clarify what you'd like me to do? For example:\n\n- Do you want me to run a specific command or script?\n- Are you referring to a job in a particular system or application?\n- Do you need help with a task related to \"Job 0\"?\n\nPlease provide more details so I can assist you properly."
+  },
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 245
+  },
+  "stage_times": [
+    22
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_f7f92f60"
+}

@@ -1,0 +1,67 @@
+{
+  "id": "pipe_ec31b299",
+  "title": "Gate Test Direct",
+  "description": "",
+  "stages": [
+    {
+      "name": "GateFirst",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Approve to start?",
+      "system_prompt": "Gate check"
+    },
+    {
+      "name": "Execute",
+      "role": "executor",
+      "prompt": "Do the thing",
+      "system_prompt": "Executor"
+    }
+  ],
+  "current_stage": 1,
+  "current_iteration": 2,
+  "max_iterations": 3,
+  "status": "killed",
+  "created_at": 1774062979,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "GateFirst",
+      "iteration": 0,
+      "verdict": "gate_approved",
+      "feedback": "",
+      "ts": 1774062980
+    },
+    {
+      "stage": "Execute",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help, but I need a bit more information! Could you please clarify what \"the thing\" is that you'd like me to do? For example:\n\n- Would you like me to read a file?\n- Create a document, spreadsheet, or presentation?\n- Run a terminal command?\n- List files in a directory?\n- Something else?\n\nPlease let me know what task you'd like me to help you with!",
+      "duration_s": 8,
+      "ts": 1774062988
+    },
+    {
+      "stage": "Execute",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "<tool_call>\n<function=files_list>\n<parameter=path>\n/Users/Jorda/Documents\n</parameter>\n</function>\n</tool_call>",
+      "duration_s": 27,
+      "ts": 1774063015
+    }
+  ],
+  "results": {
+    "Execute": "<tool_call>\n<function=files_list>\n<parameter=path>\n/Users/Jorda/Documents\n</parameter>\n</function>\n</tool_call>"
+  },
+  "token_usage": {
+    "prompt": 13626,
+    "completion": 931
+  },
+  "stage_times": [
+    0,
+    8,
+    27
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Iteration limit exceeded (4/3)"
+}

@@ -1,0 +1,43 @@
+{
+  "id": "pipe_ceac1555",
+  "title": "Rapid 1",
+  "description": "",
+  "stages": [
+    {
+      "name": "T",
+      "role": "executor",
+      "prompt": "G",
+      "system_prompt": "S"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 1,
+  "status": "killed",
+  "created_at": 1774063018,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "T",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "Hello! It looks like your message might have gotten cut off or was just a single letter. How can I help you today? I can assist with:\n\n- Managing files and folders\n- Reading and writing documents\n- Running terminal commands\n- Creating presentations (PowerPoint)\n- Creating documents (Word)\n- Creating spreadsheets (Excel)\n\nPlease let me know what you'd like to do!",
+      "duration_s": 60,
+      "ts": 1774063078
+    }
+  ],
+  "results": {
+    "T": "Hello! It looks like your message might have gotten cut off or was just a single letter. How can I help you today? I can assist with:\n\n- Managing files and folders\n- Reading and writing documents\n- Running terminal commands\n- Creating presentations (PowerPoint)\n- Creating documents (Word)\n- Creating spreadsheets (Excel)\n\nPlease let me know what you'd like to do!"
+  },
+  "token_usage": {
+    "prompt": 1406,
+    "completion": 179
+  },
+  "stage_times": [
+    60
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Iteration limit exceeded (2/1)"
+}

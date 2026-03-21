@@ -1,0 +1,92 @@
+{
+  "id": "pipe_ffdd952c",
+  "title": "Stress Test Gate",
+  "description": "Pipeline with gate stages",
+  "stages": [
+    {
+      "name": "Research",
+      "role": "researcher",
+      "prompt": "Research it",
+      "system_prompt": "You research"
+    },
+    {
+      "name": "Approve",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Review research before writing",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "Write",
+      "role": "writer",
+      "prompt": "Write report",
+      "system_prompt": "You write"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 5,
+  "max_iterations": 5,
+  "status": "killed",
+  "created_at": 1774062032,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Research",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research something! However, I need to know what specific topic you'd like me to research. Could you please clarify what \"it\" refers to? For example:\n\n- A product, service, or company\n- A news event or topic\n- A scientific concept or technology\n- A historical event or person\n- Something else entirely\n\nPlease let me know what you'd like me to look into!",
+      "duration_s": 3,
+      "ts": 1774062035
+    },
+    {
+      "stage": "Research",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with research! However, I still need to know what specific topic you'd like me to research. Could you please clarify what \"it\" refers to? \n\nFor example, are you looking for information about:\n- A product, company, or service\n- A news event or current topic\n- A scientific concept or technology\n- A historical event or person\n- Something else entirely\n\nPlease let me know what you'd like me to look into!",
+      "duration_s": 5,
+      "ts": 1774062040
+    },
+    {
+      "stage": "Research",
+      "iteration": 2,
+      "verdict": "fail",
+      "result_preview": "I understand you want me to research something, but I still need clarification on what specific topic you'd like me to investigate. \"It\" could refer to many different things.\n\nTo help you effectively, please tell me:\n\n1. **What is the subject?** (e.g., a specific product, company, technology, event, person, etc.)\n2. **What information do you need?** (e.g., pricing, features, latest news, reviews, specifications, etc.)\n3. **Any particular focus?** (e.g., recent developments, comparisons, historic",
+      "duration_s": 5,
+      "ts": 1774062045
+    },
+    {
+      "stage": "Research",
+      "iteration": 3,
+      "verdict": "fail",
+      "result_preview": "I understand you'd like me to research \"it,\" but I need more specific information to help you effectively. Without knowing what topic you're interested in, I can't conduct meaningful research.\n\nTo get you the best results, please let me know:\n\n**What would you like me to research?** For example:\n\n- **A product or service** (e.g., \"iPhone 15\", \"Netflix pricing\", \"Tesla Model 3\")\n- **A company or organization** (e.g., \"Apple stock\", \"Microsoft AI initiatives\")\n- **A technology or software** (e.g.,",
+      "duration_s": 9,
+      "ts": 1774062054
+    },
+    {
+      "stage": "Research",
+      "iteration": 4,
+      "verdict": "fail",
+      "result_preview": "<tool_call>\n<function=files_read>\n<parameter=path>\ngames/HANDOFF.md\n</parameter>\n</function>\n</tool_call>",
+      "duration_s": 13,
+      "ts": 1774062067
+    }
+  ],
+  "results": {
+    "Research": "<tool_call>\n<function=files_read>\n<parameter=path>\ngames/HANDOFF.md\n</parameter>\n</function>\n</tool_call>"
+  },
+  "token_usage": {
+    "prompt": 16923,
+    "completion": 2296
+  },
+  "stage_times": [
+    3,
+    5,
+    5,
+    9,
+    13
+  ],
+  "files_created": [],
+  "eta_seconds": 14,
+  "eta_minutes": 0.2,
+  "kill_reason": "Iteration limit exceeded (6/5)"
+}

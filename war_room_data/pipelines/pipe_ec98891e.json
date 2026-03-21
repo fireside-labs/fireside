@@ -1,0 +1,43 @@
+{
+  "id": "pipe_ec98891e",
+  "title": "Concurrent Pipeline 3",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Job 3",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 2,
+  "status": "killed",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with \"Job 3\", but I need a bit more clarification. Could you please specify what you'd like me to do? For example:\n\n- Are you referring to a specific command you want me to run?\n- Do you need me to check something related to job 3?\n- Is this about a task or project you're working on?\n\nPlease let me know what action you'd like me to take!",
+      "duration_s": 38,
+      "ts": 1774063054
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help you with \"Job 3\", but I need a bit more clarification. Could you please specify what you'd like me to do? For example:\n\n- Are you referring to a specific command you want me to run?\n- Do you need me to check something related to job 3?\n- Is this about a task or project you're working on?\n\nPlease let me know what action you'd like me to take!"
+  },
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 322
+  },
+  "stage_times": [
+    38
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_ec98891e"
+}

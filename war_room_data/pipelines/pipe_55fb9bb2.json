@@ -1,0 +1,28 @@
+{
+  "id": "pipe_55fb9bb2",
+  "title": "Not a Gate",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Do",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 0,
+  "max_iterations": 1,
+  "status": "cancelled",
+  "created_at": 1774063146,
+  "created_by": "odin",
+  "history": [],
+  "results": {},
+  "token_usage": {
+    "prompt": 0,
+    "completion": 0
+  },
+  "stage_times": [],
+  "files_created": [],
+  "cancelled_at": 1774063147
+}

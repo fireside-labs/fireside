@@ -1,0 +1,56 @@
+{
+  "id": "pipe_af6e6376",
+  "title": "Gate Goto Test",
+  "description": "",
+  "stages": [
+    {
+      "name": "Research",
+      "role": "researcher",
+      "prompt": "Research",
+      "system_prompt": "Researcher"
+    },
+    {
+      "name": "ReviewGate",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Approve?",
+      "on_fail": "goto:Research",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "Write",
+      "role": "writer",
+      "prompt": "Write",
+      "system_prompt": "Writer"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 3,
+  "status": "active",
+  "created_at": 1774063144,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Research",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with research! However, I need more details about what you'd like me to research. Could you please specify:\n\n- What topic or subject are you interested in?\n- Are you looking for current news, historical information, statistics, technical details, or something else?\n- Do you have a specific question you want answered?\n\nFor example, I could research:\n- Latest news on a current event\n- Information about a product, service, or technology\n- Market data or statistics\n- Academi",
+      "duration_s": 35,
+      "ts": 1774063179
+    }
+  ],
+  "results": {
+    "Research": "I'd be happy to help you with research! However, I need more details about what you'd like me to research. Could you please specify:\n\n- What topic or subject are you interested in?\n- Are you looking for current news, historical information, statistics, technical details, or something else?\n- Do you have a specific question you want answered?\n\nFor example, I could research:\n- Latest news on a current event\n- Information about a product, service, or technology\n- Market data or statistics\n- Academic or scientific topics\n- Company information\n- And much more\n\nPlease let me know what specific topic you'd like me to look into!"
+  },
+  "token_usage": {
+    "prompt": 813,
+    "completion": 191
+  },
+  "stage_times": [
+    35
+  ],
+  "files_created": [],
+  "eta_seconds": 70,
+  "eta_minutes": 1.2
+}

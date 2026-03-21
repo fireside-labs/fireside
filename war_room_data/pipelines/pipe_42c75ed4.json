@@ -1,0 +1,55 @@
+{
+  "id": "pipe_42c75ed4",
+  "title": "Stress Test Gate",
+  "description": "Pipeline with gate stages",
+  "stages": [
+    {
+      "name": "Research",
+      "role": "researcher",
+      "prompt": "Research it",
+      "system_prompt": "You research"
+    },
+    {
+      "name": "Approve",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Review research before writing",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "Write",
+      "role": "writer",
+      "prompt": "Write report",
+      "system_prompt": "You write"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 5,
+  "status": "active",
+  "created_at": 1774063142,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Research",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research something! However, I need to know what specific topic or subject you'd like me to research. Could you please clarify what \"it\" refers to? For example, are you asking me to research:\n\n- A specific technology or programming language?\n- A recent news event or topic?\n- A product or service?\n- A scientific concept?\n- Something else entirely?\n\nPlease let me know what you'd like me to research, and I'll use the available tools to gather that information for you.",
+      "duration_s": 16,
+      "ts": 1774063158
+    }
+  ],
+  "results": {
+    "Research": "I'd be happy to help you research something! However, I need to know what specific topic or subject you'd like me to research. Could you please clarify what \"it\" refers to? For example, are you asking me to research:\n\n- A specific technology or programming language?\n- A recent news event or topic?\n- A product or service?\n- A scientific concept?\n- Something else entirely?\n\nPlease let me know what you'd like me to research, and I'll use the available tools to gather that information for you."
+  },
+  "token_usage": {
+    "prompt": 814,
+    "completion": 170
+  },
+  "stage_times": [
+    16
+  ],
+  "files_created": [],
+  "eta_seconds": 32,
+  "eta_minutes": 0.5
+}

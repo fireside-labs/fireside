@@ -1,0 +1,43 @@
+{
+  "id": "pipe_dba78677",
+  "title": "Cancel Me",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Do it",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 1,
+  "status": "killed",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help, but I need more information about what you'd like me to do. Could you please clarify:\n\n- What specific task would you like me to execute?\n- What command or action are you referring to?\n- Are you asking me to run a particular command, create a file, or something else?\n\nPlease provide more details so I can assist you properly!",
+      "duration_s": 10,
+      "ts": 1774063026
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help, but I need more information about what you'd like me to do. Could you please clarify:\n\n- What specific task would you like me to execute?\n- What command or action are you referring to?\n- Are you asking me to run a particular command, create a file, or something else?\n\nPlease provide more details so I can assist you properly!"
+  },
+  "token_usage": {
+    "prompt": 1407,
+    "completion": 136
+  },
+  "stage_times": [
+    10
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_dba78677"
+}

@@ -1,0 +1,58 @@
+{
+  "id": "pipe_880b909b",
+  "title": "Stress Test Basic",
+  "description": "Basic pipeline for stress testing",
+  "stages": [
+    {
+      "name": "Plan",
+      "role": "planner",
+      "prompt": "Plan it",
+      "system_prompt": "You are a planner"
+    },
+    {
+      "name": "Build",
+      "role": "executor",
+      "prompt": "Build it",
+      "system_prompt": "You are an executor"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 2,
+  "max_iterations": 3,
+  "status": "killed",
+  "created_at": 1774062565,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Plan",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more detail to create a useful plan. Could you please tell me:\n\n- What would you like to plan? (e.g., a project, a trip, an event, a schedule, etc.)\n- Are there any specific goals, deadlines, or requirements I should keep in mind?\n- What's the scope or timeline you're working with?\n\nOnce I have more context, I can help you create a detailed and actionable plan!",
+      "duration_s": 14,
+      "ts": 1774062579
+    },
+    {
+      "stage": "Plan",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "<tool_call>\n<function=files_read>\n<parameter=path>\ncli/COMMERCIALIZATION.md\n</parameter>\n</function>\n</tool_call>",
+      "duration_s": 16,
+      "ts": 1774062595
+    }
+  ],
+  "results": {
+    "Plan": "<tool_call>\n<function=files_read>\n<parameter=path>\ncli/COMMERCIALIZATION.md\n</parameter>\n</function>\n</tool_call>"
+  },
+  "token_usage": {
+    "prompt": 9241,
+    "completion": 686
+  },
+  "stage_times": [
+    14,
+    16
+  ],
+  "files_created": [],
+  "eta_seconds": 15,
+  "eta_minutes": 0.2,
+  "kill_reason": "Pipeline pipe_880b909b already killed: Iteration limit exceeded (4/3)"
+}

@@ -1,0 +1,43 @@
+{
+  "id": "pipe_1cb851d2",
+  "title": "\ud83d\udd25 Unicode Test \u65e5\u672c\u8a9e \u0627\u0644\u0639\u0631\u0628\u064a\u0629",
+  "description": "",
+  "stages": [
+    {
+      "name": "\ud83c\udfaf Target",
+      "role": "executor",
+      "prompt": "Execute with \ud83d\udd25",
+      "system_prompt": "\ud83e\udd16"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 1,
+  "status": "killed",
+  "created_at": 1774063018,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "\ud83c\udfaf Target",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to execute a command with fire! \ud83d\udd25 But I need to know what command you'd like me to run. Could you please specify what you want me to execute? For example:\n\n- Check system info\n- List files in a directory\n- Run a script\n- Install dependencies\n- Check disk space\n- Or something else?\n\nJust let me know what command you'd like me to run! \ud83d\ude80",
+      "duration_s": 51,
+      "ts": 1774063069
+    }
+  ],
+  "results": {
+    "\ud83c\udfaf Target": "I'd be happy to execute a command with fire! \ud83d\udd25 But I need to know what command you'd like me to run. Could you please specify what you want me to execute? For example:\n\n- Check system info\n- List files in a directory\n- Run a script\n- Install dependencies\n- Check disk space\n- Or something else?\n\nJust let me know what command you'd like me to run! \ud83d\ude80"
+  },
+  "token_usage": {
+    "prompt": 1411,
+    "completion": 155
+  },
+  "stage_times": [
+    51
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Iteration limit exceeded (2/1)"
+}

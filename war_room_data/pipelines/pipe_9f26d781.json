@@ -1,0 +1,28 @@
+{
+  "id": "pipe_9f26d781",
+  "title": "Concurrent Pipeline 3",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Job 3",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 0,
+  "max_iterations": 2,
+  "status": "cancelled",
+  "created_at": 1774063144,
+  "created_by": "odin",
+  "history": [],
+  "results": {},
+  "token_usage": {
+    "prompt": 0,
+    "completion": 0
+  },
+  "stage_times": [],
+  "files_created": [],
+  "cancelled_at": 1774063146
+}

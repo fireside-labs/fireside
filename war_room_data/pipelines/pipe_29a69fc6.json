@@ -1,0 +1,43 @@
+{
+  "id": "pipe_29a69fc6",
+  "title": "Concurrent Pipeline 6",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Job 6",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 2,
+  "status": "killed",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "Could you provide more details about \"Job 6\"? I want to make sure I understand what you need help with. For example:\n\n- Are you referring to a specific task or assignment?\n- Do you need me to look at a file or document related to Job 6?\n- Are you asking me to run a specific command or process?\n- Do you have a job description or posting you'd like me to review?\n\nPlease let me know what you need assistance with!",
+      "duration_s": 45,
+      "ts": 1774063061
+    }
+  ],
+  "results": {
+    "Task": "Could you provide more details about \"Job 6\"? I want to make sure I understand what you need help with. For example:\n\n- Are you referring to a specific task or assignment?\n- Do you need me to look at a file or document related to Job 6?\n- Are you asking me to run a specific command or process?\n- Do you have a job description or posting you'd like me to review?\n\nPlease let me know what you need assistance with!"
+  },
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 204
+  },
+  "stage_times": [
+    45
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_29a69fc6"
+}

@@ -1,0 +1,156 @@
+{
+  "id": "pipe_7d08969f",
+  "title": "20-Stage Pipeline",
+  "description": "",
+  "stages": [
+    {
+      "name": "Stage_0",
+      "role": "executor",
+      "prompt": "Execute step 0",
+      "system_prompt": "Step 0"
+    },
+    {
+      "name": "Stage_1",
+      "role": "executor",
+      "prompt": "Execute step 1",
+      "system_prompt": "Step 1"
+    },
+    {
+      "name": "Stage_2",
+      "role": "executor",
+      "prompt": "Execute step 2",
+      "system_prompt": "Step 2"
+    },
+    {
+      "name": "Stage_3",
+      "role": "executor",
+      "prompt": "Execute step 3",
+      "system_prompt": "Step 3"
+    },
+    {
+      "name": "Stage_4",
+      "role": "executor",
+      "prompt": "Execute step 4",
+      "system_prompt": "Step 4"
+    },
+    {
+      "name": "Stage_5",
+      "role": "executor",
+      "prompt": "Execute step 5",
+      "system_prompt": "Step 5"
+    },
+    {
+      "name": "Stage_6",
+      "role": "executor",
+      "prompt": "Execute step 6",
+      "system_prompt": "Step 6"
+    },
+    {
+      "name": "Stage_7",
+      "role": "executor",
+      "prompt": "Execute step 7",
+      "system_prompt": "Step 7"
+    },
+    {
+      "name": "Stage_8",
+      "role": "executor",
+      "prompt": "Execute step 8",
+      "system_prompt": "Step 8"
+    },
+    {
+      "name": "Stage_9",
+      "role": "executor",
+      "prompt": "Execute step 9",
+      "system_prompt": "Step 9"
+    },
+    {
+      "name": "Stage_10",
+      "role": "executor",
+      "prompt": "Execute step 10",
+      "system_prompt": "Step 10"
+    },
+    {
+      "name": "Stage_11",
+      "role": "executor",
+      "prompt": "Execute step 11",
+      "system_prompt": "Step 11"
+    },
+    {
+      "name": "Stage_12",
+      "role": "executor",
+      "prompt": "Execute step 12",
+      "system_prompt": "Step 12"
+    },
+    {
+      "name": "Stage_13",
+      "role": "executor",
+      "prompt": "Execute step 13",
+      "system_prompt": "Step 13"
+    },
+    {
+      "name": "Stage_14",
+      "role": "executor",
+      "prompt": "Execute step 14",
+      "system_prompt": "Step 14"
+    },
+    {
+      "name": "Stage_15",
+      "role": "executor",
+      "prompt": "Execute step 15",
+      "system_prompt": "Step 15"
+    },
+    {
+      "name": "Stage_16",
+      "role": "executor",
+      "prompt": "Execute step 16",
+      "system_prompt": "Step 16"
+    },
+    {
+      "name": "Stage_17",
+      "role": "executor",
+      "prompt": "Execute step 17",
+      "system_prompt": "Step 17"
+    },
+    {
+      "name": "Stage_18",
+      "role": "executor",
+      "prompt": "Execute step 18",
+      "system_prompt": "Step 18"
+    },
+    {
+      "name": "Stage_19",
+      "role": "executor",
+      "prompt": "Execute step 19",
+      "system_prompt": "Step 19"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 2,
+  "status": "active",
+  "created_at": 1774063142,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Stage_0",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you execute step 0, but I need more context about what this step should accomplish. Could you please tell me:\n\n1. What is the overall task or project you're working on?\n2. What should step 0 specifically do?\n3. Are there any files, commands, or actions you'd like me to take?\n\nWithout this information, I can't determine what step 0 should involve. Please provide the details so I can assist you properly.",
+      "duration_s": 23,
+      "ts": 1774063165
+    }
+  ],
+  "results": {
+    "Stage_0": "I'd be happy to help you execute step 0, but I need more context about what this step should accomplish. Could you please tell me:\n\n1. What is the overall task or project you're working on?\n2. What should step 0 specifically do?\n3. Are there any files, commands, or actions you'd like me to take?\n\nWithout this information, I can't determine what step 0 should involve. Please provide the details so I can assist you properly."
+  },
+  "token_usage": {
+    "prompt": 1411,
+    "completion": 217
+  },
+  "stage_times": [
+    23
+  ],
+  "files_created": [],
+  "eta_seconds": 437,
+  "eta_minutes": 7.3
+}

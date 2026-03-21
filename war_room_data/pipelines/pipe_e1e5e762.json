@@ -1,0 +1,43 @@
+{
+  "id": "pipe_e1e5e762",
+  "title": "Concurrent Pipeline 5",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Job 5",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 2,
+  "status": "killed",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "Could you please clarify what you'd like me to do with \"Job 5\"? Are you referring to:\n\n1. Running a specific command or script related to Job 5?\n2. Checking the status of a job?\n3. Something else entirely?\n\nPlease provide more details so I can help you properly.",
+      "duration_s": 43,
+      "ts": 1774063059
+    }
+  ],
+  "results": {
+    "Task": "Could you please clarify what you'd like me to do with \"Job 5\"? Are you referring to:\n\n1. Running a specific command or script related to Job 5?\n2. Checking the status of a job?\n3. Something else entirely?\n\nPlease provide more details so I can help you properly."
+  },
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 211
+  },
+  "stage_times": [
+    43
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_e1e5e762"
+}

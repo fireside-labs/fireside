@@ -1,0 +1,75 @@
+{
+  "id": "pipe_276b460e",
+  "title": "Stress Test Gate",
+  "description": "Pipeline with gate stages",
+  "stages": [
+    {
+      "name": "Research",
+      "role": "researcher",
+      "prompt": "Research it",
+      "system_prompt": "You research"
+    },
+    {
+      "name": "Approve",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Review research before writing",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "Write",
+      "role": "writer",
+      "prompt": "Write report",
+      "system_prompt": "You write"
+    }
+  ],
+  "current_stage": 1,
+  "current_iteration": 0,
+  "max_iterations": 5,
+  "status": "waiting_approval",
+  "created_at": 1774062565,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Research",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research something! However, I need a bit more information about what you'd like me to research. Could you please specify what topic, subject, or question you'd like me to look into?",
+      "duration_s": 11,
+      "ts": 1774062576
+    },
+    {
+      "stage": "Research",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with research! However, I need more details about what you'd like me to research. Could you please specify:\n\n1. What topic or subject would you like me to look into?\n2. Are there any specific questions you want me to answer?\n3. Is there a particular timeframe or aspect you're interested in?\n\nPlease provide more details so I can conduct thorough research for you.",
+      "duration_s": 9,
+      "ts": 1774062585
+    },
+    {
+      "stage": "Research",
+      "iteration": 2,
+      "verdict": "ship",
+      "result_preview": "Based on my search, here are some of the major trending topics and news stories from 2024:\n\n**Key 2024 Headlines:**\n- **Election News**: Donald Trump's election victory was a major story\n- **Boeing Incidents**: Turbulence and safety concerns made headlines\n- **Weather Events**: Catastrophic hurricanes affected various regions\n- **Business**: FCC approved the Nexstar-Tegna merger, creating the largest local TV operator in the U.S.\n- **Entertainment**: Taylor Swift continued to dominate entertainm",
+      "duration_s": 17,
+      "ts": 1774062602
+    }
+  ],
+  "results": {
+    "Research": "Based on my search, here are some of the major trending topics and news stories from 2024:\n\n**Key 2024 Headlines:**\n- **Election News**: Donald Trump's election victory was a major story\n- **Boeing Incidents**: Turbulence and safety concerns made headlines\n- **Weather Events**: Catastrophic hurricanes affected various regions\n- **Business**: FCC approved the Nexstar-Tegna merger, creating the largest local TV operator in the U.S.\n- **Entertainment**: Taylor Swift continued to dominate entertainment news\n- **Health**: Various health insights and developments were trending\n\n**Top News Sources for 2024:**\n- CBS News compiled month-by-month headlines\n- CNN's top 100 digital stories\n- Taboola's analysis of captivating stories across news, trends, and entertainment\n\n---\n\n**However, I need clarification to provide better research:**\n\nCould you please specify what topic you'd like me to research in detail? For example:\n- A specific news event or story?\n- A particular industry or market?\n- A technology or product?\n- A scientific topic or discovery?\n- Something else entirely?\n\nOnce you provide more details, I can conduct thorough research and give you comprehensive information!"
+  },
+  "token_usage": {
+    "prompt": 4474,
+    "completion": 1108
+  },
+  "stage_times": [
+    11,
+    9,
+    17
+  ],
+  "files_created": [],
+  "eta_seconds": 24,
+  "eta_minutes": 0.4,
+  "gate_prompt": "Review research before writing",
+  "gate_stage": "Approve"
+}

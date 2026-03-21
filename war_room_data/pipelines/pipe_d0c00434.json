@@ -1,0 +1,58 @@
+{
+  "id": "pipe_d0c00434",
+  "title": "Stress Test Basic",
+  "description": "Basic pipeline for stress testing",
+  "stages": [
+    {
+      "name": "Plan",
+      "role": "planner",
+      "prompt": "Plan it",
+      "system_prompt": "You are a planner"
+    },
+    {
+      "name": "Build",
+      "role": "executor",
+      "prompt": "Build it",
+      "system_prompt": "You are an executor"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 2,
+  "max_iterations": 3,
+  "status": "killed",
+  "created_at": 1774062955,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Plan",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more information to get started. Could you let me know what you'd like to plan? For example:\n\n- A trip or vacation?\n- A project or task list?\n- An event or meeting?\n- A daily/weekly schedule?\n- Something else?\n\nPlease share more details about what you have in mind, and I'll help you create a solid plan!",
+      "duration_s": 18,
+      "ts": 1774062973
+    },
+    {
+      "stage": "Plan",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more information to create a meaningful plan. Could you please tell me:\n\n**What would you like to plan?**\n\nFor example:\n- A trip or vacation (destination, dates, budget, interests?)\n- A project or task list (what's the goal, timeline, resources?)\n- An event or meeting (what type, who's involved, where?)\n- A daily/weekly schedule (what activities, priorities?)\n- Something else entirely?\n\nPlease share more details about what you have i",
+      "duration_s": 22,
+      "ts": 1774062995
+    }
+  ],
+  "results": {
+    "Plan": "I'd be happy to help you plan something! However, I need a bit more information to create a meaningful plan. Could you please tell me:\n\n**What would you like to plan?**\n\nFor example:\n- A trip or vacation (destination, dates, budget, interests?)\n- A project or task list (what's the goal, timeline, resources?)\n- An event or meeting (what type, who's involved, where?)\n- A daily/weekly schedule (what activities, priorities?)\n- Something else entirely?\n\nPlease share more details about what you have in mind, and I'll create a comprehensive plan for you!"
+  },
+  "token_usage": {
+    "prompt": 1586,
+    "completion": 626
+  },
+  "stage_times": [
+    18,
+    22
+  ],
+  "files_created": [],
+  "eta_seconds": 20,
+  "eta_minutes": 0.3,
+  "kill_reason": "Pipeline pipe_d0c00434 already killed: Iteration limit exceeded (4/3)"
+}

@@ -1,0 +1,56 @@
+{
+  "id": "pipe_fcfb5fc3",
+  "title": "Gate Goto Test",
+  "description": "",
+  "stages": [
+    {
+      "name": "Research",
+      "role": "researcher",
+      "prompt": "Research",
+      "system_prompt": "Researcher"
+    },
+    {
+      "name": "ReviewGate",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Approve?",
+      "on_fail": "goto:Research",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "Write",
+      "role": "writer",
+      "prompt": "Write",
+      "system_prompt": "Writer"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 3,
+  "status": "active",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Research",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with research! However, I need a bit more information about what you'd like me to research. Could you please specify:\n\n- What topic or subject would you like me to look into?\n- Are you looking for recent news, data, facts, or something specific?\n- Is there a particular area of interest (technology, science, business, etc.)?\n\nOnce you provide more details, I can use my research tools to find the most relevant and up-to-date information for you.",
+      "duration_s": 17,
+      "ts": 1774063033
+    }
+  ],
+  "results": {
+    "Research": "I'd be happy to help you with research! However, I need a bit more information about what you'd like me to research. Could you please specify:\n\n- What topic or subject would you like me to look into?\n- Are you looking for recent news, data, facts, or something specific?\n- Is there a particular area of interest (technology, science, business, etc.)?\n\nOnce you provide more details, I can use my research tools to find the most relevant and up-to-date information for you."
+  },
+  "token_usage": {
+    "prompt": 813,
+    "completion": 156
+  },
+  "stage_times": [
+    17
+  ],
+  "files_created": [],
+  "eta_seconds": 34,
+  "eta_minutes": 0.6
+}

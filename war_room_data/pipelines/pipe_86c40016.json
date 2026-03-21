@@ -1,0 +1,43 @@
+{
+  "id": "pipe_86c40016",
+  "title": "Concurrent Pipeline 2",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Job 2",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 2,
+  "status": "killed",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with \"Job 2,\" but I need a bit more context to understand what you're looking for. Could you clarify:\n\n- Are you referring to a job posting or position?\n- Is this a task in a list you have?\n- Do you need help with something in a specific file?\n- Are you looking for information about a particular job?\n\nPlease provide more details so I can assist you effectively!",
+      "duration_s": 29,
+      "ts": 1774063045
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help you with \"Job 2,\" but I need a bit more context to understand what you're looking for. Could you clarify:\n\n- Are you referring to a job posting or position?\n- Is this a task in a list you have?\n- Do you need help with something in a specific file?\n- Are you looking for information about a particular job?\n\nPlease provide more details so I can assist you effectively!"
+  },
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 201
+  },
+  "stage_times": [
+    29
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_86c40016"
+}

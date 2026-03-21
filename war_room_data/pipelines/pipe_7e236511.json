@@ -1,0 +1,67 @@
+{
+  "id": "pipe_7e236511",
+  "title": "Stress Test Basic",
+  "description": "Basic pipeline for stress testing",
+  "stages": [
+    {
+      "name": "Plan",
+      "role": "planner",
+      "prompt": "Plan it",
+      "system_prompt": "You are a planner"
+    },
+    {
+      "name": "Build",
+      "role": "executor",
+      "prompt": "Build it",
+      "system_prompt": "You are an executor"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 3,
+  "max_iterations": 3,
+  "status": "killed",
+  "created_at": 1774061994,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Plan",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more information to create a useful plan. What would you like me to plan? For example:\n\n- A trip or vacation\n- A project or task list\n- A meeting or event\n- A workout routine\n- A study schedule\n- Something else?\n\nPlease let me know what you'd like to plan and any relevant details (dates, budget, preferences, goals, etc.) so I can create the best plan for you.",
+      "duration_s": 12,
+      "ts": 1774062006
+    },
+    {
+      "stage": "Plan",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more information to create a useful plan. What would you like me to plan? For example:\n\n- A trip or vacation\n- A project or task list\n- A meeting or event\n- A workout routine\n- A study schedule\n- Something else?\n\nPlease let me know what you'd like to plan and any relevant details (dates, budget, preferences, goals, etc.) so I can create the best plan for you.",
+      "duration_s": 5,
+      "ts": 1774062011
+    },
+    {
+      "stage": "Plan",
+      "iteration": 2,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I still need to know what specifically you'd like me to plan. Could you please tell me:\n\n1. **What type of plan?** (trip, project, meeting, event, workout, study schedule, etc.)\n2. **Any key details?** (dates, budget, number of people, goals, preferences, etc.)\n\nFor example:\n- \"Plan a 3-day trip to Paris in May for 2 people with a $2000 budget\"\n- \"Create a project timeline for launching a website in 8 weeks\"\n- \"Plan a team meeting for next Tuesda",
+      "duration_s": 7,
+      "ts": 1774062018
+    }
+  ],
+  "results": {
+    "Plan": "I'd be happy to help you plan something! However, I still need to know what specifically you'd like me to plan. Could you please tell me:\n\n1. **What type of plan?** (trip, project, meeting, event, workout, study schedule, etc.)\n2. **Any key details?** (dates, budget, number of people, goals, preferences, etc.)\n\nFor example:\n- \"Plan a 3-day trip to Paris in May for 2 people with a $2000 budget\"\n- \"Create a project timeline for launching a website in 8 weeks\"\n- \"Plan a team meeting for next Tuesday with 10 attendees\"\n\nOnce I know what you're planning and have the relevant details, I'll create a comprehensive plan for you!"
+  },
+  "token_usage": {
+    "prompt": 2471,
+    "completion": 977
+  },
+  "stage_times": [
+    12,
+    5,
+    7
+  ],
+  "files_created": [],
+  "eta_seconds": 8,
+  "eta_minutes": 0.1,
+  "kill_reason": "Iteration limit exceeded (4/3)"
+}

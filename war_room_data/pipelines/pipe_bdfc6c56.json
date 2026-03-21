@@ -1,0 +1,92 @@
+{
+  "id": "pipe_bdfc6c56",
+  "title": "Stress Test Gate",
+  "description": "Pipeline with gate stages",
+  "stages": [
+    {
+      "name": "Research",
+      "role": "researcher",
+      "prompt": "Research it",
+      "system_prompt": "You research"
+    },
+    {
+      "name": "Approve",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Review research before writing",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "Write",
+      "role": "writer",
+      "prompt": "Write report",
+      "system_prompt": "You write"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 5,
+  "max_iterations": 5,
+  "status": "killed",
+  "created_at": 1774062368,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Research",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research, but I need more information about what you'd like me to research. Could you please specify what topic, subject, or question you're interested in learning about?",
+      "duration_s": 2,
+      "ts": 1774062370
+    },
+    {
+      "stage": "Research",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research, but I need more specific information about what you'd like me to research. Could you please tell me:\n\n1. What topic or subject would you like me to investigate?\n2. Do you have a specific question you're trying to answer?\n3. Are you looking for current information, historical data, product details, or something else?\n\nPlease provide more details so I can conduct effective research for you.",
+      "duration_s": 5,
+      "ts": 1774062375
+    },
+    {
+      "stage": "Research",
+      "iteration": 2,
+      "verdict": "fail",
+      "result_preview": "I understand you'd like me to research something, but I still need more specific information to conduct effective research for you. To help you properly, please tell me:\n\n1. **What topic or subject** would you like me to investigate?\n2. **What specific question** are you trying to answer?\n3. **What type of information** are you looking for? (e.g., current events, product details, historical data, technical specifications, pricing, etc.)\n\nWithout these details, I can't provide you with the resear",
+      "duration_s": 5,
+      "ts": 1774062380
+    },
+    {
+      "stage": "Research",
+      "iteration": 3,
+      "verdict": "fail",
+      "result_preview": "I understand you want me to research something, but I still need more specific information to conduct effective research. The same issue from before - I don't know what topic you'd like me to investigate.\n\nTo help you properly, please tell me:\n\n1. **What topic or subject** would you like me to research?\n2. **What specific question** are you trying to answer?\n3. **What type of information** are you looking for? (e.g., current events, product details, historical data, technical specifications, pri",
+      "duration_s": 6,
+      "ts": 1774062386
+    },
+    {
+      "stage": "Research",
+      "iteration": 4,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research something! However, I need a bit more information to conduct effective research. Could you please clarify:\n\n1. **What topic or subject** would you like me to research?\n2. **What specific question** are you trying to answer?\n3. **What type of information** are you looking for?\n\nFor example:\n- \"Research the latest iPhone 15 specifications\"\n- \"What's the current stock price of Tesla?\"\n- \"Find information about remote work trends in 2024\"\n- \"Research the best practi",
+      "duration_s": 5,
+      "ts": 1774062391
+    }
+  ],
+  "results": {
+    "Research": "I'd be happy to help you research something! However, I need a bit more information to conduct effective research. Could you please clarify:\n\n1. **What topic or subject** would you like me to research?\n2. **What specific question** are you trying to answer?\n3. **What type of information** are you looking for?\n\nFor example:\n- \"Research the latest iPhone 15 specifications\"\n- \"What's the current stock price of Tesla?\"\n- \"Find information about remote work trends in 2024\"\n- \"Research the best practices for React Native development\"\n\nOnce you provide these details, I'll be able to conduct thorough research and give you the information you need!"
+  },
+  "token_usage": {
+    "prompt": 4710,
+    "completion": 1373
+  },
+  "stage_times": [
+    2,
+    5,
+    5,
+    6,
+    5
+  ],
+  "files_created": [],
+  "eta_seconds": 9,
+  "eta_minutes": 0.1,
+  "kill_reason": "Iteration limit exceeded (6/5)"
+}

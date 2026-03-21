@@ -1,0 +1,67 @@
+{
+  "id": "pipe_522ef2d1",
+  "title": "Stress Test Basic",
+  "description": "Basic pipeline for stress testing",
+  "stages": [
+    {
+      "name": "Plan",
+      "role": "planner",
+      "prompt": "Plan it",
+      "system_prompt": "You are a planner"
+    },
+    {
+      "name": "Build",
+      "role": "executor",
+      "prompt": "Build it",
+      "system_prompt": "You are an executor"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 3,
+  "max_iterations": 3,
+  "status": "killed",
+  "created_at": 1774062344,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Plan",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more information to create a useful plan. Could you please tell me:\n\n- What would you like me to plan? (e.g., a trip, a project, an event, a workout routine, a study schedule, etc.)\n- What are your specific goals or requirements?\n- Do you have any time constraints or deadlines?\n- Are there any particular preferences or constraints I should consider?\n\nOnce I have more details, I can create a comprehensive and tailored plan for you!",
+      "duration_s": 4,
+      "ts": 1774062348
+    },
+    {
+      "stage": "Plan",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! To create a useful and tailored plan, I need a bit more information:\n\n**What would you like me to plan?** For example:\n- A trip or vacation\n- A project or task\n- An event or gathering\n- A workout or fitness routine\n- A study or learning schedule\n- A meal plan\n- A budget or financial plan\n\n**Please also share:**\n- Your specific goals or desired outcomes\n- Any time constraints or deadlines\n- Budget considerations\n- Any preferences or constraints\n\nOnce I hav",
+      "duration_s": 5,
+      "ts": 1774062353
+    },
+    {
+      "stage": "Plan",
+      "iteration": 2,
+      "verdict": "fail",
+      "result_preview": "I understand you'd like me to create a plan. Since no specific details were provided about what you'd like to plan, I'll create a comprehensive example plan for a **Weekend Trip Planning** scenario to demonstrate my planning capabilities. You can let me know if you'd like me to adjust this for your specific needs.\n\n---\n\n## \ud83d\udccb WEEKEND TRIP PLANNING GUIDE\n\n### **Phase 1: Pre-Trip Planning (1-2 Weeks Before)**\n\n| Task | Timeline | Details |\n|------|----------|---------|\n| **Set Budget** | Week 1 | D",
+      "duration_s": 15,
+      "ts": 1774062368
+    }
+  ],
+  "results": {
+    "Plan": "I understand you'd like me to create a plan. Since no specific details were provided about what you'd like to plan, I'll create a comprehensive example plan for a **Weekend Trip Planning** scenario to demonstrate my planning capabilities. You can let me know if you'd like me to adjust this for your specific needs.\n\n---\n\n## \ud83d\udccb WEEKEND TRIP PLANNING GUIDE\n\n### **Phase 1: Pre-Trip Planning (1-2 Weeks Before)**\n\n| Task | Timeline | Details |\n|------|----------|---------|\n| **Set Budget** | Week 1 | Determine total spending limit (transport, accommodation, food, activities) |\n| **Choose Destination** | Week 1 | Select location based on interests, travel time, and cost |\n| **Check Dates** | Week 1 | Confirm availability and book time off work |\n| **Research Activities** | Week 1 | Identify must-do activities and attractions |\n| **Book Accommodation** | Week 1 | Reserve hotel/cabin (consider cancellation policies) |\n\n### **Phase 2: Logistics (3-7 Days Before)**\n\n| Task | Timeline | Details |\n|------|----------|---------|\n| **Transportation** | 3-7 days | Book flights/train/bus or plan driving route |\n| **Pack Essentials** | 3-7 days | Create packing list (clothes, toiletries, electronics, documents) |\n| **Reserve Restaurants** | 3-7 days | Book popular dining spots if needed |\n| **Download Offline Maps** | 3-7 days | Save maps and directions for areas with poor signal |\n\n### **Phase 3: Final Preparations (1-2 Days Before)**\n\n| Task | Timeline | Details |\n|------|----------|---------|\n| **Weather Check** | 1-2 days | Monitor forecast and adjust packing accordingly |\n| **Confirm Reservations** | 1-2 days | Double-check all bookings |\n| **Notify Contacts** | 1-2 days | Share itinerary with family/friends |\n| **Charge Devices** | 1-2 days | Ensure phones, cameras, and power banks are ready |\n\n### **Phase 4: Execution (During Trip)**\n\n| Day | Focus Area | Key Activities |\n|-----|------------|----------------|\n| **Day 1** | Arrival & Exploration | Check-in, settle in, explore nearby areas |\n| **Day 2** | Main Activities | Visit top attractions, enjoy planned experiences |\n| **Day 3** | Relaxation & Departure | Enjoy last meal, pack, return home |\n\n### **Budget Breakdown Template**\n\n```\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 Transportation:    $XXX         \u2502\n\u2502 Accommodation:     $XXX         \u2502\n\u2502 Food & Dining:     $XXX         \u2502\n\u2502 Activities:        $XXX         \u2502\n\u2502 Emergency Fund:    $XXX         \u2502\n\u2502 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 \u2502\n\u2502 TOTAL:             $XXX         \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n```\n\n---\n\n## \ud83c\udfaf **Next Steps**\n\nTo make this plan **specific to you**, please share:\n\n1. **What type of plan do you need?** (trip, project, event, workout, study, meal, budget, etc.)\n2. **Your goals** - What do you want to achieve?\n3. **Timeframe** - When do you need to complete this?\n4. **Budget** - Are there financial constraints?\n5. **Any special preferences** - Dietary needs, accessibility, etc.\n\nLet me know and I'll create a customized plan for you! \ud83d\ude80"
+  },
+  "token_usage": {
+    "prompt": 2506,
+    "completion": 1712
+  },
+  "stage_times": [
+    4,
+    5,
+    15
+  ],
+  "files_created": [],
+  "eta_seconds": 8,
+  "eta_minutes": 0.1,
+  "kill_reason": "Iteration limit exceeded (4/3)"
+}

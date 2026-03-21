@@ -1,0 +1,43 @@
+{
+  "id": "pipe_53b9e7d1",
+  "title": "Concurrent Pipeline 4",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Job 4",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 2,
+  "status": "killed",
+  "created_at": 1774063016,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with \"Job 4\", but I need more details about what you'd like me to execute. Could you please clarify:\n\n- What specific command or task would you like me to run for \"Job 4\"?\n- Is this a shell command, a script, or something else?\n- What's the context or purpose of this job?\n\nPlease provide more information so I can execute the appropriate command for you.",
+      "duration_s": 36,
+      "ts": 1774063052
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help you with \"Job 4\", but I need more details about what you'd like me to execute. Could you please clarify:\n\n- What specific command or task would you like me to run for \"Job 4\"?\n- Is this a shell command, a script, or something else?\n- What's the context or purpose of this job?\n\nPlease provide more information so I can execute the appropriate command for you."
+  },
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 216
+  },
+  "stage_times": [
+    36
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_53b9e7d1"
+}

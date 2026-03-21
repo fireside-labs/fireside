@@ -1,0 +1,43 @@
+{
+  "id": "pipe_38721e60",
+  "title": "Not a Gate",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "Do",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 1,
+  "status": "killed",
+  "created_at": 1774063018,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you! However, your message seems incomplete. Could you please let me know what you'd like me to do? For example, I can:\n\n- List files and folders on your system\n- Read or write files\n- Run commands on your computer\n- Create presentations, documents, or spreadsheets\n- And much more!\n\nJust let me know what you need assistance with.",
+      "duration_s": 47,
+      "ts": 1774063065
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help you! However, your message seems incomplete. Could you please let me know what you'd like me to do? For example, I can:\n\n- List files and folders on your system\n- Read or write files\n- Run commands on your computer\n- Create presentations, documents, or spreadsheets\n- And much more!\n\nJust let me know what you need assistance with."
+  },
+  "token_usage": {
+    "prompt": 1406,
+    "completion": 129
+  },
+  "stage_times": [
+    47
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_38721e60"
+}

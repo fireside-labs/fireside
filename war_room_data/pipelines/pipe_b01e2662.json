@@ -1,0 +1,27 @@
+{
+  "id": "pipe_b01e2662",
+  "title": "Test <script>alert('xss')</script>",
+  "description": "",
+  "stages": [
+    {
+      "name": "Task",
+      "role": "executor",
+      "prompt": "O'Brien's \"test\" & check",
+      "system_prompt": "Exec"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 0,
+  "max_iterations": 1,
+  "status": "active",
+  "created_at": 1774063018,
+  "created_by": "odin",
+  "history": [],
+  "results": {},
+  "token_usage": {
+    "prompt": 0,
+    "completion": 0
+  },
+  "stage_times": [],
+  "files_created": []
+}

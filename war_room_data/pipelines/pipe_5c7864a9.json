@@ -1,0 +1,67 @@
+{
+  "id": "pipe_5c7864a9",
+  "title": "Stress Test Basic",
+  "description": "Basic pipeline for stress testing",
+  "stages": [
+    {
+      "name": "Plan",
+      "role": "planner",
+      "prompt": "Plan it",
+      "system_prompt": "You are a planner"
+    },
+    {
+      "name": "Build",
+      "role": "executor",
+      "prompt": "Build it",
+      "system_prompt": "You are an executor"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 3,
+  "max_iterations": 3,
+  "status": "killed",
+  "created_at": 1774062018,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Plan",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more information about what you'd like me to plan. Could you please clarify what \"it\" refers to? \n\nFor example, are you asking me to plan:\n- A trip or vacation?\n- A project or work plan?\n- An event or meeting?\n- A daily or weekly schedule?\n- Something else entirely?\n\nOnce you give me more details about what you want to plan, I can help you create a comprehensive plan!",
+      "duration_s": 3,
+      "ts": 1774062021
+    },
+    {
+      "stage": "Plan",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you plan something! However, I need a bit more information about what you'd like me to plan. Could you please clarify what \"it\" refers to?\n\nFor example, are you asking me to plan:\n- A trip or vacation?\n- A project or work plan?\n- An event or meeting?\n- A daily or weekly schedule?\n- Something else entirely?\n\nOnce you give me more details about what you want to plan, I can create a comprehensive plan for you!",
+      "duration_s": 6,
+      "ts": 1774062027
+    },
+    {
+      "stage": "Plan",
+      "iteration": 2,
+      "verdict": "fail",
+      "result_preview": "I apologize for the previous response being too generic. To create an actual plan for you, I need to know what you'd like me to plan. \n\nCould you please tell me:\n\n1. **What is \"it\"?** What specifically do you want me to plan? (e.g., a trip, project, event, schedule, etc.)\n\n2. **What are the key details?** For example:\n   - If it's a trip: destination, dates, budget, who's going\n   - If it's a project: goals, timeline, resources needed\n   - If it's an event: type, location, number of guests, date",
+      "duration_s": 5,
+      "ts": 1774062032
+    }
+  ],
+  "results": {
+    "Plan": "I apologize for the previous response being too generic. To create an actual plan for you, I need to know what you'd like me to plan. \n\nCould you please tell me:\n\n1. **What is \"it\"?** What specifically do you want me to plan? (e.g., a trip, project, event, schedule, etc.)\n\n2. **What are the key details?** For example:\n   - If it's a trip: destination, dates, budget, who's going\n   - If it's a project: goals, timeline, resources needed\n   - If it's an event: type, location, number of guests, date\n   - If it's a schedule: what activities, timeframe, priorities\n\n3. **What's the goal?** What outcome are you hoping to achieve?\n\nOnce you provide these details, I'll create a comprehensive, actionable plan tailored to your needs!"
+  },
+  "token_usage": {
+    "prompt": 3588,
+    "completion": 1039
+  },
+  "stage_times": [
+    3,
+    6,
+    5
+  ],
+  "files_created": [],
+  "eta_seconds": 4,
+  "eta_minutes": 0.1,
+  "kill_reason": "Iteration limit exceeded (4/3)"
+}

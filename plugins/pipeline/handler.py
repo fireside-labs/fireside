@@ -318,8 +318,12 @@ def create_pipeline(title: str, description: str, stages: list,
     log.info("[pipeline] Created: %s (%d stages, max %d iterations)",
              pipeline_id, len(stages), max_iterations)
 
-    # Start the first stage
-    _start_stage(pipeline_id, meta)
+    # Start the first stage in a background thread so the API returns immediately
+    import threading
+    threading.Thread(
+        target=_start_stage, args=(pipeline_id, meta),
+        name=f"pipeline-{pipeline_id[:8]}", daemon=True,
+    ).start()
     return meta
 
 
@@ -383,152 +387,166 @@ def _start_stage(pipeline_id: str, meta: dict) -> None:
         return  # Stop here — resume when user approves
 
     # Build the prompt
-    system = stage.get("system_prompt", f"You are executing stage '{stage_name}' of a pipeline.")
-    prompt = stage.get("prompt", meta["description"])
+    try:
+        system = stage.get("system_prompt", f"You are executing stage '{stage_name}' of a pipeline.")
+        prompt = stage.get("prompt", meta["description"])
 
-    # Add previous stage results as context — structured and compressed
-    prev_results = meta.get("results", {})
-    if prev_results:
-        prompt += "\n\n--- CONTEXT FROM PREVIOUS STAGES ---"
-        for stage_key, stage_output in prev_results.items():
-            # Compress each stage's output: keep first 1500 chars and last 500 chars
-            if isinstance(stage_output, list):
-                text = "\n".join(str(r) for r in stage_output[-3:])
-            elif isinstance(stage_output, str):
-                text = stage_output
+        # Add previous stage results as context — structured and compressed
+        prev_results = meta.get("results", {})
+        if prev_results:
+            prompt += "\n\n--- CONTEXT FROM PREVIOUS STAGES ---"
+            for stage_key, stage_output in prev_results.items():
+                # Compress each stage's output: keep first 1500 chars and last 500 chars
+                if isinstance(stage_output, list):
+                    text = "\n".join(str(r) for r in stage_output[-3:])
+                elif isinstance(stage_output, str):
+                    text = stage_output
+                else:
+                    text = str(stage_output)
+
+                # Smart truncation: keep beginning (spec/plan) and end (results/verdict)
+                if len(text) > 2000:
+                    text = text[:1500] + "\n...[truncated]...\n" + text[-500:]
+
+                prompt += f"\n\n[Stage '{stage_key}' output:]\n{text}"
+
+            prompt += "\n--- END PREVIOUS CONTEXT ---\n"
+
+        # Add iteration feedback if retrying
+        if meta["current_iteration"] > 0:
+            history = meta.get("history", [])
+            if history:
+                last = history[-1]
+                prompt += f"\n\nThis is iteration {meta['current_iteration'] + 1}. " \
+                          f"Previous verdict: {last.get('verdict', 'fail')}. " \
+                          f"Feedback: {last.get('feedback', 'Fix the issues and try again.')}"
+
+        # Call the model — handle parallel sub-stages (e.g. backend + frontend)
+        if "parallel" in stage:
+            # Parallel sub-stages: run each sequentially on single-GPU,
+            # merge their outputs. On mesh, these dispatch to different nodes.
+            sub_results = []
+            for sub in stage["parallel"]:
+                sub_system = sub.get("system_prompt",
+                             f"You are a {sub.get('role', 'executor')} working on stage '{stage_name}'.")
+                sub_prompt = sub.get("prompt", meta["description"])
+
+                # Include the same previous context
+                if prev_results:
+                    sub_prompt += "\n\n--- CONTEXT FROM PREVIOUS STAGES ---"
+                    for sk, sv in prev_results.items():
+                        text = sv if isinstance(sv, str) else str(sv)
+                        if len(text) > 1500:
+                            text = text[:1000] + "\n...[truncated]...\n" + text[-500:]
+                        sub_prompt += f"\n\n[Stage '{sk}' output:]\n{text}"
+                    sub_prompt += "\n--- END PREVIOUS CONTEXT ---\n"
+
+                sub_task_type = sub.get("task_type", task_type)
+                sub_role = sub.get("role", "executor")
+                sub_result = _call_model(sub_prompt, system=sub_system,
+                                         task_type=sub_task_type, timeout=120,
+                                         role=sub_role)
+                if sub_result:
+                    sub_results.append({
+                        "role": sub.get("role", "unknown"),
+                        "output": sub_result["text"],
+                    })
+                    # Accumulate tokens and files from sub-stages
+                    meta["token_usage"]["prompt"] += sub_result.get("tokens_prompt", 0)
+                    meta["token_usage"]["completion"] += sub_result.get("tokens_completion", 0)
+                    meta["files_created"].extend(sub_result.get("files_created", []))
+                    log.info("[pipeline] Sub-stage '%s/%s' complete (%d chars)",
+                             stage_name, sub.get("role", "?"), len(sub_result["text"]))
+
+            # Merge parallel results
+            if sub_results:
+                merged = "\n\n".join(
+                    f"=== {r['role'].upper()} ===\n{r['output']}" for r in sub_results
+                )
+                result_text = merged
             else:
-                text = str(stage_output)
-
-            # Smart truncation: keep beginning (spec/plan) and end (results/verdict)
-            if len(text) > 2000:
-                text = text[:1500] + "\n...[truncated]...\n" + text[-500:]
-
-            prompt += f"\n\n[Stage '{stage_key}' output:]\n{text}"
-
-        prompt += "\n--- END PREVIOUS CONTEXT ---\n"
-
-    # Add iteration feedback if retrying
-    if meta["current_iteration"] > 0:
-        history = meta.get("history", [])
-        if history:
-            last = history[-1]
-            prompt += f"\n\nThis is iteration {meta['current_iteration'] + 1}. " \
-                      f"Previous verdict: {last.get('verdict', 'fail')}. " \
-                      f"Feedback: {last.get('feedback', 'Fix the issues and try again.')}"
-
-    # Call the model — handle parallel sub-stages (e.g. backend + frontend)
-    if "parallel" in stage:
-        # Parallel sub-stages: run each sequentially on single-GPU,
-        # merge their outputs. On mesh, these dispatch to different nodes.
-        sub_results = []
-        for sub in stage["parallel"]:
-            sub_system = sub.get("system_prompt",
-                         f"You are a {sub.get('role', 'executor')} working on stage '{stage_name}'.")
-            sub_prompt = sub.get("prompt", meta["description"])
-
-            # Include the same previous context
-            if prev_results:
-                sub_prompt += "\n\n--- CONTEXT FROM PREVIOUS STAGES ---"
-                for sk, sv in prev_results.items():
-                    text = sv if isinstance(sv, str) else str(sv)
-                    if len(text) > 1500:
-                        text = text[:1000] + "\n...[truncated]...\n" + text[-500:]
-                    sub_prompt += f"\n\n[Stage '{sk}' output:]\n{text}"
-                sub_prompt += "\n--- END PREVIOUS CONTEXT ---\n"
-
-            sub_task_type = sub.get("task_type", task_type)
-            sub_role = sub.get("role", "executor")
-            sub_result = _call_model(sub_prompt, system=sub_system,
-                                     task_type=sub_task_type, timeout=120,
-                                     role=sub_role)
-            if sub_result:
-                sub_results.append({
-                    "role": sub.get("role", "unknown"),
-                    "output": sub_result["text"],
-                })
-                # Accumulate tokens and files from sub-stages
-                meta["token_usage"]["prompt"] += sub_result.get("tokens_prompt", 0)
-                meta["token_usage"]["completion"] += sub_result.get("tokens_completion", 0)
-                meta["files_created"].extend(sub_result.get("files_created", []))
-                log.info("[pipeline] Sub-stage '%s/%s' complete (%d chars)",
-                         stage_name, sub.get("role", "?"), len(sub_result["text"]))
-
-        # Merge parallel results
-        if sub_results:
-            merged = "\n\n".join(
-                f"=== {r['role'].upper()} ===\n{r['output']}" for r in sub_results
-            )
-            result_text = merged
+                result_text = None
         else:
-            result_text = None
-    else:
-        stage_role = stage.get("role", stage.get("agent", "executor"))
-        model_result = _call_model(prompt, system=system, task_type=task_type,
-                                   timeout=120, role=stage_role)
-        if model_result:
-            result_text = model_result["text"]
-            meta["token_usage"]["prompt"] += model_result.get("tokens_prompt", 0)
-            meta["token_usage"]["completion"] += model_result.get("tokens_completion", 0)
-            meta["files_created"].extend(model_result.get("files_created", []))
-        else:
-            result_text = None
+            stage_role = stage.get("role", stage.get("agent", "executor"))
+            model_result = _call_model(prompt, system=system, task_type=task_type,
+                                       timeout=120, role=stage_role)
+            if model_result:
+                result_text = model_result["text"]
+                meta["token_usage"]["prompt"] += model_result.get("tokens_prompt", 0)
+                meta["token_usage"]["completion"] += model_result.get("tokens_completion", 0)
+                meta["files_created"].extend(model_result.get("files_created", []))
+            else:
+                result_text = None
 
-    # Calculate stage duration and ETA
-    stage_duration = int(time.time()) - stage_start_ts
-    meta["stage_times"].append(stage_duration)
-    avg_stage_time = sum(meta["stage_times"]) / len(meta["stage_times"])
-    remaining_stages = len(meta["stages"]) - stage_idx - 1
-    eta_seconds = int(avg_stage_time * remaining_stages)
-    meta["eta_seconds"] = eta_seconds
-    meta["eta_minutes"] = round(eta_seconds / 60, 1)
+        # Calculate stage duration and ETA
+        stage_duration = int(time.time()) - stage_start_ts
+        meta["stage_times"].append(stage_duration)
+        avg_stage_time = sum(meta["stage_times"]) / len(meta["stage_times"])
+        remaining_stages = len(meta["stages"]) - stage_idx - 1
+        eta_seconds = int(avg_stage_time * remaining_stages)
+        meta["eta_seconds"] = eta_seconds
+        meta["eta_minutes"] = round(eta_seconds / 60, 1)
 
-    if result_text:
-        verdict = _parse_verdict(result_text)
-        meta["results"][stage_name] = result_text
-        meta["history"].append({
-            "stage": stage_name,
-            "iteration": meta["current_iteration"],
-            "verdict": verdict,
-            "result_preview": result_text[:500],
-            "duration_s": stage_duration,
-            "ts": int(time.time()),
-        })
+        if result_text:
+            verdict = _parse_verdict(result_text)
+            meta["results"][stage_name] = result_text
+            meta["history"].append({
+                "stage": stage_name,
+                "iteration": meta["current_iteration"],
+                "verdict": verdict,
+                "result_preview": result_text[:500],
+                "duration_s": stage_duration,
+                "ts": int(time.time()),
+            })
 
-        _publish("pipeline.stage_complete", {
-            "pipeline_id": pipeline_id,
-            "stage": stage_name,
-            "stage_index": stage_idx,
-            "total_stages": len(meta["stages"]),
-            "verdict": verdict,
-            "iteration": meta["current_iteration"],
-            "duration_s": stage_duration,
-            "eta_seconds": eta_seconds,
-            "tokens": meta["token_usage"],
-        })
-
-        # Publish file-created events for dashboard toast notifications
-        for fpath in meta.get("files_created", []):
-            _publish("pipeline.file_created", {
+            _publish("pipeline.stage_complete", {
                 "pipeline_id": pipeline_id,
                 "stage": stage_name,
-                "path": fpath,
-                "title": meta.get("title", ""),
+                "stage_index": stage_idx,
+                "total_stages": len(meta["stages"]),
+                "verdict": verdict,
+                "iteration": meta["current_iteration"],
+                "duration_s": stage_duration,
+                "eta_seconds": eta_seconds,
+                "tokens": meta["token_usage"],
             })
-        # Clear files list after publishing (avoid re-publishing on retry)
-        meta["files_created"] = []
 
-        _advance(pipeline_id, meta, stage_name, verdict, result_text)
-    else:
-        # Model call failed — record and retry once
+            # Publish file-created events for dashboard toast notifications
+            for fpath in meta.get("files_created", []):
+                _publish("pipeline.file_created", {
+                    "pipeline_id": pipeline_id,
+                    "stage": stage_name,
+                    "path": fpath,
+                    "title": meta.get("title", ""),
+                })
+            # Clear files list after publishing (avoid re-publishing on retry)
+            meta["files_created"] = []
+
+            _advance(pipeline_id, meta, stage_name, verdict, result_text)
+        else:
+            # Model call failed — record and retry once
+            meta["history"].append({
+                "stage": stage_name,
+                "iteration": meta["current_iteration"],
+                "verdict": "error",
+                "feedback": "Model call failed — no response",
+                "duration_s": stage_duration,
+                "ts": int(time.time()),
+            })
+            meta["status"] = "error"
+            _save_pipeline(pipeline_id, meta)
+
+    except Exception as exc:
+        log.error("[pipeline] Stage '%s' crashed: %s", stage_name, exc)
         meta["history"].append({
             "stage": stage_name,
             "iteration": meta["current_iteration"],
             "verdict": "error",
-            "feedback": "Model call failed — no response",
-            "duration_s": stage_duration,
+            "feedback": f"Stage execution crashed: {exc}",
             "ts": int(time.time()),
         })
         meta["status"] = "error"
+        _pipelines[pipeline_id] = meta
         _save_pipeline(pipeline_id, meta)
 
 
@@ -663,7 +681,7 @@ def _escalate(pipeline_id: str, meta: dict, last_feedback: str) -> None:
 
 class CreatePipelineRequest(BaseModel):
     title: str
-    description: str
+    description: str = ""
     stages: list
     max_iterations: int = 3
 
@@ -818,7 +836,8 @@ def register_routes(app, config: dict) -> None:
 
         _pipelines[pipeline_id] = meta
         _save_pipeline(pipeline_id, meta)
-        _start_stage(pipeline_id, meta)
+        import threading
+        threading.Thread(target=_start_stage, args=(pipeline_id, meta), daemon=True).start()
         return {"ok": True, "status": meta["status"]}
 
     @router.post("/api/v1/pipeline/{pipeline_id}/intervene")
@@ -853,7 +872,8 @@ def register_routes(app, config: dict) -> None:
         })
 
         # Restart current stage with the new guidance injected
-        _start_stage(pipeline_id, meta)
+        import threading
+        threading.Thread(target=_start_stage, args=(pipeline_id, meta), daemon=True).start()
         return {"ok": True, "status": "intervention_applied"}
 
     @router.post("/api/v1/pipeline/{pipeline_id}/approve")
@@ -899,7 +919,8 @@ def register_routes(app, config: dict) -> None:
         })
 
         log.info("[pipeline] Gate approved: %s stage '%s'", pipeline_id, stage_name)
-        _start_stage(pipeline_id, meta)
+        import threading
+        threading.Thread(target=_start_stage, args=(pipeline_id, meta), daemon=True).start()
         return {"ok": True, "status": "approved"}
 
     @router.post("/api/v1/pipeline/{pipeline_id}/reject")
@@ -943,13 +964,15 @@ def register_routes(app, config: dict) -> None:
                 meta["status"] = "active"
                 _pipelines[pipeline_id] = meta
                 _save_pipeline(pipeline_id, meta)
-                _start_stage(pipeline_id, meta)
+                import threading
+                threading.Thread(target=_start_stage, args=(pipeline_id, meta), daemon=True).start()
                 return {"ok": True, "status": "rejected_goto", "target": target_name}
         elif on_fail == "retry":
             meta["status"] = "active"
             _pipelines[pipeline_id] = meta
             _save_pipeline(pipeline_id, meta)
-            _start_stage(pipeline_id, meta)
+            import threading
+            threading.Thread(target=_start_stage, args=(pipeline_id, meta), daemon=True).start()
             return {"ok": True, "status": "rejected_retry"}
 
         # Default: escalate

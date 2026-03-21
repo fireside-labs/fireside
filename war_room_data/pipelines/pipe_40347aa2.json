@@ -1,0 +1,43 @@
+{
+  "id": "pipe_40347aa2",
+  "title": "Rapid 2",
+  "description": "",
+  "stages": [
+    {
+      "name": "T",
+      "role": "executor",
+      "prompt": "G",
+      "system_prompt": "S"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 1,
+  "max_iterations": 1,
+  "status": "killed",
+  "created_at": 1774063018,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "T",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I received just \"G\" - could you please clarify what you need help with? I'd be happy to assist with:\n\n- Reading or writing files\n- Running terminal commands\n- Creating documents (Word, Excel, PowerPoint)\n- Listing files and folders\n- Or any other task you might have in mind\n\nJust let me know what you're looking for!",
+      "duration_s": 63,
+      "ts": 1774063081
+    }
+  ],
+  "results": {
+    "T": "I received just \"G\" - could you please clarify what you need help with? I'd be happy to assist with:\n\n- Reading or writing files\n- Running terminal commands\n- Creating documents (Word, Excel, PowerPoint)\n- Listing files and folders\n- Or any other task you might have in mind\n\nJust let me know what you're looking for!"
+  },
+  "token_usage": {
+    "prompt": 1406,
+    "completion": 185
+  },
+  "stage_times": [
+    63
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Iteration limit exceeded (2/1)"
+}

@@ -1,0 +1,27 @@
+{
+  "id": "pipe_d20e70e4",
+  "title": "\ud83d\udd25 Unicode Test \u65e5\u672c\u8a9e \u0627\u0644\u0639\u0631\u0628\u064a\u0629",
+  "description": "",
+  "stages": [
+    {
+      "name": "\ud83c\udfaf Target",
+      "role": "executor",
+      "prompt": "Execute with \ud83d\udd25",
+      "system_prompt": "\ud83e\udd16"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 0,
+  "max_iterations": 1,
+  "status": "active",
+  "created_at": 1774063147,
+  "created_by": "odin",
+  "history": [],
+  "results": {},
+  "token_usage": {
+    "prompt": 0,
+    "completion": 0
+  },
+  "stage_times": [],
+  "files_created": []
+}

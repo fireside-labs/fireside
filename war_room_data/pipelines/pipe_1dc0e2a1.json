@@ -1,0 +1,57 @@
+{
+  "id": "pipe_1dc0e2a1",
+  "title": "Gate Test Direct",
+  "description": "",
+  "stages": [
+    {
+      "name": "GateFirst",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Approve to start?",
+      "system_prompt": "Gate check"
+    },
+    {
+      "name": "Execute",
+      "role": "executor",
+      "prompt": "Do the thing",
+      "system_prompt": "Executor"
+    }
+  ],
+  "current_stage": 1,
+  "current_iteration": 1,
+  "max_iterations": 3,
+  "status": "active",
+  "created_at": 1774063143,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "GateFirst",
+      "iteration": 0,
+      "verdict": "gate_approved",
+      "feedback": "",
+      "ts": 1774063143
+    },
+    {
+      "stage": "Execute",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help, but I need a bit more detail about what you'd like me to do. Could you please clarify what task you have in mind? For example, would you like me to:\n\n- Read or write files?\n- Run a terminal command?\n- Create a document, spreadsheet, or presentation?\n- List files in a directory?\n- Something else?\n\nPlease let me know what specific task you'd like me to perform!",
+      "duration_s": 26,
+      "ts": 1774063169
+    }
+  ],
+  "results": {
+    "Execute": "I'd be happy to help, but I need a bit more detail about what you'd like me to do. Could you please clarify what task you have in mind? For example, would you like me to:\n\n- Read or write files?\n- Run a terminal command?\n- Create a document, spreadsheet, or presentation?\n- List files in a directory?\n- Something else?\n\nPlease let me know what specific task you'd like me to perform!"
+  },
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 157
+  },
+  "stage_times": [
+    0,
+    26
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0
+}

@@ -1,0 +1,92 @@
+{
+  "id": "pipe_f7e6edd3",
+  "title": "Stress Test Gate",
+  "description": "Pipeline with gate stages",
+  "stages": [
+    {
+      "name": "Research",
+      "role": "researcher",
+      "prompt": "Research it",
+      "system_prompt": "You research"
+    },
+    {
+      "name": "Approve",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Review research before writing",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "Write",
+      "role": "writer",
+      "prompt": "Write report",
+      "system_prompt": "You write"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 5,
+  "max_iterations": 5,
+  "status": "killed",
+  "created_at": 1774062955,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "Research",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research something, but I need a bit more information about what you'd like me to research. Could you please specify:\n\n- What topic or subject are you interested in?\n- Are you looking for current information, historical data, or something specific?\n- Is there a particular question you want answered?\n\nOnce you provide more details, I can use web search or browse relevant pages to find the information you need.",
+      "duration_s": 11,
+      "ts": 1774062966
+    },
+    {
+      "stage": "Research",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research something, but I need a bit more information about what you'd like me to research. Could you please specify:\n\n- What topic or subject are you interested in?\n- Are you looking for current information, historical data, or something specific?\n- Is there a particular question you want answered?\n\nOnce you provide more details, I can use web search or browse relevant pages to find the information you need.",
+      "duration_s": 17,
+      "ts": 1774062983
+    },
+    {
+      "stage": "Research",
+      "iteration": 2,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research, but I need more specific information about what you'd like me to look into. Could you please tell me:\n\n1. **What topic or subject** are you interested in?\n2. **What specific question** or information are you looking for?\n3. **What timeframe** - current events, historical data, or general information?\n\nFor example, you could say something like:\n- \"Research the latest developments in AI\"\n- \"Find information about renewable energy trends in 2024\"\n- \"Look up the st",
+      "duration_s": 16,
+      "ts": 1774062999
+    },
+    {
+      "stage": "Research",
+      "iteration": 3,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you research, but I need more specific information to provide you with useful results. This appears to be a follow-up to a previous conversation, so let me make this clearer:\n\n**Please tell me:**\n\n1. **What specific topic** do you want me to research? (e.g., artificial intelligence, climate change, cryptocurrency, etc.)\n\n2. **What are you looking for?** Are you interested in:\n   - Latest news and current events?\n   - Historical background?\n   - Statistics and data?\n   - Comp",
+      "duration_s": 9,
+      "ts": 1774063008
+    },
+    {
+      "stage": "Research",
+      "iteration": 4,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with research, but I need more information about what you'd like me to research. You mentioned \"Research it,\" but I don't have context about what specific topic you're referring to.\n\nCould you please clarify:\n\n1. **What topic** do you want me to research? (e.g., a specific technology, industry, company, event, etc.)\n\n2. **What kind of information** are you looking for? (e.g., latest news, statistics, comparisons, background information, etc.)\n\n3. **Any specific focus or ",
+      "duration_s": 21,
+      "ts": 1774063029
+    }
+  ],
+  "results": {
+    "Research": "I'd be happy to help you with research, but I need more information about what you'd like me to research. You mentioned \"Research it,\" but I don't have context about what specific topic you're referring to.\n\nCould you please clarify:\n\n1. **What topic** do you want me to research? (e.g., a specific technology, industry, company, event, etc.)\n\n2. **What kind of information** are you looking for? (e.g., latest news, statistics, comparisons, background information, etc.)\n\n3. **Any specific focus or angle**? (e.g., a particular region, time period, or perspective)\n\nFor example:\n- \"Research the latest developments in quantum computing\"\n- \"Find information about renewable energy investments in 2024\"\n- \"Look up the market performance of semiconductor stocks\"\n\nOnce you provide these details, I can conduct targeted research and give you comprehensive, relevant information."
+  },
+  "token_usage": {
+    "prompt": 4827,
+    "completion": 1521
+  },
+  "stage_times": [
+    11,
+    17,
+    16,
+    9,
+    21
+  ],
+  "files_created": [],
+  "eta_seconds": 29,
+  "eta_minutes": 0.5,
+  "kill_reason": "Iteration limit exceeded (6/5)"
+}

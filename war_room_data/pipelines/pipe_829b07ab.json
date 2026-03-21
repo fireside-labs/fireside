@@ -1,0 +1,45 @@
+{
+  "id": "pipe_829b07ab",
+  "title": "Gate Reject Test",
+  "description": "",
+  "stages": [
+    {
+      "name": "RejectGate",
+      "type": "gate",
+      "role": "reviewer",
+      "prompt": "Should we continue?",
+      "on_fail": "escalate",
+      "system_prompt": "Gate"
+    },
+    {
+      "name": "AfterGate",
+      "role": "executor",
+      "prompt": "Continue",
+      "system_prompt": "Executor"
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 0,
+  "max_iterations": 3,
+  "status": "escalated",
+  "created_at": 1774063015,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "RejectGate",
+      "iteration": 0,
+      "verdict": "gate_rejected",
+      "feedback": "Gate rejected by user",
+      "ts": 1774063016
+    }
+  ],
+  "results": {},
+  "token_usage": {
+    "prompt": 0,
+    "completion": 0
+  },
+  "stage_times": [],
+  "files_created": [],
+  "escalated_at": 1774063016,
+  "escalation_reason": "Gate rejected by user"
+}
