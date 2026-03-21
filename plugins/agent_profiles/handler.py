@@ -317,7 +317,7 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
                             continue
                         else:
                             # No tool_calls — model gave a text response
-                            content = msg.get("content", "")
+                            content = msg.get("content") or ""
                             if content:
                                 # Emit as SSE chunks for the frontend
                                 yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
@@ -513,7 +513,7 @@ def register_routes(app, config: dict) -> None:
                             continue
                         # Collect text content
                         delta = data.get("choices", [{}])[0].get("delta", {})
-                        if "content" in delta:
+                        if delta.get("content"):
                             response_text += delta["content"]
                         # Also handle errors from tool loop
                         if "error" in data:
