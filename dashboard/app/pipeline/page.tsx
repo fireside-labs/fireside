@@ -90,55 +90,9 @@ const STAGE_EMOJI: Record<string, string> = {
   Review: "👤", Write: "✍️", Report: "📋", Execute: "⚡",
 };
 
+// Pipelines are loaded from the backend — start empty
+const INITIAL_PIPELINES: Pipeline[] = [];
 
-
-// ── Mock data ──
-const MOCK_PIPELINES: Pipeline[] = [
-  {
-    id: "p1",
-    title: "Add user authentication to the API",
-    template: "Coding",
-    templateIcon: "⚡",
-    status: "running",
-    iteration: 3,
-    maxIterations: 10,
-    stages: [
-      { name: "Spec", emoji: "📜", status: "done", role: "planner" },
-      { name: "Build", emoji: "🔨", status: "done", role: "engineer" },
-      { name: "Test", emoji: "🔍", status: "active", role: "tester", output: "Running tests... 12/18 passing" },
-      { name: "Review", emoji: "👤", status: "pending", role: "reviewer" },
-    ],
-    startedAt: new Date(Date.now() - 14 * 60 * 1000),
-    eta: "~8 min",
-    mode: "local",
-    debate: [
-      { persona: "Planner", color: "#60A5FA", icon: "🏛️", message: "The auth middleware is solid but the token refresh flow has a race condition when two requests hit simultaneously." },
-      { persona: "Tester", color: "#F87171", icon: "😈", message: "What happens in 6 months when you have 50 endpoints? This middleware requires manual annotation on every route." },
-      { persona: "Reviewer", color: "#A78BFA", icon: "👤", message: "The error messages are too cryptic. 'Invalid JWT' tells the frontend developer nothing about what went wrong." },
-    ],
-  },
-  {
-    id: "p2",
-    title: "Research competitor pricing strategies",
-    template: "Research",
-    templateIcon: "🔍",
-    status: "complete",
-    iteration: 2,
-    maxIterations: 5,
-    stages: [
-      { name: "Gather", emoji: "🔎", status: "done", role: "researcher" },
-      { name: "Analyze", emoji: "📊", status: "done", role: "analyst" },
-      { name: "Write", emoji: "✍️", status: "done", role: "writer" },
-    ],
-    startedAt: new Date(Date.now() - 34 * 60 * 1000),
-    mode: "local",
-    lessons: [
-      "Premium tier pricing clusters around $20-30/mo for AI products",
-      "Free tier with local-only is a strong differentiator",
-      "Enterprise pricing should be per-seat, not flat rate",
-    ],
-  },
-];
 
 // ── Template auto-detection ──
 function detectTemplate(input: string): { name: string; icon: string; stages: string[] } {
@@ -157,40 +111,18 @@ function detectTemplate(input: string): { name: string; icon: string; stages: st
 }
 
 
-// ── Mock agent feed data ──
-const MOCK_AGENT_FEED: AgentMessage[] = [
-  { id: "m1", role: "system", icon: "⚙️", color: "#6B7280", message: "Pipeline started — Coding template, max 10 iterations", ts: Date.now() - 14 * 60000, type: "normal" },
-  { id: "m2", role: "planner", icon: "🧠", color: "#60A5FA", message: "Breaking into 3 phases: auth middleware, API endpoints (signup/login/refresh/me), test suite. Using bcrypt for passwords, JWT RS256 for tokens.", ts: Date.now() - 13 * 60000, type: "normal" },
-  { id: "m3", role: "coder", icon: "⚡", color: "#22D3EE", message: "Building auth middleware — JWT verification, role extraction, token decode. 4 endpoints scaffolded.", ts: Date.now() - 11 * 60000, type: "normal" },
-  { id: "m4", role: "coder", icon: "⚡", color: "#22D3EE", message: "Backend done. Files: auth.py (middleware), routes/users.py (4 endpoints), models/user.py, utils/jwt.py. STATUS: DONE", ts: Date.now() - 9 * 60000, type: "normal" },
-  { id: "m5", role: "tester", icon: "🔍", color: "#FB923C", message: "Running tests... 12/18 passing. VERDICT: FAIL — /users/refresh returns 500 when token is expired (null check missing on decoded payload)", ts: Date.now() - 7 * 60000, type: "verdict_fail" },
-  { id: "m6", role: "system", icon: "⚙️", color: "#6B7280", message: "Feedback injected into coder → retrying build stage with failure context", ts: Date.now() - 7 * 60000 + 1000, type: "feedback" },
-  // ── Iteration 2 ──
-  { id: "m6b", role: "system", icon: "🔄", color: "#4A3D30", message: "Iteration 2 — Build → Test", ts: Date.now() - 6 * 60000, type: "iteration" },
-  { id: "m7", role: "coder", icon: "⚡", color: "#22D3EE", message: "Fixed! Added null guard on jwt.decode() return value in utils/jwt.py:42. Also added try/catch around refresh endpoint.", ts: Date.now() - 5 * 60000, type: "normal" },
-  { id: "m8", role: "tester", icon: "🔍", color: "#FB923C", message: "Running tests... 16/18 passing. Still failing: test_concurrent_refresh and test_token_reuse_after_refresh", ts: Date.now() - 4 * 60000, type: "verdict_fail" },
-  // ── Iteration 3 ──
-  { id: "m8b", role: "system", icon: "🔄", color: "#4A3D30", message: "Iteration 3 — Build → Test", ts: Date.now() - 3.5 * 60000, type: "iteration" },
-  { id: "m9", role: "coder", icon: "⚡", color: "#22D3EE", message: "Added mutex lock on refresh endpoint + token blacklist for used refresh tokens. Retry.", ts: Date.now() - 3 * 60000, type: "normal" },
-  { id: "m10", role: "tester", icon: "🔍", color: "#FB923C", message: "18/18 tests passing ✅ VERDICT: PASS — All tests green!", ts: Date.now() - 2 * 60000, type: "verdict_pass" },
-  // ── Debate phase ──
-  { id: "m11", role: "system", icon: "🗣️", color: "#A78BFA", message: "Socratic Review starting — 3 reviewers, 3 rounds, 70% consensus threshold", ts: Date.now() - 90000, type: "debate_start" },
-  { id: "m12", role: "architect", icon: "🏛️", color: "#A78BFA", message: "Score: 7/10 — Solid middleware but the token refresh has a race condition when two requests hit simultaneously. Mutex helps but isn't distributed-safe.", ts: Date.now() - 80000, type: "debate" },
-  { id: "m13", role: "devil_advocate", icon: "😈", color: "#F87171", message: "Score: 5/10 — What about 50 endpoints? Manual @requires_auth on every route is fragile. One missed decorator = security hole.", ts: Date.now() - 70000, type: "debate" },
-  { id: "m14", role: "end_user", icon: "👤", color: "#60A5FA", message: "Score: 8/10 — Error messages are cryptic. 'Invalid JWT' tells developers nothing. Add error codes + expiry info.", ts: Date.now() - 60000, type: "debate" },
-  // ── Typing indicator (simulated) ──
-  { id: "m15", role: "reviewer", icon: "👤", color: "#A78BFA", message: "Synthesizing debate verdict...", ts: Date.now() - 30000, type: "typing" },
-];
+// Agent feed starts empty — populated from WebSocket events
+const INITIAL_AGENT_FEED: AgentMessage[] = [];
 
 
 export default function PipelinePage() {
 
-  const [pipelines, setPipelines] = useState<Pipeline[]>(MOCK_PIPELINES);
+  const [pipelines, setPipelines] = useState<Pipeline[]>(INITIAL_PIPELINES);
   const [activePipeline, setActivePipeline] = useState<string | null>(null);
   const [taskInput, setTaskInput] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDebate, setShowDebate] = useState(false);
-  const [agentFeed, setAgentFeed] = useState<AgentMessage[]>(MOCK_AGENT_FEED);
+  const [agentFeed, setAgentFeed] = useState<AgentMessage[]>(INITIAL_AGENT_FEED);
   const [showFeed, setShowFeed] = useState(true);
   const [interveneText, setInterveneText] = useState("");
   const [showIntervene, setShowIntervene] = useState(false);
@@ -461,10 +393,12 @@ export default function PipelinePage() {
               CREATION FLOW — text or visual
               ═══════════════════════════════════════════════ */}
           {!activePipeline && creationMode === "visual" && (
-            <WorkflowBuilder
-              onRun={() => setCreationMode("text")}
-              onClose={() => setCreationMode("text")}
-            />
+            <div className="fp-builder-container">
+              <WorkflowBuilder
+                onRun={() => setCreationMode("text")}
+                onClose={() => setCreationMode("text")}
+              />
+            </div>
           )}
 
           {!activePipeline && creationMode === "text" && (
@@ -961,6 +895,7 @@ const pageCSS = `
   }
   .fp-mode-btn.active { background: rgba(245,158,11,0.08); color: #F59E0B; }
   .fp-mode-btn:hover:not(.active) { color: #C4A882; }
+  .fp-builder-container { flex: 1; display: flex; flex-direction: column; min-height: 0; }
   .fp-create-input {
     width: 100%; padding: 16px 20px; border-radius: 14px;
     background: rgba(15,13,22,0.6); border: 1.5px solid rgba(255,255,255,0.06);

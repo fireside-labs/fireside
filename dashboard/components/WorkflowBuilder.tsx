@@ -109,10 +109,13 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
-  const [connecting, setConnecting] = useState<string | null>(null); // nodeId being connected FROM
+  const [connecting, setConnecting] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [workflowTitle, setWorkflowTitle] = useState("");
+  const [validationMsg, setValidationMsg] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  // Undo stack: stores snapshots of {nodes, connections} before destructive actions
+  const undoStack = useRef<{ nodes: WorkflowNode[]; connections: Connection[] }[]>([]);
 
   // ── Drag from toolbox to canvas ──
   const handleToolboxDrag = useCallback((type: "task" | "gate" | "review", e: React.DragEvent) => {
@@ -197,12 +200,36 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
     setConnecting(null);
   }, [connecting, connections]);
 
-  // ── Delete node ──
+  // ── Delete node (with undo snapshot) ──
   const deleteNode = useCallback((nodeId: string) => {
+    // Save undo snapshot
+    undoStack.current.push({ nodes: [...nodes], connections: [...connections] });
     setNodes(prev => prev.filter(n => n.id !== nodeId));
     setConnections(prev => prev.filter(c => c.from !== nodeId && c.to !== nodeId));
     if (selectedNode === nodeId) setSelectedNode(null);
-  }, [selectedNode]);
+  }, [selectedNode, nodes, connections]);
+
+  // ── Delete connection ──
+  const deleteConnection = useCallback((index: number) => {
+    undoStack.current.push({ nodes: [...nodes], connections: [...connections] });
+    setConnections(prev => prev.filter((_, i) => i !== index));
+  }, [nodes, connections]);
+
+  // ── Undo (ctrl+Z) ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        const snapshot = undoStack.current.pop();
+        if (snapshot) {
+          setNodes(snapshot.nodes);
+          setConnections(snapshot.connections);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // ── Update node ──
   const updateNode = useCallback((nodeId: string, updates: Partial<WorkflowNode>) => {
@@ -268,9 +295,17 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
     }));
   }, [nodes, connections]);
 
-  // ── Run workflow ──
+  // ── Run workflow (with validation) ──
   const handleRun = useCallback(async () => {
     if (nodes.length === 0) return;
+    // Validate: check for empty prompts
+    const emptyPrompts = nodes.filter(n => !n.prompt.trim() && n.type !== "gate");
+    if (emptyPrompts.length > 0) {
+      setValidationMsg(`⚠️ ${emptyPrompts.length} stage${emptyPrompts.length > 1 ? "s have" : " has"} empty prompts: ${emptyPrompts.map(n => n.name).join(", ")}`);
+      // Auto-dismiss after 5s
+      setTimeout(() => setValidationMsg(null), 5000);
+      return;
+    }
     setRunning(true);
     try {
       const stages = exportStages();
@@ -295,6 +330,14 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
     }
   }, [nodes, workflowTitle, exportStages, onRun]);
 
+  // ── Back with confirmation ──
+  const handleBack = useCallback(() => {
+    if (nodes.length > 0) {
+      if (!window.confirm(`You have ${nodes.length} unsaved stages. Discard and go back?`)) return;
+    }
+    onClose();
+  }, [nodes, onClose]);
+
   // Selected node data
   const selected = useMemo(() => nodes.find(n => n.id === selectedNode), [nodes, selectedNode]);
 
@@ -306,7 +349,7 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
       {/* ── Header ── */}
       <div className="wb-header">
         <div className="wb-header-left">
-          <button className="wb-back" onClick={onClose}>← Back</button>
+          <button className="wb-back" onClick={handleBack}>← Back</button>
           <input
             className="wb-title-input"
             value={workflowTitle}
@@ -386,11 +429,17 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
               const midX = (x1 + x2) / 2;
               return (
                 <g key={i}>
+                  {/* Invisible fat hit area for clicking */}
+                  <path
+                    d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+                    className="wb-connection-hit"
+                    onClick={(e) => { e.stopPropagation(); deleteConnection(i); }}
+                    style={{ pointerEvents: "stroke" }}
+                  />
                   <path
                     d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
                     className="wb-connection-line"
                   />
-                  {/* Arrow head */}
                   <circle cx={x2 - 8} cy={y2} r="3" fill="#F59E0B" opacity="0.6" />
                 </g>
               );
@@ -442,6 +491,13 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
               <div className="wb-empty-icon">⚡</div>
               <p>Drag stages from the toolbox</p>
               <p className="wb-empty-sub">or pick a template to start</p>
+            </div>
+          )}
+
+          {/* Validation message */}
+          {validationMsg && (
+            <div className="wb-validation-msg">
+              {validationMsg}
             </div>
           )}
         </div>
@@ -520,7 +576,7 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
 // ════════════════════════════════════════════════════════════════════
 const builderCSS = `
   .wb-root {
-    display: flex; flex-direction: column; height: 100%; min-height: 100vh;
+    display: flex; flex-direction: column; height: 100%;
     background: #060609; font-family: 'Outfit', 'Inter', system-ui, sans-serif; color: #F0DCC8;
   }
 
@@ -603,9 +659,14 @@ const builderCSS = `
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     pointer-events: none; z-index: 1;
   }
+  .wb-connection-hit {
+    fill: none; stroke: transparent; stroke-width: 12; cursor: pointer;
+    pointer-events: stroke;
+  }
+  .wb-connection-hit:hover + .wb-connection-line { stroke: #F87171; opacity: 0.6; }
   .wb-connection-line {
     fill: none; stroke: #F59E0B; stroke-width: 2; opacity: 0.35;
-    stroke-dasharray: 6 4;
+    stroke-dasharray: 6 4; pointer-events: none;
   }
 
   /* ── Nodes ── */
@@ -629,17 +690,17 @@ const builderCSS = `
   .wb-node-name { font-size: 12px; font-weight: 800; color: #F0DCC8; }
   .wb-node-role { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 
-  /* Connection handles */
+  /* Connection handles — 16px targets */
   .wb-node-handle {
-    position: absolute; width: 10px; height: 10px; border-radius: 50%;
+    position: absolute; width: 16px; height: 16px; border-radius: 50%;
     background: rgba(245,158,11,0.3); border: 1.5px solid #F59E0B;
     cursor: crosshair; transition: all 0.2s; z-index: 5;
   }
-  .wb-node-handle:hover { transform: scale(1.4); background: rgba(245,158,11,0.6); }
-  .wb-node-handle.out { right: -5px; top: 50%; transform: translateY(-50%); }
-  .wb-node-handle.out:hover { transform: translateY(-50%) scale(1.4); }
-  .wb-node-handle.in { left: -5px; top: 50%; transform: translateY(-50%); }
-  .wb-node-handle.in:hover { transform: translateY(-50%) scale(1.4); }
+  .wb-node-handle:hover { transform: scale(1.3); background: rgba(245,158,11,0.6); }
+  .wb-node-handle.out { right: -8px; top: 50%; transform: translateY(-50%); }
+  .wb-node-handle.out:hover { transform: translateY(-50%) scale(1.3); }
+  .wb-node-handle.in { left: -8px; top: 50%; transform: translateY(-50%); }
+  .wb-node-handle.in:hover { transform: translateY(-50%) scale(1.3); }
 
   /* ── Empty state ── */
   .wb-empty {
@@ -689,4 +750,14 @@ const builderCSS = `
     font-family: 'Outfit'; transition: all 0.2s;
   }
   .wb-delete-btn:hover { background: rgba(239,68,68,0.1); }
+
+  /* ── Validation ── */
+  .wb-validation-msg {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    padding: 10px 20px; border-radius: 10px; z-index: 10;
+    background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.25);
+    color: #F87171; font-size: 12px; font-weight: 700;
+    animation: wbSlideIn 0.3s ease;
+    backdrop-filter: blur(8px);
+  }
 `;
