@@ -33,6 +33,24 @@ In `tauri/src-tauri/src/main.rs`:
 
 `bifrost.py` → `plugin_loader.py` → scans `plugins/*/plugin.yaml` → calls `register_routes(app, config)` on each plugin. The pipeline plugin lives at `plugins/pipeline/handler.py`. If you add a new plugin, just create `plugins/your-plugin/plugin.yaml` + `handler.py` and it auto-loads.
 
+### Chat Fallback Chain (IMPORTANT)
+
+The dashboard chat (`page.tsx` `handleSend`) uses a **two-tier fallback**:
+
+```
+1. POST ${API_BASE}/api/v1/chat  →  bifrost:8765  →  HAS TOOLS (web search, files, etc.)
+2. POST http://127.0.0.1:8080/v1/chat/completions  →  raw llama-server  →  NO TOOLS (dumb LLM)
+```
+
+> [!CAUTION]
+> **If bifrost crashes on startup, chat STILL WORKS** via the llama-server fallback — but the user
+> loses ALL tools, the offline banner appears, brain status shows "No Brain Equipped", and download
+> buttons do nothing. This is extremely confusing because the user thinks everything is working
+> (they can chat), but tools/pipelines/brain management are all dead.
+>
+> **Diagnosis:** If the offline banner shows but chat works, bifrost is NOT running. Check port 8765.
+> Start bifrost manually: `python bifrost.py` from the repo root and watch for startup errors.
+
 ---
 
 ## Build Steps
