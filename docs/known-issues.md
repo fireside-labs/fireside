@@ -81,6 +81,22 @@
 - **Fix:** Rebuilt dashboard after conversation history changes
 - **Note:** Dev server on port 4001 picks up changes automatically
 
+### 3. Tauri exe uses stale Next.js cache — changes don't appear
+- **Symptom:** Rebuilt Tauri exe still shows old UI (mascot, unstyled pages)
+- **Cause:** `cargo tauri build` runs `npm run build`, but Next.js reuses `.next/` cache and old `out/` files without detecting component changes
+- **Fix:** Always nuke cache before Tauri builds:
+  ```powershell
+  Remove-Item -Recurse -Force dashboard\.next, dashboard\out
+  cd tauri\src-tauri; cargo tauri build
+  ```
+- **Commit:** `f7c214e`
+
+### 4. Inline `@import url()` kills all styles in Tauri webview
+- **Symptom:** Pages (pipeline, skills, installer) render completely unstyled in Tauri exe but look fine on localhost
+- **Cause:** Tauri CSP blocks cross-origin `@import` inside inline `<style>` tags → entire style block silently fails
+- **Fix:** Removed `@import url(fonts.googleapis.com)` from 3 inline CSS blocks. Fonts already loaded via `<link>` in `layout.tsx` `<head>`
+- **Commit:** `32059c3`
+
 ---
 
 ## brain_manager (`bot/brain_manager.py`)
