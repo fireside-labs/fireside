@@ -180,6 +180,12 @@ def _get_active_brain() -> dict | None:
 async def _stream_chat(message: str, system_prompt: str, brain: dict):
     """Stream chat response from active brain via SSE.
 
+    Full tool-calling agent loop:
+      1. Send user message + tool definitions to llama-server
+      2. If model returns tool_calls → execute them → send results back
+      3. Repeat until model returns a text response (no more tool_calls)
+      4. Stream final response to user
+
     Supports: local (oMLX/llama-server), cloud (NIM), BYOK (OpenAI/Anthropic/Google).
     """
     import urllib.request
@@ -192,6 +198,14 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": message},
     ]
+
+    # Load tool definitions so the model knows what tools are available
+    try:
+        from bot.tools import get_tool_definitions, execute_tool
+        tools = get_tool_definitions()
+    except Exception:
+        tools = []
+        execute_tool = None
 
     # BYOK providers: route through model-router adapters
     if provider in ("openai", "anthropic", "google"):
@@ -233,25 +247,105 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
         model_id = "local"
         headers = {"Content-Type": "application/json"}
 
-    payload = json.dumps({
-        "model": model_id,
-        "messages": messages,
-        "stream": True,
-        "max_tokens": 2048,
-    }).encode()
+    # ── Tool-calling agent loop (max 5 rounds to prevent infinite loops) ──
+    MAX_TOOL_ROUNDS = 5
+    for round_num in range(MAX_TOOL_ROUNDS):
+        payload_dict = {
+            "model": model_id,
+            "messages": messages,
+            "max_tokens": 2048,
+        }
 
-    try:
-        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=120) as response:
-            for line in response:
-                decoded = line.decode("utf-8").strip()
-                if decoded.startswith("data:"):
-                    yield f"{decoded}\n\n"
-                elif decoded:
-                    yield f"data: {decoded}\n\n"
-    except Exception as e:
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        # Include tools on non-streaming calls (for tool detection)
+        # First rounds: non-streaming so we can detect tool_calls
+        if tools and execute_tool and round_num < MAX_TOOL_ROUNDS - 1:
+            payload_dict["tools"] = tools
+            payload_dict["stream"] = False  # Need full response to detect tool_calls
+        else:
+            payload_dict["stream"] = True  # Final round or no tools: stream
 
+        payload = json.dumps(payload_dict).encode()
+
+        try:
+            req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=120) as response:
+                body = response.read().decode("utf-8")
+
+                if not payload_dict.get("stream"):
+                    # Non-streaming: check for tool_calls
+                    try:
+                        data = json.loads(body)
+                        choice = data.get("choices", [{}])[0]
+                        msg = choice.get("message", {})
+                        tool_calls = msg.get("tool_calls")
+
+                        if tool_calls and execute_tool:
+                            # Model wants to call tools — execute them
+                            log.info("[chat] Round %d: model requested %d tool call(s)",
+                                     round_num + 1, len(tool_calls))
+
+                            # Add assistant message with tool_calls to conversation
+                            messages.append(msg)
+
+                            for tc in tool_calls:
+                                fn = tc.get("function", {})
+                                tool_name = fn.get("name", "")
+                                try:
+                                    tool_args = json.loads(fn.get("arguments", "{}"))
+                                except json.JSONDecodeError:
+                                    tool_args = {}
+
+                                log.info("[chat] Executing tool: %s(%s)",
+                                         tool_name, json.dumps(tool_args)[:100])
+
+                                # Notify user that a tool is being used
+                                yield f"data: {json.dumps({'tool_use': tool_name, 'args': tool_args})}\n\n"
+
+                                result = execute_tool(tool_name, tool_args)
+
+                                # Add tool result to conversation
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tc.get("id", f"call_{tool_name}"),
+                                    "content": json.dumps(result),
+                                })
+
+                            # Continue loop — send tool results back to model
+                            continue
+                        else:
+                            # No tool_calls — model gave a text response
+                            content = msg.get("content", "")
+                            if content:
+                                # Emit as SSE chunks for the frontend
+                                yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
+                            yield "data: [DONE]\n\n"
+                            return
+                    except json.JSONDecodeError:
+                        # Response wasn't valid JSON — stream it as-is
+                        for line in body.split("\n"):
+                            line = line.strip()
+                            if line:
+                                yield f"data: {line}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
+                else:
+                    # Streaming mode (final round) — forward SSE chunks
+                    for line in body.split("\n"):
+                        line = line.strip()
+                        if line.startswith("data:"):
+                            yield f"{line}\n\n"
+                        elif line:
+                            yield f"data: {line}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+    # Exhausted all tool rounds — shouldn't happen normally
+    yield f"data: {json.dumps({'error': 'Too many tool call rounds'})}\n\n"
     yield "data: [DONE]\n\n"
 
 
