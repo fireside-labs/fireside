@@ -55,6 +55,7 @@ class XPRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     agent: Optional[str] = None
+    stream: Optional[bool] = True
 
 
 # Rebuild models to resolve forward references from `from __future__ import annotations`
@@ -199,10 +200,10 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
         {"role": "user", "content": message},
     ]
 
-    # Load tool definitions so the model knows what tools are available
+    # Load tool definitions — unified with pipeline (tool_defs.py)
     try:
-        from bot.tools import get_tool_definitions, execute_tool
-        tools = get_tool_definitions()
+        from tool_defs import TOOL_SCHEMAS as tools, execute_tool as _exec_tool
+        execute_tool = _exec_tool
     except Exception:
         tools = []
         execute_tool = None
@@ -302,12 +303,14 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
                                 yield f"data: {json.dumps({'tool_use': tool_name, 'args': tool_args})}\n\n"
 
                                 result = execute_tool(tool_name, tool_args)
+                                # execute_tool from tool_defs returns a string
+                                result_str = result if isinstance(result, str) else json.dumps(result)
 
                                 # Add tool result to conversation
                                 messages.append({
                                     "role": "tool",
                                     "tool_call_id": tc.get("id", f"call_{tool_name}"),
-                                    "content": json.dumps(result),
+                                    "content": result_str,
                                 })
 
                             # Continue loop — send tool results back to model
@@ -464,7 +467,11 @@ def register_routes(app, config: dict) -> None:
 
     @router.post("/api/v1/chat")
     async def api_chat(req: ChatRequest):
-        """Route chat through active brain. Returns SSE stream."""
+        """Route chat through active brain.
+
+        stream=true  → SSE text/event-stream (for streaming UIs)
+        stream=false → JSON {response: "..."} (used by dashboard handleSend)
+        """
         agent = req.agent or _NODE_NAME
         brain = _get_active_brain()
 
@@ -476,15 +483,45 @@ def register_routes(app, config: dict) -> None:
 
         system_prompt = _load_system_prompt(agent)
 
-        return StreamingResponse(
-            _stream_chat(req.message, system_prompt, brain),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Agent": agent,
-                "X-Brain": brain.get("id", "unknown"),
-            },
-        )
+        if req.stream:
+            # SSE streaming mode
+            return StreamingResponse(
+                _stream_chat(req.message, system_prompt, brain),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Agent": agent,
+                    "X-Brain": brain.get("id", "unknown"),
+                },
+            )
+        else:
+            # JSON mode — collect all chunks, return final text
+            response_text = ""
+            tools_used = []
+            async for chunk in _stream_chat(req.message, system_prompt, brain):
+                if not chunk.startswith("data:"):
+                    continue
+                data_str = chunk[5:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    data = json.loads(data_str)
+                    # Collect tool use events
+                    if "tool_use" in data:
+                        tools_used.append(data["tool_use"])
+                        continue
+                    # Collect text content
+                    delta = data.get("choices", [{}])[0].get("delta", {})
+                    if "content" in delta:
+                        response_text += delta["content"]
+                except (json.JSONDecodeError, IndexError, KeyError):
+                    pass
+            return {
+                "response": response_text,
+                "agent": agent,
+                "brain": brain.get("id", "unknown"),
+                "tools_used": tools_used,
+            }
 
     @router.get("/api/v1/achievements")
     async def api_all_achievements():
