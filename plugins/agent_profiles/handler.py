@@ -279,6 +279,34 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
                         choice = data.get("choices", [{}])[0]
                         msg = choice.get("message", {})
                         tool_calls = msg.get("tool_calls")
+                        content = msg.get("content") or ""
+
+                        # Some models output tool calls as XML in content instead
+                        # of structured tool_calls. Parse them.
+                        if not tool_calls and execute_tool and "<tool_call>" in content:
+                            import re
+                            xml_calls = re.findall(
+                                r'<function=(\w+)>(.*?)</function>',
+                                content, re.DOTALL
+                            )
+                            if xml_calls:
+                                tool_calls = []
+                                for fn_name, fn_body in xml_calls:
+                                    args = {}
+                                    for param_match in re.finditer(
+                                        r'<parameter=(\w+)>(.*?)</parameter>',
+                                        fn_body, re.DOTALL
+                                    ):
+                                        args[param_match.group(1)] = param_match.group(2).strip()
+                                    tool_calls.append({
+                                        "id": f"xmlcall_{fn_name}",
+                                        "function": {
+                                            "name": fn_name,
+                                            "arguments": json.dumps(args),
+                                        },
+                                    })
+                                log.info("[chat] Parsed %d XML-style tool call(s) from content",
+                                         len(tool_calls))
 
                         if tool_calls and execute_tool:
                             # Model wants to call tools — execute them
@@ -286,7 +314,8 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
                                      round_num + 1, len(tool_calls))
 
                             # Add assistant message with tool_calls to conversation
-                            messages.append(msg)
+                            messages.append({"role": "assistant", "content": content or None,
+                                             "tool_calls": tool_calls})
 
                             for tc in tool_calls:
                                 fn = tc.get("function", {})
@@ -317,10 +346,11 @@ async def _stream_chat(message: str, system_prompt: str, brain: dict):
                             continue
                         else:
                             # No tool_calls — model gave a text response
-                            content = msg.get("content") or ""
-                            if content:
-                                # Emit as SSE chunks for the frontend
-                                yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
+                            # Strip any leaked tool XML from the response
+                            import re
+                            clean = re.sub(r'</?tool_call>|<function=[^>]*>|</function>|<parameter=[^>]*>|</parameter>', '', content).strip()
+                            if clean:
+                                yield f"data: {json.dumps({'choices': [{'delta': {'content': clean}}]})}\n\n"
                             yield "data: [DONE]\n\n"
                             return
                     except json.JSONDecodeError:
