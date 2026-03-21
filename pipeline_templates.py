@@ -2,7 +2,7 @@
 pipeline_templates.py — Template engine for customizable pipeline workflows.
 
 Ships 3 built-in presets (Coding, Research, General) that work out of the box.
-Users can create custom templates in ~/.valhalla/pipelines/*.yaml.
+Users can create custom templates in ~/.fireside/pipelines/*.yaml.
 
 Templates use ROLES not agent names:
   - Multi-node: role → best mesh node via bot/router.py
@@ -417,7 +417,7 @@ def classify_template(task: str) -> str:
 def get_template(name: str) -> Optional[dict]:
     """Get a template by name. Checks user custom first, then built-in."""
     # User custom templates
-    custom_dir = Path.home() / ".valhalla" / "pipelines"
+    custom_dir = Path.home() / ".fireside" / "pipelines"
     if custom_dir.exists():
         # Check for JSON
         json_path = custom_dir / f"{name}.json"
@@ -464,7 +464,7 @@ def list_templates() -> list[dict]:
         })
 
     # User custom
-    custom_dir = Path.home() / ".valhalla" / "pipelines"
+    custom_dir = Path.home() / ".fireside" / "pipelines"
     if custom_dir.exists():
         for f in sorted(custom_dir.glob("*.json")) + sorted(custom_dir.glob("*.yaml")):
             name = f.stem

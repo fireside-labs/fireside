@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
-import { API_BASE } from "../../lib/api";
+import { API_BASE, getWebSocketUrl, intervenePipeline, approvePipeline, rejectPipeline } from "../../lib/api";
 import { DiscoveryCard } from "@/components/GuidedTour";
+import WorkflowBuilder from "@/components/WorkflowBuilder";
 
 /* ═══════════════════════════════════════════════════════════════════
    Pipeline — The Forge
@@ -25,7 +26,7 @@ interface Pipeline {
   title: string;
   template: string;
   templateIcon: string;
-  status: "running" | "complete" | "failed" | "escalated";
+  status: "running" | "complete" | "failed" | "escalated" | "waiting_approval";
   iteration: number;
   maxIterations: number;
   stages: Stage[];
@@ -189,11 +190,171 @@ export default function PipelinePage() {
   const [taskInput, setTaskInput] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDebate, setShowDebate] = useState(false);
-  const [agentFeed] = useState<AgentMessage[]>(MOCK_AGENT_FEED);
+  const [agentFeed, setAgentFeed] = useState<AgentMessage[]>(MOCK_AGENT_FEED);
   const [showFeed, setShowFeed] = useState(true);
   const [interveneText, setInterveneText] = useState("");
   const [showIntervene, setShowIntervene] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [fileToast, setFileToast] = useState<string | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [creationMode, setCreationMode] = useState<"text" | "visual">("text");
+  const feedEndRef = useRef<HTMLDivElement>(null);
+
+  // ── WebSocket: live pipeline events → agent feed ──
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    function connect() {
+      try {
+        ws = new WebSocket(getWebSocketUrl());
+        ws.onopen = () => setWsConnected(true);
+        ws.onclose = () => {
+          setWsConnected(false);
+          reconnectTimer = setTimeout(connect, 3000);
+        };
+        ws.onmessage = (e) => {
+          try {
+            const event = JSON.parse(e.data);
+            const topic: string = event.topic || "";
+            const payload = event.payload || {};
+
+            // Convert pipeline events into AgentMessage format
+            if (topic.startsWith("pipeline.")) {
+              const msg = pipelineEventToMessage(topic, payload);
+              if (msg) {
+                setAgentFeed(prev => [...prev, msg]);
+                // Auto-scroll feed
+                setTimeout(() => feedEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+              }
+
+              // File created toast
+              if (topic === "pipeline.file_created") {
+                const fname = (payload.path || "").split("/").pop() || (payload.path || "").split("\\").pop() || "file";
+                setFileToast(`📄 Created: ${fname}`);
+                setTimeout(() => setFileToast(null), 5000);
+              }
+
+              // Update pipeline status from events
+              if (topic === "pipeline.stage_complete" || topic === "pipeline.shipped" || topic === "pipeline.escalated") {
+                updatePipelineFromEvent(topic, payload);
+              }
+            }
+          } catch {
+            // ignore parse errors
+          }
+        };
+      } catch {
+        reconnectTimer = setTimeout(connect, 3000);
+      }
+    }
+
+    connect();
+    return () => {
+      clearTimeout(reconnectTimer);
+      ws?.close();
+    };
+  }, []);
+
+  // Convert WebSocket pipeline events to agent feed messages
+  const pipelineEventToMessage = useCallback((topic: string, payload: Record<string, unknown>): AgentMessage | null => {
+    const ts = Date.now();
+    const id = `ws_${ts}_${Math.random().toString(36).slice(2, 6)}`;
+    const stage = (payload.stage as string) || "";
+
+    switch (topic) {
+      case "pipeline.stage_started":
+        return { id, role: "system", icon: "▶", color: "#60A5FA", message: `Stage started: ${stage} (${payload.stage_index as number + 1}/${payload.total_stages})`, ts, type: "normal" };
+      case "pipeline.stage_complete": {
+        const verdict = payload.verdict as string;
+        const duration = payload.duration_s as number;
+        const eta = payload.eta_seconds as number;
+        const type: AgentMessage["type"] = verdict === "pass" || verdict === "ship" ? "verdict_pass" : verdict === "fail" ? "verdict_fail" : "normal";
+        return { id, role: stage || "system", icon: verdict === "pass" ? "✔" : verdict === "fail" ? "✕" : "→", color: verdict === "pass" ? "#34D399" : verdict === "fail" ? "#F87171" : "#F59E0B", message: `Stage ${stage}: ${verdict.toUpperCase()}${duration ? ` (${duration}s)` : ""}${eta ? ` · ETA ~${Math.round(eta / 60)}min` : ""}`, ts, type };
+      }
+      case "pipeline.file_created":
+        return { id, role: "system", icon: "📄", color: "#A78BFA", message: `File created: ${payload.path}`, ts, type: "normal" };
+      case "pipeline.shipped": {
+        const dur = payload.duration_s as number;
+        const tokens = payload.tokens as { prompt?: number; completion?: number } | undefined;
+        const totalTokens = tokens ? (tokens.prompt || 0) + (tokens.completion || 0) : 0;
+        return { id, role: "system", icon: "🚀", color: "#F59E0B", message: `Pipeline complete! ${dur ? `${Math.round(dur / 60)}min` : ""}${totalTokens ? ` · ${(totalTokens / 1000).toFixed(1)}K tokens` : ""}`, ts, type: "verdict_pass" };
+      }
+      case "pipeline.escalated":
+        return { id, role: "system", icon: "🖐", color: "#F87171", message: `Escalated: ${payload.reason || "Max iterations reached"}`, ts, type: "escalation" };
+      case "pipeline.human_intervention":
+        return { id, role: "you", icon: "💬", color: "#22D3EE", message: `Guidance: ${payload.guidance}`, ts, type: "normal" };
+      case "pipeline.iteration":
+        return { id, role: "system", icon: "🔄", color: "#4A3D30", message: `Iteration ${payload.iteration} — ${payload.stage} ${payload.verdict}`, ts, type: "iteration" };
+      case "pipeline.gate_waiting":
+        return { id, role: "system", icon: "⏸", color: "#FBBF24", message: `✉️ Approval required: ${payload.prompt || "Continue?"}`, ts, type: "normal" };
+      case "pipeline.gate_approved":
+        return { id, role: "you", icon: "✅", color: "#34D399", message: `Gate approved — pipeline continuing`, ts, type: "verdict_pass" };
+      case "pipeline.gate_rejected":
+        return { id, role: "you", icon: "❌", color: "#F87171", message: `Gate rejected — ${payload.stage || "stage"} declined`, ts, type: "verdict_fail" };
+      default:
+        return null;
+    }
+  }, []);
+
+  // Update pipeline state from incoming events
+  const updatePipelineFromEvent = useCallback((topic: string, payload: Record<string, unknown>) => {
+    const pipelineId = payload.pipeline_id as string;
+    if (!pipelineId) return;
+
+    setPipelines(prev => prev.map(p => {
+      if (p.id !== pipelineId) return p;
+      if (topic === "pipeline.shipped") {
+        return { ...p, status: "complete" as const, stages: p.stages.map(s => ({ ...s, status: "done" as const })) };
+      }
+      if (topic === "pipeline.escalated") {
+        return { ...p, status: "escalated" as const };
+      }
+      if (topic === "pipeline.stage_complete") {
+        const stageIdx = payload.stage_index as number;
+        const verdict = payload.verdict as string;
+        if (typeof stageIdx === "number") {
+          return {
+            ...p,
+            eta: payload.eta_seconds ? `~${Math.round((payload.eta_seconds as number) / 60)}min` : p.eta,
+            stages: p.stages.map((s, i) => {
+              if (i === stageIdx) return { ...s, status: (verdict === "pass" || verdict === "ship" ? "done" : "failed") as Stage["status"] };
+              if (i === stageIdx + 1 && (verdict === "pass" || verdict === "ship")) return { ...s, status: "active" as Stage["status"] };
+              return s;
+            }),
+          };
+        }
+      }
+      if (topic === "pipeline.gate_waiting") {
+        return { ...p, status: "waiting_approval" as const };
+      }
+      if (topic === "pipeline.gate_approved") {
+        return { ...p, status: "running" as const };
+      }
+      return p;
+    }));
+  }, []);
+
+  // Wire intervene to real API
+  const handleIntervene = useCallback(async () => {
+    if (!interveneText.trim() || !activePipeline) return;
+    try {
+      await intervenePipeline(activePipeline, interveneText.trim());
+      setAgentFeed(prev => [...prev, {
+        id: `int_${Date.now()}`,
+        role: "you",
+        icon: "💬",
+        color: "#22D3EE",
+        message: interveneText.trim(),
+        ts: Date.now(),
+        type: "normal" as const,
+      }]);
+    } catch (e) {
+      console.error("Intervention failed:", e);
+    }
+    setShowIntervene(false);
+    setInterveneText("");
+  }, [interveneText, activePipeline]);
 
   const submitTask = async () => {
     if (!taskInput.trim() || !detected || submitting) return;
@@ -297,10 +458,29 @@ export default function PipelinePage() {
         <div className="fp-main">
 
           {/* ═══════════════════════════════════════════════
-              CREATION FLOW — conversational, mascot-driven
+              CREATION FLOW — text or visual
               ═══════════════════════════════════════════════ */}
-          {!activePipeline && (
+          {!activePipeline && creationMode === "visual" && (
+            <WorkflowBuilder
+              onRun={() => setCreationMode("text")}
+              onClose={() => setCreationMode("text")}
+            />
+          )}
+
+          {!activePipeline && creationMode === "text" && (
             <div className="fp-create">
+
+              {/* Mode toggle */}
+              <div className="fp-mode-toggle">
+                <button
+                  className="fp-mode-btn active"
+                  onClick={() => setCreationMode("text")}
+                >✏️ Text</button>
+                <button
+                  className="fp-mode-btn"
+                  onClick={() => setCreationMode("visual")}
+                >🔧 Visual Builder</button>
+              </div>
 
               {/* Input */}
               <div className="fp-create-input-wrap">
@@ -387,7 +567,7 @@ export default function PipelinePage() {
                   <h1 className="fp-detail-title">{current.templateIcon} {current.title}</h1>
                   <div className="fp-detail-meta">
                     <span className={`fp-status-badge ${current.status}`}>
-                      {current.status === "running" ? "🔄 Running" : current.status === "complete" ? "✅ Complete" : "⚠️ " + current.status}
+                      {current.status === "running" ? "🔄 Running" : current.status === "complete" ? "✅ Complete" : current.status === "waiting_approval" ? "⏸ Approval Gate" : "⚠️ " + current.status}
                     </span>
                     <span>Iteration {current.iteration}/{current.maxIterations}</span>
                     <span>{current.mode === "mesh" ? "🔗 Mesh" : "🖥️ Local"}</span>
@@ -520,15 +700,14 @@ export default function PipelinePage() {
                               placeholder="Tell the agents what to do differently..."
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" && interveneText.trim()) {
-                                  setShowIntervene(false);
-                                  setInterveneText("");
+                                  handleIntervene();
                                 }
                               }}
                               autoFocus
                             />
                             <button
                               className="fp-feed-send-btn"
-                              onClick={() => { setShowIntervene(false); setInterveneText(""); }}
+                              onClick={handleIntervene}
                             >
                               Send ⚡
                             </button>
@@ -586,9 +765,14 @@ export default function PipelinePage() {
                         p.id === current.id ? { ...p, status: "failed" as const } : p
                       ));
                       // Also try to cancel via API
-                      fetch(`${API_BASE}/api/v1/pipeline/${current.id}/cancel`, { method: "POST" }).catch(() => {});
+                      fetch(`${API_BASE}/api/v1/pipeline/${current.id}`, { method: "DELETE" }).catch(() => {});
                     }}>Cancel</button>
                     <button className="fp-action-btn advance" onClick={() => {
+                      fetch(`${API_BASE}/api/v1/pipeline/${current.id}/advance`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "advance" }),
+                      }).catch(() => {});
                       setPipelines(prev => prev.map(p => {
                         if (p.id !== current.id) return p;
                         const newStages = p.stages.map((s, i) => {
@@ -606,6 +790,59 @@ export default function PipelinePage() {
                 {current.status === "complete" && (
                   <button className="fp-action-btn new" onClick={() => setActivePipeline(null)}>⚡ Start New Task</button>
                 )}
+                {current.status === "escalated" && (
+                  <button className="fp-action-btn advance" onClick={() => setShowIntervene(true)}>💬 Give Guidance</button>
+                )}
+                {current.status === "waiting_approval" && (
+                  <div className="fp-gate-ui">
+                    <div className="fp-gate-prompt">
+                      <span className="fp-gate-icon">⏸</span>
+                      <span className="fp-gate-text">Approval required to continue</span>
+                    </div>
+                    <div className="fp-gate-actions">
+                      <button className="fp-action-btn fp-gate-approve" onClick={async () => {
+                        await approvePipeline(current.id);
+                        setPipelines(prev => prev.map(p => p.id === current.id ? { ...p, status: "running" as const } : p));
+                      }}>✅ Approve</button>
+                      <button className="fp-action-btn fp-gate-reject" onClick={async () => {
+                        await rejectPipeline(current.id);
+                        setPipelines(prev => prev.map(p => p.id === current.id ? { ...p, status: "escalated" as const } : p));
+                      }}>❌ Reject</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ═══ OUTPUT VIEWER — files + tokens ═══ */}
+              {current.status === "complete" && (
+                <div className="fp-output-section">
+                  <h3 className="fp-output-title">📦 Pipeline Output</h3>
+
+                  {/* Token usage */}
+                  <div className="fp-output-tokens">
+                    <div className="fp-token-stat">
+                      <span className="fp-token-label">⏱ Duration</span>
+                      <span className="fp-token-value">{current.eta || "—"}</span>
+                    </div>
+                    <div className="fp-token-stat">
+                      <span className="fp-token-label">🔄 Iterations</span>
+                      <span className="fp-token-value">{current.iteration}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* File created toast */}
+              {fileToast && (
+                <div className="fp-file-toast">
+                  {fileToast}
+                </div>
+              )}
+
+              {/* WebSocket status */}
+              <div className="fp-ws-status">
+                <span className={wsConnected ? "fp-ws-dot connected" : "fp-ws-dot"} />
+                {wsConnected ? "Live" : "Reconnecting..."}
               </div>
             </div>
           )}
@@ -710,6 +947,20 @@ const pageCSS = `
   .fp-speech-bubble p { margin: 0; font-size: 14px; color: #C4A882; line-height: 1.5; }
 
   .fp-create-input-wrap { width: 100%; max-width: 500px; margin-bottom: 16px; }
+
+  /* ── Mode toggle ── */
+  .fp-mode-toggle {
+    display: flex; gap: 4px; margin-bottom: 24px;
+    padding: 3px; border-radius: 10px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+  }
+  .fp-mode-btn {
+    padding: 6px 16px; border-radius: 8px; border: none;
+    background: transparent; color: #4A3D30; font-size: 12px; font-weight: 700;
+    cursor: pointer; font-family: 'Outfit'; transition: all 0.2s;
+  }
+  .fp-mode-btn.active { background: rgba(245,158,11,0.08); color: #F59E0B; }
+  .fp-mode-btn:hover:not(.active) { color: #C4A882; }
   .fp-create-input {
     width: 100%; padding: 16px 20px; border-radius: 14px;
     background: rgba(15,13,22,0.6); border: 1.5px solid rgba(255,255,255,0.06);
@@ -786,6 +1037,8 @@ const pageCSS = `
   .fp-detail-meta span { font-size: 10px; color: #4A3D30; padding: 3px 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; font-weight: 600; }
   .fp-status-badge.running { color: #34D399; border-color: rgba(52,211,153,0.15); background: rgba(52,211,153,0.06); }
   .fp-status-badge.complete { color: #F59E0B; border-color: rgba(245,158,11,0.15); background: rgba(245,158,11,0.06); }
+  .fp-status-badge.waiting_approval { color: #FBBF24; border-color: rgba(251,191,36,0.2); background: rgba(251,191,36,0.08); animation: fpPulse 2s ease infinite; }
+  .fp-status-badge.escalated { color: #F87171; border-color: rgba(248,113,113,0.15); background: rgba(248,113,113,0.06); }
 
   /* ── FORGE ── */
   .fp-forge {
@@ -1084,4 +1337,79 @@ const pageCSS = `
     cursor: pointer; font-family: 'Outfit'; transition: all 0.2s;
   }
   .fp-feed-send-btn:hover { transform: translateY(-1px); }
+
+  /* ═══ OUTPUT VIEWER ═══ */
+  .fp-output-section {
+    margin-top: 20px; padding: 16px; border-radius: 12px;
+    background: rgba(245,158,11,0.03); border: 1px solid rgba(245,158,11,0.08);
+  }
+  .fp-output-title { font-size: 14px; font-weight: 800; color: #F59E0B; margin: 0 0 12px; }
+  .fp-output-tokens { display: flex; gap: 12px; flex-wrap: wrap; }
+  .fp-token-stat {
+    flex: 1; min-width: 100px; padding: 10px 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .fp-token-label { font-size: 9px; font-weight: 800; color: #6A5A4A; text-transform: uppercase; letter-spacing: 0.5px; }
+  .fp-token-value { font-size: 16px; font-weight: 900; color: #F0DCC8; }
+  .fp-output-files { margin-top: 12px; }
+  .fp-output-files-title { font-size: 10px; font-weight: 800; color: #6A5A4A; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .fp-file-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    border-radius: 8px; background: rgba(167,139,250,0.04); border: 1px solid rgba(167,139,250,0.08);
+    margin-bottom: 4px; font-size: 11px; color: #C4A882; cursor: pointer; transition: all 0.2s;
+  }
+  .fp-file-item:hover { background: rgba(167,139,250,0.08); color: #F0DCC8; }
+
+  /* ═══ FILE TOAST ═══ */
+  .fp-file-toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 1000;
+    padding: 12px 20px; border-radius: 12px;
+    background: rgba(167,139,250,0.15); backdrop-filter: blur(16px);
+    border: 1px solid rgba(167,139,250,0.25);
+    color: #E0D4FF; font-size: 13px; font-weight: 700;
+    box-shadow: 0 8px 32px rgba(167,139,250,0.15);
+    animation: fpToastIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes fpToastIn { from { opacity: 0; transform: translateY(16px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+  /* ═══ WEBSOCKET STATUS ═══ */
+  .fp-ws-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 9px; color: #3A3530; margin-top: 12px;
+  }
+  .fp-ws-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #4A3D30;
+  }
+  .fp-ws-dot.connected {
+    background: #34D399;
+    box-shadow: 0 0 6px rgba(52,211,153,0.4);
+    animation: fpPulse 2s ease infinite;
+  }
+
+  /* ═══ APPROVAL GATE ═══ */
+  .fp-gate-ui {
+    margin-top: 12px; padding: 16px; border-radius: 14px;
+    background: rgba(251,191,36,0.04); border: 1.5px solid rgba(251,191,36,0.15);
+    animation: fsFadeUp 0.4s ease, fpGatePulse 3s ease infinite;
+  }
+  @keyframes fpGatePulse {
+    0%,100% { border-color: rgba(251,191,36,0.15); box-shadow: 0 0 0 rgba(251,191,36,0); }
+    50% { border-color: rgba(251,191,36,0.3); box-shadow: 0 0 20px rgba(251,191,36,0.06); }
+  }
+  .fp-gate-prompt { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .fp-gate-icon { font-size: 20px; }
+  .fp-gate-text { font-size: 14px; font-weight: 700; color: #FBBF24; }
+  .fp-gate-actions { display: flex; gap: 10px; }
+  .fp-gate-approve {
+    background: rgba(52,211,153,0.08) !important; border: 1px solid rgba(52,211,153,0.2) !important;
+    color: #34D399 !important; font-weight: 800 !important; padding: 10px 24px !important;
+  }
+  .fp-gate-approve:hover { background: rgba(52,211,153,0.15) !important; box-shadow: 0 0 16px rgba(52,211,153,0.1); transform: translateY(-1px); }
+  .fp-gate-reject {
+    background: rgba(248,113,113,0.06) !important; border: 1px solid rgba(248,113,113,0.15) !important;
+    color: #F87171 !important;
+  }
+  .fp-gate-reject:hover { background: rgba(248,113,113,0.12) !important; }
 `;

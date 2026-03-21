@@ -68,26 +68,16 @@ def _publish(topic: str, payload: dict) -> None:
         pass
 
 
-def _call_model(prompt: str, system: str = "", task_type: str = "build",
-                timeout: int = 60, max_tokens: int = 1500) -> Optional[str]:
-    """Call inference via the model appropriate for the task type.
-
-    Uses model_router routing config to pick the right model.
-    Falls back to default local model.
-    """
-    # Determine model from routing config
+def _resolve_model(task_type: str = "build") -> tuple[str, str]:
+    """Resolve model provider URL and name from routing config."""
     model_ref = _ROUTING.get(task_type, _ROUTING.get("fallback", ""))
-
-    # Parse model ref: "cloud/glm-5" or "local/default"
     if "/" in model_ref:
         provider_key, model_name = model_ref.split("/", 1)
     else:
         provider_key = "llama"
         model_name = model_ref or "default"
 
-    # Resolve "default" to the actual model from aliases
     if model_name == "default":
-        # Use the first provider's default
         for alias, ref in _MODEL_ALIASES.items():
             if ref:
                 model_name = ref.split("/", 1)[-1] if "/" in ref else ref
@@ -95,38 +85,131 @@ def _call_model(prompt: str, system: str = "", task_type: str = "build",
 
     provider = _MODEL_PROVIDERS.get(provider_key, {})
     url = provider.get("url", "http://127.0.0.1:8080/v1")
+    key = provider.get("key", "")
+    return url, model_name, key, provider_key
 
+
+def _call_model(prompt: str, system: str = "", task_type: str = "build",
+                timeout: int = 60, max_tokens: int = 1500,
+                role: str = "") -> dict | None:
+    """Call inference with full tool access (same tools as the main chat agent).
+
+    Returns dict: {"text": str, "tokens_prompt": int, "tokens_completion": int,
+                   "files_created": [str], "tools_used": [str]}
+    or None on failure.
+    """
+    url, model_name, key, provider_key = _resolve_model(task_type)
+
+    # Import shared tool system
     try:
-        messages = []
-        if system:
-            messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        from tool_defs import get_tools_for_role, execute_tool
+        tools = get_tools_for_role(role) if role else []
+    except ImportError:
+        tools = []
+        execute_tool = None
 
-        payload = json.dumps({
-            "model": model_name,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": 0.7,
-        }).encode()
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
 
-        req = urllib.request.Request(
-            f"{url.rstrip('/')}/chat/completions",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+    max_tool_rounds = 5  # Allow up to 5 rounds of tool use
+    all_text = []
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    files_created: list[str] = []
+    tools_used: list[str] = []
 
-        # Add API key if present
-        key = provider.get("key", "")
-        if key and key != "local" and not key.startswith("$"):
-            req.add_header("Authorization", f"Bearer {key}")
+    for tool_round in range(max_tool_rounds + 1):
+        try:
+            payload_dict = {
+                "model": model_name,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": 0.7,
+            }
+            # Include tools on all but the last round
+            if tools and tool_round < max_tool_rounds:
+                payload_dict["tools"] = tools
 
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read())
-            return data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        log.warning("[pipeline] Model call failed (%s/%s): %s", provider_key, model_name, e)
+            payload = json.dumps(payload_dict).encode()
+            req = urllib.request.Request(
+                f"{url.rstrip('/')}/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            if key and key != "local" and not key.startswith("$"):
+                req.add_header("Authorization", f"Bearer {key}")
+
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.loads(r.read())
+
+            # Accumulate token usage
+            usage = data.get("usage", {})
+            total_prompt_tokens += usage.get("prompt_tokens", 0)
+            total_completion_tokens += usage.get("completion_tokens", 0)
+
+            choice = data["choices"][0]
+            msg = choice.get("message", {})
+            content = msg.get("content", "") or ""
+            tool_calls = msg.get("tool_calls", [])
+
+            if content:
+                all_text.append(content)
+
+            # If the model made tool calls, execute them and continue
+            if tool_calls and execute_tool and tool_round < max_tool_rounds:
+                log.info("[pipeline] Tool round %d: %d call(s) [role=%s]",
+                         tool_round + 1, len(tool_calls), role)
+
+                # Append assistant message with tool_calls
+                messages.append(msg)
+
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    fn_name = fn.get("name", "")
+                    try:
+                        fn_args = json.loads(fn.get("arguments", "{}"))
+                    except json.JSONDecodeError:
+                        fn_args = {}
+
+                    result = execute_tool(fn_name, fn_args)
+                    log.info("[pipeline]   %s → %s", fn_name, result[:80])
+                    tools_used.append(fn_name)
+
+                    # Track file creation
+                    if fn_name in ("files_write", "create_pptx", "create_docx", "create_xlsx"):
+                        created_path = fn_args.get("path", "")
+                        if created_path and "Error" not in result and "BLOCKED" not in result:
+                            files_created.append(created_path)
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", f"call_{tool_round}"),
+                        "content": result,
+                    })
+
+                continue  # Next round — model will see tool results
+
+            # No tool calls (or final round) — we're done
+            break
+
+        except Exception as e:
+            log.warning("[pipeline] Model call failed (%s/%s): %s", provider_key, model_name, e)
+            return None
+
+    result_text = "\n\n".join(all_text).strip()
+    if not result_text:
         return None
+
+    return {
+        "text": result_text,
+        "tokens_prompt": total_prompt_tokens,
+        "tokens_completion": total_completion_tokens,
+        "files_created": files_created,
+        "tools_used": tools_used,
+    }
 
 
 def _parse_verdict(text: str) -> str:
@@ -217,6 +300,9 @@ def create_pipeline(title: str, description: str, stages: list,
         "created_by": posted_by,
         "history": [],
         "results": {},
+        "token_usage": {"prompt": 0, "completion": 0},
+        "stage_times": [],
+        "files_created": [],
     }
 
     _pipelines[pipeline_id] = meta
@@ -267,7 +353,34 @@ def _start_stage(pipeline_id: str, meta: dict) -> None:
     if guard:
         guard.start_stage(pipeline_id, stage_name)
 
+    stage_start_ts = int(time.time())
     log.info("[pipeline] Starting stage %d: %s (agent=%s)", stage_idx, stage_name, agent)
+
+    # Publish stage started event for real-time dashboard updates
+    _publish("pipeline.stage_started", {
+        "pipeline_id": pipeline_id,
+        "stage": stage_name,
+        "stage_index": stage_idx,
+        "total_stages": len(meta["stages"]),
+        "iteration": meta["current_iteration"],
+    })
+
+    # ── Gate stage: pause for human approval ──
+    if stage.get("type") == "gate":
+        meta["status"] = "waiting_approval"
+        meta["gate_prompt"] = stage.get("prompt", "Approval required to continue.")
+        meta["gate_stage"] = stage_name
+        _save_pipeline(pipeline_id, meta)
+        _publish("pipeline.gate_waiting", {
+            "pipeline_id": pipeline_id,
+            "stage": stage_name,
+            "stage_index": stage_idx,
+            "total_stages": len(meta["stages"]),
+            "prompt": meta["gate_prompt"],
+            "title": meta.get("title", ""),
+        })
+        log.info("[pipeline] Gate pause at stage '%s' — waiting for approval", stage_name)
+        return  # Stop here — resume when user approves
 
     # Build the prompt
     system = stage.get("system_prompt", f"You are executing stage '{stage_name}' of a pipeline.")
@@ -324,46 +437,87 @@ def _start_stage(pipeline_id: str, meta: dict) -> None:
                 sub_prompt += "\n--- END PREVIOUS CONTEXT ---\n"
 
             sub_task_type = sub.get("task_type", task_type)
+            sub_role = sub.get("role", "executor")
             sub_result = _call_model(sub_prompt, system=sub_system,
-                                     task_type=sub_task_type, timeout=120)
+                                     task_type=sub_task_type, timeout=120,
+                                     role=sub_role)
             if sub_result:
                 sub_results.append({
                     "role": sub.get("role", "unknown"),
-                    "output": sub_result,
+                    "output": sub_result["text"],
                 })
+                # Accumulate tokens and files from sub-stages
+                meta["token_usage"]["prompt"] += sub_result.get("tokens_prompt", 0)
+                meta["token_usage"]["completion"] += sub_result.get("tokens_completion", 0)
+                meta["files_created"].extend(sub_result.get("files_created", []))
                 log.info("[pipeline] Sub-stage '%s/%s' complete (%d chars)",
-                         stage_name, sub.get("role", "?"), len(sub_result))
+                         stage_name, sub.get("role", "?"), len(sub_result["text"]))
 
         # Merge parallel results
         if sub_results:
             merged = "\n\n".join(
                 f"=== {r['role'].upper()} ===\n{r['output']}" for r in sub_results
             )
-            result = merged
+            result_text = merged
         else:
-            result = None
+            result_text = None
     else:
-        result = _call_model(prompt, system=system, task_type=task_type, timeout=120)
+        stage_role = stage.get("role", stage.get("agent", "executor"))
+        model_result = _call_model(prompt, system=system, task_type=task_type,
+                                   timeout=120, role=stage_role)
+        if model_result:
+            result_text = model_result["text"]
+            meta["token_usage"]["prompt"] += model_result.get("tokens_prompt", 0)
+            meta["token_usage"]["completion"] += model_result.get("tokens_completion", 0)
+            meta["files_created"].extend(model_result.get("files_created", []))
+        else:
+            result_text = None
 
-    if result:
-        verdict = _parse_verdict(result)
-        meta["results"][stage_name] = result
+    # Calculate stage duration and ETA
+    stage_duration = int(time.time()) - stage_start_ts
+    meta["stage_times"].append(stage_duration)
+    avg_stage_time = sum(meta["stage_times"]) / len(meta["stage_times"])
+    remaining_stages = len(meta["stages"]) - stage_idx - 1
+    eta_seconds = int(avg_stage_time * remaining_stages)
+    meta["eta_seconds"] = eta_seconds
+    meta["eta_minutes"] = round(eta_seconds / 60, 1)
+
+    if result_text:
+        verdict = _parse_verdict(result_text)
+        meta["results"][stage_name] = result_text
         meta["history"].append({
             "stage": stage_name,
             "iteration": meta["current_iteration"],
             "verdict": verdict,
-            "result_preview": result[:500],
+            "result_preview": result_text[:500],
+            "duration_s": stage_duration,
             "ts": int(time.time()),
         })
 
         _publish("pipeline.stage_complete", {
             "pipeline_id": pipeline_id,
             "stage": stage_name,
+            "stage_index": stage_idx,
+            "total_stages": len(meta["stages"]),
             "verdict": verdict,
             "iteration": meta["current_iteration"],
+            "duration_s": stage_duration,
+            "eta_seconds": eta_seconds,
+            "tokens": meta["token_usage"],
         })
 
-        _advance(pipeline_id, meta, stage_name, verdict, result)
+        # Publish file-created events for dashboard toast notifications
+        for fpath in meta.get("files_created", []):
+            _publish("pipeline.file_created", {
+                "pipeline_id": pipeline_id,
+                "stage": stage_name,
+                "path": fpath,
+                "title": meta.get("title", ""),
+            })
+        # Clear files list after publishing (avoid re-publishing on retry)
+        meta["files_created"] = []
+
+        _advance(pipeline_id, meta, stage_name, verdict, result_text)
     else:
         # Model call failed — record and retry once
         meta["history"].append({
@@ -371,6 +525,7 @@ def _start_stage(pipeline_id: str, meta: dict) -> None:
             "iteration": meta["current_iteration"],
             "verdict": "error",
             "feedback": "Model call failed — no response",
+            "duration_s": stage_duration,
             "ts": int(time.time()),
         })
         meta["status"] = "error"
@@ -379,7 +534,13 @@ def _start_stage(pipeline_id: str, meta: dict) -> None:
 
 def _advance(pipeline_id: str, meta: dict, stage_name: str,
              verdict: str, result: str) -> None:
-    """Decide what to do based on stage verdict."""
+    """Decide what to do based on stage verdict.
+
+    Supports on_fail routing:
+      - "retry" (default): retry current stage
+      - "goto:stage_name": jump to a different stage
+      - "escalate": immediately escalate to human
+    """
     if verdict in ("pass", "ship"):
         # Move to next stage
         meta["current_stage"] += 1
@@ -398,12 +559,8 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
             "stage": stage_name,
             "iteration": meta["current_iteration"],
         })
-
-        if meta["current_iteration"] >= meta["max_iterations"]:
-            _escalate(pipeline_id, meta, result)
-        else:
-            log.warning("[pipeline] REGRESSION in '%s' — escalating", stage_name)
-            _escalate(pipeline_id, meta, result)
+        log.warning("[pipeline] REGRESSION in '%s' — escalating", stage_name)
+        _escalate(pipeline_id, meta, result)
 
     else:  # fail or progress
         meta["current_iteration"] += 1
@@ -417,7 +574,31 @@ def _advance(pipeline_id: str, meta: dict, stage_name: str,
 
         if meta["current_iteration"] > meta["max_iterations"]:
             _escalate(pipeline_id, meta, result)
-        else:
+            return
+
+        # Check on_fail routing from the stage definition
+        stage_def = meta["stages"][meta["current_stage"]] if meta["current_stage"] < len(meta["stages"]) else {}
+        on_fail = stage_def.get("on_fail", "retry")
+
+        if on_fail.startswith("goto:"):
+            target_name = on_fail[5:]
+            # Find the target stage index
+            stage_names = [s.get("name", "") for s in meta["stages"]]
+            if target_name in stage_names:
+                target_idx = stage_names.index(target_name)
+                log.info("[pipeline] on_fail goto '%s' (stage %d) from '%s'",
+                         target_name, target_idx, stage_name)
+                meta["current_stage"] = target_idx
+                meta["current_iteration"] = 0  # Reset iteration for the target stage
+                _save_pipeline(pipeline_id, meta)
+                _start_stage(pipeline_id, meta)
+            else:
+                log.warning("[pipeline] on_fail target '%s' not found — retrying current", target_name)
+                _save_pipeline(pipeline_id, meta)
+                _start_stage(pipeline_id, meta)
+        elif on_fail == "escalate":
+            _escalate(pipeline_id, meta, result)
+        else:  # "retry" or default
             log.info("[pipeline] Stage '%s' verdict=%s — iteration %d/%d",
                      stage_name, verdict, meta["current_iteration"], meta["max_iterations"])
             _save_pipeline(pipeline_id, meta)
@@ -431,6 +612,8 @@ def _complete_pipeline(pipeline_id: str, meta: dict) -> None:
     meta["total_iterations"] = sum(
         1 for h in meta.get("history", []) if h.get("verdict") in ("fail", "progress")
     )
+    meta["eta_seconds"] = 0
+    meta["eta_minutes"] = 0
 
     _save_pipeline(pipeline_id, meta)
 
@@ -438,14 +621,21 @@ def _complete_pipeline(pipeline_id: str, meta: dict) -> None:
     if guard:
         guard.remove_pipeline(pipeline_id)
 
+    duration_s = meta["completed_at"] - meta.get("created_at", meta["completed_at"])
+    tokens = meta.get("token_usage", {})
+
     _publish("pipeline.shipped", {
         "pipeline_id": pipeline_id,
         "title": meta.get("title", ""),
         "total_iterations": meta["total_iterations"],
-        "duration_s": meta["completed_at"] - meta.get("created_at", meta["completed_at"]),
+        "duration_s": duration_s,
+        "tokens": tokens,
+        "files_created": meta.get("files_created", []),
     })
 
-    log.info("[pipeline] SHIPPED: %s (%d iterations)", pipeline_id, meta["total_iterations"])
+    log.info("[pipeline] SHIPPED: %s (%d iterations, %ds, %d tokens)",
+             pipeline_id, meta["total_iterations"], duration_s,
+             tokens.get("prompt", 0) + tokens.get("completion", 0))
 
 
 def _escalate(pipeline_id: str, meta: dict, last_feedback: str) -> None:
@@ -480,6 +670,10 @@ class CreatePipelineRequest(BaseModel):
 
 class AdvanceRequest(BaseModel):
     action: str = "advance"  # "advance" or "retry"
+
+
+class InterventionRequest(BaseModel):
+    guidance: str  # Human guidance to inject into the current stage
 
 
 # ---------------------------------------------------------------------------
@@ -589,6 +783,9 @@ def register_routes(app, config: dict) -> None:
                     "total_stages": len(m.get("stages", [])),
                     "current_iteration": m.get("current_iteration", 0),
                     "created_at": m.get("created_at"),
+                    "eta_minutes": m.get("eta_minutes", 0),
+                    "token_usage": m.get("token_usage", {}),
+                    "files_created": m.get("files_created", []),
                 }
                 for pid, m in all_pipes.items()
             ],
@@ -623,6 +820,141 @@ def register_routes(app, config: dict) -> None:
         _save_pipeline(pipeline_id, meta)
         _start_stage(pipeline_id, meta)
         return {"ok": True, "status": meta["status"]}
+
+    @router.post("/api/v1/pipeline/{pipeline_id}/intervene")
+    async def api_intervene_pipeline(pipeline_id: str, req: InterventionRequest):
+        """Inject human guidance into the current stage of a running pipeline."""
+        meta = _load_pipeline(pipeline_id)
+        if not meta:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+        if meta["status"] not in ("active", "escalated", "waiting_approval"):
+            raise HTTPException(status_code=400, detail=f"Cannot intervene: status is {meta['status']}")
+
+        # Add guidance to history so the next stage iteration sees it
+        meta["history"].append({
+            "stage": meta["stages"][meta["current_stage"]].get("name", "unknown") if meta["current_stage"] < len(meta["stages"]) else "unknown",
+            "iteration": meta["current_iteration"],
+            "verdict": "human_guidance",
+            "feedback": req.guidance,
+            "ts": int(time.time()),
+        })
+
+        # If escalated, restart the current stage with human context
+        if meta["status"] == "escalated":
+            meta["status"] = "active"
+
+        _pipelines[pipeline_id] = meta
+        _save_pipeline(pipeline_id, meta)
+
+        _publish("pipeline.human_intervention", {
+            "pipeline_id": pipeline_id,
+            "guidance": req.guidance[:200],
+            "stage": meta["stages"][meta["current_stage"]].get("name", "unknown") if meta["current_stage"] < len(meta["stages"]) else "unknown",
+        })
+
+        # Restart current stage with the new guidance injected
+        _start_stage(pipeline_id, meta)
+        return {"ok": True, "status": "intervention_applied"}
+
+    @router.post("/api/v1/pipeline/{pipeline_id}/approve")
+    async def api_approve_pipeline(pipeline_id: str):
+        """Approve a gate stage — pipeline continues to next stage."""
+        meta = _load_pipeline(pipeline_id)
+        if not meta:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+        if meta["status"] != "waiting_approval":
+            raise HTTPException(status_code=400, detail=f"Pipeline not at a gate: status is {meta['status']}")
+
+        stage_idx = meta["current_stage"]
+        stage_name = meta.get("gate_stage", "unknown")
+
+        # Record gate approval in history
+        meta["history"].append({
+            "stage": stage_name,
+            "iteration": meta["current_iteration"],
+            "verdict": "gate_approved",
+            "feedback": "",
+            "ts": int(time.time()),
+        })
+
+        # Record stage completion time
+        stage_start = meta.get("stage_start_ts", int(time.time()))
+        duration = int(time.time()) - stage_start
+        meta["stage_times"].append(duration)
+
+        # Advance past gate
+        meta["status"] = "active"
+        meta["current_stage"] += 1
+        meta["current_iteration"] = 0
+        meta.pop("gate_prompt", None)
+        meta.pop("gate_stage", None)
+
+        _pipelines[pipeline_id] = meta
+        _save_pipeline(pipeline_id, meta)
+
+        _publish("pipeline.gate_approved", {
+            "pipeline_id": pipeline_id,
+            "stage": stage_name,
+            "stage_index": stage_idx,
+        })
+
+        log.info("[pipeline] Gate approved: %s stage '%s'", pipeline_id, stage_name)
+        _start_stage(pipeline_id, meta)
+        return {"ok": True, "status": "approved"}
+
+    @router.post("/api/v1/pipeline/{pipeline_id}/reject")
+    async def api_reject_pipeline(pipeline_id: str):
+        """Reject a gate stage — triggers on_fail routing."""
+        meta = _load_pipeline(pipeline_id)
+        if not meta:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+        if meta["status"] != "waiting_approval":
+            raise HTTPException(status_code=400, detail=f"Pipeline not at a gate: status is {meta['status']}")
+
+        stage_idx = meta["current_stage"]
+        stage = meta["stages"][stage_idx] if stage_idx < len(meta["stages"]) else {}
+        stage_name = meta.get("gate_stage", "unknown")
+
+        # Record gate rejection in history
+        meta["history"].append({
+            "stage": stage_name,
+            "iteration": meta["current_iteration"],
+            "verdict": "gate_rejected",
+            "feedback": "Gate rejected by user",
+            "ts": int(time.time()),
+        })
+        meta.pop("gate_prompt", None)
+        meta.pop("gate_stage", None)
+
+        _publish("pipeline.gate_rejected", {
+            "pipeline_id": pipeline_id,
+            "stage": stage_name,
+            "stage_index": stage_idx,
+        })
+
+        # Follow on_fail routing
+        on_fail = stage.get("on_fail", "escalate")
+        if on_fail.startswith("goto:"):
+            target_name = on_fail[5:]
+            stage_names = [s.get("name", "") for s in meta["stages"]]
+            if target_name in stage_names:
+                meta["current_stage"] = stage_names.index(target_name)
+                meta["current_iteration"] = 0
+                meta["status"] = "active"
+                _pipelines[pipeline_id] = meta
+                _save_pipeline(pipeline_id, meta)
+                _start_stage(pipeline_id, meta)
+                return {"ok": True, "status": "rejected_goto", "target": target_name}
+        elif on_fail == "retry":
+            meta["status"] = "active"
+            _pipelines[pipeline_id] = meta
+            _save_pipeline(pipeline_id, meta)
+            _start_stage(pipeline_id, meta)
+            return {"ok": True, "status": "rejected_retry"}
+
+        # Default: escalate
+        _escalate(pipeline_id, meta, "Gate rejected by user")
+        return {"ok": True, "status": "rejected_escalated"}
 
     @router.delete("/api/v1/pipeline/{pipeline_id}")
     async def api_cancel_pipeline(pipeline_id: str):

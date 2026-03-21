@@ -341,7 +341,7 @@ export function getWebSocketUrl(): string {
 
 // ─── Pipeline Types ───
 
-export type PipelineStatus = "running" | "completed" | "failed" | "escalated" | "cancelled";
+export type PipelineStatus = "running" | "completed" | "failed" | "escalated" | "cancelled" | "waiting_approval";
 export type StageStatus = "passed" | "running" | "failed" | "pending";
 
 export interface PipelineStage {
@@ -377,6 +377,8 @@ export interface Pipeline {
   eta_minutes?: number;
   cloud_tokens: number;
   local_tokens: number;
+  token_usage?: { prompt: number; completion: number };
+  files_created?: string[];
   lessons?: string[];
 }
 
@@ -518,6 +520,21 @@ export async function advancePipeline(id: string): Promise<{ status: string }> {
 
 export async function cancelPipeline(id: string): Promise<{ status: string }> {
   return apiFetch(`/api/v1/pipeline/${id}`, { method: "DELETE" }, { status: "cancelled" });
+}
+
+export async function intervenePipeline(id: string, guidance: string): Promise<{ ok: boolean; status: string }> {
+  return apiFetch(`/api/v1/pipeline/${id}/intervene`, {
+    method: "POST",
+    body: JSON.stringify({ guidance }),
+  }, { ok: true, status: "intervention_applied" });
+}
+
+export async function approvePipeline(id: string): Promise<{ ok: boolean; status: string }> {
+  return apiFetch(`/api/v1/pipeline/${id}/approve`, { method: "POST" }, { ok: true, status: "approved" });
+}
+
+export async function rejectPipeline(id: string): Promise<{ ok: boolean; status: string }> {
+  return apiFetch(`/api/v1/pipeline/${id}/reject`, { method: "POST" }, { ok: true, status: "rejected_escalated" });
 }
 
 export async function getCrucibleResults(): Promise<CrucibleResults> {

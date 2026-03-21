@@ -316,6 +316,7 @@ Custom templates appear in the dashboard wizard alongside built-ins.
 | `/api/v1/pipeline` | GET | List active pipelines |
 | `/api/v1/pipeline/{id}` | GET | Pipeline detail (status, stages, iterations) |
 | `/api/v1/pipeline/{id}/advance` | POST | Force advance to next stage |
+| `/api/v1/pipeline/{id}/intervene` | POST | Inject human guidance into running pipeline |
 | `/api/v1/pipeline/{id}` | DELETE | Cancel pipeline |
 | `/api/v1/socratic/debate/{id}` | GET | Debate status and rounds |
 | `/api/v1/socratic/debate/{id}/intervene` | POST | Human adds input to debate |
@@ -339,3 +340,5 @@ These roles are used across all templates. On single-node, each becomes a system
 | `writer` | Clear prose, key takeaways, tone matching |
 | `designer` | Visual layout, typography, color, hierarchy |
 | `executor` | Takes plans and implements them methodically |
+| `presenter` | Creates presentations and documents from data |
+| `drafter` | Writes and formats reports, proposals, memos |

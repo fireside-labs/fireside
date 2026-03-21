@@ -15,6 +15,16 @@ const TOPIC_COLORS: Record<string, { color: string; bg: string; icon: string }> 
     plugin: { color: "#00ccaa", bg: "rgba(0,204,170,0.12)", icon: "◆" },
     config: { color: "#a0a0b8", bg: "rgba(160,160,184,0.12)", icon: "⚙" },
     error: { color: "#ff4466", bg: "rgba(255,68,102,0.12)", icon: "⚠" },
+    pipeline: { color: "#F59E0B", bg: "rgba(245,158,11,0.12)", icon: "⚡" },
+    "pipeline.stage_started": { color: "#60A5FA", bg: "rgba(96,165,250,0.12)", icon: "▶" },
+    "pipeline.stage_complete": { color: "#34D399", bg: "rgba(52,211,153,0.12)", icon: "✔" },
+    "pipeline.file_created": { color: "#A78BFA", bg: "rgba(167,139,250,0.12)", icon: "📄" },
+    "pipeline.shipped": { color: "#F59E0B", bg: "rgba(245,158,11,0.15)", icon: "🚀" },
+    "pipeline.escalated": { color: "#ff4466", bg: "rgba(255,68,102,0.12)", icon: "🖐" },
+    "pipeline.human_intervention": { color: "#22D3EE", bg: "rgba(34,211,238,0.12)", icon: "💬" },
+    "pipeline.gate_waiting": { color: "#FBBF24", bg: "rgba(251,191,36,0.12)", icon: "⏸" },
+    "pipeline.gate_approved": { color: "#34D399", bg: "rgba(52,211,153,0.12)", icon: "✅" },
+    "pipeline.gate_rejected": { color: "#F87171", bg: "rgba(248,113,113,0.12)", icon: "❌" },
 };
 
 export default function EventStream({ events, connected }: Props) {
