@@ -142,14 +142,38 @@ def _load_system_prompt(agent_name: str) -> str:
 
 
 def _get_active_brain() -> dict | None:
-    """Get the currently active brain config."""
+    """Get the currently active brain config.
+
+    Resolution order:
+      1. ~/.valhalla/brains_state.json (explicit brain selection from Brain Lab)
+      2. brain_manager status (llama-server already running from auto-start)
+      3. None (no brain available)
+    """
+    # 1. Check explicit brain selection
     state_file = Path.home() / ".valhalla" / "brains_state.json"
     if state_file.exists():
         try:
             data = json.loads(state_file.read_text(encoding="utf-8"))
-            return data.get("active")
+            active = data.get("active")
+            if active:
+                return active
         except Exception:
             pass
+
+    # 2. Fall back to brain_manager — llama-server may already be running
+    try:
+        from bot.brain_manager import get_status
+        status = get_status()
+        if status.get("running"):
+            return {
+                "id": status.get("model", "local"),
+                "runtime": "local",
+                "port": status.get("port", 8080),
+                "model_id": "local",
+            }
+    except Exception:
+        pass
+
     return None
 
 
