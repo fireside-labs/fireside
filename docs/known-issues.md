@@ -60,6 +60,27 @@
 - **Cause:** No history was sent → nothing to compact. Compaction at 60%/75% of context window requires messages to exist first
 - **Fix:** Same as #8 — now that history flows through, compaction kicks in automatically when conversations get long
 
+### 10. files_write BLOCKED on relative paths — model hallucinated success
+- **Symptom:** Model said "File saved: ./Desktop/my_favorite_food.txt" but file didn't exist
+- **Cause:** Model used relative paths (`./Desktop/`, `Desktop/`) which don't start with `C:/Users/Jorda/` → security check returned BLOCKED. Model ignored the BLOCKED response and told user it succeeded
+- **Fix:** All file tools (`files_list`, `files_read`, `files_write`) now resolve `./path`, `~/path`, and bare relative paths against `Path.home()` before security check
+- **Commit:** `564000f`
+
+---
+
+## dashboard (`dashboard/app/page.tsx`)
+
+### 1. New conversation (+) button clears chat instead of saving
+- **Symptom:** Pressing + clears the current conversation — it doesn't save to sidebar
+- **Cause:** Button just resets `chatHistory` state — no persistence layer for conversations
+- **Status:** 🔴 Open — needs conversation persistence (localStorage or backend storage)
+
+### 2. Static build missing latest changes
+- **Symptom:** User on port 3999 (`npx serve out`) doesn't get code updates
+- **Cause:** Dashboard changes require `npx next build` to regenerate static files
+- **Fix:** Rebuilt dashboard after conversation history changes
+- **Note:** Dev server on port 4001 picks up changes automatically
+
 ---
 
 ## brain_manager (`bot/brain_manager.py`)
