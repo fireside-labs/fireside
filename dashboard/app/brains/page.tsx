@@ -13,6 +13,7 @@ export default function BrainsPage() {
     const [detectedVram, setDetectedVram] = useState(0);
     const [currentBrain, setCurrentBrain] = useState("");
     const [switching, setSwitching] = useState(false);
+    const [downloadError, setDownloadError] = useState("");
 
     useEffect(() => {
         // Fetch real VRAM from backend
@@ -39,6 +40,7 @@ export default function BrainsPage() {
         localStorage.setItem("fireside_brain_quant", quant);
         setCurrentBrain(label);
         setSwitching(true);
+        setDownloadError("");
 
         // Call backend to trigger download + auto-start
         try {
@@ -47,10 +49,17 @@ export default function BrainsPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ model_id: modelId === "llama-3.1-8b" ? "fast" : "deep" }),
             });
+            if (!res.ok) {
+                const err = await res.text();
+                throw new Error(err || `Server returned ${res.status}`);
+            }
             const data = await res.json();
             console.log("[BrainLab] Install response:", data);
-        } catch (e) {
+        } catch (e: any) {
+            const msg = e?.message || "Could not reach the backend";
             console.warn("[BrainLab] Backend call failed:", e);
+            setDownloadError(`⚠ Download failed: ${msg}. Make sure the Fireside backend is running.`);
+            setTimeout(() => setDownloadError(""), 8000);
         } finally {
             setSwitching(false);
         }
@@ -80,6 +89,18 @@ export default function BrainsPage() {
                 }}>
                     <span>⏳</span>
                     <span>Downloading and switching brain...</span>
+                </div>
+            )}
+
+            {downloadError && (
+                <div style={{
+                    padding: '12px 24px',
+                    background: 'rgba(239,68,68,0.06)',
+                    borderBottom: '1px solid rgba(239,68,68,0.15)',
+                    fontSize: 12, color: '#EF4444', fontWeight: 600,
+                    display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                    {downloadError}
                 </div>
             )}
 
