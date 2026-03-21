@@ -572,6 +572,12 @@ def register_routes(app, config: dict) -> None:
                 log.error("[chat] JSON mode agent loop failed: %s", e, exc_info=True)
                 if not response_text:
                     response_text = f"Sorry, I encountered an error while processing: {str(e)}"
+            # Strip any leaked tool XML from final response
+            import re
+            response_text = re.sub(
+                r'</?tool_call>|<function=[^>]*>|</function>|<parameter=[^>]*>|</parameter>',
+                '', response_text
+            ).strip()
             return {
                 "response": response_text,
                 "agent": agent,
