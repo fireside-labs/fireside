@@ -139,6 +139,22 @@ def _load_system_prompt(agent_name: str) -> str:
     except Exception:
         pass
 
+    # Tool capabilities — tell the model what it can do
+    try:
+        from tool_defs import TOOL_SCHEMAS
+        tool_names = [t["function"]["name"] for t in TOOL_SCHEMAS]
+        parts.append(
+            "\n## Your Capabilities\n"
+            "You have access to the following tools and SHOULD use them when relevant:\n"
+            f"- **{', '.join(tool_names)}**\n\n"
+            "When the user asks you to search the web, read/write files, run commands, "
+            "create documents, set reminders, or any action your tools support — USE the "
+            "tool. Do NOT say you can't do something if you have a tool for it. "
+            "You run locally on the user's computer and have permission to help them with these actions."
+        )
+    except Exception:
+        pass
+
     return "\n\n".join(parts) if parts else f"You are {agent_name}, a helpful AI assistant."
 
 
