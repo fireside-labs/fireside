@@ -11,18 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 2,
-  "status": "cancelled",
+  "status": "killed",
   "created_at": 1774063144,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'm not sure what you mean by \"Job 0\". Could you please clarify what you're looking for? For example, are you:\n\n- Looking for a specific job or task?\n- Wanting to check on a job queue?\n- Need help with a project or work item?\n- Something else?\n\nPlease provide more details so I can assist you better.",
+      "duration_s": 46,
+      "ts": 1774063190
+    }
+  ],
+  "results": {
+    "Task": "I'm not sure what you mean by \"Job 0\". Could you please clarify what you're looking for? For example, are you:\n\n- Looking for a specific job or task?\n- Wanting to check on a job queue?\n- Need help with a project or work item?\n- Something else?\n\nPlease provide more details so I can assist you better."
   },
-  "stage_times": [],
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 183
+  },
+  "stage_times": [
+    46
+  ],
   "files_created": [],
-  "cancelled_at": 1774063146
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_3e23859d"
 }

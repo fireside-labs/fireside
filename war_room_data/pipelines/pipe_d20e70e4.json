@@ -11,17 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 1,
-  "status": "active",
+  "status": "killed",
   "created_at": 1774063147,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "\ud83c\udfaf Target",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you execute something! \ud83d\udd25 But I need a bit more information about what you'd like me to run. Could you please specify:\n\n- What command would you like me to execute?\n- Or what task would you like me to perform?\n\nFor example, you could ask me to:\n- Run a specific shell command\n- Check something on your system\n- Execute a script or program\n- Or something else entirely\n\nLet me know what you have in mind! \ud83d\ude80",
+      "duration_s": 70,
+      "ts": 1774063217
+    }
+  ],
+  "results": {
+    "\ud83c\udfaf Target": "I'd be happy to help you execute something! \ud83d\udd25 But I need a bit more information about what you'd like me to run. Could you please specify:\n\n- What command would you like me to execute?\n- Or what task would you like me to perform?\n\nFor example, you could ask me to:\n- Run a specific shell command\n- Check something on your system\n- Execute a script or program\n- Or something else entirely\n\nLet me know what you have in mind! \ud83d\ude80"
   },
-  "stage_times": [],
-  "files_created": []
+  "token_usage": {
+    "prompt": 1411,
+    "completion": 185
+  },
+  "stage_times": [
+    70
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Iteration limit exceeded (2/1)"
 }

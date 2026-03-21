@@ -11,17 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 1,
-  "status": "active",
+  "status": "killed",
   "created_at": 1774063147,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "T",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I received your message \"G\", but it looks like it might be incomplete. Could you please provide more details about what you need help with? \n\nFor example, are you asking me to:\n- Read a file?\n- Create a document, presentation, or spreadsheet?\n- Run a command on your computer?\n- Something else entirely?\n\nPlease let me know what you'd like me to do!",
+      "duration_s": 65,
+      "ts": 1774063212
+    }
+  ],
+  "results": {
+    "T": "I received your message \"G\", but it looks like it might be incomplete. Could you please provide more details about what you need help with? \n\nFor example, are you asking me to:\n- Read a file?\n- Create a document, presentation, or spreadsheet?\n- Run a command on your computer?\n- Something else entirely?\n\nPlease let me know what you'd like me to do!"
   },
-  "stage_times": [],
-  "files_created": []
+  "token_usage": {
+    "prompt": 1406,
+    "completion": 138
+  },
+  "stage_times": [
+    65
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Iteration limit exceeded (2/1)"
 }

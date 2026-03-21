@@ -11,17 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 1,
-  "status": "active",
+  "status": "killed",
   "created_at": 1774063147,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "T",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I received \"G\" - could you please provide more details about what you need help with? I can assist you with:\n\n- Listing files and folders\n- Reading file contents\n- Writing or creating files\n- Running terminal commands\n- Creating presentations (PowerPoint)\n- Creating documents (Word)\n- Creating spreadsheets (Excel)\n\nJust let me know what you'd like to accomplish!",
+      "duration_s": 62,
+      "ts": 1774063209
+    }
+  ],
+  "results": {
+    "T": "I received \"G\" - could you please provide more details about what you need help with? I can assist you with:\n\n- Listing files and folders\n- Reading file contents\n- Writing or creating files\n- Running terminal commands\n- Creating presentations (PowerPoint)\n- Creating documents (Word)\n- Creating spreadsheets (Excel)\n\nJust let me know what you'd like to accomplish!"
   },
-  "stage_times": [],
-  "files_created": []
+  "token_usage": {
+    "prompt": 1406,
+    "completion": 135
+  },
+  "stage_times": [
+    62
+  ],
+  "files_created": [],
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Iteration limit exceeded (2/1)"
 }

@@ -11,18 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 1,
-  "status": "cancelled",
+  "status": "killed",
   "created_at": 1774063144,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help, but I need more context about what you'd like me to do. Could you please clarify what task you'd like me to perform? For example:\n\n- Run a specific command?\n- Create a document or file?\n- Check something on your system?\n- Work with existing files?\n\nLet me know what you need!",
+      "duration_s": 39,
+      "ts": 1774063183
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help, but I need more context about what you'd like me to do. Could you please clarify what task you'd like me to perform? For example:\n\n- Run a specific command?\n- Create a document or file?\n- Check something on your system?\n- Work with existing files?\n\nLet me know what you need!"
   },
-  "stage_times": [],
+  "token_usage": {
+    "prompt": 1407,
+    "completion": 118
+  },
+  "stage_times": [
+    39
+  ],
   "files_created": [],
-  "cancelled_at": 1774063144
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_85d888c9"
 }

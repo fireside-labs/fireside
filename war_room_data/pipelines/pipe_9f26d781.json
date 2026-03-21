@@ -11,18 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 2,
-  "status": "cancelled",
+  "status": "killed",
   "created_at": 1774063144,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'm not sure what you mean by \"Job 3\". Could you please clarify what you'd like me to do? For example:\n\n- Are you referring to a specific task or project?\n- Do you have a list of jobs and want me to execute job #3?\n- Is there a specific command or action you need help with?\n\nPlease provide more details so I can assist you properly.",
+      "duration_s": 55,
+      "ts": 1774063199
+    }
+  ],
+  "results": {
+    "Task": "I'm not sure what you mean by \"Job 3\". Could you please clarify what you'd like me to do? For example:\n\n- Are you referring to a specific task or project?\n- Do you have a list of jobs and want me to execute job #3?\n- Is there a specific command or action you need help with?\n\nPlease provide more details so I can assist you properly."
   },
-  "stage_times": [],
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 197
+  },
+  "stage_times": [
+    55
+  ],
   "files_created": [],
-  "cancelled_at": 1774063146
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_9f26d781"
 }

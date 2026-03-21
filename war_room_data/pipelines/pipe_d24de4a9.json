@@ -11,18 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 2,
-  "status": "cancelled",
+  "status": "killed",
   "created_at": 1774063144,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you with \"Job 2,\" but I need more details about what you'd like me to do. Could you please provide more information about:\n\n- What specific task or command you want me to execute?\n- What file or project you're working on?\n- Any specific instructions or requirements?\n\nFor example, are you asking me to:\n- Run a specific command?\n- Check a file or directory?\n- Create or modify a file?\n- Something else?\n\nPlease let me know what you need help with!",
+      "duration_s": 51,
+      "ts": 1774063195
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help you with \"Job 2,\" but I need more details about what you'd like me to do. Could you please provide more information about:\n\n- What specific task or command you want me to execute?\n- What file or project you're working on?\n- Any specific instructions or requirements?\n\nFor example, are you asking me to:\n- Run a specific command?\n- Check a file or directory?\n- Create or modify a file?\n- Something else?\n\nPlease let me know what you need help with!"
   },
-  "stage_times": [],
+  "token_usage": {
+    "prompt": 1408,
+    "completion": 220
+  },
+  "stage_times": [
+    51
+  ],
   "files_created": [],
-  "cancelled_at": 1774063146
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_d24de4a9"
 }

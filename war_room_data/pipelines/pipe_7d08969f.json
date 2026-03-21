@@ -125,9 +125,9 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 1,
+  "current_iteration": 2,
   "max_iterations": 2,
-  "status": "active",
+  "status": "killed",
   "created_at": 1774063142,
   "created_by": "odin",
   "history": [
@@ -138,19 +138,29 @@
       "result_preview": "I'd be happy to help you execute step 0, but I need more context about what this step should accomplish. Could you please tell me:\n\n1. What is the overall task or project you're working on?\n2. What should step 0 specifically do?\n3. Are there any files, commands, or actions you'd like me to take?\n\nWithout this information, I can't determine what step 0 should involve. Please provide the details so I can assist you properly.",
       "duration_s": 23,
       "ts": 1774063165
+    },
+    {
+      "stage": "Stage_0",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "I understand you want me to execute step 0, but I still don't have enough context about what this step should accomplish. To help you effectively, I need to know:\n\n1. **What is the overall task or project?** (e.g., building an app, analyzing data, creating documents, etc.)\n\n2. **What should step 0 specifically do?** (e.g., set up environment, check prerequisites, initialize files, etc.)\n\n3. **Are there any specific files, commands, or actions you expect?**\n\nCould you provide these details so I c",
+      "duration_s": 64,
+      "ts": 1774063229
     }
   ],
   "results": {
-    "Stage_0": "I'd be happy to help you execute step 0, but I need more context about what this step should accomplish. Could you please tell me:\n\n1. What is the overall task or project you're working on?\n2. What should step 0 specifically do?\n3. Are there any files, commands, or actions you'd like me to take?\n\nWithout this information, I can't determine what step 0 should involve. Please provide the details so I can assist you properly."
+    "Stage_0": "I understand you want me to execute step 0, but I still don't have enough context about what this step should accomplish. To help you effectively, I need to know:\n\n1. **What is the overall task or project?** (e.g., building an app, analyzing data, creating documents, etc.)\n\n2. **What should step 0 specifically do?** (e.g., set up environment, check prerequisites, initialize files, etc.)\n\n3. **Are there any specific files, commands, or actions you expect?**\n\nCould you provide these details so I can execute step 0 correctly? Without this context, I'm unable to determine what actions to take."
   },
   "token_usage": {
-    "prompt": 1411,
-    "completion": 217
+    "prompt": 2972,
+    "completion": 552
   },
   "stage_times": [
-    23
+    23,
+    64
   ],
   "files_created": [],
-  "eta_seconds": 437,
-  "eta_minutes": 7.3
+  "eta_seconds": 826,
+  "eta_minutes": 13.8,
+  "kill_reason": "Iteration limit exceeded (3/2)"
 }

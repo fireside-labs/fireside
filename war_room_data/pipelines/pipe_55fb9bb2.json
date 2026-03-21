@@ -11,18 +11,33 @@
     }
   ],
   "current_stage": 0,
-  "current_iteration": 0,
+  "current_iteration": 1,
   "max_iterations": 1,
-  "status": "cancelled",
+  "status": "killed",
   "created_at": 1774063146,
   "created_by": "odin",
-  "history": [],
-  "results": {},
-  "token_usage": {
-    "prompt": 0,
-    "completion": 0
+  "history": [
+    {
+      "stage": "Task",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'd be happy to help you! However, your message \"Do\" is incomplete. Could you please provide more details about what you'd like me to do? For example:\n\n- Do you need help with a specific task?\n- Do you want me to run a command?\n- Do you need a file created or modified?\n- Do you have a question about something?\n\nPlease let me know what you need assistance with!",
+      "duration_s": 55,
+      "ts": 1774063201
+    }
+  ],
+  "results": {
+    "Task": "I'd be happy to help you! However, your message \"Do\" is incomplete. Could you please provide more details about what you'd like me to do? For example:\n\n- Do you need help with a specific task?\n- Do you want me to run a command?\n- Do you need a file created or modified?\n- Do you have a question about something?\n\nPlease let me know what you need assistance with!"
   },
-  "stage_times": [],
+  "token_usage": {
+    "prompt": 1406,
+    "completion": 131
+  },
+  "stage_times": [
+    55
+  ],
   "files_created": [],
-  "cancelled_at": 1774063147
+  "eta_seconds": 0,
+  "eta_minutes": 0.0,
+  "kill_reason": "Unknown pipeline: pipe_55fb9bb2"
 }
