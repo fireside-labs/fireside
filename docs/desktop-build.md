@@ -110,6 +110,37 @@ cargo tauri dev
 | "Backend exited" in Tauri logs | Tauri restarts it 3 times, then gives up. Check Python logs. |
 | NSIS not found | First `cargo tauri build` downloads NSIS automatically. If it fails, install NSIS manually. |
 | Dashboard shows stale UI | Rebuild dashboard first: `cd dashboard && npm run build` |
+| Offline banner but chat works | Bifrost crashed — chat fell back to raw llama-server. See "Known Bug" below. |
+| Port 8765 in TIME_WAIT | Kill the process holding it: `taskkill /F /PID <pid>`, then wait 60-120s for Windows to release it. |
+
+---
+
+## Known Bug: Zombie Bifrost (2026-03-20)
+
+> [!WARNING]
+> **Symptom:** The exe starts, chat works, but the offline banner shows and tools/brains/pipelines are broken.
+>
+> **Root cause:** `spawn_backend()` in main.rs runs `python bifrost.py`. Sometimes bifrost
+> partially initializes (loads all 30 plugins, starts llama-server on 8080) but then fails to
+> bind port 8765 or fails to mount the API routes. It ends up in a **zombie state** — holding port
+> 8765 open but returning 404 on every route. The dashboard tries `/api/v1/status`, gets 404
+> (`!res.ok`), and shows the offline banner. Chat still works because `page.tsx` falls back
+> to `http://127.0.0.1:8080/v1/chat/completions` (raw llama-server, no tools).
+>
+> **Fix (manual):**
+> ```powershell
+> # 1. Find what's on port 8765
+> netstat -ano | findstr :8765
+> # 2. Kill the zombie process
+> taskkill /F /PID <pid_from_above>
+> # 3. Wait for TIME_WAIT to clear (60-120s on Windows)
+> Start-Sleep 120
+> # 4. Start bifrost fresh
+> python bifrost.py
+> ```
+>
+> **Root fix needed:** `spawn_backend()` should verify bifrost is healthy (HTTP 200 on `/api/v1/status`)
+> after spawning, and kill+retry if it's in the zombie state instead of counting it as "running".
 
 ---
 
