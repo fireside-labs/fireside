@@ -1326,7 +1326,68 @@ fn main() {
 
                     loop {
                         let child = spawn_backend(&dir);
-                        if let Some(child) = child {
+                        if let Some(mut child) = child {
+                            // Health check: wait for bifrost to respond before marking as "running"
+                            let healthy = {
+                                let mut ok = false;
+                                for attempt in 1..=30 {
+                                    thread::sleep(std::time::Duration::from_secs(2));
+                                    // Check if process died during startup
+                                    match child.try_wait() {
+                                        Ok(Some(_)) => {
+                                            println!("[fireside] Backend died during health check");
+                                            break;
+                                        }
+                                        _ => {}
+                                    }
+                                    // Try TCP connect to port 8765
+                                    match std::net::TcpStream::connect_timeout(
+                                        &"127.0.0.1:8765".parse().unwrap(),
+                                        std::time::Duration::from_secs(2),
+                                    ) {
+                                        Ok(stream) => {
+                                            drop(stream);
+                                            // TCP connect succeeded — try an HTTP GET /health
+                                            let http_ok = silent_cmd("powershell")
+                                                .args(["-NoProfile", "-Command",
+                                                    "try { $r = Invoke-WebRequest -Uri http://127.0.0.1:8765/health -TimeoutSec 3 -UseBasicParsing; exit $r.StatusCode -ne 200 } catch { exit 1 }"])
+                                                .status()
+                                                .map(|s| s.success())
+                                                .unwrap_or(false);
+                                            if http_ok {
+                                                println!("[fireside] Backend health check passed (attempt {}/30)", attempt);
+                                                ok = true;
+                                                break;
+                                            } else {
+                                                println!("[fireside] Backend TCP open but HTTP not ready (attempt {}/30)", attempt);
+                                            }
+                                        }
+                                        Err(_) => {
+                                            if attempt % 5 == 0 {
+                                                println!("[fireside] Waiting for backend... (attempt {}/30)", attempt);
+                                            }
+                                        }
+                                    }
+                                }
+                                ok
+                            };
+
+                            if !healthy {
+                                println!("[fireside] Backend failed health check — killing and retrying");
+                                let _ = child.kill();
+                                let _ = child.wait();
+                                let mut s = state.lock().unwrap();
+                                s.restart_count += 1;
+                                if s.restart_count > max_restarts {
+                                    eprintln!("[fireside] Backend failed {} times, giving up", s.restart_count);
+                                    break;
+                                }
+                                println!("[fireside] Restarting backend (attempt {}/{})", s.restart_count, max_restarts);
+                                drop(s);
+                                thread::sleep(std::time::Duration::from_secs(3));
+                                continue;
+                            }
+
                             {
                                 let mut s = state.lock().unwrap();
                                 s.running = true;

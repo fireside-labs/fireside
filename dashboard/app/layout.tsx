@@ -4,6 +4,7 @@ import { ToastProvider } from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeToggle";
 import OnboardingGate from "@/components/OnboardingGate";
 import OfflineBanner from "@/components/OfflineBanner";
+import StartupGate from "@/components/StartupGate";
 import { TourProvider, TourOverlay } from "@/components/GuidedTour";
 
 export const metadata: Metadata = {
@@ -35,16 +36,18 @@ export default function RootLayout({
                 <ThemeProvider>
                     <ToastProvider>
                         <TourProvider>
-                            <OnboardingGate>
-                                <OfflineBanner />
-                                <div className="fireside-world">
-                                    {/* Persistent fireside atmosphere */}
-                                    <div className="fireside-atmosphere" />
-                                    <div className="fireside-embers" />
-                                    <main className="fireside-main">{children}</main>
-                                </div>
-                                <TourOverlay />
-                            </OnboardingGate>
+                            <StartupGate>
+                                <OnboardingGate>
+                                    <OfflineBanner />
+                                    <div className="fireside-world">
+                                        {/* Persistent fireside atmosphere */}
+                                        <div className="fireside-atmosphere" />
+                                        <div className="fireside-embers" />
+                                        <main className="fireside-main">{children}</main>
+                                    </div>
+                                    <TourOverlay />
+                                </OnboardingGate>
+                            </StartupGate>
                         </TourProvider>
                     </ToastProvider>
                 </ThemeProvider>

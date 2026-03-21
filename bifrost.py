@@ -169,6 +169,78 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
+def _clear_port(port: int, timeout: int = 30) -> None:
+    """Kill any zombie process holding our port so startup doesn't fail.
+
+    This fixes the 'Errno 10048: address already in use' crash that occurs
+    when a previous bifrost instance died but left the socket open (zombie
+    state). Without this, the exe's restart loop cascades into multiple
+    TIME_WAIT sockets and the user has to manually kill processes.
+    """
+    import subprocess
+    import sys
+    import time as _time
+
+    def _find_pid_on_port() -> int | None:
+        """Find PID listening on the given port. Returns None if free."""
+        try:
+            if sys.platform == "win32":
+                out = subprocess.check_output(
+                    ["netstat", "-ano"], text=True, creationflags=0x08000000
+                )
+                for line in out.splitlines():
+                    if f":{port}" in line and "LISTENING" in line:
+                        parts = line.split()
+                        return int(parts[-1])
+            else:
+                out = subprocess.check_output(
+                    ["lsof", "-ti", f":{port}"], text=True
+                ).strip()
+                if out:
+                    return int(out.splitlines()[0])
+        except Exception:
+            pass
+        return None
+
+    pid = _find_pid_on_port()
+    if pid is None:
+        return  # Port is free, nothing to do
+
+    # Don't kill ourselves
+    if pid == os.getpid():
+        return
+
+    log.warning("[startup] Port %d is held by PID %d — killing zombie process", port, pid)
+    try:
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/F", "/PID", str(pid)],
+                capture_output=True, creationflags=0x08000000,
+            )
+        else:
+            os.kill(pid, 9)
+    except Exception as e:
+        log.warning("[startup] Could not kill PID %d: %s", pid, e)
+
+    # Wait for the port to actually free up (TIME_WAIT can linger)
+    deadline = _time.time() + timeout
+    while _time.time() < deadline:
+        if _find_pid_on_port() is None:
+            # Also check we can actually bind
+            try:
+                test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                test_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                test_sock.bind(("127.0.0.1", port))
+                test_sock.close()
+                log.info("[startup] Port %d is now free", port)
+                return
+            except OSError:
+                pass  # Still in TIME_WAIT
+        _time.sleep(2)
+
+    log.warning("[startup] Port %d did not free after %ds — attempting bind anyway", port, timeout)
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="Valhalla Bifrost V2")
@@ -187,6 +259,9 @@ def main() -> None:
     if port is None:
         from config_loader import get_config
         port = get_config().get("node", {}).get("port", 8765)
+
+    # ── Auto-cleanup: kill any zombie process hogging our port ──────────
+    _clear_port(port)
 
     import uvicorn
     log.info("Starting Bifrost on %s:%d", args.host, port)
