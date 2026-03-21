@@ -498,24 +498,34 @@ def register_routes(app, config: dict) -> None:
             # JSON mode — collect all chunks, return final text
             response_text = ""
             tools_used = []
-            async for chunk in _stream_chat(req.message, system_prompt, brain):
-                if not chunk.startswith("data:"):
-                    continue
-                data_str = chunk[5:].strip()
-                if data_str == "[DONE]":
-                    break
-                try:
-                    data = json.loads(data_str)
-                    # Collect tool use events
-                    if "tool_use" in data:
-                        tools_used.append(data["tool_use"])
+            try:
+                async for chunk in _stream_chat(req.message, system_prompt, brain):
+                    if not chunk.startswith("data:"):
                         continue
-                    # Collect text content
-                    delta = data.get("choices", [{}])[0].get("delta", {})
-                    if "content" in delta:
-                        response_text += delta["content"]
-                except (json.JSONDecodeError, IndexError, KeyError):
-                    pass
+                    data_str = chunk[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(data_str)
+                        # Collect tool use events
+                        if "tool_use" in data:
+                            tools_used.append(data["tool_use"])
+                            continue
+                        # Collect text content
+                        delta = data.get("choices", [{}])[0].get("delta", {})
+                        if "content" in delta:
+                            response_text += delta["content"]
+                        # Also handle errors from tool loop
+                        if "error" in data:
+                            log.warning("[chat] Agent loop error: %s", data["error"])
+                            if not response_text:
+                                response_text = f"Sorry, I ran into an issue: {data['error']}"
+                    except (json.JSONDecodeError, IndexError, KeyError):
+                        pass
+            except Exception as e:
+                log.error("[chat] JSON mode agent loop failed: %s", e, exc_info=True)
+                if not response_text:
+                    response_text = f"Sorry, I encountered an error while processing: {str(e)}"
             return {
                 "response": response_text,
                 "agent": agent,
