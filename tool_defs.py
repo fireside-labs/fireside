@@ -494,21 +494,57 @@ def execute_tool(name: str, arguments: dict, api_port: int = 8765) -> str:
                         f"Destructive commands are only allowed within your project directories."
                     )
 
+            # Route through terminal plugin API (approval mode, history, events)
+            # Falls back to direct subprocess if plugin is unreachable
             try:
-                result = subprocess.run(
-                    cmd, shell=True, capture_output=True, text=True,
-                    timeout=30, cwd=str(Path.home()),
+                payload = json.dumps({
+                    "command": cmd,
+                    "reason": arguments.get("reason", ""),
+                    "working_dir": str(Path.home()),
+                }).encode()
+                req = urllib.request.Request(
+                    f"{base}/api/v1/terminal/exec",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
                 )
-                out = f"Exit code: {result.returncode}\n"
-                if result.stdout:
-                    out += f"Output:\n{result.stdout[:2000]}\n"
-                if result.stderr:
-                    out += f"Errors:\n{result.stderr[:500]}\n"
+                with urllib.request.urlopen(req, timeout=35) as resp:
+                    data = json.loads(resp.read())
+
+                if data.get("status") == "pending":
+                    return (
+                        f"Command queued for approval: {cmd}\n"
+                        f"Command ID: {data.get('command_id')}\n"
+                        f"The user must approve this command in the dashboard before it runs."
+                    )
+
+                result = data.get("result", {})
+                rc = result.get("returncode", -1)
+                out = f"Exit code: {rc}\n"
+                if result.get("stdout"):
+                    out += f"Output:\n{result['stdout'][:2000]}\n"
+                if result.get("stderr"):
+                    out += f"Errors:\n{result['stderr'][:500]}\n"
                 return out
-            except subprocess.TimeoutExpired:
-                return f"Command timed out after 30 seconds: {cmd}"
-            except Exception as e:
-                return f"Error running command: {e}"
+
+            except (urllib.error.URLError, ConnectionRefusedError, OSError):
+                # Plugin API unreachable — fallback to direct execution
+                log.debug("[tools] Terminal plugin unreachable, falling back to subprocess")
+                try:
+                    result = subprocess.run(
+                        cmd, shell=True, capture_output=True, text=True,
+                        timeout=30, cwd=str(Path.home()),
+                    )
+                    out = f"Exit code: {result.returncode}\n"
+                    if result.stdout:
+                        out += f"Output:\n{result.stdout[:2000]}\n"
+                    if result.stderr:
+                        out += f"Errors:\n{result.stderr[:500]}\n"
+                    return out
+                except subprocess.TimeoutExpired:
+                    return f"Command timed out after 30 seconds: {cmd}"
+                except Exception as e:
+                    return f"Error running command: {e}"
 
         elif name == "web_search":
             try:
