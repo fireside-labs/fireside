@@ -84,16 +84,24 @@ export default function CampfireHub() {
   const [activeConvo, setActiveConvo] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
 
+  // Ref to always have latest chatHistory (avoids stale closure in onClick handlers)
+  const chatHistoryRef = useRef(chatHistory);
+  chatHistoryRef.current = chatHistory;
+  const activeConvoRef = useRef(activeConvo);
+  activeConvoRef.current = activeConvo;
+
   // Save current chat to a conversation (create or update)
   const saveCurrentChat = () => {
-    if (chatHistory.length === 0) return;
-    const id = activeConvo || `conv_${Date.now()}`;
-    const title = generateTitle(chatHistory);
-    const preview = chatHistory[chatHistory.length - 1]?.content?.substring(0, 80) || "";
+    const history = chatHistoryRef.current;
+    const convoId = activeConvoRef.current;
+    if (history.length === 0) return;
+    const id = convoId || `conv_${Date.now()}`;
+    const title = generateTitle(history);
+    const preview = history[history.length - 1]?.content?.substring(0, 80) || "";
     const convo: Conversation = {
       id, title, preview,
       date: new Date().toISOString(),
-      messages: chatHistory.map(m => ({ ...m, ts: m.ts ? new Date(m.ts).toISOString() : undefined })),
+      messages: history.map(m => ({ ...m, ts: m.ts ? new Date(m.ts).toISOString() : undefined })),
     };
     setConversations(prev => {
       const filtered = prev.filter(c => c.id !== id);
@@ -101,7 +109,7 @@ export default function CampfireHub() {
       saveConversations(updated);
       return updated;
     });
-    if (!activeConvo) setActiveConvo(id);
+    if (!convoId) setActiveConvo(id);
   };
 
   // Load a conversation from the sidebar
