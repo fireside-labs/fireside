@@ -112,6 +112,7 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [workflowTitle, setWorkflowTitle] = useState("");
+  const [showConfirmBack, setShowConfirmBack] = useState(false);
   const [validationMsg, setValidationMsg] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   // Undo stack: stores snapshots of {nodes, connections} before destructive actions
@@ -333,7 +334,8 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
   // ── Back with confirmation ──
   const handleBack = useCallback(() => {
     if (nodes.length > 0) {
-      if (!window.confirm(`You have ${nodes.length} unsaved stages. Discard and go back?`)) return;
+      setShowConfirmBack(true);
+      return;
     }
     onClose();
   }, [nodes, onClose]);
@@ -344,7 +346,49 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
   // ── Render ──
   return (
     <div className="wb-root">
-      <style>{builderCSS}</style>
+      {/* CSS in globals.css */}
+
+      {/* ── Confirm discard modal ── */}
+      {showConfirmBack && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            background: '#141418', borderRadius: 16,
+            border: '1px solid rgba(245,158,11,0.15)',
+            padding: '28px 32px', maxWidth: 380, width: '90%',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            fontFamily: "'Outfit', system-ui",
+          }}>
+            <p style={{ color: '#F0DCC8', fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
+              Discard workflow?
+            </p>
+            <p style={{ color: '#5A4D40', fontSize: 13, marginBottom: 20, lineHeight: 1.5 }}>
+              You have {nodes.length} unsaved stage{nodes.length !== 1 ? 's' : ''}. This can't be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowConfirmBack(false)}
+                style={{
+                  padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#C4A882', cursor: 'pointer', fontFamily: "'Outfit', system-ui",
+                }}
+              >Keep editing</button>
+              <button
+                onClick={() => { setShowConfirmBack(false); onClose(); }}
+                style={{
+                  padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)',
+                  color: '#F87171', cursor: 'pointer', fontFamily: "'Outfit', system-ui",
+                }}
+              >Discard</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="wb-header">
@@ -574,190 +618,4 @@ export default function WorkflowBuilder({ onRun, onClose }: Props) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-const builderCSS = `
-  .wb-root {
-    display: flex; flex-direction: column; height: 100%;
-    background: #060609; font-family: 'Outfit', 'Inter', system-ui, sans-serif; color: #F0DCC8;
-  }
-
-  /* ── Header ── */
-  .wb-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.04);
-    background: rgba(8,8,14,0.95); backdrop-filter: blur(12px);
-  }
-  .wb-header-left { display: flex; align-items: center; gap: 16px; }
-  .wb-header-right { display: flex; align-items: center; gap: 12px; }
-  .wb-back {
-    padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.02); color: #C4A882; font-size: 12px; font-weight: 700;
-    cursor: pointer; font-family: 'Outfit'; transition: all 0.2s;
-  }
-  .wb-back:hover { background: rgba(255,255,255,0.04); color: #F0DCC8; }
-  .wb-title-input {
-    padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.02); color: #F0DCC8; font-size: 16px; font-weight: 800;
-    font-family: 'Outfit'; outline: none; width: 280px; transition: all 0.2s;
-  }
-  .wb-title-input:focus { border-color: rgba(245,158,11,0.2); }
-  .wb-title-input::placeholder { color: rgba(240,220,200,0.2); }
-  .wb-node-count { font-size: 11px; color: #4A3D30; font-weight: 700; }
-  .wb-run-btn {
-    padding: 8px 20px; border-radius: 10px; border: none;
-    background: linear-gradient(135deg, #D97706, #F59E0B); color: #0A0A0A;
-    font-size: 13px; font-weight: 900; cursor: pointer; font-family: 'Outfit';
-    transition: all 0.2s; box-shadow: 0 4px 16px rgba(245,158,11,0.2);
-  }
-  .wb-run-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(245,158,11,0.3); }
-  .wb-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* ── Layout ── */
-  .wb-layout { display: flex; flex: 1; overflow: hidden; }
-
-  /* ── Toolbox ── */
-  .wb-toolbox {
-    width: 220px; flex-shrink: 0; padding: 16px;
-    background: rgba(8,8,14,0.95); border-right: 1px solid rgba(255,255,255,0.04);
-    overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
-  }
-  .wb-toolbox-section { display: flex; flex-direction: column; gap: 6px; }
-  .wb-toolbox-title {
-    font-size: 9px; font-weight: 800; color: #6A5A4A; text-transform: uppercase;
-    letter-spacing: 1px; margin: 0 0 4px;
-  }
-  .wb-toolbox-item {
-    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-    border-radius: 10px; cursor: grab; transition: all 0.2s;
-    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
-  }
-  .wb-toolbox-item:hover { background: color-mix(in srgb, var(--item-color) 6%, transparent); border-color: color-mix(in srgb, var(--item-color) 15%, transparent); }
-  .wb-toolbox-item:active { cursor: grabbing; }
-  .wb-toolbox-icon { font-size: 18px; }
-  .wb-toolbox-label { font-size: 12px; font-weight: 700; color: #C4A882; }
-  .wb-toolbox-desc { font-size: 9px; color: #4A3D30; }
-
-  .wb-template-btn {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px; border-radius: 10px; cursor: pointer; transition: all 0.2s;
-    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
-    color: #C4A882; font-size: 11px; font-weight: 700; font-family: 'Outfit';
-  }
-  .wb-template-btn:hover { background: rgba(245,158,11,0.04); border-color: rgba(245,158,11,0.1); }
-  .wb-template-count { font-size: 9px; color: #4A3D30; font-weight: 600; }
-
-  /* ── Canvas ── */
-  .wb-canvas {
-    flex: 1; position: relative; overflow: auto;
-    background:
-      radial-gradient(circle at 50% 50%, rgba(245,158,11,0.015) 0%, transparent 70%),
-      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px),
-      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px);
-    min-height: 500px;
-  }
-
-  .wb-connections {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none; z-index: 1;
-  }
-  .wb-connection-hit {
-    fill: none; stroke: transparent; stroke-width: 12; cursor: pointer;
-    pointer-events: stroke;
-  }
-  .wb-connection-hit:hover + .wb-connection-line { stroke: #F87171; opacity: 0.6; }
-  .wb-connection-line {
-    fill: none; stroke: #F59E0B; stroke-width: 2; opacity: 0.35;
-    stroke-dasharray: 6 4; pointer-events: none;
-  }
-
-  /* ── Nodes ── */
-  .wb-node {
-    position: absolute; z-index: 2; width: 150px;
-    padding: 10px 14px; border-radius: 12px; cursor: move;
-    background: rgba(15,13,22,0.85); backdrop-filter: blur(8px);
-    border: 1.5px solid color-mix(in srgb, var(--node-color) 20%, transparent);
-    transition: box-shadow 0.2s, border-color 0.2s;
-    user-select: none;
-  }
-  .wb-node:hover { border-color: color-mix(in srgb, var(--node-color) 40%, transparent); }
-  .wb-node.selected {
-    border-color: var(--node-color);
-    box-shadow: 0 0 20px color-mix(in srgb, var(--node-color) 15%, transparent);
-  }
-  .wb-node.gate { border-style: dashed; }
-  .wb-node.connectable { cursor: crosshair; }
-  .wb-node-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .wb-node-type-icon { font-size: 14px; }
-  .wb-node-name { font-size: 12px; font-weight: 800; color: #F0DCC8; }
-  .wb-node-role { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-
-  /* Connection handles — 16px targets */
-  .wb-node-handle {
-    position: absolute; width: 16px; height: 16px; border-radius: 50%;
-    background: rgba(245,158,11,0.3); border: 1.5px solid #F59E0B;
-    cursor: crosshair; transition: all 0.2s; z-index: 5;
-  }
-  .wb-node-handle:hover { transform: scale(1.3); background: rgba(245,158,11,0.6); }
-  .wb-node-handle.out { right: -8px; top: 50%; transform: translateY(-50%); }
-  .wb-node-handle.out:hover { transform: translateY(-50%) scale(1.3); }
-  .wb-node-handle.in { left: -8px; top: 50%; transform: translateY(-50%); }
-  .wb-node-handle.in:hover { transform: translateY(-50%) scale(1.3); }
-
-  /* ── Empty state ── */
-  .wb-empty {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    text-align: center; color: #3A3530;
-  }
-  .wb-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
-  .wb-empty p { margin: 0; font-size: 14px; font-weight: 700; }
-  .wb-empty-sub { font-size: 11px; color: #2A2520; margin-top: 4px !important; }
-
-  /* ── Settings Panel ── */
-  .wb-settings {
-    width: 260px; flex-shrink: 0; padding: 16px;
-    background: rgba(8,8,14,0.95); border-left: 1px solid rgba(255,255,255,0.04);
-    overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
-    animation: wbSlideIn 0.25s ease;
-  }
-  @keyframes wbSlideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-  .wb-settings-title { font-size: 13px; font-weight: 800; color: #F59E0B; margin: 0 0 4px; }
-
-  .wb-field-label { font-size: 9px; font-weight: 800; color: #6A5A4A; text-transform: uppercase; letter-spacing: 0.5px; }
-  .wb-field-input, .wb-field-select, .wb-field-textarea {
-    width: 100%; padding: 8px 10px; border-radius: 8px;
-    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
-    color: #F0DCC8; font-size: 12px; font-family: 'Outfit'; outline: none;
-    transition: border-color 0.2s;
-  }
-  .wb-field-input:focus, .wb-field-select:focus, .wb-field-textarea:focus {
-    border-color: rgba(245,158,11,0.2);
-  }
-  .wb-field-select { cursor: pointer; }
-  .wb-field-textarea { resize: vertical; min-height: 60px; }
-
-  .wb-type-group { display: flex; gap: 4px; flex-wrap: wrap; }
-  .wb-type-btn {
-    padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700;
-    cursor: pointer; font-family: 'Outfit'; transition: all 0.2s;
-    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); color: #6A5A4A;
-  }
-  .wb-type-btn.active { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); color: #F59E0B; }
-  .wb-type-btn:hover { background: rgba(245,158,11,0.04); color: #C4A882; }
-
-  .wb-delete-btn {
-    margin-top: 8px; padding: 8px 12px; border-radius: 8px;
-    background: rgba(239,68,68,0.04); border: 1px solid rgba(239,68,68,0.1);
-    color: #F87171; font-size: 11px; font-weight: 700; cursor: pointer;
-    font-family: 'Outfit'; transition: all 0.2s;
-  }
-  .wb-delete-btn:hover { background: rgba(239,68,68,0.1); }
-
-  /* ── Validation ── */
-  .wb-validation-msg {
-    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
-    padding: 10px 20px; border-radius: 10px; z-index: 10;
-    background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.25);
-    color: #F87171; font-size: 12px; font-weight: 700;
-    animation: wbSlideIn 0.3s ease;
-    backdrop-filter: blur(8px);
-  }
-`;
+// CSS migrated to globals.css

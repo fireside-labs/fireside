@@ -69,7 +69,7 @@ export default function StartupGate({ children }: Props) {
 
     return (
         <div style={styles.root}>
-            <style>{gateCSS}</style>
+            {/* CSS in globals.css */}
             <div className="sg-container">
                 <div className="sg-fire">🔥</div>
                 <h1 className="sg-title">Fireside</h1>
@@ -98,81 +98,4 @@ const styles: Record<string, React.CSSProperties> = {
     },
 };
 
-const gateCSS = `
-    .sg-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 16px;
-        animation: sgFadeIn 0.8s ease both;
-    }
-    @keyframes sgFadeIn {
-        from { opacity: 0; transform: scale(0.95); }
-        to { opacity: 1; transform: scale(1); }
-    }
-
-    .sg-fire {
-        font-size: 64px;
-        animation: sgFlicker 2s ease-in-out infinite alternate;
-        filter: drop-shadow(0 0 30px rgba(245,158,11,0.4));
-    }
-    @keyframes sgFlicker {
-        0% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(245,158,11,0.3)); }
-        100% { transform: scale(1.05); filter: drop-shadow(0 0 40px rgba(245,158,11,0.5)); }
-    }
-
-    .sg-title {
-        font-size: 36px;
-        font-weight: 900;
-        background: linear-gradient(135deg, #F0DCC8, #FBBF24, #D97706);
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0;
-    }
-
-    .sg-loading {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        margin-top: 12px;
-        width: 240px;
-    }
-
-    .sg-bar {
-        width: 100%;
-        height: 4px;
-        border-radius: 2px;
-        background: rgba(245,158,11,0.08);
-        overflow: hidden;
-    }
-    .sg-bar-fill {
-        height: 100%;
-        border-radius: 2px;
-        background: linear-gradient(90deg, #D97706, #F59E0B, #FBBF24);
-        box-shadow: 0 0 10px rgba(245,158,11,0.3);
-        animation: sgBarPulse 1.5s ease-in-out infinite;
-        width: 40%;
-    }
-    @keyframes sgBarPulse {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(350%); }
-    }
-
-    .sg-status {
-        font-size: 14px;
-        font-weight: 600;
-        color: #6A5A4A;
-        margin: 0;
-        letter-spacing: 0.5px;
-    }
-    .sg-hint {
-        font-size: 11px;
-        color: #4A3D30;
-        margin: 0;
-        animation: sgFadeIn 0.5s ease both;
-        text-align: center;
-        max-width: 220px;
-    }
-`;
+// CSS migrated to globals.css

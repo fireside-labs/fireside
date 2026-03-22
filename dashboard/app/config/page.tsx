@@ -3,12 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import VoiceSettings from "@/components/VoiceSettings";
 import { API_BASE } from "@/lib/api";
 import { useToast } from "@/components/Toast";
 import { DiscoveryCard } from "@/components/GuidedTour";
 
-const NodesPage = dynamic(() => import("@/app/nodes/page"), { ssr: false });
+const NodesPage = dynamic(() => import("@/app/nodes/page"), {
+    ssr: false,
+    loading: () => <div style={{ padding: 20, color: '#5A4D40', fontSize: 13 }}>Loading devices...</div>,
+});
 
 type SettingsTab = "general" | "apikeys" | "advanced";
 
@@ -66,7 +70,7 @@ export default function SettingsPage() {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <style>{settingsCSS}</style>
+            {/* CSS in globals.css */}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', marginBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 800, color: '#C4A882', textDecoration: 'none', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.12)', fontFamily: "'Outfit', system-ui" }}>🔥 Hub</Link>
@@ -144,7 +148,9 @@ export default function SettingsPage() {
                 <div className="space-y-8">
                     <div>
                         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><span>📱</span> Connected Devices</h2>
-                        <NodesPage />
+                        <ErrorBoundary>
+                            <NodesPage />
+                        </ErrorBoundary>
                     </div>
                     <div className="glass-card p-6">
                         <h2 className="text-lg font-semibold text-white mb-2 flex items-center gap-2"><span>🛠</span> Developer Tools</h2>
@@ -170,41 +176,4 @@ export default function SettingsPage() {
     );
 }
 
-const settingsCSS = `
-  .stab-strip {
-    display: flex; gap: 4px; margin-bottom: 24px; padding: 4px;
-    border-radius: 14px; background: rgba(10,10,15,0.8);
-    border: 1px solid rgba(255,255,255,0.06);
-  }
-  .stab-btn {
-    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 10px 12px; border-radius: 10px; border: none; cursor: pointer;
-    font-size: 13px; font-weight: 600; white-space: nowrap;
-    color: #5A4D40; background: transparent; transition: all 0.2s;
-    font-family: 'Outfit', system-ui;
-  }
-  .stab-btn:hover { color: #C4A882; background: rgba(255,255,255,0.03); }
-  .stab-active { background: var(--color-neon) !important; color: #0A0A0A !important; box-shadow: 0 2px 12px rgba(245,158,11,0.2); }
-
-  .ak-card { padding: 18px; border-radius: 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s; }
-  .ak-card:hover { border-color: color-mix(in srgb, var(--ak-color) 20%, transparent); }
-  .ak-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-  .ak-icon { font-size: 22px; }
-  .ak-name { font-size: 14px; font-weight: 700; color: #F0DCC8; }
-  .ak-hint { font-size: 10px; color: #4A3D30; }
-  .ak-connected { font-size: 10px; font-weight: 700; color: #34D399; margin-left: auto; padding: 2px 8px; border-radius: 8px; background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.15); }
-  .ak-input-row { display: flex; gap: 8px; }
-  .ak-input { flex: 1; padding: 10px 14px; border-radius: 10px; background: rgba(10,10,15,0.6); border: 1px solid rgba(255,255,255,0.06); color: #C4A882; font-size: 12px; outline: none; font-family: 'Outfit'; transition: border-color 0.2s; }
-  .ak-input:focus { border-color: rgba(245,158,11,0.2); }
-  .ak-input::placeholder { color: rgba(200,180,160,0.2); }
-  .ak-save { padding: 10px 18px; border-radius: 10px; border: none; cursor: pointer; background: rgba(245,158,11,0.1); color: #F59E0B; font-size: 12px; font-weight: 700; transition: all 0.2s; font-family: 'Outfit'; }
-  .ak-save:hover { background: rgba(245,158,11,0.2); }
-  .ak-note { padding: 14px; border-radius: 12px; text-align: center; background: rgba(52,211,153,0.04); border: 1px solid rgba(52,211,153,0.08); }
-  .ak-note p { font-size: 11px; color: #34D399; margin: 0; }
-
-  .dev-tool-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 12px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); text-decoration: none; transition: all 0.2s; cursor: pointer; }
-  .dev-tool-card:hover { background: rgba(245,158,11,0.05); border-color: rgba(245,158,11,0.15); transform: translateY(-2px); }
-  .dev-tool-icon { font-size: 24px; }
-  .dev-tool-label { font-size: 12px; font-weight: 700; color: #C4A882; }
-  .dev-tool-desc { font-size: 9px; color: #4A3D30; text-align: center; }
-`;
+// CSS migrated to globals.css

@@ -175,7 +175,7 @@ export default function PersonalityPage() {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <style>{css}</style>
+            {/* CSS in globals.css */}
 
             <div className="per-topbar">
                 <Link href="/" className="per-back-link">🔥 Hub</Link>
@@ -302,115 +302,4 @@ export default function PersonalityPage() {
     );
 }
 
-const css = `
-  .per-page-title {
-    font-size: 28px; font-weight: 900; margin: 0 0 6px;
-    background: linear-gradient(135deg, #F0DCC8, #FBBF24);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    font-family: 'Outfit', system-ui;
-  }
-  .per-page-sub { font-size: 14px; color: #5A4D40; }
-  .per-topbar {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 0; margin-bottom: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-  }
-  .per-back-link {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 16px; border-radius: 10px;
-    font-size: 13px; font-weight: 800; color: #C4A882;
-    text-decoration: none; transition: all 0.2s;
-    background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.12);
-    font-family: 'Outfit', system-ui;
-  }
-  .per-back-link:hover { background: rgba(245,158,11,0.12); color: #F59E0B; border-color: rgba(245,158,11,0.25); }
-  .per-topbar-title { font-size: 12px; color: #3A3530; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-
-  .per-preset-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-  .per-preset-card {
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    padding: 16px 6px; border-radius: 14px; cursor: pointer;
-    background: rgba(255,255,255,0.02); border: 1.5px solid rgba(255,255,255,0.06);
-    transition: all 0.3s; font-family: 'Outfit';
-  }
-  .per-preset-card:hover {
-    background: rgba(255,255,255,0.04); border-color: color-mix(in srgb, var(--pr-color) 25%, transparent);
-    transform: translateY(-3px);
-  }
-  .per-preset-active {
-    background: color-mix(in srgb, var(--pr-color) 6%, transparent) !important;
-    border-color: color-mix(in srgb, var(--pr-color) 40%, transparent) !important;
-    box-shadow: 0 0 20px color-mix(in srgb, var(--pr-color) 10%, transparent);
-  }
-  .per-preset-emoji { font-size: 28px; }
-  .per-preset-label { font-size: 12px; font-weight: 800; color: var(--pr-color); }
-  .per-preset-desc { font-size: 9px; color: #4A3D30; text-align: center; line-height: 1.3; }
-  .per-preset-active .per-preset-desc { color: #6A5A4A; }
-
-  .per-section-title { font-size: 15px; font-weight: 800; color: #F0DCC8; margin-bottom: 2px; font-family: 'Outfit'; }
-  .per-section-desc { font-size: 11px; color: #4A3D30; margin-bottom: 12px; }
-
-  .per-name-input {
-    width: 100%; padding: 12px 16px; border-radius: 12px;
-    background: rgba(10,10,15,0.6); border: 1px solid rgba(255,255,255,0.06);
-    color: #F0DCC8; font-size: 16px; font-weight: 700; outline: none;
-    font-family: 'Outfit'; transition: border-color 0.3s;
-  }
-  .per-name-input:focus { border-color: rgba(245,158,11,0.25); box-shadow: 0 0 20px rgba(245,158,11,0.04); }
-
-  .per-textarea {
-    width: 100%; padding: 14px 16px; border-radius: 12px; resize: vertical;
-    background: rgba(10,10,15,0.6); border: 1px solid rgba(255,255,255,0.06);
-    color: #F0DCC8; font-size: 13px; line-height: 1.6; outline: none;
-    font-family: 'Outfit'; transition: border-color 0.3s; min-height: 120px;
-  }
-  .per-textarea:focus { border-color: rgba(245,158,11,0.25); box-shadow: 0 0 20px rgba(245,158,11,0.04); }
-  .per-textarea::placeholder { color: rgba(240,220,200,0.2); }
-
-  .per-mini-label { display: block; font-size: 11px; color: #5A4D40; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-
-  .per-role-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-  .per-role-chip {
-    display: flex; align-items: center; gap: 6px;
-    padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(10,10,15,0.6); color: #6A5A4A; font-size: 13px; font-weight: 600;
-    cursor: pointer; transition: all 0.25s; font-family: 'Outfit';
-  }
-  .per-role-chip:hover { border-color: rgba(245,158,11,0.2); color: #C4A882; }
-  .per-role-active {
-    border-color: rgba(245,158,11,0.4) !important; color: #F59E0B !important;
-    background: rgba(245,158,11,0.08) !important;
-    box-shadow: 0 0 12px rgba(245,158,11,0.1);
-  }
-
-  .per-traits { display: flex; flex-direction: column; gap: 18px; }
-  .per-trait-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
-  .per-trait-label { font-size: 13px; font-weight: 700; color: #C4A882; }
-  .per-trait-value { font-size: 12px; color: #5A4D40; font-weight: 600; }
-  .per-slider {
-    width: 100%; height: 6px; border-radius: 3px; appearance: none; cursor: pointer;
-    background: linear-gradient(90deg, rgba(245,158,11,0.1) 0%, rgba(245,158,11,0.2) 100%);
-  }
-  .per-slider::-webkit-slider-thumb {
-    appearance: none; width: 18px; height: 18px; border-radius: 50%;
-    background: #F59E0B; border: 3px solid #0A0A0F;
-    box-shadow: 0 0 10px rgba(245,158,11,0.4); cursor: pointer;
-  }
-  .per-trait-ends { display: flex; justify-content: space-between; font-size: 10px; color: #3A3530; margin-top: 4px; }
-
-  .per-style-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .per-style-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 8px;
-    padding: 18px 8px; border-radius: 14px; cursor: pointer;
-    background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.06);
-    transition: all 0.25s; font-family: 'Outfit';
-  }
-  .per-style-btn:hover { background: rgba(255,255,255,0.05); border-color: rgba(245,158,11,0.15); transform: translateY(-2px); }
-  .per-style-active {
-    background: rgba(245,158,11,0.08) !important; border-color: rgba(245,158,11,0.3) !important;
-    box-shadow: 0 0 20px rgba(245,158,11,0.08); transform: translateY(-2px);
-  }
-  .per-style-icon { font-size: 28px; }
-  .per-style-name { font-size: 11px; font-weight: 700; color: #6A5A4A; }
-  .per-style-active .per-style-name { color: #F59E0B; }
-`;
+// CSS migrated to globals.css

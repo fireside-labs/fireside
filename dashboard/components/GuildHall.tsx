@@ -429,19 +429,7 @@ export default function GuildHall({ theme }: GuildHallProps) {
             </div>
 
             {/* Ember + Dust keyframes */}
-            <style>{`
-                @keyframes emberRise {
-                    0% { transform: translateY(0) scale(1); opacity: 0.9; }
-                    50% { transform: translateY(-80px) translateX(${Math.random() > 0.5 ? '' : '-'}8px) scale(0.6); opacity: 0.6; }
-                    100% { transform: translateY(-160px) scale(0.2); opacity: 0; }
-                }
-                @keyframes dustFloat {
-                    0%, 100% { transform: translate(0, 0); opacity: 0.2; }
-                    25% { transform: translate(5px, -3px); opacity: 0.4; }
-                    50% { transform: translate(-3px, 2px); opacity: 0.15; }
-                    75% { transform: translate(2px, -5px); opacity: 0.35; }
-                }
-            `}</style>
+            {/* CSS in globals.css */}
         </div>
     );
 }

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
@@ -6,11 +6,11 @@ import { API_BASE, getWebSocketUrl, intervenePipeline, approvePipeline, rejectPi
 import { DiscoveryCard } from "@/components/GuidedTour";
 import WorkflowBuilder from "@/components/WorkflowBuilder";
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   Pipeline â€” The Forge
+/* ═══════════════════════════════════════════════════════════════════
+   Pipeline — The Forge
    Companion-guided task orchestration.
    The mascot narrates, guides, and reacts.
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════════ */
 
 interface Stage {
   name: string;
@@ -69,49 +69,49 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const ROLE_ICONS: Record<string, string> = {
-  planner: "ðŸ§ ",
-  coder: "âš¡",
-  backend: "âš¡",
-  frontend: "ðŸŽ¨",
-  tester: "ðŸ”",
-  reviewer: "ðŸ‘¤",
-  architect: "ðŸ›ï¸",
-  devil_advocate: "ðŸ˜ˆ",
-  end_user: "ðŸ‘¤",
-  distiller: "ðŸ“œ",
-  system: "âš™ï¸",
+  planner: "🧠",
+  coder: "⚡",
+  backend: "⚡",
+  frontend: "🎨",
+  tester: "🔍",
+  reviewer: "👤",
+  architect: "🏛️",
+  devil_advocate: "😈",
+  end_user: "👤",
+  distiller: "📜",
+  system: "⚙️",
 };
 
-// â”€â”€ Stage emoji mapping â”€â”€
+// ── Stage emoji mapping ──
 const STAGE_EMOJI: Record<string, string> = {
-  Spec: "ðŸ“œ", Plan: "ðŸ“œ", Outline: "ðŸ“œ", Context: "ðŸ“œ", Gather: "ðŸ”Ž",
-  Build: "ðŸ”¨", Content: "ðŸ”¨", Draft: "âœï¸", Design: "ðŸŽ¨",
-  Test: "ðŸ”", Analyze: "ðŸ“Š", Insights: "ðŸ’¡",
-  Review: "ðŸ‘¤", Write: "âœï¸", Report: "ðŸ“‹", Execute: "âš¡",
+  Spec: "📜", Plan: "📜", Outline: "📜", Context: "📜", Gather: "🔎",
+  Build: "🔨", Content: "🔨", Draft: "✍️", Design: "🎨",
+  Test: "🔍", Analyze: "📊", Insights: "💡",
+  Review: "👤", Write: "✍️", Report: "📋", Execute: "⚡",
 };
 
-// Pipelines are loaded from the backend â€” start empty
+// Pipelines are loaded from the backend — start empty
 const INITIAL_PIPELINES: Pipeline[] = [];
 
 
-// â”€â”€ Template auto-detection â”€â”€
+// ── Template auto-detection ──
 function detectTemplate(input: string): { name: string; icon: string; stages: string[] } {
   const lower = input.toLowerCase();
   if (["api", "backend", "frontend", "build", "code", "deploy", "app", "function"].some(k => lower.includes(k)))
-    return { name: "Coding", icon: "âš¡", stages: ["ðŸ“œ Plan", "ðŸ”¨ Build", "ðŸ” Test", "ðŸ‘¤ Review"] };
+    return { name: "Coding", icon: "⚡", stages: ["📜 Plan", "🔨 Build", "🔍 Test", "👤 Review"] };
   if (["research", "investigate", "find out", "look into", "compare"].some(k => lower.includes(k)))
-    return { name: "Research", icon: "ðŸ”", stages: ["ðŸ”Ž Gather", "ðŸ“Š Analyze", "âœï¸ Write"] };
+    return { name: "Research", icon: "🔍", stages: ["🔎 Gather", "📊 Analyze", "✍️ Write"] };
   if (["draft", "letter", "email", "write a"].some(k => lower.includes(k)))
-    return { name: "Drafting", icon: "âœ‰ï¸", stages: ["ðŸ“œ Context", "âœï¸ Draft", "ðŸ‘¤ Review"] };
+    return { name: "Drafting", icon: "✉️", stages: ["📜 Context", "✍️ Draft", "👤 Review"] };
   if (["presentation", "slides", "deck"].some(k => lower.includes(k)))
-    return { name: "Presentation", icon: "ðŸ“Š", stages: ["ðŸ“œ Outline", "ðŸ”¨ Content", "ðŸŽ¨ Design", "ðŸ‘¤ Review"] };
+    return { name: "Presentation", icon: "📊", stages: ["📜 Outline", "🔨 Content", "🎨 Design", "👤 Review"] };
   if (["analyze", "data", "trends", "metrics", "numbers"].some(k => lower.includes(k)))
-    return { name: "Analysis", icon: "ðŸ“ˆ", stages: ["ðŸ”Ž Gather", "ðŸ“Š Analyze", "ðŸ’¡ Insights", "ðŸ“‹ Report"] };
-  return { name: "General", icon: "ðŸ“‹", stages: ["ðŸ“œ Plan", "âš¡ Execute", "ðŸ‘¤ Review"] };
+    return { name: "Analysis", icon: "📈", stages: ["🔎 Gather", "📊 Analyze", "💡 Insights", "📋 Report"] };
+  return { name: "General", icon: "📋", stages: ["📜 Plan", "⚡ Execute", "👤 Review"] };
 }
 
 
-// Agent feed starts empty â€” populated from WebSocket events
+// Agent feed starts empty — populated from WebSocket events
 const INITIAL_AGENT_FEED: AgentMessage[] = [];
 
 
@@ -132,7 +132,7 @@ export default function PipelinePage() {
   const [creationMode, setCreationMode] = useState<"text" | "visual">("text");
   const feedEndRef = useRef<HTMLDivElement>(null);
 
-  // â”€â”€ WebSocket: live pipeline events â†’ agent feed â”€â”€
+  // ── WebSocket: live pipeline events → agent feed ──
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
@@ -163,7 +163,7 @@ export default function PipelinePage() {
               // File created toast
               if (topic === "pipeline.file_created") {
                 const fname = (payload.path || "").split("/").pop() || (payload.path || "").split("\\").pop() || "file";
-                setFileToast(`ðŸ“„ Created: ${fname}`);
+                setFileToast(`📄 Created: ${fname}`);
                 setTimeout(() => setFileToast(null), 5000);
               }
 
@@ -196,34 +196,34 @@ export default function PipelinePage() {
 
     switch (topic) {
       case "pipeline.stage_started":
-        return { id, role: "system", icon: "â–¶", color: "#60A5FA", message: `Stage started: ${stage} (${payload.stage_index as number + 1}/${payload.total_stages})`, ts, type: "normal" };
+        return { id, role: "system", icon: "▶", color: "#60A5FA", message: `Stage started: ${stage} (${payload.stage_index as number + 1}/${payload.total_stages})`, ts, type: "normal" };
       case "pipeline.stage_complete": {
         const verdict = payload.verdict as string;
         const duration = payload.duration_s as number;
         const eta = payload.eta_seconds as number;
         const type: AgentMessage["type"] = verdict === "pass" || verdict === "ship" ? "verdict_pass" : verdict === "fail" ? "verdict_fail" : "normal";
-        return { id, role: stage || "system", icon: verdict === "pass" ? "âœ”" : verdict === "fail" ? "âœ•" : "â†’", color: verdict === "pass" ? "#34D399" : verdict === "fail" ? "#F87171" : "#F59E0B", message: `Stage ${stage}: ${verdict.toUpperCase()}${duration ? ` (${duration}s)` : ""}${eta ? ` Â· ETA ~${Math.round(eta / 60)}min` : ""}`, ts, type };
+        return { id, role: stage || "system", icon: verdict === "pass" ? "✔" : verdict === "fail" ? "✕" : "→", color: verdict === "pass" ? "#34D399" : verdict === "fail" ? "#F87171" : "#F59E0B", message: `Stage ${stage}: ${verdict.toUpperCase()}${duration ? ` (${duration}s)` : ""}${eta ? ` · ETA ~${Math.round(eta / 60)}min` : ""}`, ts, type };
       }
       case "pipeline.file_created":
-        return { id, role: "system", icon: "ðŸ“„", color: "#A78BFA", message: `File created: ${payload.path}`, ts, type: "normal" };
+        return { id, role: "system", icon: "📄", color: "#A78BFA", message: `File created: ${payload.path}`, ts, type: "normal" };
       case "pipeline.shipped": {
         const dur = payload.duration_s as number;
         const tokens = payload.tokens as { prompt?: number; completion?: number } | undefined;
         const totalTokens = tokens ? (tokens.prompt || 0) + (tokens.completion || 0) : 0;
-        return { id, role: "system", icon: "ðŸš€", color: "#F59E0B", message: `Pipeline complete! ${dur ? `${Math.round(dur / 60)}min` : ""}${totalTokens ? ` Â· ${(totalTokens / 1000).toFixed(1)}K tokens` : ""}`, ts, type: "verdict_pass" };
+        return { id, role: "system", icon: "🚀", color: "#F59E0B", message: `Pipeline complete! ${dur ? `${Math.round(dur / 60)}min` : ""}${totalTokens ? ` · ${(totalTokens / 1000).toFixed(1)}K tokens` : ""}`, ts, type: "verdict_pass" };
       }
       case "pipeline.escalated":
-        return { id, role: "system", icon: "ðŸ–", color: "#F87171", message: `Escalated: ${payload.reason || "Max iterations reached"}`, ts, type: "escalation" };
+        return { id, role: "system", icon: "🖐", color: "#F87171", message: `Escalated: ${payload.reason || "Max iterations reached"}`, ts, type: "escalation" };
       case "pipeline.human_intervention":
-        return { id, role: "you", icon: "ðŸ’¬", color: "#22D3EE", message: `Guidance: ${payload.guidance}`, ts, type: "normal" };
+        return { id, role: "you", icon: "💬", color: "#22D3EE", message: `Guidance: ${payload.guidance}`, ts, type: "normal" };
       case "pipeline.iteration":
-        return { id, role: "system", icon: "ðŸ”„", color: "#4A3D30", message: `Iteration ${payload.iteration} â€” ${payload.stage} ${payload.verdict}`, ts, type: "iteration" };
+        return { id, role: "system", icon: "🔄", color: "#4A3D30", message: `Iteration ${payload.iteration} — ${payload.stage} ${payload.verdict}`, ts, type: "iteration" };
       case "pipeline.gate_waiting":
-        return { id, role: "system", icon: "â¸", color: "#FBBF24", message: `âœ‰ï¸ Approval required: ${payload.prompt || "Continue?"}`, ts, type: "normal" };
+        return { id, role: "system", icon: "⏸", color: "#FBBF24", message: `✉️ Approval required: ${payload.prompt || "Continue?"}`, ts, type: "normal" };
       case "pipeline.gate_approved":
-        return { id, role: "you", icon: "âœ…", color: "#34D399", message: `Gate approved â€” pipeline continuing`, ts, type: "verdict_pass" };
+        return { id, role: "you", icon: "✅", color: "#34D399", message: `Gate approved — pipeline continuing`, ts, type: "verdict_pass" };
       case "pipeline.gate_rejected":
-        return { id, role: "you", icon: "âŒ", color: "#F87171", message: `Gate rejected â€” ${payload.stage || "stage"} declined`, ts, type: "verdict_fail" };
+        return { id, role: "you", icon: "❌", color: "#F87171", message: `Gate rejected — ${payload.stage || "stage"} declined`, ts, type: "verdict_fail" };
       default:
         return null;
     }
@@ -275,7 +275,7 @@ export default function PipelinePage() {
       setAgentFeed(prev => [...prev, {
         id: `int_${Date.now()}`,
         role: "you",
-        icon: "ðŸ’¬",
+        icon: "💬",
         color: "#22D3EE",
         message: interveneText.trim(),
         ts: Date.now(),
@@ -344,10 +344,10 @@ export default function PipelinePage() {
       <DiscoveryCard pageKey="/pipeline" />
 
       <div className="fp-layout">
-        {/* â”€â”€ Sidebar â”€â”€ */}
+        {/* ── Sidebar ── */}
         <div className="fp-sidebar">
           <div className="fp-sidebar-header">
-            <Link href="/" className="fp-back-hub">ðŸ”¥ Hub</Link>
+            <Link href="/" className="fp-back-hub">🔥 Hub</Link>
             <h2 className="fp-sidebar-title">Tasks</h2>
           </div>
 
@@ -355,7 +355,7 @@ export default function PipelinePage() {
             className={`fp-pipeline-card new-task ${!activePipeline ? "active" : ""}`}
             onClick={() => { setActivePipeline(null); setShowDebate(false); }}
           >
-            <span className="fp-pc-icon">âš¡</span>
+            <span className="fp-pc-icon">⚡</span>
             <span className="fp-pc-title" style={{ color: "#F59E0B" }}>New Task</span>
           </button>
 
@@ -370,7 +370,7 @@ export default function PipelinePage() {
                   <span className="fp-pc-icon">{p.templateIcon}</span>
                   <span className="fp-pc-template">{p.template}</span>
                   {p.status === "running" && <span className="fp-pc-live">LIVE</span>}
-                  {p.status === "complete" && <span className="fp-pc-done">âœ”</span>}
+                  {p.status === "complete" && <span className="fp-pc-done">✔</span>}
                 </div>
                 <div className="fp-pc-title">{p.title}</div>
                 <div className="fp-pc-stages">
@@ -379,19 +379,19 @@ export default function PipelinePage() {
                   ))}
                 </div>
                 {p.status === "running" && (
-                  <div className="fp-pc-meta">Iteration {p.iteration} Â· {p.eta || "..."}</div>
+                  <div className="fp-pc-meta">Iteration {p.iteration} · {p.eta || "..."}</div>
                 )}
               </button>
             ))}
           </div>
         </div>
 
-        {/* â”€â”€ Main Area â”€â”€ */}
+        {/* ── Main Area ── */}
         <div className="fp-main">
 
-          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              CREATION FLOW â€” text or visual
-              â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {/* ═══════════════════════════════════════════════
+              CREATION FLOW — text or visual
+              ═══════════════════════════════════════════════ */}
           {!activePipeline && creationMode === "visual" && (
             <div className="fp-builder-container">
               <WorkflowBuilder
@@ -409,11 +409,11 @@ export default function PipelinePage() {
                 <button
                   className="fp-mode-btn active"
                   onClick={() => setCreationMode("text")}
-                >âœï¸ Text</button>
+                >✏️ Text</button>
                 <button
                   className="fp-mode-btn"
                   onClick={() => setCreationMode("visual")}
-                >ðŸ”§ Visual Builder</button>
+                >🔧 Visual Builder</button>
               </div>
 
               {/* Input */}
@@ -437,17 +437,17 @@ export default function PipelinePage() {
                     {detected.stages.map((s, i) => (
                       <span key={i} className="fp-detected-stage" style={{ animationDelay: `${i * 0.08}s` }}>
                         {s}
-                        {i < detected.stages.length - 1 && <span className="fp-detected-arrow">â†’</span>}
+                        {i < detected.stages.length - 1 && <span className="fp-detected-arrow">→</span>}
                       </span>
                     ))}
                   </div>
 
                   <button className="fp-start-btn" onClick={submitTask} disabled={submitting}>
-                    {submitting ? "â³ Starting..." : "âš¡ Start"}
+                    {submitting ? "⏳ Starting..." : "⚡ Start"}
                   </button>
 
                   <button className="fp-customize-toggle" onClick={() => setShowAdvanced(!showAdvanced)}>
-                    {showAdvanced ? "Hide options â–¾" : "Want to customize? â–¸"}
+                    {showAdvanced ? "Hide options ▾" : "Want to customize? ▸"}
                   </button>
 
                   {showAdvanced && (
@@ -490,9 +490,9 @@ export default function PipelinePage() {
             </div>
           )}
 
-          {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-              PIPELINE DETAIL â€” running/complete view
-              â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+          {/* ═══════════════════════════════════════════════
+              PIPELINE DETAIL — running/complete view
+              ═══════════════════════════════════════════════ */}
           {current && (
             <div className="fp-detail">
               {/* Header */}
@@ -501,15 +501,15 @@ export default function PipelinePage() {
                   <h1 className="fp-detail-title">{current.templateIcon} {current.title}</h1>
                   <div className="fp-detail-meta">
                     <span className={`fp-status-badge ${current.status}`}>
-                      {current.status === "running" ? "ðŸ”„ Running" : current.status === "complete" ? "âœ… Complete" : current.status === "waiting_approval" ? "â¸ Approval Gate" : "âš ï¸ " + current.status}
+                      {current.status === "running" ? "🔄 Running" : current.status === "complete" ? "✅ Complete" : current.status === "waiting_approval" ? "⏸ Approval Gate" : "⚠️ " + current.status}
                     </span>
                     <span>Iteration {current.iteration}/{current.maxIterations}</span>
-                    <span>{current.mode === "mesh" ? "ðŸ”— Mesh" : "ðŸ–¥ï¸ Local"}</span>
+                    <span>{current.mode === "mesh" ? "🔗 Mesh" : "🖥️ Local"}</span>
                   </div>
                 </div>
               </div>
 
-              {/* â”€â”€ FORGE with mascot â”€â”€ */}
+              {/* ── FORGE with mascot ── */}
               <div className="fp-forge">
                 <div className="fp-forge-glow" />
 
@@ -518,11 +518,11 @@ export default function PipelinePage() {
                   {current.stages.map((stage, i) => (
                     <div key={i} className={`fp-stage ${stage.status}`} style={{ animationDelay: `${i * 0.12}s` }}>
                       <div className={`fp-ember-stone ${stage.status}`}>
-                        {stage.status === "done" && <span className="fp-ember-check">âœ”</span>}
+                        {stage.status === "done" && <span className="fp-ember-check">✔</span>}
                         {stage.status === "active" && <div className="fp-ember-flames" />}
-                        {stage.status === "failed" && <span className="fp-ember-x">âœ•</span>}
+                        {stage.status === "failed" && <span className="fp-ember-x">✕</span>}
                       </div>
-                      <div className="fp-stage-label">{stage.emoji || STAGE_EMOJI[stage.name] || "âš¡"} {stage.name}</div>
+                      <div className="fp-stage-label">{stage.emoji || STAGE_EMOJI[stage.name] || "⚡"} {stage.name}</div>
                       <div className="fp-stage-role">{stage.role}</div>
                       {i < current.stages.length - 1 && (
                         <div className={`fp-fire-trail ${stage.status === "done" ? "lit" : ""}`} />
@@ -538,10 +538,10 @@ export default function PipelinePage() {
                 <div className="fp-progress-bar">
                   <div className="fp-progress-fill" style={{ width: `${progress}%` }} />
                 </div>
-                <span className="fp-progress-text">{progress}% Â· {current.eta || "Complete"}</span>
+                <span className="fp-progress-text">{progress}% · {current.eta || "Complete"}</span>
               </div>
 
-              {/* â•â•â• AGENT FEED â•â•â• */}
+              {/* ═══ AGENT FEED ═══ */}
               {current.status === "running" && (
                 <div className="fp-feed-section">
                   <button
@@ -549,8 +549,8 @@ export default function PipelinePage() {
                     onClick={() => setShowFeed(!showFeed)}
                   >
                     <span className="fp-feed-toggle-dot" />
-                    Agent Feed â€” {agentFeed.length} messages
-                    <span className="fp-feed-toggle-arrow">{showFeed ? "â–¼" : "â–¶"}</span>
+                    Agent Feed — {agentFeed.length} messages
+                    <span className="fp-feed-toggle-arrow">{showFeed ? "▼" : "▶"}</span>
                   </button>
 
                   {showFeed && (
@@ -585,7 +585,7 @@ export default function PipelinePage() {
                             );
                           }
 
-                          // Debate messages â€” grouped with indent
+                          // Debate messages — grouped with indent
                           const isDebate = msg.type === "debate" || msg.type === "debate_start";
 
                           return (
@@ -616,14 +616,14 @@ export default function PipelinePage() {
                         })}
                       </div>
 
-                      {/* Sticky intervene bar â€” always visible */}
+                      {/* Sticky intervene bar — always visible */}
                       <div className="fp-feed-intervene-sticky">
                         {!showIntervene ? (
                           <button
                             className="fp-feed-intervene-btn"
                             onClick={() => setShowIntervene(true)}
                           >
-                            ðŸ–ï¸ Intervene â€” Jump In
+                            🖐️ Intervene — Jump In
                           </button>
                         ) : (
                           <div className="fp-feed-intervene-input-wrap">
@@ -643,7 +643,7 @@ export default function PipelinePage() {
                               className="fp-feed-send-btn"
                               onClick={handleIntervene}
                             >
-                              Send âš¡
+                              Send ⚡
                             </button>
                           </div>
                         )}
@@ -658,7 +658,7 @@ export default function PipelinePage() {
               {current.debate && current.debate.length > 0 && (
                 <div className="fp-debate-section">
                   <button className="fp-debate-toggle" onClick={() => setShowDebate(!showDebate)}>
-                    ðŸ—£ï¸ Socratic Review â€” the team is debating {showDebate ? "â–¼" : "â–¶"}
+                    🗣️ Socratic Review — the team is debating {showDebate ? "▼" : "▶"}
                   </button>
                   {showDebate && (
                     <div className="fp-debate">
@@ -676,7 +676,7 @@ export default function PipelinePage() {
                           </div>
                         </div>
                       ))}
-                      <button className="fp-intervene-btn">ðŸ–ï¸ Intervene â€” Add Your Take</button>
+                      <button className="fp-intervene-btn">🖐️ Intervene — Add Your Take</button>
                     </div>
                   )}
                 </div>
@@ -685,8 +685,8 @@ export default function PipelinePage() {
               {/* Lessons */}
               {current.lessons && current.lessons.length > 0 && (
                 <div className="fp-lessons">
-                  <h3 className="fp-lessons-title">ðŸ“œ Lessons Learned</h3>
-                  {current.lessons.map((l, i) => <div key={i} className="fp-lesson-item">â€¢ {l}</div>)}
+                  <h3 className="fp-lessons-title">📜 Lessons Learned</h3>
+                  {current.lessons.map((l, i) => <div key={i} className="fp-lesson-item">• {l}</div>)}
                 </div>
               )}
 
@@ -718,48 +718,48 @@ export default function PipelinePage() {
                         const allDone = newStages.every(s => s.status === "done");
                         return { ...p, stages: newStages, status: allDone ? "complete" as const : "running" as const };
                       }));
-                    }}>Force Advance â–¶</button>
+                    }}>Force Advance ▶</button>
                   </>
                 )}
                 {current.status === "complete" && (
-                  <button className="fp-action-btn new" onClick={() => setActivePipeline(null)}>âš¡ Start New Task</button>
+                  <button className="fp-action-btn new" onClick={() => setActivePipeline(null)}>⚡ Start New Task</button>
                 )}
                 {current.status === "escalated" && (
-                  <button className="fp-action-btn advance" onClick={() => setShowIntervene(true)}>ðŸ’¬ Give Guidance</button>
+                  <button className="fp-action-btn advance" onClick={() => setShowIntervene(true)}>💬 Give Guidance</button>
                 )}
                 {current.status === "waiting_approval" && (
                   <div className="fp-gate-ui">
                     <div className="fp-gate-prompt">
-                      <span className="fp-gate-icon">â¸</span>
+                      <span className="fp-gate-icon">⏸</span>
                       <span className="fp-gate-text">Approval required to continue</span>
                     </div>
                     <div className="fp-gate-actions">
                       <button className="fp-action-btn fp-gate-approve" onClick={async () => {
                         await approvePipeline(current.id);
                         setPipelines(prev => prev.map(p => p.id === current.id ? { ...p, status: "running" as const } : p));
-                      }}>âœ… Approve</button>
+                      }}>✅ Approve</button>
                       <button className="fp-action-btn fp-gate-reject" onClick={async () => {
                         await rejectPipeline(current.id);
                         setPipelines(prev => prev.map(p => p.id === current.id ? { ...p, status: "escalated" as const } : p));
-                      }}>âŒ Reject</button>
+                      }}>❌ Reject</button>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* â•â•â• OUTPUT VIEWER â€” files + tokens â•â•â• */}
+              {/* ═══ OUTPUT VIEWER — files + tokens ═══ */}
               {current.status === "complete" && (
                 <div className="fp-output-section">
-                  <h3 className="fp-output-title">ðŸ“¦ Pipeline Output</h3>
+                  <h3 className="fp-output-title">📦 Pipeline Output</h3>
 
                   {/* Token usage */}
                   <div className="fp-output-tokens">
                     <div className="fp-token-stat">
-                      <span className="fp-token-label">â± Duration</span>
-                      <span className="fp-token-value">{current.eta || "â€”"}</span>
+                      <span className="fp-token-label">⏱ Duration</span>
+                      <span className="fp-token-value">{current.eta || "—"}</span>
                     </div>
                     <div className="fp-token-stat">
-                      <span className="fp-token-label">ðŸ”„ Iterations</span>
+                      <span className="fp-token-label">🔄 Iterations</span>
                       <span className="fp-token-value">{current.iteration}</span>
                     </div>
                   </div>
@@ -786,6 +786,5 @@ export default function PipelinePage() {
   );
 }
 
-
+// ════════════════════════════════════════════════════════════════════
 // Pipeline CSS now lives in globals.css (migrated for Tauri CSP compat)
-

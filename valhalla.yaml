@@ -103,6 +103,7 @@ plugins:
   - browse
   - guardian
   - social
+  - terminal
 soul:
   identity: mesh/souls/IDENTITY.odin.md
   personality: mesh/souls/SOUL.odin.md

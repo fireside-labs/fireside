@@ -89,35 +89,7 @@ const ACTION_ANIMATION: Record<SpriteAction, string> = {
     happy: "spriteHappy 0.5s ease-in-out infinite",
 };
 
-const KEYFRAMES = `
-@keyframes spriteBreath {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-2px); }
-}
-@keyframes spriteBob {
-    0%, 100% { transform: translateY(0) translateX(0); }
-    25% { transform: translateY(-3px) translateX(2px); }
-    75% { transform: translateY(-1px) translateX(-2px); }
-}
-@keyframes spriteWork {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(-2deg) translateY(-1px); }
-    75% { transform: rotate(2deg) translateY(-1px); }
-}
-@keyframes spriteSleep {
-    0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
-    50% { transform: translateY(1px) scale(0.98); opacity: 0.5; }
-}
-@keyframes spriteChat {
-    0%, 100% { transform: translateY(0); }
-    30% { transform: translateY(-3px); }
-    60% { transform: translateY(-1px); }
-}
-@keyframes spriteHappy {
-    0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-4px) scale(1.05); }
-}
-`;
+// CSS migrated to globals.css
 
 // ---------------------------------------------------------------------------
 // Component
@@ -149,7 +121,7 @@ export default function SpriteCharacter({
                 cursor: onClick ? "pointer" : undefined,
             }}
         >
-            <style>{KEYFRAMES}</style>
+            {/* CSS in globals.css */}
             {!imgError ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img

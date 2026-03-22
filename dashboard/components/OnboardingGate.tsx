@@ -97,7 +97,7 @@ export default function OnboardingGate({ children }: { children: React.ReactNode
     if (loading) return (
         <div style={{ position: "fixed", inset: 0, background: "#080810", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div style={{ width: 32, height: 32, borderRadius: "50%", border: "2px solid rgba(245,158,11,0.15)", borderTop: "2px solid #F59E0B", animation: "spin 0.8s linear infinite" }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            {/* keyframes in globals.css */}
         </div>
     );
 

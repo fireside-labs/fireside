@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { API_BASE } from "../lib/api";
@@ -8,11 +8,11 @@ import { playWhoosh, playTick } from "@/components/FiresideSounds";
 import { DiscoveryCard } from "@/components/GuidedTour";
 import ReactMarkdown from "react-markdown";
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   Fireside â€” Hub + Chat
+/* ═══════════════════════════════════════════════════════════════════
+   Fireside — Hub + Chat
    Split layout hub (campfire scene left, 3 nav cards right)
    Transitions to premium chat view with conversation sidebar
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════════ */
 
 const GREETINGS = [
   "What shall we work on today?",
@@ -101,13 +101,13 @@ export default function CampfireHub() {
     const convoId = activeConvoRef.current;
     console.log("[Fireside] saveCurrentChat called", { historyLen: history.length, convoId });
     if (history.length === 0) {
-      console.log("[Fireside] saveCurrentChat skipped â€” no messages");
+      console.log("[Fireside] saveCurrentChat skipped -- no messages");
       return;
     }
     const id = convoId || `conv_${Date.now()}`;
     const title = generateTitle(history);
     const preview = history[history.length - 1]?.content?.substring(0, 80) || "";
-    console.log("[Fireside] saving conversation", { id, title, messageCount: history.length });
+    console.log("[Fireside] saving conversation", { id, title: generateTitle(history), messageCount: history.length });
     const convo: Conversation = {
       id, title, preview,
       date: new Date().toISOString(),
@@ -117,7 +117,6 @@ export default function CampfireHub() {
       const filtered = prev.filter(c => c.id !== id);
       const updated = [convo, ...filtered].slice(0, 50); // keep last 50
       saveConversations(updated);
-      console.log("[Fireside] conversations updated â€” total:", updated.length);
       return updated;
     });
     if (!convoId) setActiveConvo(id);
@@ -185,7 +184,7 @@ export default function CampfireHub() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
-  // â•â•â• Smart Chat Compaction â•â•â•
+  // ═══ Smart Chat Compaction ═══
   const estimateTokens = (text: string) => Math.ceil(text.length / 4);
 
   const getContextLimit = () => {
@@ -215,7 +214,7 @@ export default function CampfireHub() {
     try {
       const memories = JSON.parse(localStorage.getItem("fireside_memories") || "[]");
       if (memories.length === 0) return "";
-      // Simple keyword matching â€” find memories relevant to current message
+      // Simple keyword matching — find memories relevant to current message
       const words = currentMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3);
       const relevant = memories.filter((m: { summary: string }) =>
         words.some(w => m.summary.toLowerCase().includes(w))
@@ -269,7 +268,7 @@ export default function CampfireHub() {
         ...toKeep,
       ];
     } catch {
-      return history; // Network error â€” don't compact
+      return history; // Network error — don't compact
     }
   };
 
@@ -312,7 +311,7 @@ export default function CampfireHub() {
       } catch {
         // Fallback: try llama-server directly (port 8080, OpenAI-compatible)
         try {
-          // Build system prompt â€” use personality from localStorage if available
+          // Build system prompt — use personality from localStorage if available
           const soulIdentity = typeof window !== "undefined" ? localStorage.getItem("fireside_soul_identity") : null;
           const systemPrompt = soulIdentity
             ? `${soulIdentity}\n\nYour name is ${displayName}.${memoryContext}`
@@ -399,7 +398,7 @@ export default function CampfireHub() {
     <div className="fs-root">
       <EmberParticles intensity={activeView === "hub" ? 25 : 12} className="fs-embers" />
 
-      {/* â•â•â• Stars â•â•â• */}
+      {/* ═══ Stars ═══ */}
       <div className="fs-stars">
         {Array.from({ length: 50 }).map((_, i) => (
           <div key={i} className="fs-star" style={{
@@ -413,7 +412,7 @@ export default function CampfireHub() {
         ))}
       </div>
 
-      {/* â•â•â•â•â•â•â•â•â•â•â• HUB VIEW â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════ HUB VIEW ═══════════ */}
       {activeView === "hub" && (
         <div className="fs-hub">
           <DiscoveryCard pageKey="/" />
@@ -437,9 +436,9 @@ export default function CampfireHub() {
 
             <div className="fs-model-badge">
               {brainLabel ? (
-                <>Active: <strong>{brainLabel}</strong>{brainQuant ? ` Â· ${brainQuant}` : ''} Â· ðŸŸ¢ Ready</>
+                <>Active: <strong>{brainLabel}</strong>{brainQuant ? ` · ${brainQuant}` : ''} · 🟢 Ready</>
               ) : (
-                <>âš  No brain installed Â· <Link href="/brains" style={{color:'#F59E0B'}}>Set up â†’</Link></>
+                <>⚠ No brain installed · <Link href="/brains" style={{color:'#F59E0B'}}>Set up →</Link></>
               )}
             </div>
           </div>
@@ -450,9 +449,9 @@ export default function CampfireHub() {
               <div className="fs-nc-icon"><img src="/hub/nav_chat.png" alt="Chat" /></div>
               <div className="fs-nc-text">
                 <div className="fs-nc-title">Chat</div>
-                <div className="fs-nc-desc">Talk with your AI â€” ask anything, anytime</div>
+                <div className="fs-nc-desc">Talk with your AI — ask anything, anytime</div>
               </div>
-              <span className="fs-nc-arrow">â†’</span>
+              <span className="fs-nc-arrow">→</span>
             </button>
 
             <Link href="/brains" onClick={() => playWhoosh()}>
@@ -462,7 +461,7 @@ export default function CampfireHub() {
                   <div className="fs-nc-title">Brain</div>
                   <div className="fs-nc-desc">Switch models, adjust quality, or download new ones</div>
                 </div>
-                <span className="fs-nc-arrow">â†’</span>
+                <span className="fs-nc-arrow">→</span>
               </div>
             </Link>
 
@@ -471,9 +470,9 @@ export default function CampfireHub() {
                 <div className="fs-nc-icon"><img src="/hub/nav_skills.png" alt="Skills" /></div>
                 <div className="fs-nc-text">
                   <div className="fs-nc-title">Skills</div>
-                  <div className="fs-nc-desc">Equip abilities â€” memory, voice, browsing, and more</div>
+                  <div className="fs-nc-desc">Equip abilities — memory, voice, browsing, and more</div>
                 </div>
-                <span className="fs-nc-arrow">â†’</span>
+                <span className="fs-nc-arrow">→</span>
               </div>
             </Link>
 
@@ -482,9 +481,9 @@ export default function CampfireHub() {
                 <div className="fs-nc-icon"><img src="/hub/nav_personality.png" alt="Personality" /></div>
                 <div className="fs-nc-text">
                   <div className="fs-nc-title">Personality</div>
-                  <div className="fs-nc-desc">Define who your AI is â€” traits, style, and soul</div>
+                  <div className="fs-nc-desc">Define who your AI is — traits, style, and soul</div>
                 </div>
-                <span className="fs-nc-arrow">â†’</span>
+                <span className="fs-nc-arrow">→</span>
               </div>
             </Link>
 
@@ -495,7 +494,7 @@ export default function CampfireHub() {
                   <div className="fs-nc-title">Settings</div>
                   <div className="fs-nc-desc">API keys, connected devices, and advanced options</div>
                 </div>
-                <span className="fs-nc-arrow">â†’</span>
+                <span className="fs-nc-arrow">→</span>
               </div>
             </Link>
 
@@ -506,31 +505,31 @@ export default function CampfireHub() {
                   <div className="fs-nc-title">Tasks</div>
                   <div className="fs-nc-desc">Set up multi-step workflows your AI runs for you</div>
                 </div>
-                <span className="fs-nc-arrow">â†’</span>
+                <span className="fs-nc-arrow">→</span>
               </div>
             </Link>
 
             {!hasBrain && (
               <Link href="/brains">
-                <button className="fs-btn-gold" onClick={() => playWhoosh()}>Set Up Brain â†’</button>
+                <button className="fs-btn-gold" onClick={() => playWhoosh()}>Set Up Brain →</button>
               </Link>
             )}
           </div>
         </div>
       )}
 
-      {/* â•â•â•â•â•â•â•â•â•â•â• CHAT VIEW â•â•â•â•â•â•â•â•â•â•â• */}
+      {/* ═══════════ CHAT VIEW ═══════════ */}
       {activeView === "chat" && (
         <div className="fs-chat-layout">
           {/* Fire ambient glow at bottom */}
           <div className="fs-chat-fire-glow" />
 
-          {/* â”€â”€ Conversation Sidebar â”€â”€ */}
+          {/* ── Conversation Sidebar ── */}
           <div className={`fs-convo-sidebar ${sidebarOpen ? "open" : "closed"}`}>
             <div className="fs-convo-header">
-              <button className="fs-back-hub" onClick={() => { setActiveView("hub"); playWhoosh(); }} title="Back to Hub">ðŸ”¥ Hub</button>
+              <button className="fs-back-hub" onClick={() => { setActiveView("hub"); playWhoosh(); }} title="Back to Hub">🔥 Hub</button>
               <span className="fs-convo-title">Conversations</span>
-              <button className="fs-new-chat" onClick={() => { console.log("[Fireside] + button clicked"); saveCurrentChat(); setChatHistory([]); setActiveConvo(null); sessionStorage.removeItem("fireside_chat_session"); }} title="New chat">ï¼‹</button>
+              <button className="fs-new-chat" onClick={() => { saveCurrentChat(); setChatHistory([]); setActiveConvo(null); sessionStorage.removeItem("fireside_chat_session"); }} title="New chat">＋</button>
             </div>
 
             <div className="fs-convo-search-wrap">
@@ -545,7 +544,7 @@ export default function CampfireHub() {
             <div className="fs-convo-list">
               {groupedConvos.pinned.length > 0 && (
                 <div className="fs-convo-group">
-                  <div className="fs-convo-group-label">ðŸ“Œ Pinned</div>
+                  <div className="fs-convo-group-label">📌 Pinned</div>
                   {groupedConvos.pinned.map(c => (
                     <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
                       <div className="fs-convo-item-title">{c.title}</div>
@@ -594,39 +593,39 @@ export default function CampfireHub() {
             </div>
           </div>
 
-          {/* â”€â”€ Main Chat Area â”€â”€ */}
+          {/* ── Main Chat Area ── */}
           <div className="fs-chat">
             {/* Header */}
             <div className="fs-chat-header">
               <button className="fs-chat-back" onClick={() => { playWhoosh(); setActiveView("hub"); }}>
-                â† Hub
+                ← Hub
               </button>
               <button className="fs-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} title="Toggle conversations">
-                {sidebarOpen ? "â—€" : "â–¶"}
+                {sidebarOpen ? "◀" : "▶"}
               </button>
               <img className="fs-chat-avatar" src={mascotSrc} alt={species} />
               <div className="fs-chat-info">
                 <p className="fs-chat-name">{displayName}</p>
                 <p className="fs-chat-status">
                   <span className="fs-status-dot" />
-                  {isTyping ? "thinking..." : "Online Â· at the fireside"}
+                  {isTyping ? "thinking..." : "Online · at the fireside"}
                 </p>
               </div>
-              <span className="fs-chat-model">{brainLabel || 'No model'}{brainQuant ? ` Â· ${brainQuant}` : ''}</span>
+              <span className="fs-chat-model">{brainLabel || 'No model'}{brainQuant ? ` · ${brainQuant}` : ''}</span>
             </div>
 
             {/* Messages */}
             <div className="fs-messages">
               {chatHistory.length === 0 && (
                 <div className="fs-empty-state">
-                  <div className="fs-empty-fire">ðŸ”¥</div>
+                  <div className="fs-empty-fire">🔥</div>
                   <img src={mascotSrc} alt="" className="fs-empty-fox" />
                   <p className="fs-empty-text">Start a conversation with {displayName}</p>
-                  <p className="fs-empty-sub">Your AI remembers everything Â· always private Â· always local</p>
+                  <p className="fs-empty-sub">Your AI remembers everything · always private · always local</p>
                   <div className="fs-empty-suggestions">
-                    <button className="fs-suggestion" onClick={() => { setMessage("What can you help me with?"); }}>ðŸ’¡ What can you do?</button>
-                    <button className="fs-suggestion" onClick={() => { setMessage("Tell me about yourself"); }}>ðŸ¦Š Who are you?</button>
-                    <button className="fs-suggestion" onClick={() => { setMessage("Help me brainstorm an idea"); }}>âœ¨ Brainstorm</button>
+                    <button className="fs-suggestion" onClick={() => { setMessage("What can you help me with?"); }}>💡 What can you do?</button>
+                    <button className="fs-suggestion" onClick={() => { setMessage("Tell me about yourself"); }}>🦊 Who are you?</button>
+                    <button className="fs-suggestion" onClick={() => { setMessage("Help me brainstorm an idea"); }}>✨ Brainstorm</button>
                   </div>
                 </div>
               )}
@@ -637,12 +636,12 @@ export default function CampfireHub() {
                   )}
                   <div>
                     {msg.memory && (
-                      <div className="fs-memory-pill">ðŸ§  Recalled: {msg.memory}</div>
+                      <div className="fs-memory-pill">🧠 Recalled: {msg.memory}</div>
                     )}
                     <div className={`fs-bubble ${msg.role === "user" ? "fs-bubble-user" : "fs-bubble-ai"}`}>
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                       {msg.skills && msg.skills.length > 0 && (
-                        <div className="fs-skill-tag">âœ¦ {msg.skills.join(" Â· ")}</div>
+                        <div className="fs-skill-tag">✦ {msg.skills.join(" · ")}</div>
                       )}
                     </div>
                     {msg.ts && (
@@ -667,7 +666,7 @@ export default function CampfireHub() {
             {/* Input Bar */}
             <div className="fs-input-bar">
               <div className="fs-input-wrap">
-                <button className="fs-voice-btn" title="Voice mode">ðŸŽ™</button>
+                <button className="fs-voice-btn" title="Voice mode">🎙</button>
                 <button
                   className={`fs-think-btn ${thinkingEnabled ? 'active' : ''}`}
                   onClick={() => {
@@ -677,9 +676,9 @@ export default function CampfireHub() {
                       return next;
                     });
                   }}
-                  title={thinkingEnabled ? 'Thinking mode ON â€” model reasons before responding (global)' : 'Thinking mode OFF â€” direct responses (global)'}
+                  title={thinkingEnabled ? 'Thinking mode ON — model reasons before responding (global)' : 'Thinking mode OFF — direct responses (global)'}
                 >
-                  ðŸ§ 
+                  🧠
                 </button>
                 <textarea
                   ref={inputRef}
@@ -700,7 +699,7 @@ export default function CampfireHub() {
                   autoFocus
                   rows={1}
                 />
-                <button onClick={handleSend} disabled={!message.trim()} className="fs-send-btn">â–¶</button>
+                <button onClick={handleSend} disabled={!message.trim()} className="fs-send-btn">▶</button>
               </div>
             </div>
           </div>
@@ -720,3 +719,4 @@ function isYesterday(date: Date) {
 
 // CSS for Hub + Chat lives in globals.css (migrated from inline styles)
 
+// CSS for Hub + Chat lives in globals.css (migrated from inline styles)

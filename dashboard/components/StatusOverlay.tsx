@@ -80,45 +80,7 @@ const STATUS_CONFIG: Record<string, {
     },
 };
 
-const STATUS_CSS = `
-    @keyframes statusBounce {
-        0%, 100% { transform: translateY(0) scale(1); }
-        50% { transform: translateY(-6px) scale(1.15); }
-    }
-    @keyframes statusFloat {
-        0%, 100% { transform: translateY(0) translateX(0); opacity: 0.8; }
-        25% { transform: translateY(-8px) translateX(3px); opacity: 1; }
-        75% { transform: translateY(-4px) translateX(-3px); opacity: 0.6; }
-    }
-    @keyframes statusFlash {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.3; transform: scale(0.8); }
-    }
-    @keyframes statusShake {
-        0%, 100% { transform: translateX(0); }
-        25% { transform: translateX(-3px) rotate(-5deg); }
-        75% { transform: translateX(3px) rotate(5deg); }
-    }
-    @keyframes statusPop {
-        0% { transform: scale(0.8); opacity: 0.5; }
-        50% { transform: scale(1.3); opacity: 1; }
-        100% { transform: scale(1); opacity: 0.8; }
-    }
-    @keyframes statusPulse {
-        0%, 100% { opacity: 0.4; filter: grayscale(0.5); }
-        50% { opacity: 0.8; filter: grayscale(0); }
-    }
-    @keyframes statusGlow {
-        0%, 100% { filter: drop-shadow(0 0 2px var(--glow-color)); }
-        50% { filter: drop-shadow(0 0 10px var(--glow-color)) drop-shadow(0 0 20px var(--glow-color)); }
-    }
-    @keyframes statusBeat {
-        0%, 100% { transform: scale(1); }
-        15% { transform: scale(1.3); }
-        30% { transform: scale(1); }
-        45% { transform: scale(1.2); }
-    }
-`;
+// CSS migrated to globals.css
 
 export default function StatusOverlay({ status, premium = false, size = 20, className = "" }: StatusOverlayProps) {
     if (!status) return null;
@@ -130,7 +92,7 @@ export default function StatusOverlay({ status, premium = false, size = 20, clas
 
     return (
         <>
-            <style>{STATUS_CSS}</style>
+            {/* CSS in globals.css */}
             <div
                 className={`absolute z-20 pointer-events-none ${config.animation} ${className}`}
                 style={{

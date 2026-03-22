@@ -166,15 +166,32 @@ Different models handle tool calling differently:
 
 ## Chat UI (`dashboard/app/page.tsx`)
 
-### 1. + button clears chat instead of saving — OPEN
+### 1. + button clears chat instead of saving — ✅ FIXED
 - **Symptom:** Pressing + for new conversation clears the current one. Previous conversation is lost
-- **Cause:** No persistence layer — chat history is only in React state / sessionStorage, not saved per-conversation
-- **Fix needed:** Save conversations to localStorage or backend before clearing, load from sidebar
+- **Cause:** `JSON.parse` from sessionStorage converts `Date` objects to strings → `ts.toDateString()` crashes silently. Also, stale closures in the `+` button handler captured old state
+- **Fix:** Added `ts` rehydration (`new Date(c.ts)`) in `useState` initializer + `useRef` to prevent stale closures
+- **Commit:** `8467d26`
 
-### 2. Tasks/Workflow tab still unstyled in Tauri — OPEN
-- **Symptom:** Pipeline page renders fully styled on localhost:4001 but unstyled in Tauri exe
-- **Cause:** Inline `<style>{pageCSS}</style>` pattern may have issues in Tauri webview beyond the `@import` fix
-- **Fix needed:** Investigate Tauri CSP handling of large inline style blocks, or move to CSS module
+### 2. Tasks/Workflow tab still unstyled in Tauri — ✅ FIXED
+- **Symptom:** Pipeline page (and 9 other pages/components) rendered unstyled in Tauri exe
+- **Cause:** Inline `<style>{pageCSS}</style>` pattern doesn't reliably apply in Tauri's static webview context
+- **Fix:** Migrated ~1,000 lines of CSS from 10 files to `globals.css`, removed all inline `<style>` injection
+- **Files fixed:** `pipeline/page.tsx`, `config/page.tsx`, `skills/page.tsx`, `personality/page.tsx`, `WorkflowBuilder.tsx`, `BrainControlPanel.tsx`, `StatusOverlay.tsx`, `StartupGate.tsx`, `SpriteCharacter.tsx`, `OnboardingGate.tsx`, `GuildHall.tsx`
+
+### 3. Settings → Advanced tab crashes in Tauri — ✅ FIXED
+- **Symptom:** "Application error: a client-side exception has occurred" when clicking Advanced tab
+- **Cause:** `dynamic(() => import("@/app/nodes/page"), { ssr: false })` crashed during render in Tauri
+- **Fix:** Created `ErrorBoundary.tsx` component, wrapped `NodesPage` in it. Shows styled error with Retry button instead of crashing
+
+### 4. Native "tauri.localhost says" confirm dialog — ✅ FIXED
+- **Symptom:** Back button in Visual Builder shows ugly native browser confirm dialog
+- **Cause:** `window.confirm()` in `WorkflowBuilder.tsx`
+- **Fix:** Replaced with custom styled modal (dark glass, "Keep editing" / "Discard" buttons)
+
+### 5. PowerShell encoding corruption (ðŸ"¥ mojibake) — ✅ FIXED
+- **Symptom:** After file truncation, all emoji/special chars showed as garbled text
+- **Cause:** PowerShell `Set-Content -Encoding UTF8` adds BOM and double-encodes non-ASCII
+- **Fix:** Switched to Node.js `fs.writeFileSync('utf8')` for all file operations
 
 ---
 
