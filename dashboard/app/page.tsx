@@ -22,17 +22,34 @@ const GREETINGS = [
   "Pull up a log and let's chat!",
 ];
 
-// Mock conversation history for the sidebar
+// Conversation persistence
 interface Conversation {
   id: string;
   title: string;
   preview: string;
-  date: Date;
+  date: string; // ISO string for serialization
   folder?: string;
   pinned?: boolean;
+  messages: { role: string; content: string; memory?: string; skills?: string[]; ts?: string }[];
 }
 
-const MOCK_CONVERSATIONS: Conversation[] = [];
+function loadConversations(): Conversation[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem("fireside_conversations") || "[]");
+  } catch { return []; }
+}
+
+function saveConversations(convos: Conversation[]) {
+  localStorage.setItem("fireside_conversations", JSON.stringify(convos));
+}
+
+function generateTitle(messages: { role: string; content: string }[]): string {
+  const first = messages.find(m => m.role === "user");
+  if (!first) return "New conversation";
+  const text = first.content.substring(0, 60);
+  return text.length < first.content.length ? text + "..." : text;
+}
 
 export default function CampfireHub() {
   const [message, setMessage] = useState("");
@@ -65,6 +82,45 @@ export default function CampfireHub() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeConvo, setActiveConvo] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
+
+  // Save current chat to a conversation (create or update)
+  const saveCurrentChat = () => {
+    if (chatHistory.length === 0) return;
+    const id = activeConvo || `conv_${Date.now()}`;
+    const title = generateTitle(chatHistory);
+    const preview = chatHistory[chatHistory.length - 1]?.content?.substring(0, 80) || "";
+    const convo: Conversation = {
+      id, title, preview,
+      date: new Date().toISOString(),
+      messages: chatHistory.map(m => ({ ...m, ts: m.ts ? new Date(m.ts).toISOString() : undefined })),
+    };
+    setConversations(prev => {
+      const filtered = prev.filter(c => c.id !== id);
+      const updated = [convo, ...filtered].slice(0, 50); // keep last 50
+      saveConversations(updated);
+      return updated;
+    });
+    if (!activeConvo) setActiveConvo(id);
+  };
+
+  // Load a conversation from the sidebar
+  const loadConvo = (id: string) => {
+    saveCurrentChat(); // save current first
+    const convo = conversations.find(c => c.id === id);
+    if (convo) {
+      setChatHistory(convo.messages.map(m => ({ ...m, ts: m.ts ? new Date(m.ts) : undefined })));
+      setActiveConvo(id);
+    }
+  };
+
+  // Auto-save conversation after each assistant response
+  useEffect(() => {
+    if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1]?.role === "assistant") {
+      saveCurrentChat();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatHistory.length]);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -309,16 +365,16 @@ export default function CampfireHub() {
 
   // Group conversations by date
   const groupedConvos = useMemo(() => {
-    const filtered = MOCK_CONVERSATIONS.filter(c =>
+    const filtered = conversations.filter(c =>
       !searchQuery || c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.preview.toLowerCase().includes(searchQuery.toLowerCase())
     );
     const pinned = filtered.filter(c => c.pinned);
-    const today = filtered.filter(c => !c.pinned && isToday(c.date));
-    const yesterday = filtered.filter(c => !c.pinned && isYesterday(c.date));
-    const older = filtered.filter(c => !c.pinned && !isToday(c.date) && !isYesterday(c.date));
+    const today = filtered.filter(c => !c.pinned && isToday(new Date(c.date)));
+    const yesterday = filtered.filter(c => !c.pinned && isYesterday(new Date(c.date)));
+    const older = filtered.filter(c => !c.pinned && !isToday(new Date(c.date)) && !isYesterday(new Date(c.date)));
     return { pinned, today, yesterday, older };
-  }, [searchQuery]);
+  }, [searchQuery, conversations]);
 
   return (
     <div className="fs-root">
@@ -455,7 +511,7 @@ export default function CampfireHub() {
             <div className="fs-convo-header">
               <button className="fs-back-hub" onClick={() => { setActiveView("hub"); playWhoosh(); }} title="Back to Hub">🔥 Hub</button>
               <span className="fs-convo-title">Conversations</span>
-              <button className="fs-new-chat" onClick={() => { setChatHistory([]); setActiveConvo(null); sessionStorage.removeItem("fireside_chat_session"); }} title="New chat">＋</button>
+              <button className="fs-new-chat" onClick={() => { saveCurrentChat(); setChatHistory([]); setActiveConvo(null); sessionStorage.removeItem("fireside_chat_session"); }} title="New chat">＋</button>
             </div>
 
             <div className="fs-convo-search-wrap">
@@ -472,7 +528,7 @@ export default function CampfireHub() {
                 <div className="fs-convo-group">
                   <div className="fs-convo-group-label">📌 Pinned</div>
                   {groupedConvos.pinned.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => setActiveConvo(c.id)}>
+                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
                       <div className="fs-convo-item-title">{c.title}</div>
                       <div className="fs-convo-item-preview">{c.preview}</div>
                       {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
@@ -484,7 +540,7 @@ export default function CampfireHub() {
                 <div className="fs-convo-group">
                   <div className="fs-convo-group-label">Today</div>
                   {groupedConvos.today.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => setActiveConvo(c.id)}>
+                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
                       <div className="fs-convo-item-title">{c.title}</div>
                       <div className="fs-convo-item-preview">{c.preview}</div>
                       {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
@@ -496,7 +552,7 @@ export default function CampfireHub() {
                 <div className="fs-convo-group">
                   <div className="fs-convo-group-label">Yesterday</div>
                   {groupedConvos.yesterday.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => setActiveConvo(c.id)}>
+                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
                       <div className="fs-convo-item-title">{c.title}</div>
                       <div className="fs-convo-item-preview">{c.preview}</div>
                       {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
@@ -508,7 +564,7 @@ export default function CampfireHub() {
                 <div className="fs-convo-group">
                   <div className="fs-convo-group-label">Older</div>
                   {groupedConvos.older.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => setActiveConvo(c.id)}>
+                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
                       <div className="fs-convo-item-title">{c.title}</div>
                       <div className="fs-convo-item-preview">{c.preview}</div>
                       {c.folder && <span className="fs-convo-folder">{c.folder}</span>}

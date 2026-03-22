@@ -156,6 +156,23 @@ def _load_system_prompt(agent_name: str) -> str:
     except Exception:
         pass
 
+    # Environment context — tell the model where files live
+    try:
+        import platform
+        home = str(Path.home())
+        parts.append(
+            "\n## Environment\n"
+            f"- **OS:** {platform.system()} {platform.release()}\n"
+            f"- **Home directory:** {home}\n"
+            f"- **Desktop:** {home}\\Desktop\n"
+            f"- **Documents:** {home}\\Documents\n"
+            f"- **Username:** {Path.home().name}\n\n"
+            "When the user says 'my Desktop' or 'my Documents', always use the absolute paths above. "
+            "Never guess or run commands to discover the username — you already know it."
+        )
+    except Exception:
+        pass
+
     return "\n\n".join(parts) if parts else f"You are {agent_name}, a helpful AI assistant."
 
 
