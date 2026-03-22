@@ -4035,3 +4035,100 @@ h6 {
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+/* ── PIN Display (Device 1 modal — big readable PIN) ── */
+
+.nd-pin-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.nd-pin-digit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    color: var(--color-neon, #ff6b00);
+    text-shadow: 0 0 20px rgba(255, 107, 0, 0.3);
+}
+
+.nd-pin-sep {
+    font-size: 28px;
+    color: var(--color-rune-dim, #5a4d40);
+    margin: 0 4px;
+}
+
+/* ── PIN Input (Device 2 join page — 6 individual boxes) ── */
+
+.jm-pin-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.jm-pin-input {
+    width: 44px;
+    height: 54px;
+    border-radius: 10px;
+    border: 2px solid var(--color-glass-border, rgba(255,255,255,0.08));
+    background: rgba(255, 255, 255, 0.04);
+    color: white;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    transition: all 0.2s;
+    caret-color: var(--color-neon, #ff6b00);
+}
+.jm-pin-input:focus {
+    border-color: var(--color-neon, #ff6b00);
+    box-shadow: 0 0 12px rgba(255, 107, 0, 0.2);
+}
+
+.jm-pin-dash {
+    font-size: 20px;
+    color: var(--color-rune-dim, #5a4d40);
+    margin: 0 2px;
+}
+
+/* ── Scanning pulse animation ── */
+
+.jm-pulse-ring {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    position: relative;
+    margin: 0 auto;
+}
+.jm-pulse-ring::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--color-neon, #ff6b00);
+    opacity: 0.3;
+    animation: jmPulse 2s ease-out infinite;
+}
+.jm-pulse-ring::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px solid var(--color-neon, #ff6b00);
+    opacity: 0.15;
+    animation: jmPulse 2s ease-out infinite 0.5s;
+}
+
+@keyframes jmPulse {
+    0% { transform: scale(0.8); opacity: 0.4; }
+    100% { transform: scale(1.6); opacity: 0; }
+}

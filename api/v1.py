@@ -293,50 +293,33 @@ async def get_nodes():
 
 
 # ---------------------------------------------------------------------------
-# Endpoints: Mesh Join Flow  (add-a-node.md)
+# Endpoints: Mesh Join Flow  — PIN-based pairing + LAN auto-discovery
 # ---------------------------------------------------------------------------
+
+# Discovery listener (started in init_api)
+_discovery_listener = None
+
 
 @router.post("/mesh/join-token")
 async def create_join_token():
-    """Generate a time-limited join token for the 'Add Node' flow.
+    """Generate a 6-digit PIN for the 'Add Node' flow.
 
-    Returns a short join command the user pastes on a second machine.
-    Called by the 'Add Node' button in the dashboard.
+    Like Bluetooth pairing — Device 1 shows a PIN, Device 2 enters it.
+    The PIN expires after 15 minutes.
     """
+    import random
+
     node = _config.get("node", {})
     node_name = node.get("name", "valhalla")
     node_port = node.get("port", 8765)
 
-    # Detect the orchestrator's LAN IP
-    # Priority: 1) mesh config self-entry, 2) UDP socket trick, 3) hostname
-    my_ip = "127.0.0.1"
+    # Detect LAN IP
+    my_ip = _detect_lan_ip()
 
-    # 1. Check mesh config for our own entry
-    mesh_nodes = _config.get("mesh", {}).get("nodes", {})
-    for name, ncfg in mesh_nodes.items():
-        if name == node_name and ncfg.get("ip"):
-            my_ip = ncfg["ip"]
-            break
-
-    # 2. If still localhost, detect LAN IP via UDP socket (works without Tailscale)
-    if my_ip == "127.0.0.1":
-        try:
-            import socket as _sock
-            s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))  # doesn't actually send data
-            my_ip = s.getsockname()[0]
-            s.close()
-        except Exception:
-            # 3. Fallback: hostname resolution
-            try:
-                import socket as _sock
-                my_ip = _sock.gethostbyname(_sock.gethostname())
-            except Exception:
-                pass
-
-    # Generate signed token
-    token_id = secrets.token_urlsafe(8)
-    token_secret = secrets.token_urlsafe(16)
+    # Generate 6-digit PIN
+    pin = f"{random.randint(0, 999999):06d}"
+    token_id = pin  # Use PIN as the token ID
+    token_secret = pin  # PIN IS the secret — simple
     expires_at = time.time() + _JOIN_TOKEN_TTL
 
     _join_tokens[token_id] = {
@@ -351,21 +334,41 @@ async def create_join_token():
     for k in expired:
         del _join_tokens[k]
 
-    join_command = f"valhalla join {node_name}@{my_ip}"
     expires_in = _JOIN_TOKEN_TTL
 
-    log.info("[mesh] Join token created: %s (expires in %ds)", token_id, expires_in)
+    log.info("[mesh] Join PIN created: %s (expires in %ds)", pin, expires_in)
 
     return {
         "ok": True,
-        "token_id": token_id,
-        "token": token_secret,
-        "join_command": join_command,
-        "orchestrator": f"{my_ip}:{node_port}",
+        "pin": pin,
+        "node_name": node_name,
+        "orchestrator_ip": my_ip,
+        "orchestrator_port": node_port,
         "expires_in_seconds": expires_in,
         "expires_at": datetime.fromtimestamp(
             expires_at, tz=timezone.utc).isoformat(),
+        # Legacy fields for backward compat
+        "token_id": token_id,
+        "token": token_secret,
+        "join_command": f"valhalla join {node_name}@{my_ip}",
+        "orchestrator": f"{my_ip}:{node_port}",
     }
+
+
+@router.get("/mesh/discover")
+async def discover_mesh_nodes():
+    """Scan the LAN for other Fireside instances via UDP broadcast.
+
+    Called by Device 2's join page to auto-find Device 1.
+    Returns a list of discovered nodes (typically completes in ~3 seconds).
+    """
+    try:
+        from mesh_discovery import scan_lan
+        found = scan_lan(timeout=3.0)
+        return {"ok": True, "nodes": found, "count": len(found)}
+    except Exception as e:
+        log.warning("[mesh] Discovery scan failed: %s", e)
+        return {"ok": False, "nodes": [], "count": 0, "error": str(e)}
 
 
 @router.post("/mesh/announce")
@@ -2154,7 +2157,7 @@ def init_api(config: dict) -> APIRouter:
 
     Must be called before the router is mounted.
     """
-    global _config, _start_time, _base_dir
+    global _config, _start_time, _base_dir, _discovery_listener
     _config = config
     _start_time = time.time()
     _base_dir = Path(config.get("_meta", {}).get("base_dir", "."))
@@ -2165,6 +2168,19 @@ def init_api(config: dict) -> APIRouter:
         orchestrator.init(config, _base_dir)
     except Exception as e:
         log.warning("[api/v1] Orchestrator init failed (non-fatal): %s", e)
+
+    # Start LAN discovery listener so other devices can find us
+    try:
+        from mesh_discovery import DiscoveryListener
+        node = config.get("node", {})
+        _discovery_listener = DiscoveryListener(
+            node_name=node.get("name", "fireside"),
+            node_port=node.get("port", 8765),
+        )
+        _discovery_listener.start()
+        log.info("[api/v1] Mesh discovery listener started")
+    except Exception as e:
+        log.warning("[api/v1] Discovery listener failed (non-fatal): %s", e)
 
     log.info("[api/v1] Initialized (%d endpoints)", len(router.routes))
     return router
@@ -2190,6 +2206,39 @@ def _format_uptime(seconds: float) -> str:
     parts.append(f"{secs}s")
     return " ".join(parts)
 
+
+def _detect_lan_ip() -> str:
+    """Detect this machine's LAN IP address.
+
+    Priority: mesh config → UDP socket trick → hostname → 127.0.0.1
+    """
+    node_name = _config.get("node", {}).get("name", "")
+
+    # 1. Check mesh config for our own entry
+    mesh_nodes = _config.get("mesh", {}).get("nodes", {})
+    for name, ncfg in mesh_nodes.items():
+        if name == node_name and ncfg.get("ip"):
+            return ncfg["ip"]
+
+    # 2. UDP socket trick (works on LAN without Tailscale)
+    try:
+        import socket as _sock
+        s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # doesn't send data
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        pass
+
+    # 3. Hostname resolution
+    try:
+        import socket as _sock
+        return _sock.gethostbyname(_sock.gethostname())
+    except Exception:
+        pass
+
+    return "127.0.0.1"
 
 def _push_config_to_mesh(yaml_content: str) -> None:
     """Push config to all mesh peers (fire-and-forget daemon threads)."""

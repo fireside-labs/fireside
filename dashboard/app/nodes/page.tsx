@@ -34,7 +34,7 @@ export default function ConnectedDevicesPage() {
 
     // Join token modal state
     const [showJoinModal, setShowJoinModal] = useState(false);
-    const [joinCode, setJoinCode] = useState("");
+    const [joinPin, setJoinPin] = useState("");
     const [joinExpiry, setJoinExpiry] = useState(0);
     const [joinLoading, setJoinLoading] = useState(false);
 
@@ -64,10 +64,7 @@ export default function ConnectedDevicesPage() {
             const res = await fetch(`${API_BASE}/api/v1/mesh/join-token`, { method: "POST" });
             if (res.ok) {
                 const data = await res.json();
-                // Build join code: TOKEN@IP:PORT
-                const token = data.token || "N/A";
-                const orch = data.orchestrator || "127.0.0.1:8765";
-                setJoinCode(`${token}@${orch}`);
+                setJoinPin(data.pin || "000000");
                 setJoinExpiry(data.expires_in_seconds || 900);
                 setShowJoinModal(true);
             } else {
@@ -246,26 +243,23 @@ export default function ConnectedDevicesPage() {
                 {showAdvanced ? "▾ Hide" : "▸ Show"} advanced details
             </button>
 
-            {/* ── Join Token Modal ── */}
+            {/* ── Join PIN Modal ── */}
             {showJoinModal && (
                 <div className="nd-modal-overlay" onClick={() => setShowJoinModal(false)}>
                     <div className="nd-modal" onClick={e => e.stopPropagation()}>
                         <h2 className="text-white text-lg font-semibold mb-2">🔗 Add Device</h2>
-                        <p className="text-sm text-[var(--color-rune-dim)] mb-4">
-                            On your other device, open Fireside and go to <strong className="text-white">Settings → Join Mesh</strong>, then paste this code:
+                        <p className="text-sm text-[var(--color-rune-dim)] mb-5">
+                            On your other device, open Fireside and go to <strong className="text-white">Join Mesh</strong>.
+                            It will find this device automatically. Enter this PIN when asked:
                         </p>
 
-                        <div className="nd-token-box">
-                            <code className="nd-token-code">{joinCode}</code>
-                            <button
-                                className="nd-copy-btn"
-                                onClick={() => copyToClipboard(joinCode)}
-                            >
-                                📋 Copy
-                            </button>
+                        <div className="nd-pin-display">
+                            <span className="nd-pin-digit">{joinPin.slice(0, 3)}</span>
+                            <span className="nd-pin-sep">—</span>
+                            <span className="nd-pin-digit">{joinPin.slice(3, 6)}</span>
                         </div>
 
-                        <div className="nd-token-meta">
+                        <div className="nd-token-meta" style={{ justifyContent: "center" }}>
                             <span>Expires in {Math.round(joinExpiry / 60)} minutes</span>
                         </div>
 

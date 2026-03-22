@@ -1,181 +1,309 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { API_BASE } from "@/lib/api";
 
 /* ═══════════════════════════════════════════════════════════════════
-   Join Mesh — Device 2 enters the join code from Device 1
+   Join Mesh — Device 2 auto-discovers Device 1 and pairs with a PIN
+   Like Bluetooth pairing: find → enter 6-digit PIN → connected.
    ═══════════════════════════════════════════════════════════════════ */
 
-export default function JoinMeshPage() {
-    const [joinCode, setJoinCode] = useState("");
-    const [status, setStatus] = useState<"idle" | "joining" | "success" | "error">("idle");
-    const [message, setMessage] = useState("");
-    const [deviceName, setDeviceName] = useState("");
+interface DiscoveredNode {
+    name: string;
+    ip: string;
+    port: number;
+}
 
-    // Parse join code format: TOKEN@IP:PORT  or just TOKEN@IP
-    const parseJoinCode = (code: string) => {
-        // Format: TOKEN@IP:PORT  or  TOKEN@IP
-        const match = code.trim().match(/^(.+)@([\d.]+)(?::(\d+))?$/);
-        if (!match) return null;
-        return {
-            token: match[1],
-            ip: match[2],
-            port: parseInt(match[3] || "8765"),
-        };
+type JoinStep = "scanning" | "found" | "pin" | "joining" | "success" | "error" | "manual";
+
+export default function JoinMeshPage() {
+    const [step, setStep] = useState<JoinStep>("scanning");
+    const [discovered, setDiscovered] = useState<DiscoveredNode[]>([]);
+    const [selected, setSelected] = useState<DiscoveredNode | null>(null);
+    const [pin, setPin] = useState(["", "", "", "", "", ""]);
+    const [deviceName, setDeviceName] = useState("");
+    const [message, setMessage] = useState("");
+    const [assignedName, setAssignedName] = useState("");
+    const pinRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    // Auto-scan LAN on mount
+    const scanLan = useCallback(async () => {
+        setStep("scanning");
+        setMessage("Looking for Fireside on your network...");
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/mesh/discover`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.nodes && data.nodes.length > 0) {
+                    setDiscovered(data.nodes);
+                    if (data.nodes.length === 1) {
+                        setSelected(data.nodes[0]);
+                        setStep("pin");
+                    } else {
+                        setStep("found");
+                    }
+                } else {
+                    setStep("manual");
+                    setMessage("No devices found. Make sure both are on the same WiFi.");
+                }
+            } else {
+                setStep("manual");
+                setMessage("Discovery failed. You can enter the IP manually.");
+            }
+        } catch {
+            setStep("manual");
+            setMessage("Backend not running. Start Fireside first.");
+        }
+    }, []);
+
+    useEffect(() => { scanLan(); }, [scanLan]);
+
+    // Select a discovered node
+    const selectNode = (node: DiscoveredNode) => {
+        setSelected(node);
+        setStep("pin");
+        setTimeout(() => pinRefs.current[0]?.focus(), 100);
     };
 
-    const handleJoin = async () => {
-        const parsed = parseJoinCode(joinCode);
-        if (!parsed) {
-            setStatus("error");
-            setMessage("Invalid join code. Paste the code shown on Device 1.");
-            return;
+    // PIN input handlers
+    const handlePinChange = (index: number, value: string) => {
+        if (!/^\d?$/.test(value)) return; // only digits
+        const newPin = [...pin];
+        newPin[index] = value;
+        setPin(newPin);
+        // Auto-advance to next input
+        if (value && index < 5) {
+            pinRefs.current[index + 1]?.focus();
         }
+        // Auto-submit when all 6 digits entered
+        if (value && index === 5 && newPin.every(d => d)) {
+            handleJoin(newPin.join(""));
+        }
+    };
 
-        setStatus("joining");
-        setMessage(`Connecting to ${parsed.ip}:${parsed.port}...`);
+    const handlePinKeyDown = (index: number, e: React.KeyboardEvent) => {
+        if (e.key === "Backspace" && !pin[index] && index > 0) {
+            pinRefs.current[index - 1]?.focus();
+        }
+        if (e.key === "Enter") {
+            const fullPin = pin.join("");
+            if (fullPin.length === 6) handleJoin(fullPin);
+        }
+    };
+
+    // Paste handler — fill all 6 digits at once
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+        if (text.length === 6) {
+            e.preventDefault();
+            const newPin = text.split("");
+            setPin(newPin);
+            handleJoin(text);
+        }
+    };
+
+    // Join the mesh
+    const handleJoin = async (pinCode: string) => {
+        if (!selected) return;
+        setStep("joining");
+        setMessage(`Connecting to ${selected.name}...`);
 
         try {
-            // Detect this device's name and info
-            let myName = deviceName.trim().toLowerCase().replace(/\s+/g, "-") || "device-2";
-            let gpu = null;
-            let model = null;
+            const myName = deviceName.trim().toLowerCase().replace(/\s+/g, "-") || "device-2";
 
-            // Try to get local status for GPU info
+            // Detect our own LAN IP
+            let myIp = "0.0.0.0";
             try {
-                const localRes = await fetch(`${API_BASE}/api/v1/status`, { signal: AbortSignal.timeout(3000) });
-                if (localRes.ok) {
-                    const localData = await localRes.json();
-                    gpu = localData.gpu?.name || null;
-                    model = localData.model || null;
-                    if (!deviceName) myName = localData.node || myName;
+                const statusRes = await fetch(`${API_BASE}/api/v1/status`, { signal: AbortSignal.timeout(2000) });
+                if (statusRes.ok) {
+                    const statusData = await statusRes.json();
+                    // Use the status endpoint's detected info
+                    if (statusData.node) myIp = "0.0.0.0"; // Will be detected by remote
                 }
-            } catch {
-                // Local backend not running — that's OK for now
-            }
+            } catch { /* ok */ }
 
-            // Call Device 1's announce endpoint
-            const announceUrl = `http://${parsed.ip}:${parsed.port}/api/v1/mesh/announce`;
+            const announceUrl = `http://${selected.ip}:${selected.port}/api/v1/mesh/announce`;
             const res = await fetch(announceUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: myName,
-                    ip: window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname,
+                    ip: myIp,
                     port: 8765,
                     role: "worker",
-                    token: parsed.token,
-                    gpu,
-                    model,
+                    token: pinCode,
                 }),
             });
 
             if (res.ok) {
                 const data = await res.json();
-                setStatus("success");
-                setMessage(
-                    data.renamed
-                        ? `Joined as "${data.name}" (renamed from "${data.original_name}"). ${data.message}`
-                        : `${data.message} You're now part of the mesh as "${data.name}".`
-                );
+                setAssignedName(data.name || myName);
+                setStep("success");
+                setMessage(data.message || "Connected!");
             } else {
                 const err = await res.json().catch(() => ({ detail: "Connection failed" }));
-                setStatus("error");
-                setMessage(err.detail || "Failed to join mesh");
+                setStep("pin");
+                setMessage(err.detail || "Wrong PIN or expired. Try again.");
+                setPin(["", "", "", "", "", ""]);
+                setTimeout(() => pinRefs.current[0]?.focus(), 100);
             }
-        } catch (e: unknown) {
-            setStatus("error");
-            const errMsg = e instanceof Error ? e.message : "Unknown error";
-            if (errMsg.includes("fetch") || errMsg.includes("network") || errMsg.includes("Failed")) {
-                setMessage(`Can't reach Device 1 at that address. Make sure both devices are on the same network.`);
-            } else {
-                setMessage(errMsg);
-            }
+        } catch {
+            setStep("error");
+            setMessage(`Can't reach ${selected.name}. Make sure both devices are on the same network.`);
         }
     };
 
     return (
         <div className="max-w-md mx-auto mt-12">
             <div className="glass-card p-8">
-                <div className="text-center mb-6">
-                    <span className="text-4xl mb-3 block">🔗</span>
-                    <h1 className="text-xl font-bold text-white">Join a Mesh</h1>
-                    <p className="text-sm text-[var(--color-rune-dim)] mt-2">
-                        Enter the join code from your other device.
-                    </p>
-                </div>
 
-                {status === "success" ? (
+                {/* ── Scanning ── */}
+                {step === "scanning" && (
                     <div className="text-center">
-                        <span className="text-4xl block mb-3">✅</span>
-                        <p className="text-[var(--color-neon)] font-semibold mb-2">Connected!</p>
+                        <div className="jm-pulse-ring mb-4">
+                            <span className="text-3xl">📡</span>
+                        </div>
+                        <h1 className="text-xl font-bold text-white mb-2">Scanning Network</h1>
                         <p className="text-sm text-[var(--color-rune-dim)]">{message}</p>
-                        <a
-                            href="/nodes"
-                            className="inline-block mt-4 px-6 py-2 rounded-lg text-sm font-medium"
-                            style={{
-                                background: "var(--color-neon, #ff6b00)",
-                                color: "black",
-                            }}
-                        >
-                            View Devices
-                        </a>
                     </div>
-                ) : (
-                    <>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-xs text-[var(--color-rune-dim)] block mb-1.5">
-                                    Device name (optional)
-                                </label>
-                                <input
-                                    type="text"
-                                    value={deviceName}
-                                    onChange={e => setDeviceName(e.target.value)}
-                                    placeholder="e.g. gaming-pc, laptop"
-                                    className="jm-input"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs text-[var(--color-rune-dim)] block mb-1.5">
-                                    Join code
-                                </label>
-                                <input
-                                    type="text"
-                                    value={joinCode}
-                                    onChange={e => setJoinCode(e.target.value)}
-                                    placeholder="Paste the code from Device 1"
-                                    className="jm-input jm-input-mono"
-                                    onKeyDown={e => e.key === "Enter" && handleJoin()}
-                                />
-                            </div>
+                )}
+
+                {/* ── Found multiple devices ── */}
+                {step === "found" && (
+                    <div className="text-center">
+                        <h1 className="text-xl font-bold text-white mb-1">Devices Found</h1>
+                        <p className="text-sm text-[var(--color-rune-dim)] mb-4">
+                            Select the device you want to join.
+                        </p>
+                        <div className="space-y-2">
+                            {discovered.map(node => (
+                                <button
+                                    key={node.ip}
+                                    onClick={() => selectNode(node)}
+                                    className="w-full p-3 rounded-lg text-left transition-all hover:border-[var(--color-neon)]"
+                                    style={{
+                                        background: "rgba(255,255,255,0.04)",
+                                        border: "1px solid var(--color-glass-border)",
+                                    }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xl">💻</span>
+                                        <div>
+                                            <div className="text-white font-medium">{node.name}</div>
+                                            <div className="text-xs text-[var(--color-rune-dim)]">{node.ip}</div>
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ── PIN entry ── */}
+                {step === "pin" && (
+                    <div className="text-center">
+                        <span className="text-3xl block mb-3">🔐</span>
+                        <h1 className="text-xl font-bold text-white mb-1">Enter PIN</h1>
+                        <p className="text-sm text-[var(--color-rune-dim)] mb-5">
+                            Enter the 6-digit PIN shown on <strong className="text-white">{selected?.name}</strong>
+                        </p>
+
+                        <div className="jm-pin-row" onPaste={handlePaste}>
+                            {pin.map((digit, i) => (
+                                <span key={i} className="contents">
+                                    {i === 3 && <span className="jm-pin-dash">—</span>}
+                                    <input
+                                        ref={el => { pinRefs.current[i] = el; }}
+                                        type="text"
+                                        inputMode="numeric"
+                                        maxLength={1}
+                                        value={digit}
+                                        onChange={e => handlePinChange(i, e.target.value)}
+                                        onKeyDown={e => handlePinKeyDown(i, e)}
+                                        className="jm-pin-input"
+                                        autoFocus={i === 0}
+                                    />
+                                </span>
+                            ))}
                         </div>
 
-                        {status === "error" && (
-                            <div className="mt-3 p-3 rounded-lg text-sm" style={{ background: "rgba(255,68,102,0.1)", color: "#ff4466" }}>
+                        {message && (
+                            <div className="mt-3 text-sm" style={{ color: "#ff4466" }}>
                                 {message}
                             </div>
                         )}
 
-                        {status === "joining" && (
-                            <div className="mt-3 p-3 rounded-lg text-sm text-[var(--color-rune-dim)]" style={{ background: "rgba(255,255,255,0.03)" }}>
-                                ⏳ {message}
-                            </div>
-                        )}
+                        <div className="mt-4">
+                            <label className="text-xs text-[var(--color-rune-dim)] block mb-1">
+                                Name this device (optional)
+                            </label>
+                            <input
+                                type="text"
+                                value={deviceName}
+                                onChange={e => setDeviceName(e.target.value)}
+                                placeholder="e.g. gaming-pc"
+                                className="jm-input text-center"
+                                style={{ maxWidth: 200, margin: "0 auto" }}
+                            />
+                        </div>
+                    </div>
+                )}
 
-                        <button
-                            onClick={handleJoin}
-                            disabled={!joinCode.trim() || status === "joining"}
-                            className="jm-join-btn mt-5"
-                        >
-                            {status === "joining" ? "Connecting..." : "Join Mesh"}
-                        </button>
+                {/* ── Joining ── */}
+                {step === "joining" && (
+                    <div className="text-center">
+                        <div className="jm-pulse-ring mb-4">
+                            <span className="text-3xl">🔗</span>
+                        </div>
+                        <h1 className="text-xl font-bold text-white mb-2">Connecting</h1>
+                        <p className="text-sm text-[var(--color-rune-dim)]">{message}</p>
+                    </div>
+                )}
 
-                        <p className="text-xs text-center text-[var(--color-rune-dim)] mt-4">
-                            On your main device, go to <strong className="text-[var(--color-rune)]">Devices → Add device</strong> to get a code.
+                {/* ── Success ── */}
+                {step === "success" && (
+                    <div className="text-center">
+                        <span className="text-4xl block mb-3">✅</span>
+                        <h1 className="text-xl font-bold text-[var(--color-neon)] mb-2">Connected!</h1>
+                        <p className="text-sm text-[var(--color-rune-dim)] mb-1">{message}</p>
+                        <p className="text-sm text-[var(--color-rune)]">
+                            This device is now <strong>{assignedName}</strong> in the mesh.
                         </p>
-                    </>
+                        <a
+                            href="/nodes"
+                            className="inline-block mt-5 px-6 py-2.5 rounded-lg text-sm font-medium"
+                            style={{ background: "var(--color-neon)", color: "black" }}
+                        >
+                            View Devices
+                        </a>
+                    </div>
+                )}
+
+                {/* ── Error ── */}
+                {step === "error" && (
+                    <div className="text-center">
+                        <span className="text-4xl block mb-3">❌</span>
+                        <h1 className="text-xl font-bold text-white mb-2">Connection Failed</h1>
+                        <p className="text-sm text-[var(--color-rune-dim)] mb-4">{message}</p>
+                        <button onClick={scanLan} className="jm-join-btn" style={{ maxWidth: 200, margin: "0 auto" }}>
+                            Try Again
+                        </button>
+                    </div>
+                )}
+
+                {/* ── Manual fallback ── */}
+                {step === "manual" && (
+                    <div className="text-center">
+                        <span className="text-3xl block mb-3">🔧</span>
+                        <h1 className="text-xl font-bold text-white mb-2">Manual Setup</h1>
+                        <p className="text-sm text-[var(--color-rune-dim)] mb-4">{message}</p>
+                        <button onClick={scanLan} className="jm-join-btn mb-3" style={{ maxWidth: 200, margin: "0 auto" }}>
+                            🔄 Scan Again
+                        </button>
+                        <p className="text-xs text-[var(--color-rune-dim)]">
+                            Make sure Fireside is running on both devices and they&apos;re on the same WiFi network.
+                        </p>
+                    </div>
                 )}
             </div>
         </div>
