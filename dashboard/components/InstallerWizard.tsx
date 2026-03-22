@@ -507,20 +507,24 @@ export default function InstallerWizard({ onComplete }: { onComplete: () => void
                 ‹
               </button>
 
-              <div style={{ position: 'relative', width: 220, height: 220, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ position: 'relative', width: 220, height: 220, flexShrink: 0 }}>
                 {/* Glow ring */}
                 <div style={{
                   position: 'absolute', inset: -10, borderRadius: '50%',
                   background: 'radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 70%)',
                   animation: 'pulse 3s ease-in-out infinite',
                 }} />
-                {/* Species emoji instead of mascot image */}
-                <span style={{
-                  fontSize: 100, lineHeight: 1,
-                  filter: 'drop-shadow(0 0 40px rgba(245,158,11,0.4))',
-                  animation: 'float 3s ease-in-out infinite',
-                  transition: 'all 0.3s ease',
-                }}>{SPECIES.find(s => s.id === config.companionSpecies)?.emoji || '🦊'}</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/hub/mascot_${config.companionSpecies}.png`}
+                  alt={SPECIES.find(s => s.id === config.companionSpecies)?.label || 'Companion'}
+                  style={{
+                    width: 220, height: 220, objectFit: 'contain',
+                    filter: 'drop-shadow(0 0 40px rgba(245,158,11,0.4))',
+                    animation: 'float 3s ease-in-out infinite',
+                    transition: 'all 0.3s ease',
+                  }}
+                />
               </div>
 
               <button
