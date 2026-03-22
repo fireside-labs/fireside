@@ -88,6 +88,22 @@ export default function CampfireHub() {
     // Global thinking mode setting
     const thinking = localStorage.getItem("fireside_thinking_enabled");
     if (thinking !== null) setThinkingEnabled(thinking === "true");
+
+    // Auto-detect brain from API if localStorage doesn't have it
+    if (!model) {
+      fetch(`${API_BASE}/api/v1/status`).then(r => r.json()).then(data => {
+        if (data.model || data.status === "ready") {
+          const detected = data.model || "Local Model";
+          setHasBrain(true);
+          setBrainLabel(detected);
+          localStorage.setItem("fireside_model", detected);
+          if (data.quant) {
+            setBrainQuant(data.quant);
+            localStorage.setItem("fireside_brain_quant", data.quant);
+          }
+        }
+      }).catch(() => { /* backend not running yet */ });
+    }
   }, []);
 
   useEffect(() => {
