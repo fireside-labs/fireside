@@ -3987,3 +3987,51 @@ h6 {
     background: #5a4d40;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   Join Mesh Page
+   ═══════════════════════════════════════════════════════════════════ */
+
+.jm-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--color-glass-border, rgba(255,255,255,0.08));
+    background: rgba(255, 255, 255, 0.04);
+    color: white;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.jm-input:focus {
+    border-color: var(--color-neon, #ff6b00);
+}
+.jm-input::placeholder {
+    color: var(--color-rune-dim, #5a4d40);
+}
+
+.jm-input-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+}
+
+.jm-join-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--color-neon, #ff6b00);
+    color: black;
+}
+.jm-join-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+.jm-join-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}

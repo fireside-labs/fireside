@@ -307,15 +307,32 @@ async def create_join_token():
     node_name = node.get("name", "valhalla")
     node_port = node.get("port", 8765)
 
-    # Detect the orchestrator's IP (best guess: first interface or config)
-    # In production, Tailscale IP is in mesh config
+    # Detect the orchestrator's LAN IP
+    # Priority: 1) mesh config self-entry, 2) UDP socket trick, 3) hostname
     my_ip = "127.0.0.1"
+
+    # 1. Check mesh config for our own entry
     mesh_nodes = _config.get("mesh", {}).get("nodes", {})
-    # Try to find our own IP from mesh config
     for name, ncfg in mesh_nodes.items():
         if name == node_name and ncfg.get("ip"):
             my_ip = ncfg["ip"]
             break
+
+    # 2. If still localhost, detect LAN IP via UDP socket (works without Tailscale)
+    if my_ip == "127.0.0.1":
+        try:
+            import socket as _sock
+            s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))  # doesn't actually send data
+            my_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            # 3. Fallback: hostname resolution
+            try:
+                import socket as _sock
+                my_ip = _sock.gethostbyname(_sock.gethostname())
+            except Exception:
+                pass
 
     # Generate signed token
     token_id = secrets.token_urlsafe(8)

@@ -34,8 +34,7 @@ export default function ConnectedDevicesPage() {
 
     // Join token modal state
     const [showJoinModal, setShowJoinModal] = useState(false);
-    const [joinToken, setJoinToken] = useState("");
-    const [joinCommand, setJoinCommand] = useState("");
+    const [joinCode, setJoinCode] = useState("");
     const [joinExpiry, setJoinExpiry] = useState(0);
     const [joinLoading, setJoinLoading] = useState(false);
 
@@ -65,8 +64,10 @@ export default function ConnectedDevicesPage() {
             const res = await fetch(`${API_BASE}/api/v1/mesh/join-token`, { method: "POST" });
             if (res.ok) {
                 const data = await res.json();
-                setJoinToken(data.token || "N/A");
-                setJoinCommand(data.join_command || "");
+                // Build join code: TOKEN@IP:PORT
+                const token = data.token || "N/A";
+                const orch = data.orchestrator || "127.0.0.1:8765";
+                setJoinCode(`${token}@${orch}`);
                 setJoinExpiry(data.expires_in_seconds || 900);
                 setShowJoinModal(true);
             } else {
@@ -251,21 +252,20 @@ export default function ConnectedDevicesPage() {
                     <div className="nd-modal" onClick={e => e.stopPropagation()}>
                         <h2 className="text-white text-lg font-semibold mb-2">🔗 Add Device</h2>
                         <p className="text-sm text-[var(--color-rune-dim)] mb-4">
-                            Install Fireside on your other device, then run this command:
+                            On your other device, open Fireside and go to <strong className="text-white">Settings → Join Mesh</strong>, then paste this code:
                         </p>
 
                         <div className="nd-token-box">
-                            <code className="nd-token-code">{joinCommand}</code>
+                            <code className="nd-token-code">{joinCode}</code>
                             <button
                                 className="nd-copy-btn"
-                                onClick={() => copyToClipboard(joinCommand)}
+                                onClick={() => copyToClipboard(joinCode)}
                             >
                                 📋 Copy
                             </button>
                         </div>
 
                         <div className="nd-token-meta">
-                            <span>Token: <code>{joinToken.slice(0, 8)}...</code></span>
                             <span>Expires in {Math.round(joinExpiry / 60)} minutes</span>
                         </div>
 
