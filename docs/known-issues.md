@@ -97,6 +97,12 @@
 - **Fix:** Removed `@import url(fonts.googleapis.com)` from 3 inline CSS blocks. Fonts already loaded via `<link>` in `layout.tsx` `<head>`
 - **Commit:** `32059c3`
 
+### 5. Hub shows "No brain installed" despite brain running
+- **Symptom:** Brain is active on port 8080 (visible on Brain Lab), but hub shows "⚠ No brain installed · Set up →"
+- **Cause:** Hub only checked `localStorage.getItem("fireside_model")`, which is only set during the installer download flow. Pre-installed or externally-started brains were never detected
+- **Fix:** Added API-based auto-detection — hub probes `/api/v1/status` on load and auto-populates brain label from the running model
+- **Commit:** `61a2acf`
+
 ---
 
 ## brain_manager (`bot/brain_manager.py`)
