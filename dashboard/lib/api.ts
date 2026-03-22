@@ -11,7 +11,8 @@ export interface MeshNode {
   role: string;
   ip: string;
   port: number;
-  status: "online" | "offline";
+  status: "online" | "offline" | "self" | "unknown";
+  is_self?: boolean;
   current_model: string;
   last_task: string;
   uptime: string;

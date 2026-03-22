@@ -11,23 +11,7 @@ dashboard:
   - http://127.0.0.1:8765
 mesh:
   auth_token: change-me-to-a-long-random-string
-  nodes:
-    freya:
-      ip: 100.102.105.3
-      port: 8765
-      role: memory
-    heimdall:
-      ip: 100.108.153.23
-      port: 8765
-      role: security
-    hermes:
-      ip: 100.86.195.123
-      port: 8765
-      role: courier
-    thor:
-      ip: 100.117.255.38
-      port: 8765
-      role: backend
+  nodes: {}
 model_router:
   cost_tracking: true
   routing:
