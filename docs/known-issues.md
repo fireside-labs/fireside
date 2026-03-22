@@ -161,3 +161,37 @@ Different models handle tool calling differently:
 
 > [!TIP]
 > If adding support for a new model and tools don't work, check what format it uses for tool calls. The parser in `_stream_chat()` handles both structured JSON and XML formats.
+
+---
+
+## Chat UI (`dashboard/app/page.tsx`)
+
+### 1. + button clears chat instead of saving — OPEN
+- **Symptom:** Pressing + for new conversation clears the current one. Previous conversation is lost
+- **Cause:** No persistence layer — chat history is only in React state / sessionStorage, not saved per-conversation
+- **Fix needed:** Save conversations to localStorage or backend before clearing, load from sidebar
+
+### 2. Tasks/Workflow tab still unstyled in Tauri — OPEN
+- **Symptom:** Pipeline page renders fully styled on localhost:4001 but unstyled in Tauri exe
+- **Cause:** Inline `<style>{pageCSS}</style>` pattern may have issues in Tauri webview beyond the `@import` fix
+- **Fix needed:** Investigate Tauri CSP handling of large inline style blocks, or move to CSS module
+
+---
+
+## Tools — Known Failures (March 21 2026 testing)
+
+### 1. create_docx sometimes fails to resolve path
+- **Symptom:** Model runs `Get-ChildItem` to find username instead of using known path
+- **Cause:** System prompt doesn't tell the model the user's home directory path
+- **Fix needed:** Pass `HOME_DIR=C:\Users\Jorda` in system prompt context
+
+### 2. list_schedules times out
+- **Symptom:** Two consecutive timeout errors when listing schedules
+- **Cause:** Scheduler plugin may not be running, or endpoint hangs
+- **Fix needed:** Check `plugins/scheduler/handler.py` timeout handling
+
+### 3. files_list on Documents folder returns incomplete results
+- **Symptom:** Model showed `/Users` instead of listing Documents folder contents
+- **Cause:** Model used relative path instead of absolute path
+- **Fix needed:** Same as #1 — pass home dir in system prompt
+

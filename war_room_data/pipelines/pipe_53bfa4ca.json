@@ -1,0 +1,76 @@
+{
+  "id": "pipe_53bfa4ca",
+  "title": "Research the latest trends in AI agents, including advancements in capabilities, use cases, and emer",
+  "description": "Research the latest trends in AI agents, including advancements in capabilities, use cases, and emerging technologies",
+  "stages": [
+    {
+      "name": "gather",
+      "agent": "local",
+      "task_type": "spec",
+      "system_prompt": "You are a research specialist. You find relevant information from multiple angles, evaluate source credibility, and organize findings systematically. You cite your sources.",
+      "prompt": "Task: Research the latest trends in AI agents, including advancements in capabilities, use cases, and emerging technologies\n\nYour part: Research the topic thoroughly. Collect key facts, data points, and different perspectives. Cite sources.",
+      "chain_context": false,
+      "on_fail": "retry",
+      "debate": false
+    },
+    {
+      "name": "analyze",
+      "agent": "local",
+      "task_type": "spec",
+      "system_prompt": "You are a strategic analyst. You identify patterns, trends, and insights in information. You think critically, spot contradictions, and distinguish correlation from causation.",
+      "prompt": "Task: Research the latest trends in AI agents, including advancements in capabilities, use cases, and emerging technologies\n\nYour part: Analyze the gathered information. Identify patterns, contradictions, and key insights. Be objective.",
+      "chain_context": true,
+      "on_fail": "goto:gather",
+      "debate": false
+    },
+    {
+      "name": "write",
+      "agent": "local",
+      "task_type": "build",
+      "system_prompt": "You are a writing specialist. You produce clear, well-structured content. You lead with key takeaways, use concrete examples, and keep prose concise. You match tone to audience.",
+      "prompt": "Task: Research the latest trends in AI agents, including advancements in capabilities, use cases, and emerging technologies\n\nYour part: Write a clear, well-structured summary of findings. Include key takeaways at the top. End with VERDICT: SHIP.",
+      "chain_context": true,
+      "on_fail": "retry",
+      "debate": false
+    }
+  ],
+  "current_stage": 0,
+  "current_iteration": 2,
+  "max_iterations": 2,
+  "status": "killed",
+  "created_at": 1774151499,
+  "created_by": "odin",
+  "history": [
+    {
+      "stage": "gather",
+      "iteration": 0,
+      "verdict": "fail",
+      "result_preview": "I'll help you research the latest trends in AI agents. Let me start by checking if there are any relevant files in your system that might contain information on this topic.\n\n\n\n<tool_call>\n<function=files_read>\n<parameter=path>\nC:\\Users\\Jorda\\Downloads\\README.md\n</parameter>\n</function>\n</tool_call>",
+      "duration_s": 40,
+      "ts": 1774151539
+    },
+    {
+      "stage": "gather",
+      "iteration": 1,
+      "verdict": "fail",
+      "result_preview": "<tool_call>\n<function=files_read>\n<parameter=path>\nC:\\Users\\Jorda\\Downloads\\Walkthrough (2)\n</parameter>\n</function>\n</tool_call>",
+      "duration_s": 51,
+      "ts": 1774151590
+    }
+  ],
+  "results": {
+    "gather": "<tool_call>\n<function=files_read>\n<parameter=path>\nC:\\Users\\Jorda\\Downloads\\Walkthrough (2)\n</parameter>\n</function>\n</tool_call>"
+  },
+  "token_usage": {
+    "prompt": 27683,
+    "completion": 1451
+  },
+  "stage_times": [
+    40,
+    51
+  ],
+  "files_created": [],
+  "eta_seconds": 91,
+  "eta_minutes": 1.5,
+  "kill_reason": "Iteration limit exceeded (3/2)"
+}
