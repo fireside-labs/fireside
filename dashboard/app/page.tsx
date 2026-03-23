@@ -100,10 +100,50 @@ export default function CampfireHub() {
   // ── Voice input ──
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Check voice status on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/tools/voice/status`).then(r => r.json()).then(d => {
+      if (d.ok && d.model_loaded) setVoiceEnabled(true);
+    }).catch(() => {});
+  }, []);
+
+  const enableVoice = async () => {
+    setVoiceLoading(true);
+    try {
+      await fetch(`${API_BASE}/tools/voice/enable`, { method: 'POST' });
+      // Poll until ready
+      const poll = setInterval(async () => {
+        try {
+          const r = await fetch(`${API_BASE}/tools/voice/download-progress`);
+          const d = await r.json();
+          if (d.status === 'ready') {
+            clearInterval(poll);
+            setVoiceEnabled(true);
+            setVoiceLoading(false);
+          } else if (d.status === 'error') {
+            clearInterval(poll);
+            setVoiceLoading(false);
+            console.error('[voice] Enable failed:', d.message);
+          }
+        } catch { clearInterval(poll); setVoiceLoading(false); }
+      }, 1000);
+    } catch (err) {
+      console.error('[voice] Enable failed:', err);
+      setVoiceLoading(false);
+    }
+  };
+
   const startRecording = async () => {
+    // If voice not enabled yet, enable it first
+    if (!voiceEnabled) {
+      enableVoice();
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -1002,15 +1042,26 @@ export default function CampfireHub() {
                 <button
                   className={`fs-voice-btn ${isRecording ? 'recording' : ''}`}
                   onClick={isRecording ? stopRecording : startRecording}
-                  disabled={isTranscribing}
-                  title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Voice input'}
+                  disabled={isTranscribing || voiceLoading}
+                  title={
+                    voiceLoading ? 'Downloading voice model...'
+                    : !voiceEnabled ? 'Click to enable voice input'
+                    : isRecording ? 'Stop recording'
+                    : isTranscribing ? 'Transcribing...'
+                    : 'Voice input'
+                  }
                   style={{
-                    background: isRecording ? 'rgba(239,68,68,0.2)' : isTranscribing ? 'rgba(167,139,250,0.1)' : undefined,
-                    color: isRecording ? '#EF4444' : isTranscribing ? '#A78BFA' : undefined,
-                    animation: isRecording ? 'pulse 1.5s ease infinite' : undefined,
+                    background: isRecording ? 'rgba(239,68,68,0.2)'
+                      : voiceLoading ? 'rgba(251,191,36,0.1)'
+                      : isTranscribing ? 'rgba(167,139,250,0.1)' : undefined,
+                    color: isRecording ? '#EF4444'
+                      : voiceLoading ? '#FBBF24'
+                      : isTranscribing ? '#A78BFA' : undefined,
+                    animation: isRecording ? 'pulse 1.5s ease infinite'
+                      : voiceLoading ? 'pulse 2s ease infinite' : undefined,
                   }}
                 >
-                  {isTranscribing ? '⏳' : isRecording ? '⏹' : '🎙'}
+                  {voiceLoading ? '⬇️' : isTranscribing ? '⏳' : isRecording ? '⏹' : '🎙'}
                 </button>
                 <button
                   className={`fs-think-btn ${thinkingEnabled ? 'active' : ''}`}
