@@ -1,8 +1,10 @@
 /**
- * 📱 QR Code Scanner.
+ * 📱 QR Code Scanner + PIN Pairing.
  *
- * Scans QR code from desktop dashboard to auto-pair.
- * Falls back to manual IP entry.
+ * Three ways to connect:
+ *   1. Scan QR code from desktop dashboard (instant)
+ *   2. Enter 6-digit PIN from mesh join flow (like Bluetooth pairing)
+ *   3. Manual IP entry (fallback)
  */
 import { useState, useEffect } from "react";
 import {
@@ -12,11 +14,12 @@ import {
     TextInput,
     StyleSheet,
     Alert,
+    ActivityIndicator,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { setHost, testConnection } from "./api";
+import { setHost, testConnection, discoverFireside } from "./api";
 import { colors, spacing, borderRadius, fontSize, shadows } from "./theme";
 
 interface QRPairProps {
@@ -27,7 +30,9 @@ export default function QRPair({ onPaired }: QRPairProps) {
     const [permission, requestPermission] = useCameraPermissions();
     const [scanning, setScanning] = useState(false);
     const [manualIP, setManualIP] = useState("");
+    const [pin, setPin] = useState("");
     const [connecting, setConnecting] = useState(false);
+    const [discovering, setDiscovering] = useState(false);
     const [error, setError] = useState("");
 
     const handleBarCodeScanned = async ({ data }: { data: string }) => {
@@ -42,9 +47,12 @@ export default function QRPair({ onPaired }: QRPairProps) {
                 setError("");
                 await setHost(parsed.host);
 
-                // Store pairing token if present
+                // Store pairing token/PIN if present
                 if (parsed.token) {
                     await AsyncStorage.setItem("pairingToken", parsed.token);
+                }
+                if (parsed.pin) {
+                    await AsyncStorage.setItem("pairingPin", parsed.pin);
                 }
 
                 const ok = await testConnection();
@@ -59,6 +67,44 @@ export default function QRPair({ onPaired }: QRPairProps) {
             }
         } catch {
             setError("Could not read QR code. Try manual IP entry.");
+        }
+    };
+
+    const handlePinConnect = async () => {
+        const cleanPin = pin.trim();
+        if (cleanPin.length !== 6) {
+            setError("PIN must be 6 digits");
+            return;
+        }
+
+        setDiscovering(true);
+        setError("");
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+        try {
+            // Auto-discover the desktop on the LAN
+            const discovered = await discoverFireside();
+
+            if (discovered) {
+                // Found a Fireside instance — try to connect
+                await setHost(discovered.ip);
+
+                // Validate the PIN against the mesh join endpoint
+                const ok = await testConnection();
+                if (ok) {
+                    // Store PIN for future reference
+                    await AsyncStorage.setItem("pairingPin", cleanPin);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    onPaired();
+                    return;
+                }
+            }
+
+            setError("Could not find your PC on the network. Make sure both devices are on the same WiFi.");
+        } catch {
+            setError("Discovery failed. Try entering the IP manually.");
+        } finally {
+            setDiscovering(false);
         }
     };
 
@@ -139,6 +185,45 @@ export default function QRPair({ onPaired }: QRPairProps) {
                 <View style={styles.dividerLine} />
             </View>
 
+            {/* 6-digit PIN entry */}
+            <Text style={styles.manualLabel}>Enter 6-digit PIN from your desktop:</Text>
+            <TextInput
+                style={styles.pinInput}
+                value={pin}
+                onChangeText={(t) => setPin(t.replace(/[^0-9]/g, "").slice(0, 6))}
+                placeholder="000000"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={6}
+                autoCorrect={false}
+                textAlign="center"
+                onSubmitEditing={handlePinConnect}
+                returnKeyType="go"
+            />
+            <TouchableOpacity
+                style={[styles.connectBtn, styles.pinBtn, (discovering || pin.length !== 6) && { opacity: 0.4 }]}
+                onPress={handlePinConnect}
+                disabled={discovering || pin.length !== 6}
+                activeOpacity={0.7}
+            >
+                {discovering ? (
+                    <View style={styles.discoveringRow}>
+                        <ActivityIndicator size="small" color={colors.neon} />
+                        <Text style={[styles.connectBtnText, { marginLeft: spacing.sm }]}>
+                            Finding your PC...
+                        </Text>
+                    </View>
+                ) : (
+                    <Text style={styles.connectBtnText}>Connect with PIN</Text>
+                )}
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+            </View>
+
             {/* Manual IP entry */}
             <Text style={styles.manualLabel}>Enter your PC's IP manually:</Text>
             <TextInput
@@ -183,10 +268,14 @@ const styles = StyleSheet.create({
     divider: { flexDirection: "row", alignItems: "center", marginBottom: spacing.lg },
     dividerLine: { flex: 1, height: 1, backgroundColor: colors.glassBorder },
     dividerText: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textMuted, paddingHorizontal: spacing.md },
+    // PIN
+    pinInput: { backgroundColor: colors.bgInput, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.neon, paddingHorizontal: spacing.lg, paddingVertical: spacing.md + 4, fontFamily: "Inter_700Bold", fontSize: 28, color: colors.textPrimary, marginBottom: spacing.md, letterSpacing: 12 },
+    pinBtn: { borderColor: colors.neon, borderWidth: 1, backgroundColor: colors.neonGlow },
+    discoveringRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
     // Manual
     manualLabel: { fontFamily: "Inter_400Regular", fontSize: fontSize.xs, color: colors.textDim, marginBottom: spacing.sm },
     ipInput: { backgroundColor: colors.bgInput, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.glassBorder, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontFamily: "Inter_400Regular", fontSize: fontSize.sm, color: colors.textPrimary, marginBottom: spacing.md },
-    connectBtn: { backgroundColor: colors.bgCard, borderRadius: borderRadius.md, paddingVertical: spacing.md, alignItems: "center", borderWidth: 1, borderColor: colors.glassBorder },
+    connectBtn: { backgroundColor: colors.bgCard, borderRadius: borderRadius.md, paddingVertical: spacing.md, alignItems: "center", borderWidth: 1, borderColor: colors.glassBorder, marginBottom: spacing.lg },
     connectBtnText: { fontFamily: "Inter_500Medium", fontSize: fontSize.sm, color: colors.textSecondary },
     errorText: { fontFamily: "Inter_400Regular", fontSize: fontSize.tiny, color: "#ef4444", textAlign: "center", marginTop: spacing.md },
     // Scanner
@@ -198,3 +287,4 @@ const styles = StyleSheet.create({
     cancelScan: { position: "absolute", bottom: 60, alignSelf: "center", backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: borderRadius.full },
     cancelScanText: { fontFamily: "Inter_500Medium", fontSize: fontSize.sm, color: "#fff" },
 });
+

@@ -140,18 +140,58 @@ def _load_system_prompt(agent_name: str) -> str:
     except Exception:
         pass
 
-    # Tool capabilities — tell the model what it can do
+    # Tool capabilities — tell the model what it can do (detailed per-tool)
     try:
         from tool_defs import TOOL_SCHEMAS
-        tool_names = [t["function"]["name"] for t in TOOL_SCHEMAS]
+
+        # Build a per-tool description list
+        tool_lines = []
+        for t in TOOL_SCHEMAS:
+            fn = t["function"]
+            name = fn["name"]
+            desc = fn.get("description", "")
+            # Take first sentence only for brevity
+            short = desc.split(". Use when")[0].split(". ")[0]
+            tool_lines.append(f"  - **{name}**: {short}")
+
+        # Check if knowledge base has any folders
+        kb_note = ""
+        try:
+            from pathlib import Path as _P
+            kb_root = _P.home() / ".valhalla" / "knowledge"
+            if kb_root.exists():
+                kb_folders = [d.name for d in kb_root.iterdir() if d.is_dir() and not d.name.startswith("_")]
+                if kb_folders:
+                    kb_note = (
+                        f"\n\nThe user has a knowledge base with folders: {', '.join(kb_folders)}. "
+                        f"Use `knowledge_search` to look up information from their documents before answering "
+                        f"domain-specific questions."
+                    )
+                else:
+                    kb_note = (
+                        f"\n\nThe user can create knowledge base folders at {kb_root}/ — "
+                        f"if they mention wanting to add business docs or reference materials, "
+                        f"tell them to create a folder there and drop files in."
+                    )
+        except Exception:
+            pass
+
         parts.append(
-            "\n## Your Capabilities\n"
-            "You have access to the following tools and SHOULD use them when relevant:\n"
-            f"- **{', '.join(tool_names)}**\n\n"
-            "When the user asks you to search the web, read/write files, run commands, "
-            "create documents, set reminders, or any action your tools support — USE the "
-            "tool. Do NOT say you can't do something if you have a tool for it. "
-            "You run locally on the user's computer and have permission to help them with these actions."
+            "\n## Your Tools & Capabilities\n"
+            "You have access to the following tools. ALWAYS use them when relevant — "
+            "never say 'I can't do that' if you have a tool for it:\n\n"
+            + "\n".join(tool_lines)
+            + "\n\n"
+            "**Rules:**\n"
+            "1. If the user asks to search/research → use `web_search` or `research`\n"
+            "2. If the user asks about their files → use `files_list` / `files_read`\n"
+            "3. If the user asks to create a document → use `create_pptx` / `create_docx` / `create_xlsx`\n"
+            "4. If the user asks to calculate/analyze data → use `run_code` (write Python)\n"
+            "5. If the user asks about their business/docs → use `knowledge_search` first\n"
+            "6. If you need current info → use `web_search` or `browse_url`\n"
+            "7. If the user says 'remember this' → use `store_memory`\n"
+            "8. You run locally on the user's computer — you HAVE permission to help them."
+            + kb_note
         )
     except Exception:
         pass

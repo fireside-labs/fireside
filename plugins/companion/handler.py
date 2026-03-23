@@ -2471,5 +2471,148 @@ def register_routes(app, config: dict) -> None:
             "since": since,
         }
 
+    # ── Pet State (mood/energy/hunger) ─────────────────────────────────────────
+
+    @router.get("/api/v1/companion/pet-state")
+    async def api_companion_pet_state():
+        """Return companion pet state — mood, energy, hunger, last interaction.
+
+        Powers the mobile care screen meters and desktop companion widget.
+        """
+        import time as _time
+        from pathlib import Path as _Path
+
+        state_path = _Path.home() / ".valhalla" / "companion_state.json"
+        state = {}
+        if state_path.exists():
+            try:
+                state = json.loads(state_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        return {
+            "mood": state.get("happiness", 50),
+            "energy": state.get("energy", 70),
+            "hunger": state.get("hunger", 50),
+            "last_interaction": state.get("last_interaction"),
+        }
+
+    # ── Interact (feed/walk/play) ──────────────────────────────────────────────
+
+    @router.post("/api/v1/companion/interact")
+    async def api_companion_interact(request: "Request"):
+        """Interact with companion — feed, walk, or play.
+
+        Body: { "action": "feed" | "walk" | "play", "item": "optional item" }
+        Updates pet state and returns new state + flavour message.
+        """
+        import time as _time
+        import random
+        from pathlib import Path as _Path
+
+        body = await request.json()
+        action = body.get("action", "")
+        item = body.get("item")
+
+        if action not in ("feed", "walk", "play"):
+            raise HTTPException(400, "action must be 'feed', 'walk', or 'play'")
+
+        state_path = _Path.home() / ".valhalla" / "companion_state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+
+        state = {}
+        if state_path.exists():
+            try:
+                state = json.loads(state_path.read_text(encoding="utf-8"))
+            except Exception:
+                state = {}
+
+        mood = state.get("happiness", 50)
+        energy = state.get("energy", 70)
+        hunger = state.get("hunger", 50)
+
+        messages = {
+            "feed": [
+                "Nom nom! That was delicious! 🍖",
+                "Mmmm, thank you! I was getting hungry! 🍕",
+                "Yummy! My favorite! 🍪",
+            ],
+            "walk": [
+                "What a lovely walk! Found a shiny pebble! 🪨✨",
+                "Fresh air feels great! Let's do this more often! 🌳",
+                "I spotted a butterfly! Almost caught it! 🦋",
+            ],
+            "play": [
+                "That was so much fun! Again, again! 🎾",
+                "Woohoo! Best playtime ever! 🎮",
+                "I love playing with you! 🎉",
+            ],
+        }
+
+        if action == "feed":
+            hunger = max(0, hunger - 30)
+            mood = min(100, mood + 10)
+            energy = min(100, energy + 5)
+        elif action == "walk":
+            energy = max(0, energy - 15)
+            mood = min(100, mood + 15)
+            hunger = min(100, hunger + 10)
+        elif action == "play":
+            energy = max(0, energy - 20)
+            mood = min(100, mood + 20)
+            hunger = min(100, hunger + 5)
+
+        state["happiness"] = mood
+        state["energy"] = energy
+        state["hunger"] = hunger
+        state["last_interaction"] = _time.time()
+
+        state_path.write_text(
+            json.dumps(state, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        return {
+            "ok": True,
+            "state": {"mood": mood, "energy": energy, "hunger": hunger},
+            "message": random.choice(messages[action]),
+        }
+
+    # ── Forget All (nuclear reset) ─────────────────────────────────────────────
+
+    @router.delete("/api/v1/companion/forget")
+    async def api_companion_forget():
+        """Nuclear reset — clear all companion data.
+
+        Deletes: companion_state, taught_facts, companion_soul, chat_history,
+        companion_skills, phone_context. Does NOT delete the user's config.
+        """
+        from pathlib import Path as _Path
+
+        valhalla_dir = _Path.home() / ".valhalla"
+
+        deleted = []
+        for filename in [
+            "companion_state.json",
+            "taught_facts.json",
+            "companion_soul.json",
+            "chat_history.json",
+            "companion_skills.json",
+            "phone_context.json",
+        ]:
+            fp = valhalla_dir / filename
+            if fp.exists():
+                try:
+                    fp.unlink()
+                    deleted.append(filename)
+                except Exception as e:
+                    log.warning("[companion/forget] Failed to delete %s: %s", filename, e)
+
+        log.info("[companion/forget] Nuclear reset — deleted %d files: %s", len(deleted), deleted)
+        return {
+            "ok": True,
+            "message": f"All companion data has been reset. Deleted {len(deleted)} files.",
+        }
+
     app.include_router(router)
     log.info("[companion] Plugin loaded (Sprint 11: network status + bridge).")

@@ -5,7 +5,6 @@ import { API_BASE } from "../lib/api";
 import Link from "next/link";
 import EmberParticles from "@/components/EmberParticles";
 import { playWhoosh, playTick } from "@/components/FiresideSounds";
-import { DiscoveryCard } from "@/components/GuidedTour";
 import ReactMarkdown from "react-markdown";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -88,6 +87,110 @@ export default function CampfireHub() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeConvo, setActiveConvo] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
+
+  // ── Chat management ──
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // ── File upload ──
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Knowledge Base ──
+  const [kbOpen, setKbOpen] = useState(false);
+  const [kbFolders, setKbFolders] = useState<{name:string;files:number;chunks:number}[]>([]);
+  const [kbNewFolder, setKbNewFolder] = useState("");
+  const [kbUploading, setKbUploading] = useState(false);
+  const kbFileRef = useRef<HTMLInputElement>(null);
+  const [kbSelectedFolder, setKbSelectedFolder] = useState("general");
+
+  const fetchKbFolders = async () => {
+    try {
+      const r = await fetch(`${API_BASE}/tools/knowledge/folders`);
+      const d = await r.json();
+      if (d.ok) setKbFolders(d.folders || []);
+    } catch {}
+  };
+  const uploadKbFile = async (file: File, folder: string) => {
+    setKbUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("folder", folder);
+      await fetch(`${API_BASE}/tools/knowledge/upload-file`, { method: "POST", body: form });
+      await fetchKbFolders();
+    } catch {} finally { setKbUploading(false); }
+  };
+  const createKbFolder = async () => {
+    if (!kbNewFolder.trim()) return;
+    // Creating a folder is done by uploading — but we can also just ingest
+    try {
+      await fetch(`${API_BASE}/tools/knowledge/ingest`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ folder: kbNewFolder.trim() }),
+      });
+      setKbNewFolder("");
+      await fetchKbFolders();
+    } catch {}
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const deleteConvo = (id: string) => {
+    if (activeConvo === id) {
+      setChatHistory([]);
+      setActiveConvo(null);
+      sessionStorage.removeItem("fireside_chat_session");
+    }
+    setConversations(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      saveConversations(updated);
+      return updated;
+    });
+  };
+
+  const deleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    if (activeConvo && selectedIds.has(activeConvo)) {
+      setChatHistory([]);
+      setActiveConvo(null);
+      sessionStorage.removeItem("fireside_chat_session");
+    }
+    setConversations(prev => {
+      const updated = prev.filter(c => !selectedIds.has(c.id));
+      saveConversations(updated);
+      return updated;
+    });
+    setSelectedIds(new Set());
+    setSelectMode(false);
+  };
+
+  const clearAllConvos = () => {
+    if (!confirm("Delete ALL conversations? This cannot be undone.")) return;
+    setChatHistory([]);
+    setActiveConvo(null);
+    sessionStorage.removeItem("fireside_chat_session");
+    setConversations([]);
+    saveConversations([]);
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files) return;
+    setAttachedFiles(prev => [...prev, ...Array.from(files)].slice(0, 5));
+  };
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
   // Ref to always have latest chatHistory (avoids stale closure in onClick handlers)
   const chatHistoryRef = useRef(chatHistory);
@@ -286,86 +389,163 @@ export default function CampfireHub() {
       playWhoosh();
     }
 
-    try {
-      // Try Python backend first (port 8765)
-      let responseText = "";
+    // Add a placeholder assistant message that we stream into
+    const streamIndex = chatHistory.length + 1; // +1 for user msg just added
+    setChatHistory(prev => [...prev, { role: "assistant", content: "", ts: new Date() }]);
 
-      // Recall relevant memories
+    // Helper: append tokens to the last assistant message
+    const appendToken = (token: string) => {
+      setChatHistory(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content: last.content + token };
+        }
+        return updated;
+      });
+    };
+
+    // Helper: finalize the last assistant message (strip artifacts, set final content)
+    const finalizeMessage = (fullText: string) => {
+      const clean = fullText
+        .replace(/<\/?think>/g, "")
+        .replace(/Thinking Process[\s\S]*?(?=\n\n|\n[A-Z]|$)/i, "")
+        .replace(/Thought Process[\s\S]*?(?=\n\n|\n[A-Z]|$)/i, "")
+        .replace(/<\|im_start\|>[^\n]*/g, "")
+        .replace(/<\|im_end\|>/g, "")
+        .replace(/<\|end\|>/g, "")
+        .replace(/<\|eot_id\|>/g, "")
+        .replace(/<\|start_header_id\|>[^<]*<\|end_header_id\|>/g, "")
+        .replace(/\[INST\]|\[\/INST\]/g, "")
+        .trim();
+
+      setChatHistory(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === "assistant") {
+          updated[updated.length - 1] = { ...last, content: clean || "I received your message." };
+        }
+        return updated;
+      });
+    };
+
+    // Helper: parse SSE stream (used by both backends)
+    const readSSEStream = async (response: Response): Promise<string> => {
+      const reader = response.body?.getReader();
+      if (!reader) return "";
+      const decoder = new TextDecoder();
+      let fullText = "";
+      setIsTyping(false); // stop dots once streaming starts
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          // Parse SSE format: "data: {...}\n\n"
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6).trim();
+              if (data === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(data);
+                // OpenAI-compatible streaming format
+                const token = parsed.choices?.[0]?.delta?.content
+                  || parsed.choices?.[0]?.text
+                  || parsed.token?.text
+                  || parsed.content
+                  || "";
+                if (token) {
+                  fullText += token;
+                  appendToken(token);
+                }
+              } catch { /* skip non-JSON lines */ }
+            }
+          }
+        }
+      } catch { /* stream interrupted */ }
+      return fullText;
+    };
+
+    try {
+      let fullText = "";
       const recalled = recallMemories(userMessage);
       const memoryContext = recalled ? `\n\n[Remembered from past conversations] ${recalled}` : "";
       const maxTokens = getResponseLimit();
 
+      // Try Python backend first (port 8765) with streaming
       try {
         const res = await fetch(`${API_BASE}/api/v1/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: userMessage,
-            stream: false,
+            stream: true,
             history: chatHistory.map(m => ({ role: m.role, content: m.content })),
           }),
         });
         if (!res.ok) throw new Error(`API error: ${res.status}`);
-        const data = await res.json();
-        responseText = data.response || data.content || "";
+
+        // Check if response is streaming (SSE) or JSON
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("text/event-stream") || contentType.includes("text/plain")) {
+          fullText = await readSSEStream(res);
+        } else {
+          // Fallback: non-streaming JSON response
+          const data = await res.json();
+          fullText = data.response || data.content || "";
+          setIsTyping(false);
+        }
       } catch {
-        // Fallback: try llama-server directly (port 8080, OpenAI-compatible)
+        // Fallback: try llama-server directly (port 8080, OpenAI-compatible streaming)
         try {
-          // Build system prompt — use personality from localStorage if available
           const soulIdentity = typeof window !== "undefined" ? localStorage.getItem("fireside_soul_identity") : null;
           const systemPrompt = soulIdentity
             ? `${soulIdentity}\n\nYour name is ${displayName}.${memoryContext}`
             : `You are a helpful AI companion named ${displayName}. Be friendly, concise, and helpful.${memoryContext}`;
-          const thinkingEnabled = typeof window !== "undefined" ? localStorage.getItem("fireside_thinking_enabled") !== "false" : true;
+          const thinkingOn = typeof window !== "undefined" ? localStorage.getItem("fireside_thinking_enabled") !== "false" : true;
           const payload: Record<string, unknown> = {
             model: "local",
+            stream: true,
             messages: [
               { role: "system", content: systemPrompt },
-              ...chatHistory.map(m => ({ role: m.role, content: m.content })),
+              ...chatHistory.slice(0, -1).map(m => ({ role: m.role, content: m.content })), // exclude the empty placeholder
               { role: "user", content: userMessage },
             ],
             temperature: parseFloat(localStorage.getItem("fireside_temperature") || "0.7"),
           };
           if (maxTokens) payload.max_tokens = maxTokens;
-          if (!thinkingEnabled) payload.reasoning_effort = "none";
+          if (!thinkingOn) payload.reasoning_effort = "none";
+
           const res = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error(`llama-server error: ${res.status}`);
-          const data = await res.json();
-          const msg = data.choices?.[0]?.message;
-          // Show content first; fall back to reasoning_content
-          let raw = msg?.content || (msg?.reasoning_content || "");
-          // Strip leaked template tokens (ChatML, Llama, think tags, etc.)
-          raw = raw
-            .replace(/<\/?think>/g, "")
-            .replace(/Thinking Process[\s\S]*?(?=\n\n|\n[A-Z]|$)/i, "")
-            .replace(/Thought Process[\s\S]*?(?=\n\n|\n[A-Z]|$)/i, "")
-            .replace(/<\|im_start\|>[^\n]*/g, "")
-            .replace(/<\|im_end\|>/g, "")
-            .replace(/<\|end\|>/g, "")
-            .replace(/<\|eot_id\|>/g, "")
-            .replace(/<\|start_header_id\|>[^<]*<\|end_header_id\|>/g, "")
-            .replace(/\[INST\]|\[\/INST\]/g, "")
-            .trim();
-          responseText = raw;
+
+          fullText = await readSSEStream(res);
         } catch {
           throw new Error("No backend available");
         }
       }
-      setChatHistory(prev => [...prev, {
-        role: "assistant",
-        content: responseText || "I received your message.",
-        ts: new Date(),
-      }]);
+
+      // Clean up template artifacts in the final text
+      finalizeMessage(fullText);
+
     } catch {
-      setChatHistory(prev => [...prev, {
-        role: "assistant",
-        content: "I'm not connected right now. Check that your brain is running.",
-        ts: new Date(),
-      }]);
+      setChatHistory(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === "assistant") {
+          updated[updated.length - 1] = {
+            ...last,
+            content: "I'm not connected right now. Check that your brain is running.",
+          };
+        }
+        return updated;
+      });
     } finally {
       setIsTyping(false);
       // Auto-compact history after response (non-blocking, fire-and-forget)
@@ -415,7 +595,6 @@ export default function CampfireHub() {
       {/* ═══════════ HUB VIEW ═══════════ */}
       {activeView === "hub" && (
         <div className="fs-hub">
-          <DiscoveryCard pageKey="/" />
           <div className="fs-ambient" />
 
           {/* LEFT: Campfire Scene */}
@@ -430,7 +609,6 @@ export default function CampfireHub() {
                   {greeting}
                 </p>
               </div>
-              <img className="fs-fox" src={mascotSrc} alt={species} />
               <img className="fs-campfire" src="/hub/campfire.png" alt="Campfire" />
             </div>
 
@@ -529,8 +707,52 @@ export default function CampfireHub() {
             <div className="fs-convo-header">
               <button className="fs-back-hub" onClick={() => { setActiveView("hub"); playWhoosh(); }} title="Back to Hub">🔥 Hub</button>
               <span className="fs-convo-title">Conversations</span>
-              <button className="fs-new-chat" onClick={() => { saveCurrentChat(); setChatHistory([]); setActiveConvo(null); sessionStorage.removeItem("fireside_chat_session"); }} title="New chat">＋</button>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  className="fs-new-chat"
+                  onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+                  title={selectMode ? "Cancel select" : "Select chats"}
+                  style={{ opacity: selectMode ? 1 : 0.5, fontSize: 13 }}
+                >
+                  {selectMode ? "✕" : "☑"}
+                </button>
+                <button className="fs-new-chat" onClick={() => { saveCurrentChat(); setChatHistory([]); setActiveConvo(null); sessionStorage.removeItem("fireside_chat_session"); }} title="New chat">＋</button>
+              </div>
             </div>
+
+            {/* Bulk actions bar */}
+            {selectMode && (
+              <div style={{
+                display: "flex", gap: 6, padding: "6px 12px",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+              }}>
+                <button
+                  onClick={deleteSelected}
+                  disabled={selectedIds.size === 0}
+                  style={{
+                    flex: 1, padding: "6px 0", borderRadius: 6,
+                    background: selectedIds.size > 0 ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.05)",
+                    color: selectedIds.size > 0 ? "#EF4444" : "#666",
+                    border: "1px solid rgba(239,68,68,0.2)",
+                    cursor: selectedIds.size > 0 ? "pointer" : "default",
+                    fontSize: 12, fontWeight: 600,
+                  }}
+                >
+                  🗑 Delete ({selectedIds.size})
+                </button>
+                <button
+                  onClick={clearAllConvos}
+                  style={{
+                    padding: "6px 10px", borderRadius: 6,
+                    background: "rgba(239,68,68,0.08)",
+                    color: "#EF4444", border: "1px solid rgba(239,68,68,0.15)",
+                    cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  }}
+                >
+                  Clear All
+                </button>
+              </div>
+            )}
 
             <div className="fs-convo-search-wrap">
               <input
@@ -542,54 +764,47 @@ export default function CampfireHub() {
             </div>
 
             <div className="fs-convo-list">
-              {groupedConvos.pinned.length > 0 && (
-                <div className="fs-convo-group">
-                  <div className="fs-convo-group-label">📌 Pinned</div>
-                  {groupedConvos.pinned.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
-                      <div className="fs-convo-item-title">{c.title}</div>
-                      <div className="fs-convo-item-preview">{c.preview}</div>
-                      {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {groupedConvos.today.length > 0 && (
-                <div className="fs-convo-group">
-                  <div className="fs-convo-group-label">Today</div>
-                  {groupedConvos.today.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
-                      <div className="fs-convo-item-title">{c.title}</div>
-                      <div className="fs-convo-item-preview">{c.preview}</div>
-                      {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {groupedConvos.yesterday.length > 0 && (
-                <div className="fs-convo-group">
-                  <div className="fs-convo-group-label">Yesterday</div>
-                  {groupedConvos.yesterday.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
-                      <div className="fs-convo-item-title">{c.title}</div>
-                      <div className="fs-convo-item-preview">{c.preview}</div>
-                      {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {groupedConvos.older.length > 0 && (
-                <div className="fs-convo-group">
-                  <div className="fs-convo-group-label">Older</div>
-                  {groupedConvos.older.map(c => (
-                    <button key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`} onClick={() => loadConvo(c.id)}>
-                      <div className="fs-convo-item-title">{c.title}</div>
-                      <div className="fs-convo-item-preview">{c.preview}</div>
-                      {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {(["pinned", "today", "yesterday", "older"] as const).map(group => {
+                const items = groupedConvos[group];
+                if (items.length === 0) return null;
+                const label = group === "pinned" ? "📌 Pinned" : group.charAt(0).toUpperCase() + group.slice(1);
+                return (
+                  <div key={group} className="fs-convo-group">
+                    <div className="fs-convo-group-label">{label}</div>
+                    {items.map(c => (
+                      <div key={c.id} className={`fs-convo-item ${activeConvo === c.id ? "active" : ""}`}
+                        style={{ display: "flex", alignItems: "center", gap: 8 }}
+                      >
+                        {selectMode && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(c.id)}
+                            onChange={() => toggleSelect(c.id)}
+                            style={{ accentColor: "#E8712C", flexShrink: 0, cursor: "pointer" }}
+                          />
+                        )}
+                        <button
+                          style={{ flex: 1, textAlign: "left", background: "none", border: "none", color: "inherit", padding: 0, cursor: "pointer" }}
+                          onClick={() => selectMode ? toggleSelect(c.id) : loadConvo(c.id)}
+                        >
+                          <div className="fs-convo-item-title">{c.title}</div>
+                          <div className="fs-convo-item-preview">{c.preview}</div>
+                          {c.folder && <span className="fs-convo-folder">{c.folder}</span>}
+                        </button>
+                        {!selectMode && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteConvo(c.id); }}
+                            title="Delete chat"
+                            className="fs-convo-delete"
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -612,6 +827,19 @@ export default function CampfireHub() {
                 </p>
               </div>
               <span className="fs-chat-model">{brainLabel || 'No model'}{brainQuant ? ` · ${brainQuant}` : ''}</span>
+              <button
+                onClick={() => { setKbOpen(!kbOpen); if (!kbOpen) fetchKbFolders(); }}
+                title="Knowledge Base"
+                style={{
+                  background: kbOpen ? "rgba(167,139,250,0.15)" : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${kbOpen ? "rgba(167,139,250,0.3)" : "rgba(255,255,255,0.06)"}`,
+                  color: kbOpen ? "#A78BFA" : "#4A3D40",
+                  borderRadius: 8, padding: "4px 10px", cursor: "pointer",
+                  fontSize: 14, fontFamily: "Outfit", transition: "all 0.2s",
+                }}
+              >
+                📚
+              </button>
             </div>
 
             {/* Messages */}
@@ -664,7 +892,54 @@ export default function CampfireHub() {
             </div>
 
             {/* Input Bar */}
-            <div className="fs-input-bar">
+            <div
+              className={`fs-input-bar ${isDragging ? 'fs-dragging' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                handleFileSelect(e.dataTransfer.files);
+              }}
+            >
+              {/* Attached files preview */}
+              {attachedFiles.length > 0 && (
+                <div style={{
+                  display: "flex", gap: 6, padding: "8px 16px 0",
+                  flexWrap: "wrap",
+                }}>
+                  {attachedFiles.map((f, i) => (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      background: "rgba(232,113,44,0.12)",
+                      border: "1px solid rgba(232,113,44,0.25)",
+                      borderRadius: 8, padding: "4px 10px", fontSize: 12,
+                      color: "#E8712C",
+                    }}>
+                      <span>📎 {f.name.length > 20 ? f.name.slice(0, 18) + '...' : f.name}</span>
+                      <span style={{ fontSize: 10, opacity: 0.6 }}>({(f.size / 1024).toFixed(0)}KB)</span>
+                      <button onClick={() => removeFile(i)} style={{
+                        background: "none", border: "none", color: "#EF4444",
+                        cursor: "pointer", fontSize: 14, padding: 0,
+                      }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {isDragging && (
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: 16,
+                  background: "rgba(232,113,44,0.08)",
+                  border: "2px dashed rgba(232,113,44,0.4)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#E8712C", fontSize: 14, fontWeight: 600,
+                  zIndex: 10, pointerEvents: "none",
+                }}>
+                  📎 Drop files here
+                </div>
+              )}
+
               <div className="fs-input-wrap">
                 <button className="fs-voice-btn" title="Voice mode">🎙</button>
                 <button
@@ -680,6 +955,22 @@ export default function CampfireHub() {
                 >
                   🧠
                 </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="fs-voice-btn"
+                  title="Attach file"
+                  style={{ fontSize: 16 }}
+                >
+                  📎
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                  accept=".txt,.pdf,.csv,.xlsx,.xls,.json,.py,.js,.ts,.md,.pptx,.docx,.png,.jpg,.jpeg,.gif,.webp"
+                />
                 <textarea
                   ref={inputRef}
                   value={message}
@@ -694,15 +985,146 @@ export default function CampfireHub() {
                       handleSend();
                     }
                   }}
-                  placeholder={`Message ${displayName}...`}
+                  placeholder={attachedFiles.length > 0 ? `${attachedFiles.length} file(s) attached — add a message...` : `Message ${displayName}...`}
                   className="fs-chat-input"
                   autoFocus
                   rows={1}
                 />
-                <button onClick={handleSend} disabled={!message.trim()} className="fs-send-btn">▶</button>
+                <button onClick={handleSend} disabled={!message.trim() && attachedFiles.length === 0} className="fs-send-btn">▶</button>
               </div>
             </div>
           </div>
+
+          {/* ── Knowledge Base Panel ── */}
+          {kbOpen && (
+            <div style={{
+              width: 320, flexShrink: 0,
+              background: "rgba(8,8,14,0.95)", backdropFilter: "blur(20px)",
+              borderLeft: "1px solid rgba(255,255,255,0.04)",
+              display: "flex", flexDirection: "column",
+              animation: "bsSlideIn 0.3s ease",
+              overflow: "hidden",
+            }}>
+              <div style={{
+                padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: "#A78BFA" }}>📚 Knowledge Base</span>
+                <button onClick={() => setKbOpen(false)} style={{
+                  background: "none", border: "none", color: "#4A3D30",
+                  cursor: "pointer", fontSize: 16,
+                }}>✕</button>
+              </div>
+
+              {/* Upload area */}
+              <div style={{ padding: 14 }}>
+                <div style={{
+                  border: "2px dashed rgba(167,139,250,0.15)",
+                  borderRadius: 12, padding: "20px 16px",
+                  textAlign: "center", cursor: "pointer",
+                  background: "rgba(167,139,250,0.03)",
+                  transition: "all 0.2s",
+                }} onClick={() => kbFileRef.current?.click()}>
+                  <div style={{ fontSize: 28, marginBottom: 6 }}>{kbUploading ? "⏳" : "📄"}</div>
+                  <div style={{ fontSize: 12, color: "#A78BFA", fontWeight: 700 }}>
+                    {kbUploading ? "Uploading & indexing..." : "Click to upload documents"}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#4A3D30", marginTop: 4 }}>
+                    PDF, DOCX, CSV, TXT, MD, JSON
+                  </div>
+                </div>
+                <input
+                  ref={kbFileRef}
+                  type="file"
+                  multiple
+                  style={{ display: "none" }}
+                  accept=".txt,.pdf,.csv,.json,.md,.docx,.xlsx,.py,.js,.ts,.yaml,.yml,.html,.xml"
+                  onChange={async (e) => {
+                    if (!e.target.files) return;
+                    for (const f of Array.from(e.target.files)) {
+                      await uploadKbFile(f, kbSelectedFolder);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+
+                {/* Folder selector */}
+                <div style={{ marginTop: 10, display: "flex", gap: 6 }}>
+                  <select
+                    value={kbSelectedFolder}
+                    onChange={(e) => setKbSelectedFolder(e.target.value)}
+                    style={{
+                      flex: 1, padding: "6px 10px", borderRadius: 8,
+                      background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                      color: "#C4A882", fontSize: 12, fontFamily: "Outfit",
+                    }}
+                  >
+                    <option value="general">📁 general</option>
+                    {kbFolders.filter(f => f.name !== "general").map(f => (
+                      <option key={f.name} value={f.name}>📁 {f.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Create new folder */}
+                <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                  <input
+                    value={kbNewFolder}
+                    onChange={(e) => setKbNewFolder(e.target.value)}
+                    placeholder="New folder name..."
+                    onKeyDown={(e) => e.key === "Enter" && createKbFolder()}
+                    style={{
+                      flex: 1, padding: "6px 10px", borderRadius: 8,
+                      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+                      color: "#C4A882", fontSize: 11, fontFamily: "Outfit", outline: "none",
+                    }}
+                  />
+                  <button onClick={createKbFolder} style={{
+                    padding: "6px 12px", borderRadius: 8,
+                    background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)",
+                    color: "#A78BFA", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    fontFamily: "Outfit",
+                  }}>+ Add</button>
+                </div>
+              </div>
+
+              {/* Folder list */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "0 14px 14px" }}>
+                <div style={{
+                  fontSize: 10, fontWeight: 800, color: "#4A3D30",
+                  textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8,
+                }}>Your Folders</div>
+                {kbFolders.length === 0 ? (
+                  <div style={{ fontSize: 11, color: "#3A3530", padding: 12, textAlign: "center" }}>
+                    No folders yet. Upload a document to get started!
+                  </div>
+                ) : kbFolders.map(f => (
+                  <div key={f.name} style={{
+                    padding: "10px 12px", borderRadius: 10, marginBottom: 6,
+                    background: kbSelectedFolder === f.name
+                      ? "rgba(167,139,250,0.08)" : "rgba(255,255,255,0.02)",
+                    border: `1px solid ${kbSelectedFolder === f.name
+                      ? "rgba(167,139,250,0.15)" : "rgba(255,255,255,0.04)"}`,
+                    cursor: "pointer", transition: "all 0.2s",
+                  }} onClick={() => setKbSelectedFolder(f.name)}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#C4A882" }}>
+                      📁 {f.name}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#4A3D30", marginTop: 3 }}>
+                      {f.files} file{f.files !== 1 ? "s" : ""} · {f.chunks} chunks indexed
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{
+                padding: "10px 14px", borderTop: "1px solid rgba(255,255,255,0.04)",
+                fontSize: 10, color: "#3A3530", textAlign: "center",
+              }}>
+                Documents are indexed locally & stored in memory
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

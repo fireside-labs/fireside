@@ -184,18 +184,51 @@ export default function ChatTab() {
         return unsub;
     }, []);
 
-    // Load chat history from AsyncStorage on mount
+    // Load chat history: merge local + backend (desktop) history
     useEffect(() => {
         (async () => {
-            const history = await loadHistory();
-            if (history.length > 0) {
-                setMessages(history);
+            const localHistory = await loadHistory();
+
+            // Also fetch desktop chat history so it feels like one product
+            let backendMessages: Message[] = [];
+            if (isOnline) {
+                try {
+                    const { baseUrl } = await import("../../src/api");
+                    const base = await baseUrl();
+                    const res = await fetch(
+                        base + "/api/v1/companion/chat/history"
+                    ).catch(() => null);
+                    if (res && res.ok) {
+                        const data = await res.json();
+                        const history = data.messages || data.history || [];
+                        backendMessages = history.map((m: any) => ({
+                            role: m.role === "user" ? "user" as const : "pet" as const,
+                            content: m.content || m.text || "",
+                            timestamp: m.timestamp ? new Date(m.timestamp).getTime() : undefined,
+                        }));
+                    }
+                } catch {
+                    // Backend unreachable — use local only
+                }
+            }
+
+            // Merge: use backend history as base, append any local-only messages
+            let merged: Message[];
+            if (backendMessages.length > 0 && localHistory.length === 0) {
+                merged = backendMessages.slice(-MAX_HISTORY);
+            } else if (backendMessages.length > 0 && localHistory.length > 0) {
+                // Deduplicate by content (simple heuristic)
+                const backendContents = new Set(backendMessages.map(m => m.content.slice(0, 100)));
+                const uniqueLocal = localHistory.filter(m => !backendContents.has(m.content.slice(0, 100)));
+                merged = [...backendMessages, ...uniqueLocal].slice(-MAX_HISTORY);
+            } else if (localHistory.length > 0) {
+                merged = localHistory;
             } else {
                 const greeting = getGreeting(petName);
-                setMessages([
-                    { role: "pet", content: greeting, timestamp: Date.now() } as any,
-                ]);
+                merged = [{ role: "pet", content: greeting, timestamp: Date.now() } as any];
             }
+
+            setMessages(merged);
             setHistoryLoaded(true);
         })();
     }, []);

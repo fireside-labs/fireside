@@ -1,25 +1,34 @@
-# Translate with Ember — iOS/Android Extension
+# Translate with Ember — Inline Share Extension
 
 Provides "Translate with Ember" in the system share/action menu.
-When a user selects text in any app and taps the action:
+**Translates inline without leaving the current app** — shows a compact
+overlay inside WhatsApp, iMessage, etc.
 
-1. Text is captured
-2. Deep linked to `valhalla://translate?text=...`
-3. Main app opens the translate screen
-4. NLLB-200 on PC translates (200 languages, offline)
-5. User taps Copy to bring translation back
+```
+User selects text → Share/Action menu → "Translate with Ember"
+  → Dark overlay appears inside WhatsApp
+  → Auto-translates (Home PC or Google Translate)
+  → User taps Copy → overlay dismisses
+  → Still in WhatsApp with translation on clipboard
+```
+
+## Translation Priority
+
+1. **Home PC** (NLLB-200) → private, 200 languages, no cloud
+2. **Google Translate** (cloud) → fallback when away from PC, 130+ languages
+
+The overlay shows which engine was used: 🏠 Home PC (green) or ☁️ Google Translate (yellow).
 
 ## Platform Setup
 
 ### Android (automatic)
-The intent filter in `app.json` registers the app for `ACTION_SEND` with `text/plain`.
-When the user shares text, the app opens the translate screen.
+The intent filter in `app.json` routes `ACTION_SEND text/plain` to
+`TranslateOverlayActivity`, which renders a translucent popup over the caller.
 
 **No additional build steps needed** — works after `eas build` or `npx expo run:android`.
 
 ### iOS (requires EAS Build)
-The Action Extension (`com.apple.ui-services`) needs to be added as a separate
-target in the Xcode project. This is handled by the Expo config plugin.
+The Action Extension shows a bottom sheet overlay with built-in translation UI.
 
 **To enable:** Add to `app.json` plugins:
 ```json
@@ -37,20 +46,7 @@ Then build with `eas build --platform ios` or `npx expo run:ios`.
 
 | File | Purpose |
 |------|---------|
-| `ios/ActionViewController.swift` | Extension controller — extracts text, deep links to app |
-| `ios/Info.plist` | Extension config — activates on text selection only |
+| `ios/ActionViewController.swift` | iOS extension — full inline translate UI (bottom sheet) |
+| `ios/Info.plist` | Extension config — activates on text selection |
+| `android/TranslateOverlayActivity.java` | Android overlay — translucent popup translate UI |
 | `expo-plugin.js` | Expo config plugin — wires extension into Xcode project |
-
-## How Translation Works
-
-```
-User selects text → Action menu → "Translate with Ember"
-  → ActionViewController.swift extracts text
-  → Opens valhalla://translate?text=...
-  → translate.tsx receives text
-  → POST /api/v1/companion/translate {text, target_lang}
-  → NLLB-200 on PC translates
-  → User copies result back to original app
-```
-
-The NLLB model runs entirely on the user's home PC. No text leaves their network.

@@ -78,7 +78,9 @@ export default function TranslateScreen() {
     const [showAllLangs, setShowAllLangs] = useState(false);
     const [langSearch, setLangSearch] = useState("");
     /** Where the translation came from */
-    const [translationSource, setTranslationSource] = useState<"pc" | "local" | null>(null);
+    const [translationSource, setTranslationSource] = useState<"google" | "pc" | null>(null);
+    /** Optional: use home PC instead of Google */
+    const [useHomePc, setUseHomePc] = useState(false);
 
     // Fox mascot animation
     const foxBounce = useRef(new Animated.Value(0)).current;
@@ -135,8 +137,9 @@ export default function TranslateScreen() {
         setTranslationSource(null);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-        // Try PC first (NLLB-200, best quality)
-        if (isOnline) {
+        // Default: Google Translate (fast, 130+ languages, auto-detect)
+        // Optional: Home PC (NLLB-200, 200 languages, private)
+        if (useHomePc && isOnline) {
             try {
                 const res = await companionAPI.translate(
                     inputText.trim(),
@@ -149,18 +152,19 @@ export default function TranslateScreen() {
                 setTranslating(false);
                 return;
             } catch {
-                // PC failed — fall through to local
+                // PC failed — fall through to Google
             }
         }
 
-        // Fallback: on-device translation
+        // Google Translate (default)
         try {
             const local = await translateLocal(inputText.trim(), targetLang.code);
             if (local.ok) {
                 setResult(local.translated);
-                setTranslationSource("local");
+                if (local.source_lang) setDetectedLang(local.source_lang);
+                setTranslationSource("google");
             } else {
-                setResult("⚠️ Offline — connect to your home PC for full translation");
+                setResult("⚠️ Translation failed — check your internet connection");
             }
         } catch {
             setResult("⚠️ Translation unavailable right now");
@@ -204,17 +208,27 @@ export default function TranslateScreen() {
                 <View style={{ width: 28 }} />
             </View>
 
-            {/* ── Connection badge ── */}
             <View style={styles.connBadge}>
                 <Text style={styles.connDot}>
-                    {isOnline ? "🟢" : "🔴"}
+                    {"🟢"}
                 </Text>
                 <Text style={styles.connText}>
-                    {isOnline
-                        ? powerState === "home" ? "Connected to home PC" : "Connected via bridge"
-                        : "Offline — translation requires PC connection"
+                    {useHomePc && isOnline
+                        ? "Using Home PC — NLLB (private)"
+                        : "Google Translate — auto-detect 130+ languages"
                     }
                 </Text>
+                {isOnline && (
+                    <TouchableOpacity
+                        onPress={() => { setUseHomePc(!useHomePc); setResult(""); }}
+                        activeOpacity={0.7}
+                        style={{ marginLeft: "auto" }}
+                    >
+                        <Text style={[styles.connText, { color: colors.neon }]}>
+                            {useHomePc ? "Use Google" : "Use Home PC"}
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             <ScrollView
@@ -360,7 +374,7 @@ export default function TranslateScreen() {
                                         styles.resultBadge,
                                         translationSource === "pc" ? { color: "#22c55e" } : { color: "#F59E0B" },
                                     ]}>
-                                        {translationSource === "pc" ? "🏠 Home PC" : "📱 On-device"}
+                                        {translationSource === "pc" ? "🏠 Home PC" : "☁️ Google Translate"}
                                     </Text>
                                 )}
                                 <Text style={styles.resultLangBadge}>
@@ -388,9 +402,8 @@ export default function TranslateScreen() {
                 {/* ── Privacy note ── */}
                 <View style={styles.privacyCard}>
                     <Text style={styles.privacyText}>
-                        🔒 Powered by NLLB-200 running on your home PC.{"\n"}
-                        200 languages · fully offline · no cloud services.{"\n"}
-                        Your text never leaves your network.
+                        Powered by Google Translate · 130+ languages · auto-detect{"\n"}
+                        Optional: switch to Home PC for private NLLB translation
                     </Text>
                 </View>
             </ScrollView>

@@ -212,15 +212,16 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "create_pptx",
-            "description": "Create a PowerPoint presentation. Use when the user says 'make a presentation', 'create slides', 'put together a deck', 'make a PowerPoint about X'. Produces a real .pptx file.",
+            "description": "Create a PowerPoint presentation. Use when the user says 'make a presentation', 'create slides', 'put together a deck', 'make a PowerPoint about X'. Produces a real .pptx file with professional themes. Available themes: dark, light, corporate, gradient. Can also use learned templates from user's existing presentations.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Absolute path for the .pptx file (e.g. C:/Users/Jordan/Documents/report.pptx)"},
-                    "title": {"type": "string", "description": "Presentation title for the title slide"},
+                    "path": {"type": "string", "description": "Absolute path for the .pptx file"},
+                    "title": {"type": "string", "description": "Presentation title"},
+                    "theme": {"type": "string", "description": "Visual theme: 'dark', 'light', 'corporate', 'gradient', or a learned template name", "default": "dark"},
                     "slides": {
                         "type": "array",
-                        "description": "List of slides. Each slide has a 'title' and 'content' (bullet points separated by newlines).",
+                        "description": "List of slides. Each slide has: layout (title/content/section/two_column/chart/blank), title, content (bullet points), chart_type, chart_data.",
                         "items": {
                             "type": "object",
                             "properties": {
@@ -289,6 +290,79 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_code",
+            "description": "Execute Python code and return the output. Use when the user says 'analyze this data', 'calculate', 'run this script', 'chart this', 'what's the average', or anything requiring computation. You can use pandas, matplotlib, numpy, and other data science libraries. Charts are saved as PNG files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Python code to execute"},
+                },
+                "required": ["code"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "research",
+            "description": "Research a topic by searching the web and reading multiple sources. Use when the user says 'research this', 'find out about', 'what do experts say about', 'look into', 'compare options for'. Returns a compiled brief with citations from multiple sources.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to research"},
+                    "depth": {"type": "integer", "description": "Number of sources to read (1-5)", "default": 3},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "knowledge_search",
+            "description": "Search the user's knowledge base — documents they've added to knowledge folders. Use when the user asks about their business, their products, their SOPs, 'check my docs', 'what does our policy say', 'look in my knowledge base'. These are files the user uploaded for you to reference.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to search for in the knowledge base"},
+                    "folder": {"type": "string", "description": "Optional: limit search to a specific folder"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "convert_to_pdf",
+            "description": "Convert a Word document or PowerPoint to PDF. Use when the user says 'convert to PDF', 'make a PDF', 'export as PDF', 'send as PDF'. Works with .docx, .pptx, .xlsx files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Absolute path to the .docx, .pptx, or .xlsx file"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "learn_template",
+            "description": "Learn the visual style from an existing PowerPoint. Use when the user says 'use this template', 'match this style', 'learn from this presentation', 'copy the look of this deck'. Scans the .pptx and saves its colors, fonts, and layout patterns as a reusable template.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Absolute path to the .pptx file to learn from"},
+                    "name": {"type": "string", "description": "Name for the template (e.g. 'company', 'sales_deck')"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
 ]
 
 
@@ -302,14 +376,14 @@ _ROLE_TOOL_MAP: dict[str, list[str]] = {
     "frontend":     ["files_list", "files_read", "files_write", "terminal_exec"],
     "tester":       ["files_list", "files_read", "terminal_exec"],
     "reviewer":     ["files_list", "files_read"],
-    "researcher":   ["files_list", "files_read", "web_search", "browse_url", "recall_memory"],
-    "analyst":      ["files_list", "files_read", "web_search", "recall_memory", "create_xlsx"],
-    "data_analyst": ["files_list", "files_read", "terminal_exec", "create_xlsx"],
+    "researcher":   ["files_list", "files_read", "web_search", "browse_url", "recall_memory", "research", "knowledge_search"],
+    "analyst":      ["files_list", "files_read", "web_search", "recall_memory", "create_xlsx", "run_code", "research", "knowledge_search"],
+    "data_analyst": ["files_list", "files_read", "terminal_exec", "create_xlsx", "run_code"],
     "writer":       ["files_list", "files_read", "files_write", "store_memory", "create_docx", "create_pptx"],
     "designer":     ["files_list", "files_read", "create_pptx"],
-    "executor":     ["files_list", "files_read", "files_write", "terminal_exec", "create_pptx", "create_docx", "create_xlsx"],
-    "presenter":    ["files_list", "files_read", "create_pptx", "create_docx"],
-    "drafter":      ["files_list", "files_read", "files_write", "create_docx", "create_pptx"],
+    "executor":     ["files_list", "files_read", "files_write", "terminal_exec", "create_pptx", "create_docx", "create_xlsx", "run_code"],
+    "presenter":    ["files_list", "files_read", "create_pptx", "create_docx", "research"],
+    "drafter":      ["files_list", "files_read", "files_write", "create_docx", "create_pptx", "research"],
 }
 
 # Tools that pipeline subagents should NEVER get (prevents recursion, destructive ops)
@@ -664,50 +738,54 @@ def execute_tool(name: str, arguments: dict, api_port: int = 8765) -> str:
 
         elif name == "create_pptx":
             try:
-                from pptx import Presentation
-                from pptx.util import Inches, Pt
-                from pptx.enum.text import PP_ALIGN
-                prs = Presentation()
-                prs.slide_width = Inches(13.333)
-                prs.slide_height = Inches(7.5)
-
-                title_text = arguments.get("title", "Untitled")
+                from plugins.pptx_creator.handler import create_pptx as _create_pptx, auto_detect_layout
                 slides_data = arguments.get("slides", [])
-
-                # Title slide
-                slide = prs.slides.add_slide(prs.slide_layouts[0])
-                slide.shapes.title.text = title_text
-                if slide.placeholders[1]:
-                    slide.placeholders[1].text = f"Generated by Fireside AI"
-
-                # Content slides
-                for s in slides_data:
-                    slide = prs.slides.add_slide(prs.slide_layouts[1])
-                    slide.shapes.title.text = s.get("title", "")
-                    body = slide.placeholders[1]
-                    tf = body.text_frame
-                    tf.clear()
-                    content = s.get("content", "")
-                    for i, line in enumerate(content.split("\n")):
-                        line = line.strip()
-                        if not line:
-                            continue
-                        if i == 0:
-                            tf.text = line
-                        else:
-                            p = tf.add_paragraph()
-                            p.text = line
-                            p.level = 1 if line.startswith("-") or line.startswith("•") else 0
-
-                out_path = arguments.get("path", "")
-                p = Path(out_path)
-                p.parent.mkdir(parents=True, exist_ok=True)
-                prs.save(str(p))
-                return f"PowerPoint created: {out_path} ({len(slides_data)} slides)"
+                # Auto-detect layouts where not explicitly set
+                for idx, s in enumerate(slides_data):
+                    if isinstance(s, dict) and not s.get("layout"):
+                        s["layout"] = auto_detect_layout(s, idx, len(slides_data))
+                theme = arguments.get("theme", "dark")
+                result = _create_pptx(
+                    title=arguments.get("title", "Untitled"),
+                    slides=slides_data,
+                    theme=theme,
+                )
+                if result.get("ok"):
+                    return f"PowerPoint created: {result['filepath']} ({result['slide_count']} slides, theme: {result['theme']})"
+                return f"Error: {result.get('error', 'unknown')}"
             except ImportError:
-                return "Error: python-pptx not installed. Run: pip install python-pptx"
-            except Exception as e:
-                return f"Error creating PowerPoint: {e}"
+                # Fallback to basic inline creation
+                try:
+                    from pptx import Presentation
+                    from pptx.util import Inches, Pt
+                    prs = Presentation()
+                    prs.slide_width = Inches(13.333)
+                    prs.slide_height = Inches(7.5)
+                    title_text = arguments.get("title", "Untitled")
+                    slides_data = arguments.get("slides", [])
+                    slide = prs.slides.add_slide(prs.slide_layouts[0])
+                    slide.shapes.title.text = title_text
+                    for s in slides_data:
+                        slide = prs.slides.add_slide(prs.slide_layouts[1])
+                        slide.shapes.title.text = s.get("title", "")
+                        body = slide.placeholders[1]
+                        tf = body.text_frame
+                        tf.clear()
+                        for i, line in enumerate(s.get("content", "").split("\n")):
+                            line = line.strip()
+                            if not line: continue
+                            if i == 0: tf.text = line
+                            else:
+                                p = tf.add_paragraph()
+                                p.text = line
+                    out_path = arguments.get("path", str(Path.home() / "Documents" / f"{title_text}.pptx"))
+                    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+                    prs.save(out_path)
+                    return f"PowerPoint created: {out_path} ({len(slides_data)} slides)"
+                except ImportError:
+                    return "Error: python-pptx not installed. Run: pip install python-pptx"
+                except Exception as e:
+                    return f"Error creating PowerPoint: {e}"
 
         elif name == "create_docx":
             try:
@@ -781,6 +859,128 @@ def execute_tool(name: str, arguments: dict, api_port: int = 8765) -> str:
                 return "Error: openpyxl not installed. Run: pip install openpyxl"
             except Exception as e:
                 return f"Error creating Excel file: {e}"
+
+        elif name == "run_code":
+            code = arguments.get("code", "")
+            if not code.strip():
+                return "No code provided."
+            try:
+                from plugins import code_interpreter
+                result = code_interpreter.handler.run_code(code, timeout=30)
+            except ImportError:
+                # Fallback: run directly
+                import tempfile, subprocess as sp
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
+                    f.write(code)
+                    script = f.name
+                try:
+                    r = sp.run([sys.executable, script], capture_output=True, text=True, timeout=30)
+                    result = {"ok": r.returncode == 0, "stdout": r.stdout[:3000], "stderr": r.stderr[:500]}
+                except sp.TimeoutExpired:
+                    result = {"ok": False, "error": "Code timed out after 30s"}
+                finally:
+                    import os; os.unlink(script)
+            if result.get("ok"):
+                out = result.get("stdout", "")
+                files = result.get("output_files", [])
+                msg = out if out else "Code executed successfully (no output)."
+                if files:
+                    msg += f"\nOutput files: {', '.join(f['name'] for f in files)}"
+                return msg
+            else:
+                err = result.get("stderr", result.get("error", "Unknown error"))
+                return f"Code error:\n{err}"
+
+        elif name == "research":
+            query = arguments.get("query", "")
+            depth = arguments.get("depth", 3)
+            if not query.strip():
+                return "No research query provided."
+            try:
+                from plugins.research.handler import research as _research
+                import asyncio
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                if loop and loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        result = pool.submit(asyncio.run, _research(query, depth=depth)).result()
+                else:
+                    result = asyncio.run(_research(query, depth=depth))
+                if not result.get("ok"):
+                    return f"Research failed: {result.get('error', 'unknown')}"
+                return result.get("brief", "No research data found.")
+            except Exception as e:
+                return f"Research error: {e}"
+
+        elif name == "convert_to_pdf":
+            input_path = arguments.get("path", "")
+            if not input_path:
+                return "No file path provided."
+            try:
+                from plugins.pptx_creator.handler import convert_to_pdf as _convert
+                result = _convert(input_path)
+            except ImportError:
+                # Inline fallback
+                try:
+                    import docx2pdf
+                    pdf_path = str(Path(input_path).with_suffix(".pdf"))
+                    docx2pdf.convert(input_path, pdf_path)
+                    result = {"ok": True, "pdf_path": pdf_path}
+                except ImportError:
+                    result = {"ok": False, "error": "Install docx2pdf (pip install docx2pdf) or LibreOffice"}
+            if result.get("ok"):
+                return f"PDF created: {result['pdf_path']}"
+            return f"PDF conversion failed: {result.get('error', 'unknown')}"
+
+        elif name == "learn_template":
+            pptx_path = arguments.get("path", "")
+            template_name = arguments.get("name", "")
+            if not pptx_path:
+                return "No file path provided."
+            try:
+                from plugins.pptx_creator.handler import learn_template as _learn
+                result = _learn(pptx_path, template_name)
+            except ImportError:
+                return "Template learning plugin not available."
+            if result.get("ok"):
+                profile = result.get("profile", {})
+                fonts = profile.get("fonts", {})
+                return (
+                    f"Template '{result['template_name']}' learned!\n"
+                    f"Fonts: {fonts.get('title_font', 'Calibri')} (titles), {fonts.get('body_font', 'Calibri')} (body)\n"
+                    f"Colors extracted from {profile.get('slide_count', 0)} slides.\n"
+                    f"Use theme='{result['template_name']}' when creating presentations to apply this style."
+                )
+            return f"Template learning failed: {result.get('error', 'unknown')}"
+
+        elif name == "knowledge_search":
+            query = arguments.get("query", "")
+            folder = arguments.get("folder")
+            if not query.strip():
+                return "No search query provided."
+            try:
+                from plugins.knowledge_base import handler as kb
+                result = kb.search(query, folder=folder, top_k=5)
+            except ImportError:
+                try:
+                    # Try hyphenated import
+                    import importlib
+                    kb = importlib.import_module("plugins.knowledge-base.handler")
+                    result = kb.search(query, folder=folder, top_k=5)
+                except Exception:
+                    return "Knowledge base plugin not available."
+            if not result.get("ok"):
+                return result.get("message", result.get("error", "Search failed"))
+            results = result.get("results", [])
+            if not results:
+                return f"No knowledge base results for '{query}'. The user may not have added documents yet.\nTell them to add files to: {Path.home() / '.valhalla' / 'knowledge' / '<folder_name>'}/"
+            lines = []
+            for r in results:
+                lines.append(f"[Source: {r['source']}] {r['text'][:400]}")
+            return f"Knowledge base results ({len(results)} matches):\n\n" + "\n\n".join(lines)
 
         else:
             return f"Unknown tool: {name}"

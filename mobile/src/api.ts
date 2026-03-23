@@ -467,10 +467,10 @@ export const companionAPI = {
         ),
 
     /** Switch the active model on PC. */
-    brainSwitch: (modelId: string) =>
-        apiFetch<{ ok: boolean; model: string; message?: string }>(
-            "/api/v1/brain/switch",
-            { method: "POST", body: JSON.stringify({ model_id: modelId }) }
+    brainSwitch: (modelPath: string) =>
+        apiFetch<{ ok: boolean; model: string; model_path?: string }>(
+            "/api/v1/brains/switch",
+            { method: "POST", body: JSON.stringify({ model_path: modelPath }) }
         ),
 
     /** Get companion skills (RPG toggle cards). */
@@ -515,13 +515,13 @@ export const companionAPI = {
     /** List active/recent pipelines. */
     pipelines: (status?: string) =>
         apiFetch<{ pipelines: Array<Record<string, unknown>> }>(
-            `/api/v1/pipelines${status ? `?status=${status}` : ""}`
+            `/api/v1/pipeline${status ? `?status=${status}` : ""}`
         ),
 
     /** Send intervention instructions to a running pipeline. */
     intervene: (pipelineId: string, instructions: string) =>
         apiFetch<{ ok: boolean; injected: boolean }>(
-            `/api/v1/pipelines/${pipelineId}/intervene`,
+            `/api/v1/pipeline/${pipelineId}/intervene`,
             { method: "POST", body: JSON.stringify({ instructions }) }
         ),
 

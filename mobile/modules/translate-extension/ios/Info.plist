@@ -5,8 +5,9 @@
 
   NSExtension config:
   - Type: com.apple.ui-services (Action Extension)
-  - Activates on: text content
+  - Activates on: text content only
   - Shows "Translate with Ember" in the action menu
+  - No storyboard — UI is built in code via ActionViewController.swift
 -->
 <plist version="1.0">
 <dict>
@@ -33,6 +34,13 @@
 
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+
+    <!-- Allow HTTP for local PC connection -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
 
     <key>NSExtension</key>
     <dict>
