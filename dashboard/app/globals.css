@@ -1884,6 +1884,15 @@ h6 {
   }
   @keyframes fsFoxBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 
+  /* Voice recording pulse */
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+  }
+  .fs-voice-btn.recording {
+    box-shadow: 0 0 12px rgba(239,68,68,0.3);
+  }
+
   .fs-speech {
     position: absolute; top: 55px; left: 120px;
     background: rgba(15,13,22,0.90); border: 1px solid rgba(245,158,11,0.12);

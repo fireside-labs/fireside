@@ -97,6 +97,64 @@ export default function CampfireHub() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Voice input ──
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        // Stop all tracks
+        stream.getTracks().forEach(t => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (audioBlob.size < 1000) return; // Too short, ignore
+
+        // Send to Whisper
+        setIsTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append('file', audioBlob, 'recording.webm');
+          const res = await fetch(`${API_BASE}/tools/voice/transcribe`, {
+            method: 'POST', body: form,
+          });
+          const data = await res.json();
+          if (data.ok && data.text) {
+            setMessage(prev => prev ? prev + ' ' + data.text : data.text);
+          }
+        } catch (err) {
+          console.error('[voice] Transcription failed:', err);
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start(250); // Collect chunks every 250ms
+      setIsRecording(true);
+    } catch (err) {
+      console.error('[voice] Mic access denied:', err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  };
+
   // ── Knowledge Base ──
   const [kbOpen, setKbOpen] = useState(false);
   const [kbFolders, setKbFolders] = useState<{name:string;files:number;chunks:number}[]>([]);
@@ -941,7 +999,19 @@ export default function CampfireHub() {
               )}
 
               <div className="fs-input-wrap">
-                <button className="fs-voice-btn" title="Voice mode">🎙</button>
+                <button
+                  className={`fs-voice-btn ${isRecording ? 'recording' : ''}`}
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={isTranscribing}
+                  title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Voice input'}
+                  style={{
+                    background: isRecording ? 'rgba(239,68,68,0.2)' : isTranscribing ? 'rgba(167,139,250,0.1)' : undefined,
+                    color: isRecording ? '#EF4444' : isTranscribing ? '#A78BFA' : undefined,
+                    animation: isRecording ? 'pulse 1.5s ease infinite' : undefined,
+                  }}
+                >
+                  {isTranscribing ? '⏳' : isRecording ? '⏹' : '🎙'}
+                </button>
                 <button
                   className={`fs-think-btn ${thinkingEnabled ? 'active' : ''}`}
                   onClick={() => {

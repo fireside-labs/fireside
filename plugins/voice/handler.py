@@ -1,151 +1,167 @@
 """
-voice/handler.py — Voice I/O API.
+Voice Input — Fireside Plugin.
+
+CPU-only speech-to-text using faster-whisper (CTranslate2 backend).
+No VRAM needed — runs alongside the LLM without conflict.
+
+Model: whisper-base (142 MB) — auto-downloaded on first use.
+Latency: ~1-2 sec on mid-range CPU for short phrases.
 
 Routes:
-  GET  /api/v1/voice/status   — Voice capability + status
-  POST /api/v1/voice/enable   — Download + load STT/TTS models
-  POST /api/v1/voice/disable  — Unload models, free VRAM
-  GET  /api/v1/voice/voices   — List installed voices
-  PUT  /api/v1/voice/select   — Switch active voice
+    POST /tools/voice/transcribe — Transcribe audio (multipart upload)
+    GET  /tools/voice/status     — Check if whisper model is loaded
 """
-from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from pathlib import Path
-
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 log = logging.getLogger("valhalla.voice")
 
-_BASE_DIR = Path(".")
-_ENABLED = False
+# Model config — base is the sweet spot (142 MB, fast, good quality)
+MODEL_SIZE = os.environ.get("WHISPER_MODEL", "base")
+WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
+COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE", "int8")  # int8 = fastest on CPU
+
+_model = None
+_model_loading = False
 
 
-def _publish(topic: str, payload: dict) -> None:
+def _get_model():
+    """Lazy-load the Whisper model on first transcription request."""
+    global _model, _model_loading
+    if _model is not None:
+        return _model
+    if _model_loading:
+        return None
+
+    _model_loading = True
     try:
-        from plugin_loader import emit_event
-        emit_event(topic, payload)
-    except Exception:
-        pass
+        from faster_whisper import WhisperModel
+        log.info("[voice] Loading whisper '%s' model (device=%s, compute=%s)...",
+                 MODEL_SIZE, WHISPER_DEVICE, COMPUTE_TYPE)
+        _model = WhisperModel(MODEL_SIZE, device=WHISPER_DEVICE, compute_type=COMPUTE_TYPE)
+        log.info("[voice] Whisper model loaded successfully")
+        return _model
+    except ImportError:
+        log.error("[voice] faster-whisper not installed. Run: pip install faster-whisper")
+        return None
+    except Exception as e:
+        log.error("[voice] Failed to load whisper model: %s", e)
+        return None
+    finally:
+        _model_loading = False
 
 
-def _get_free_vram() -> float:
-    """Estimate free VRAM after main brain."""
-    try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "consumer_handler",
-            str(_BASE_DIR / "plugins" / "consumer-api" / "handler.py"),
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        total = mod._detect_vram_gb()
-        # Assume brain uses ~60% of VRAM
-        return round(total * 0.4, 1)
-    except Exception:
-        return 0.0
+def transcribe_audio(audio_path: str, language: str = None) -> dict:
+    """
+    Transcribe an audio file to text using Whisper.
 
+    Args:
+        audio_path: Path to audio file (wav, mp3, webm, ogg, m4a)
+        language: Optional language code (e.g. 'en'). Auto-detected if not set.
 
-class VoiceSelectRequest(BaseModel):
-    voice_id: str
-    speed: float = 1.0
-
-
-def register_routes(app, config: dict) -> None:
-    global _BASE_DIR
-
-    _BASE_DIR = Path(config.get("_meta", {}).get("base_dir", "."))
-
-    router = APIRouter(tags=["voice"])
-
-    @router.get("/api/v1/voice/status")
-    async def api_status():
-        """Voice capability detection."""
-        from plugins.voice.stt import get_info as stt_info
-        from plugins.voice.tts import get_info as tts_info
-
-        free_vram = _get_free_vram()
-        stt = stt_info()
-        tts = tts_info()
-
-        stt_possible = free_vram >= 1.5 or stt["loaded"]
-        tts_possible = True  # CPU only
-
-        if stt_possible and tts_possible:
-            availability = "available"
-        elif tts_possible:
-            availability = "tts_only"
-        else:
-            availability = "not_recommended"
-
+    Returns:
+        {"ok": True, "text": "...", "language": "en", "segments": [...]}
+    """
+    model = _get_model()
+    if model is None:
         return {
-            "enabled": _ENABLED,
-            "availability": availability,
-            "free_vram_gb": free_vram,
-            "stt": stt,
-            "tts": tts,
-            "tip": None if stt_possible else "Use a smaller brain to free VRAM for voice",
+            "ok": False,
+            "error": "Whisper model not available. Install: pip install faster-whisper",
         }
 
-    @router.post("/api/v1/voice/enable")
-    async def api_enable():
-        """Download and load voice models."""
-        global _ENABLED
-        from plugins.voice.stt import is_installed as stt_ok, install as stt_install, load_model
-        from plugins.voice.tts import is_installed as tts_ok, install as tts_install
+    if not os.path.exists(audio_path):
+        return {"ok": False, "error": f"Audio file not found: {audio_path}"}
 
-        results = {}
+    try:
+        segments, info = model.transcribe(
+            audio_path,
+            language=language,
+            beam_size=5,
+            vad_filter=True,  # Skip silence — faster
+            vad_parameters=dict(
+                min_silence_duration_ms=500,
+                speech_pad_ms=200,
+            ),
+        )
 
-        # Install STT if needed
-        if not stt_ok():
-            r = stt_install()
-            results["stt_install"] = r
-            if not r.get("ok"):
-                raise HTTPException(status_code=500, detail=f"STT install failed: {r.get('error')}")
+        # Collect all segments
+        text_parts = []
+        segment_list = []
+        for segment in segments:
+            text_parts.append(segment.text.strip())
+            segment_list.append({
+                "start": round(segment.start, 2),
+                "end": round(segment.end, 2),
+                "text": segment.text.strip(),
+            })
 
-        # Install TTS if needed
-        if not tts_ok():
-            r = tts_install()
-            results["tts_install"] = r
-            if not r.get("ok"):
-                raise HTTPException(status_code=500, detail=f"TTS install failed: {r.get('error')}")
+        full_text = " ".join(text_parts)
 
-        # Load STT model
-        r = load_model("medium")
-        results["stt_load"] = r
-        if not r.get("ok"):
-            raise HTTPException(status_code=500, detail=f"STT load failed: {r.get('error')}")
+        return {
+            "ok": True,
+            "text": full_text,
+            "language": info.language,
+            "language_probability": round(info.language_probability, 3),
+            "duration": round(info.duration, 2),
+            "segments": segment_list,
+        }
 
-        _ENABLED = True
-        _publish("voice.enabled", {"stt": "whisper-medium", "tts": "kokoro"})
-        return {"ok": True, "enabled": True, **results}
+    except Exception as e:
+        log.error("[voice] Transcription failed: %s", e)
+        return {"ok": False, "error": str(e)}
 
-    @router.post("/api/v1/voice/disable")
-    async def api_disable():
-        """Unload models and free VRAM."""
-        global _ENABLED
-        from plugins.voice.stt import unload_model
-        unload_model()
-        _ENABLED = False
-        _publish("voice.disabled", {})
-        return {"ok": True, "enabled": False}
 
-    @router.get("/api/v1/voice/voices")
-    async def api_voices():
-        """List available voices."""
-        from plugins.voice.tts import get_voices
-        voices = get_voices()
-        return {"voices": voices, "count": len(voices)}
+# ---------------------------------------------------------------------------
+# FastAPI route registration
+# ---------------------------------------------------------------------------
 
-    @router.put("/api/v1/voice/select")
-    async def api_select(req: VoiceSelectRequest):
-        """Switch active voice."""
-        from plugins.voice.tts import set_voice, set_speed
-        set_voice(req.voice_id)
-        if req.speed != 1.0:
-            set_speed(req.speed)
-        return {"ok": True, "voice": req.voice_id, "speed": req.speed}
+def register_routes(app, config: dict = None):
+    """Register voice transcription routes."""
+    from fastapi import UploadFile, File as FastFile, Form
 
-    app.include_router(router)
-    log.info("[voice] Plugin loaded. Enabled: %s", _ENABLED)
+    @app.post("/tools/voice/transcribe")
+    async def handle_transcribe(
+        file: UploadFile = FastFile(...),
+        language: str = Form(default=None),
+    ):
+        """Transcribe uploaded audio to text."""
+        # Save to temp file
+        suffix = Path(file.filename).suffix if file.filename else ".webm"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            result = transcribe_audio(tmp_path, language=language)
+            return result
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    @app.get("/tools/voice/status")
+    async def handle_status():
+        """Check if Whisper model is loaded and ready."""
+        model_ready = _model is not None
+        try:
+            import faster_whisper
+            installed = True
+        except ImportError:
+            installed = False
+
+        return {
+            "ok": True,
+            "installed": installed,
+            "model_loaded": model_ready,
+            "model_size": MODEL_SIZE,
+            "device": WHISPER_DEVICE,
+            "compute_type": COMPUTE_TYPE,
+        }
+
+    log.info("[voice] Routes registered: /tools/voice/transcribe, /tools/voice/status")
