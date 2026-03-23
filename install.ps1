@@ -528,6 +528,11 @@ plugins:
     - personality
     - guardian
     - social
+    - voice
+    - knowledge-base
+    - pptx-creator
+    - research
+    - code-interpreter
 
 agent:
   name: "${AGENT_NAME}"
