@@ -2,21 +2,21 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fireside — Your free personal AI assistant",
+  title: "Fireside — The only AI that's actually yours",
   description:
-    "Create presentations, search your files, draft emails, and talk to it with your voice — completely private, no subscription. Download free for Windows, Mac, and Linux.",
+    "ChatGPT forgets you. Copilot rents you cloud time. Fireside lives on your machine — it remembers every conversation, learns your preferences, and gets smarter the longer you use it. Free forever.",
   openGraph: {
-    title: "Fireside — Your free personal AI assistant",
+    title: "Fireside — The only AI that's actually yours",
     description:
-      "An AI assistant that creates presentations, remembers your files, and gets smarter every day. Free and private.",
+      "An AI that lives on your machine, remembers everything, and gets smarter every day. Free forever, no cloud.",
     type: "website",
     siteName: "Fireside",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fireside — Your free personal AI assistant",
+    title: "Fireside — The only AI that's actually yours",
     description:
-      "Create presentations, search your files, and talk to your AI with your voice. Free, private, no subscription.",
+      "ChatGPT forgets you. Copilot rents you cloud time. Fireside lives on your machine. Free forever.",
   },
 };
 

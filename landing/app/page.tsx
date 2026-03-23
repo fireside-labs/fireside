@@ -106,17 +106,20 @@ export default function LandingPage() {
 
         <div className="max-w-4xl mx-auto relative z-10">
           <div className="fade-up flex items-center justify-center gap-3 mb-8">
-            <span className="badge badge-free">✦ Free for everyone</span>
+            <span className="badge badge-free">✦ Free forever</span>
+            <span className="badge badge-count">$0/month</span>
           </div>
 
           <h1 className="fade-up fade-up-delay-1 font-[var(--font-serif)] text-5xl md:text-7xl font-bold leading-[1.1] tracking-tight mb-8">
-            A personal AI that{" "}
-            <span className="gradient-text">actually does the work</span>
+            The only AI that&apos;s{" "}
+            <span className="gradient-text">actually yours</span>
           </h1>
 
           <p className="fade-up fade-up-delay-2 text-lg md:text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto mb-12 leading-relaxed">
-            Create presentations, search your files, draft emails, and talk to it
-            with your voice — completely private, no subscription, no cloud.
+            ChatGPT forgets you. Copilot rents you cloud time.{" "}
+            <strong className="text-[var(--color-foreground)]">Fireside lives on your machine</strong> — it
+            remembers every conversation, learns your preferences, and gets smarter
+            the longer you use it.
           </p>
 
           <div className="fade-up fade-up-delay-3 flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
@@ -138,7 +141,7 @@ export default function LandingPage() {
             </a>
           </div>
           <p className="fade-up fade-up-delay-4 text-[var(--color-text-dim)] text-sm">
-            Works on Windows, Mac, and Linux · No account needed
+            Runs on your laptop · No cloud · No account · No subscription
           </p>
         </div>
       </section>
@@ -152,15 +155,15 @@ export default function LandingPage() {
           </div>
           <div className="stat-item">
             <div className="stat-value gradient-text">$0</div>
-            <div className="stat-label">Always Free</div>
+            <div className="stat-label">Forever</div>
           </div>
           <div className="stat-item">
             <div className="stat-value gradient-text">2 min</div>
-            <div className="stat-label">Setup Time</div>
+            <div className="stat-label">To Get Started</div>
           </div>
           <div className="stat-item">
             <div className="stat-value gradient-text">100%</div>
-            <div className="stat-label">Private &amp; Offline</div>
+            <div className="stat-label">Yours</div>
           </div>
         </div>
       </section>
@@ -170,10 +173,11 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="font-[var(--font-display)] text-3xl md:text-5xl font-bold mb-4">
-              What can Fireside <span className="gradient-text">do for you?</span>
+              Everything you need,{" "}
+              <span className="gradient-text">nothing you rent</span>
             </h2>
             <p className="text-[var(--color-text-muted)] text-lg max-w-xl mx-auto">
-              Real tools that create, remember, and get things done — not just chat.
+              22 tools that create, remember, and work for you — running on your machine, not someone else&apos;s server.
             </p>
           </div>
 
@@ -183,8 +187,8 @@ export default function LandingPage() {
               <div className="feature-icon">🎙️</div>
               <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Talk to It</h3>
               <p className="text-[var(--color-text-muted)] leading-relaxed">
-                Just speak — it types what you say. No internet needed, no recordings
-                sent anywhere. Your voice stays on your computer.
+                Speak naturally — it understands you. Your voice never leaves your
+                computer. No recordings, no cloud, no eavesdropping.
               </p>
             </div>
 
@@ -192,17 +196,17 @@ export default function LandingPage() {
               <div className="feature-icon">📊</div>
               <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Create Presentations</h3>
               <p className="text-[var(--color-text-muted)] leading-relaxed">
-                Tell it what you need, get polished PowerPoint slides in seconds.
-                It can even learn your company&apos;s style from an existing file.
+                Describe your deck, get polished slides in seconds. Give it one of
+                your old presentations and it learns your company&apos;s style.
               </p>
             </div>
 
             <div className="glass feature-card-lg p-8 fade-up fade-up-delay-2">
               <div className="feature-icon">📚</div>
-              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Ask About Your Files</h3>
+              <h3 className="font-[var(--font-display)] text-xl font-bold mb-3">Give It Your Documents</h3>
               <p className="text-[var(--color-text-muted)] leading-relaxed">
-                Upload documents and your AI reads and remembers them.
-                Ask questions about your own files and get instant answers.
+                Drop in your files — contracts, reports, manuals, anything.
+                Then just ask: &ldquo;What did we agree in the Q3 proposal?&rdquo; It knows.
               </p>
             </div>
           </div>
@@ -235,9 +239,9 @@ export default function LandingPage() {
 
             <div className="glass p-6 fade-up">
               <div className="feature-icon">🧠</div>
-              <h3 className="font-[var(--font-display)] text-sm font-bold mb-2">Remembers Everything</h3>
+              <h3 className="font-[var(--font-display)] text-sm font-bold mb-2">Never Forgets</h3>
               <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
-                It remembers your past conversations and learns what works best for you.
+                Every conversation, every preference — it remembers. Close the tab, come back next week. It knows.
               </p>
             </div>
 
@@ -328,18 +332,19 @@ export default function LandingPage() {
 
         <div className="max-w-4xl mx-auto text-center mb-16">
           <h2 className="font-[var(--font-display)] text-3xl md:text-5xl font-bold mb-4">
-            The more you use it, the <span className="gradient-text-rose">smarter it gets</span>
+            Other AIs reset.{" "}
+            <span className="gradient-text-rose">Yours evolves.</span>
           </h2>
           <p className="text-[var(--color-text-muted)] text-lg max-w-2xl mx-auto">
-            Most AI tools forget everything between conversations.
-            Fireside remembers, learns from experience, and improves every day.
+            Every conversation makes it sharper. Every night it reviews what it learned.
+            After a month, it doesn&apos;t just answer — it anticipates.
           </p>
         </div>
 
         <div className="max-w-3xl mx-auto grid md:grid-cols-3 gap-6 text-center">
           <div className="glass p-6">
             <div className="text-2xl mb-3">📋</div>
-            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Day 1</h4>
+            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Week 1</h4>
             <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
               It follows your instructions and does what you ask.
             </p>
@@ -353,9 +358,9 @@ export default function LandingPage() {
           </div>
           <div className="glass p-6">
             <div className="text-2xl mb-3">☀️</div>
-            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Day 90</h4>
+            <h4 className="font-[var(--font-display)] font-bold mb-2 text-sm">Month 3</h4>
             <p className="text-[var(--color-text-dim)] text-xs leading-relaxed">
-              It knows your preferences, your writing style, and how you work.
+              It knows your writing style, your preferences, and how you think. It&apos;s yours.
             </p>
           </div>
         </div>
@@ -524,13 +529,13 @@ export default function LandingPage() {
 
         <div className="max-w-3xl mx-auto text-center">
           <blockquote className="text-2xl md:text-4xl font-[var(--font-serif)] font-bold leading-relaxed mb-8">
-            &ldquo;Day 1, it follows instructions.<br />
-            Day 90, it <span className="gradient-text text-glow">knows how you work</span>.&rdquo;
+            &ldquo;Other AIs are rented.<br />
+            This one is <span className="gradient-text text-glow">mine</span>.&rdquo;
           </blockquote>
           <p className="text-[var(--color-text-dim)] text-lg leading-relaxed max-w-xl mx-auto">
-            The longer you use Fireside, the better it understands you.
-            That&apos;s something no cloud AI can offer — because they forget you
-            the moment you close the tab.
+            ChatGPT doesn&apos;t remember your name next Tuesday.
+            Fireside remembers what you told it three months ago — because
+            it lives on your computer, not someone else&apos;s cloud.
           </p>
         </div>
       </section>
@@ -540,12 +545,12 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="glass p-10">
             <p className="text-lg md:text-xl text-[var(--color-text-muted)] leading-relaxed mb-6">
-              Independent. Open source. Community-supported.
+              Open source. Free forever. Built for people, not investors.
             </p>
             <p className="text-[var(--color-text-dim)] text-sm leading-relaxed max-w-lg mx-auto">
-              Fireside is an open-source project built on the belief that your data
-              should stay yours and your AI should get smarter every day. The code
-              is public, the community is growing, and the product is free.
+              Every line of code is public. There&apos;s no catch, no freemium upgrade,
+              no investor breathing down our neck. Your data stays on your machine.
+              The AI gets smarter for you, not for us.
             </p>
           </div>
         </div>
@@ -557,10 +562,10 @@ export default function LandingPage() {
 
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="font-[var(--font-display)] text-3xl md:text-5xl font-bold mb-4">
-            Ready to try it?
+            Make it yours.
           </h2>
           <p className="text-[var(--color-text-muted)] text-lg mb-10 max-w-lg mx-auto">
-            Download Fireside and start chatting with your own AI in 2 minutes.
+            2 minutes to install. 0 dollars to keep. Yours forever.
           </p>
 
           <div className="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
