@@ -47,6 +47,7 @@ class InstallRequest(BaseModel):
 
 class CloudSetupRequest(BaseModel):
     api_key: str
+    provider: str = ""  # auto-detected from key prefix if empty
 
 
 class CustomModelRequest(BaseModel):
@@ -325,15 +326,21 @@ def register_routes(app, config: dict) -> None:
     @router.post("/api/v1/brains/cloud/setup")
     async def api_cloud_setup(req: CloudSetupRequest):
         """Save and validate cloud API key."""
-        from plugins.brain_installer.installers.cloud import validate_api_key, save_api_key
+        from plugins.brain_installer.installers.cloud import (
+            validate_api_key, save_api_key, detect_provider,
+        )
 
-        validation = validate_api_key(req.api_key)
+        # Auto-detect provider from key prefix if not specified
+        provider = req.provider or detect_provider(req.api_key)
+
+        validation = validate_api_key(req.api_key, provider=provider)
         if not validation.get("ok"):
             raise HTTPException(status_code=400, detail=validation.get("error"))
 
-        save_result = save_api_key(req.api_key)
+        save_result = save_api_key(req.api_key, provider=provider)
         return {
             "ok": True,
+            "provider": provider,
             "validation": validation.get("message"),
             "stored": save_result.get("ok"),
         }
