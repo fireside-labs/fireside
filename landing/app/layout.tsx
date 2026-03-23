@@ -2,21 +2,21 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fireside — AI that learns while you sleep",
+  title: "Fireside — Your free personal AI assistant",
   description:
-    "Deploy persistent AI agents on your own hardware. They dream, learn, and wake up smarter every morning. No cloud required.",
+    "Create presentations, search your files, draft emails, and talk to it with your voice — completely private, no subscription. Download free for Windows, Mac, and Linux.",
   openGraph: {
-    title: "Fireside — AI that learns while you sleep",
+    title: "Fireside — Your free personal AI assistant",
     description:
-      "Deploy persistent AI agents on your own hardware. They dream, learn, and wake up smarter every morning.",
+      "An AI assistant that creates presentations, remembers your files, and gets smarter every day. Free and private.",
     type: "website",
     siteName: "Fireside",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fireside — AI that learns while you sleep",
+    title: "Fireside — Your free personal AI assistant",
     description:
-      "Persistent AI agents that run on your hardware, learn from your work, and never forget.",
+      "Create presentations, search your files, and talk to your AI with your voice. Free, private, no subscription.",
   },
 };
 

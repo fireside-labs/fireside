@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  🛡️ Guardian Keyboard — iOS Custom Keyboard Extension Info.plist
+
+  NSExtension config:
+  - Type: com.apple.keyboard-service (Custom Keyboard)
+  - RequestsOpenAccess: true (needed for network — translate feature)
+  - PrimaryLanguage: en — but keyboard works with any text
+  - No storyboard — UI is fully programmatic in KeyboardViewController.swift
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Guardian Keyboard</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>Guardian Keyboard</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>com.valhalla.companion.guardian-keyboard</string>
+
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <!-- Allow HTTP for local PC connection (NLLB translate) -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.keyboard-service</string>
+
+        <key>NSExtensionPrincipalClass</key>
+        <string>KeyboardViewController</string>
+
+        <key>NSExtensionAttributes</key>
+        <dict>
+            <!-- Request open access for network (translate feature) -->
+            <key>RequestsOpenAccess</key>
+            <true/>
+
+            <!-- Primary language -->
+            <key>PrimaryLanguage</key>
+            <string>en</string>
+
+            <!-- Prefix for predictive text (not used, but required key) -->
+            <key>PrefersRightToLeft</key>
+            <false/>
+
+            <!-- Show in keyboard settings as "Guardian Keyboard" -->
+            <key>IsASCIICapable</key>
+            <true/>
+        </dict>
+    </dict>
+</dict>
+</plist>

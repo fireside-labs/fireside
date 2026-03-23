@@ -13,6 +13,7 @@
   --color-border: #2A2520;
   --color-text-muted: #9C9488;
   --color-text-dim: #6B655C;
+  --color-emerald: #34D399;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Outfit', system-ui, sans-serif;
   --font-serif: 'Playfair Display', Georgia, serif;
@@ -81,6 +82,13 @@
 
 .gradient-text-rose {
   background: linear-gradient(135deg, #E2A336, #FB7185);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-emerald {
+  background: linear-gradient(135deg, #34D399, #6EE7B7);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -178,6 +186,38 @@
   box-shadow: 0 8px 32px rgba(226, 163, 54, 0.1);
 }
 
+/* ─── Download hero button — oversized and glowing ─── */
+.cta-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 48px;
+  background: linear-gradient(135deg, var(--color-amber), var(--color-orange));
+  color: var(--color-background);
+  font-weight: 800;
+  font-size: 18px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+  animation: download-glow 3s ease-in-out infinite;
+}
+
+@keyframes download-glow {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(226, 163, 54, 0.25), 0 0 60px rgba(226, 163, 54, 0.1);
+  }
+  50% {
+    box-shadow: 0 8px 40px rgba(226, 163, 54, 0.4), 0 0 80px rgba(226, 163, 54, 0.2);
+  }
+}
+
+.cta-download:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 48px rgba(226, 163, 54, 0.45), 0 0 100px rgba(226, 163, 54, 0.15);
+}
+
 /* ─── Code block — warm theme ─── */
 .code-block {
   background: var(--color-surface);
@@ -244,6 +284,35 @@
   border: 1px solid rgba(226, 163, 54, 0.12);
   font-size: 22px;
   margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.glass:hover .feature-icon {
+  transform: scale(1.1);
+  background: rgba(226, 163, 54, 0.12);
+  border-color: rgba(226, 163, 54, 0.25);
+}
+
+/* ─── Large feature card ─── */
+.feature-card-lg {
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card-lg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-amber), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.feature-card-lg:hover::before {
+  opacity: 1;
 }
 
 /* ─── Comparison table ─── */
@@ -278,26 +347,186 @@
   color: var(--color-text-dim);
 }
 
-/* ─── Waitlist form ─── */
-.waitlist-input {
-  width: 100%;
-  max-width: 320px;
-  padding: 14px 20px;
+/* ─── Tools marquee ─── */
+@keyframes scroll-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.marquee-container {
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  gap: 16px;
+  animation: scroll-marquee 40s linear infinite;
+  width: max-content;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+.marquee-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  color: var(--color-foreground);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  outline: none;
-  transition: border-color 0.2s ease;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
 }
 
-.waitlist-input::placeholder {
+.marquee-pill:hover {
+  border-color: rgba(226, 163, 54, 0.3);
+  color: var(--color-foreground);
+  background: var(--color-surface-2);
+}
+
+/* ─── Badge ─── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.badge-free {
+  background: rgba(52, 211, 153, 0.1);
+  color: #34D399;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.badge-count {
+  background: rgba(226, 163, 54, 0.1);
+  color: var(--color-amber);
+  border: 1px solid rgba(226, 163, 54, 0.2);
+}
+
+/* ─── Platform tabs ─── */
+.platform-tabs {
+  display: inline-flex;
+  background: var(--color-surface);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  padding: 4px;
+  gap: 2px;
+}
+
+.platform-tab {
+  padding: 8px 18px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: transparent;
   color: var(--color-text-dim);
 }
 
-.waitlist-input:focus {
-  border-color: var(--color-amber);
-  box-shadow: 0 0 0 3px rgba(226, 163, 54, 0.1);
+.platform-tab.active {
+  background: rgba(226, 163, 54, 0.12);
+  color: var(--color-amber);
+}
+
+/* ─── Mobile mockup frame ─── */
+.phone-frame {
+  width: 240px;
+  height: 480px;
+  border-radius: 32px;
+  border: 2px solid rgba(226, 163, 54, 0.15);
+  background: linear-gradient(
+    180deg,
+    rgba(20, 18, 16, 0.95),
+    rgba(28, 25, 21, 0.8)
+  );
+  box-shadow: 0 0 60px rgba(226, 163, 54, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.phone-frame::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  width: 60px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(226, 163, 54, 0.15);
+}
+
+/* ─── Stat counter ─── */
+.stat-item {
+  text-align: center;
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--color-text-dim);
+  font-weight: 500;
+}
+
+/* ─── Download section ─── */
+.download-card {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 18, 16, 0.95),
+    rgba(28, 25, 21, 0.85)
+  );
+  border: 1px solid rgba(226, 163, 54, 0.12);
+  border-radius: 24px;
+  padding: 40px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.download-card:hover {
+  border-color: rgba(226, 163, 54, 0.25);
+  box-shadow: 0 0 60px rgba(226, 163, 54, 0.06);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .cta-download {
+    padding: 16px 32px;
+    font-size: 16px;
+  }
+
+  .phone-frame {
+    width: 180px;
+    height: 360px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+  }
 }

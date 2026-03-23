@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  🛡️ Guardian Keyboard — Android IME metadata
+  Declares the input method with English subtype.
+  Referenced by the <service> declaration in AndroidManifest.xml.
+-->
+<input-method
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.valhalla.companion.MainActivity">
+
+    <subtype
+        android:label="Guardian Keyboard"
+        android:imeSubtypeLocale="en_US"
+        android:imeSubtypeMode="keyboard" />
+</input-method>
