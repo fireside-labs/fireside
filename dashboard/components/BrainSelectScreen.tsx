@@ -26,7 +26,7 @@ interface ModelDef {
   family: string;
   params: string;
   speed: string;
-  category: "speed" | "power" | "specialist";
+  category: "speed" | "power" | "specialist" | "cloud";
   tags: string[];
   recommended: boolean;
   desc: string;
@@ -269,78 +269,160 @@ const MODELS: ModelDef[] = [
       { label: "Low", bits: "4-bit", intel: 90, spd: 15, sizeGB: 20, size: "~20 GB" },
     ],
   },
-  // Cloud giants
+
+  // ── CLOUD: API-powered models (bring your own key) ────────────────────────────
+
+  // OpenAI
   {
-    id: "cloud-deepseek-r1", name: "DeepSeek R1 (Cloud)", family: "DeepSeek",
-    params: "671B", speed: "~50 tok/s", category: "power",
-    tags: ["cloud", "reasoning", "frontier"], recommended: true,
-    desc: "The frontier model that shocked the world and rattled OpenAI stocks. Rivals o1 in math and coding via pure Reinforcement Learning. API costs a fraction of OpenAI. Requires a free API key.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 99, spd: 65, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-gpt-4o", name: "GPT-4o", family: "OpenAI",
+    params: "cloud", speed: "~90 tok/s", category: "cloud",
+    tags: ["multimodal", "vision", "flagship"], recommended: true,
+    desc: "OpenAI's flagship multimodal model. 128K context, handles text, vision, audio, and function calling. The gold standard in general intelligence. $2.50/1M input, $10/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 98, spd: 85, sizeGB: 0, size: "0 GB" }],
   },
   {
-    id: "cloud-deepseek-v3", name: "DeepSeek V3 (Cloud)", family: "DeepSeek",
-    params: "671B", speed: "~60 tok/s", category: "power",
-    tags: ["cloud", "fast", "cheap"], recommended: false,
-    desc: "DeepSeek's general-purpose frontier model. Matching GPT-4o's capability at roughly 1/10th the API cost. Exceptionally fast, excellent at chat and coding. One of the best value APIs available.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 97, spd: 80, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-gpt-4o-mini", name: "GPT-4o Mini", family: "OpenAI",
+    params: "cloud", speed: "~120 tok/s", category: "cloud",
+    tags: ["fast", "cheap", "lightweight"], recommended: false,
+    desc: "Fast, cheap, and surprisingly capable. 128K context. Perfect for high-volume tasks where you don't need the full 4o. $0.15/1M input, $0.60/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 82, spd: 95, sizeGB: 0, size: "0 GB" }],
   },
   {
-    id: "cloud-claude-3-5", name: "Claude 3.5 Sonnet (Cloud)", family: "Anthropic",
-    params: "~200B+", speed: "~70 tok/s", category: "power",
-    tags: ["cloud", "coding", "writing"], recommended: false,
-    desc: "Anthropic's masterpiece. The undisputed champion for coding and nuanced creative writing. Produces the most human-feeling text of any AI available today. Cloud API only.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 98, spd: 90, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-gpt-4-5", name: "GPT-4.5 Preview", family: "OpenAI",
+    params: "cloud", speed: "~50 tok/s", category: "cloud",
+    tags: ["creative", "nuance", "premium"], recommended: false,
+    desc: "OpenAI's largest model ever. Significantly better at creative writing, emotional nuance, and subtle instruction following than 4o. Very expensive. $75/1M input, $150/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 99, spd: 60, sizeGB: 0, size: "0 GB" }],
   },
   {
-    id: "cloud-gpt4", name: "GPT-4o (Cloud)", family: "OpenAI",
-    params: "~200B+", speed: "~60 tok/s", category: "power",
-    tags: ["cloud", "multimodal"], recommended: false,
-    desc: "OpenAI's multimodal flagship. The gold standard in general intelligence — handles text, vision, and audio. Huge plugin ecosystem. No local option; data leaves your machine.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 98, spd: 85, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-o1", name: "o1", family: "OpenAI",
+    params: "cloud", speed: "~30 tok/s", category: "cloud",
+    tags: ["reasoning", "chain-of-thought", "math"], recommended: false,
+    desc: "OpenAI's advanced reasoning model. Thinks deeply before answering with chain-of-thought. 200K context. Best for hard math, science, and complex logic. $15/1M input, $60/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 99, spd: 40, sizeGB: 0, size: "0 GB" }],
   },
   {
-    id: "cloud-grok2", name: "Grok 2 (Cloud)", family: "xAI",
-    params: "Unknown", speed: "~70 tok/s", category: "power",
-    tags: ["cloud", "rebel", "uncensored"], recommended: false,
-    desc: "Elon Musk's xAI model. Famous for abandoning the overly cautious safety filters of OpenAI and Anthropic. Has a sarcastic, rebellious personality baked in. Will tackle topics others decline. Cloud API required.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 95, spd: 88, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-o3-mini", name: "o3-mini", family: "OpenAI",
+    params: "cloud", speed: "~80 tok/s", category: "cloud",
+    tags: ["reasoning", "fast", "cheap"], recommended: false,
+    desc: "Fast reasoning at low cost. 200K context. Great for math, science, and code where you want chain-of-thought without the o1 price tag. $1.10/1M input, $4.40/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 90, spd: 80, sizeGB: 0, size: "0 GB" }],
   },
   {
-    id: "cloud-mistral-large", name: "Mistral Large 2 (Cloud)", family: "Mistral",
-    params: "123B", speed: "~55 tok/s", category: "power",
-    tags: ["cloud", "european", "multilingual"], recommended: false,
-    desc: "Mistral's heavyweight cloud model. 128k context, outstanding multilingual (French, German, Spanish, etc.), and one of the best non-US options for privacy-conscious European users.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 96, spd: 80, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-o4-mini", name: "o4-mini", family: "OpenAI",
+    params: "cloud", speed: "~85 tok/s", category: "cloud",
+    tags: ["reasoning", "tool-use", "latest"], recommended: false,
+    desc: "OpenAI's latest small reasoning model. Excellent at tool use and agentic workflows. 200K context. $1.10/1M input, $4.40/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 92, spd: 82, sizeGB: 0, size: "0 GB" }],
+  },
+  // Anthropic
+  {
+    id: "cloud-claude-opus-4", name: "Claude Opus 4", family: "Anthropic",
+    params: "cloud", speed: "~40 tok/s", category: "cloud",
+    tags: ["frontier", "coding", "deep-thinking"], recommended: false,
+    desc: "Anthropic's most powerful model. Exceptional at complex analysis, long-form coding, and deep reasoning. 200K context. $15/1M input, $75/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 99, spd: 50, sizeGB: 0, size: "0 GB" }],
   },
   {
-    id: "cloud-kimi", name: "Kimi k1.5 (Cloud)", family: "Moonshot AI",
-    params: "Unknown", speed: "~45 tok/s", category: "power",
-    tags: ["cloud", "long-context", "reasoning"], recommended: false,
-    desc: "Moonshot AI's long-context reasoning model. You can feed it millions of tokens — entire books, entire codebases — and it won't lose a single detail. Kimi k1.5 also has an o1-style reasoning mode for hard problems.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 93, spd: 70, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-claude-sonnet-4", name: "Claude Sonnet 4", family: "Anthropic",
+    params: "cloud", speed: "~70 tok/s", category: "cloud",
+    tags: ["coding", "balanced", "latest"], recommended: true,
+    desc: "Best balance of speed and intelligence. Excellent for coding, writing, and analysis. 200K context. The sweet spot of the Claude lineup. $3/1M input, $15/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 96, spd: 80, sizeGB: 0, size: "0 GB" }],
   },
   {
-    id: "cloud-minimax", name: "MiniMax abab6.5 (Cloud)", family: "MiniMax",
-    params: "Unknown", speed: "~50 tok/s", category: "power",
-    tags: ["cloud", "roleplay", "character"], recommended: false,
-    desc: "MiniMax's frontier model. Specifically fine-tuned for deep, long-form character interactions without breaking persona. The best cloud option if you want your AI companion to feel like a real personality.",
-    quants: [
-      { label: "Cloud", bits: "API", intel: 91, spd: 75, sizeGB: 0, size: "0 GB" },
-    ],
+    id: "cloud-claude-3-5-sonnet", name: "Claude 3.5 Sonnet", family: "Anthropic",
+    params: "cloud", speed: "~70 tok/s", category: "cloud",
+    tags: ["coding", "writing", "proven"], recommended: false,
+    desc: "Previous-gen Sonnet that defined what 'good at coding' means for LLMs. Still incredibly capable and battle-tested. 200K context. $3/1M input, $15/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 95, spd: 80, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-claude-3-5-haiku", name: "Claude 3.5 Haiku", family: "Anthropic",
+    params: "cloud", speed: "~120 tok/s", category: "cloud",
+    tags: ["fast", "cheap", "chat"], recommended: false,
+    desc: "Fastest Claude. 200K context. Perfect for chat, lightweight tasks, and high-volume processing. The most affordable model in the Claude family. $0.80/1M input, $4/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 85, spd: 95, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-claude-3-opus", name: "Claude 3 Opus", family: "Anthropic",
+    params: "cloud", speed: "~35 tok/s", category: "cloud",
+    tags: ["reasoning", "writing", "legacy"], recommended: false,
+    desc: "Previous-gen flagship. Still the best at long, nuanced creative writing with a unique 'soul'. 200K context. $15/1M input, $75/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 94, spd: 45, sizeGB: 0, size: "0 GB" }],
+  },
+  // Google
+  {
+    id: "cloud-gemini-2-5-pro", name: "Gemini 2.5 Pro", family: "Google",
+    params: "cloud", speed: "~60 tok/s", category: "cloud",
+    tags: ["reasoning", "1M-context", "multimodal"], recommended: true,
+    desc: "Google's best model. 1M context window, multimodal (text + image + video), deep thinking mode. Incredible value for its quality. $1.25/1M input, $10/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 98, spd: 70, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-gemini-2-5-flash", name: "Gemini 2.5 Flash", family: "Google",
+    params: "cloud", speed: "~150 tok/s", category: "cloud",
+    tags: ["fast", "cheap", "thinking"], recommended: false,
+    desc: "Fastest Gemini with 1M context and optional thinking mode. Insanely cheap. Perfect for batch processing and simple reasoning tasks. $0.15/1M input, $0.60/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 88, spd: 98, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-gemini-2-0-flash", name: "Gemini 2.0 Flash", family: "Google",
+    params: "cloud", speed: "~140 tok/s", category: "cloud",
+    tags: ["fast", "stable", "reliable"], recommended: false,
+    desc: "Previous-gen Flash. Stable, battle-tested, 1M context. A reliable workhorse. $0.10/1M input, $0.40/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 84, spd: 95, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-gemini-1-5-pro", name: "Gemini 1.5 Pro", family: "Google",
+    params: "cloud", speed: "~50 tok/s", category: "cloud",
+    tags: ["2M-context", "documents", "analysis"], recommended: false,
+    desc: "2M token context window — the largest available. Ideal for processing entire codebases or books in one shot. $1.25/1M input, $5/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 90, spd: 60, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-gemini-1-5-flash", name: "Gemini 1.5 Flash", family: "Google",
+    params: "cloud", speed: "~130 tok/s", category: "cloud",
+    tags: ["cheap", "batch", "1M-context"], recommended: false,
+    desc: "1M context, incredibly cheap. Best all-time value for simple tasks and high-volume batch processing. $0.075/1M input, $0.30/1M output.",
+    quants: [{ label: "Cloud", bits: "API", intel: 80, spd: 92, sizeGB: 0, size: "0 GB" }],
+  },
+  // DeepSeek
+  {
+    id: "cloud-deepseek-r1", name: "DeepSeek R1", family: "DeepSeek",
+    params: "671B", speed: "~50 tok/s", category: "cloud",
+    tags: ["reasoning", "frontier", "free-tier"], recommended: true,
+    desc: "The model that shocked the world. 671B parameters, rivals o1 in math and coding via pure Reinforcement Learning. API costs a fraction of OpenAI. Free tier on NVIDIA NIM.",
+    quants: [{ label: "Cloud", bits: "API", intel: 99, spd: 65, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-deepseek-v3", name: "DeepSeek V3", family: "DeepSeek",
+    params: "671B", speed: "~60 tok/s", category: "cloud",
+    tags: ["fast", "cheap", "general"], recommended: false,
+    desc: "DeepSeek's general-purpose frontier model. Matches GPT-4o at roughly 1/10th the cost. Exceptionally fast. One of the best value APIs available.",
+    quants: [{ label: "Cloud", bits: "API", intel: 97, spd: 80, sizeGB: 0, size: "0 GB" }],
+  },
+  // Other cloud
+  {
+    id: "cloud-grok2", name: "Grok 2", family: "xAI",
+    params: "cloud", speed: "~70 tok/s", category: "cloud",
+    tags: ["rebel", "uncensored", "sarcastic"], recommended: false,
+    desc: "Elon Musk's xAI model. No safety theatre — tackles topics others decline. Sarcastic personality baked in. Cloud API required.",
+    quants: [{ label: "Cloud", bits: "API", intel: 95, spd: 88, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-mistral-large", name: "Mistral Large 2", family: "Mistral",
+    params: "123B", speed: "~55 tok/s", category: "cloud",
+    tags: ["european", "multilingual", "128k"], recommended: false,
+    desc: "Mistral's heavyweight. 128K context, outstanding multilingual support. Best non-US option for privacy-conscious European users.",
+    quants: [{ label: "Cloud", bits: "API", intel: 96, spd: 80, sizeGB: 0, size: "0 GB" }],
+  },
+  {
+    id: "cloud-kimi", name: "Kimi k1.5", family: "Moonshot AI",
+    params: "cloud", speed: "~45 tok/s", category: "cloud",
+    tags: ["long-context", "reasoning", "millions"], recommended: false,
+    desc: "Moonshot AI's long-context reasoning model. Feed it millions of tokens — entire books, codebases — without losing a detail. o1-style reasoning mode for hard problems.",
+    quants: [{ label: "Cloud", bits: "API", intel: 93, spd: 70, sizeGB: 0, size: "0 GB" }],
   },
 
   // ── SPECIALIST: Code, Vision, Bilingual ──────────────────────────────────────
@@ -454,9 +536,21 @@ const CATEGORIES = [
   { id: "speed" as const, img: "/hub/card_speed.png", label: "Speed", color: "#F59E0B", subtitle: "Fast responses, lighter models" },
   { id: "power" as const, img: "/hub/card_power.png", label: "Power", color: "#A78BFA", subtitle: "Deep intelligence, larger models" },
   { id: "specialist" as const, img: "/hub/card_specialist.png", label: "Specialist", color: "#34D399", subtitle: "Code, math, creative writing" },
+  { id: "cloud" as const, img: "/hub/card_power.png", label: "Cloud", color: "#60A5FA", subtitle: "API-powered, no GPU needed" },
 ];
 
-const CAT_LABELS: Record<string, string> = { speed: "\u26A1 SPEED", power: "\uD83E\uDDE0 POWER", specialist: "\uD83D\uDD27 SPECIALIST" };
+const CAT_LABELS: Record<string, string> = { speed: "\u26A1 SPEED", power: "\uD83E\uDDE0 POWER", specialist: "\uD83D\uDD27 SPECIALIST", cloud: "☁️ CLOUD" };
+
+const CLOUD_PROVIDERS = [
+  { id: "all", label: "All", emoji: "☁️" },
+  { id: "OpenAI", label: "OpenAI", emoji: "🟢" },
+  { id: "Anthropic", label: "Anthropic", emoji: "🟠" },
+  { id: "Google", label: "Google", emoji: "🔵" },
+  { id: "DeepSeek", label: "DeepSeek", emoji: "🔮" },
+  { id: "other", label: "Other", emoji: "🌐" },
+];
+
+const MAJOR_CLOUD_FAMILIES = ["OpenAI", "Anthropic", "Google", "DeepSeek"];
 
 const MASCOT_MESSAGES: Record<string, string> = {
   categories: "Hey there! Pick a path that fits your style \u2728",
@@ -476,7 +570,8 @@ interface Props {
 
 export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, fullscreen }: Props) {
   const [screen, setScreen] = useState<"categories" | "models">("categories");
-  const [category, setCategory] = useState<"speed" | "power" | "specialist">("speed");
+  const [category, setCategory] = useState<"speed" | "power" | "specialist" | "cloud">("speed");
+  const [cloudProvider, setCloudProvider] = useState("all");
   const [search, setSearch] = useState("");
   const [detailModel, setDetailModel] = useState<number | null>(null);
   const [detailQuant, setDetailQuant] = useState(0);
@@ -494,6 +589,14 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
 
   const filteredModels = useMemo(() => {
     let list = MODELS.filter(m => m.category === category);
+    // Cloud provider filter
+    if (category === "cloud" && cloudProvider !== "all") {
+      if (cloudProvider === "other") {
+        list = list.filter(m => !MAJOR_CLOUD_FAMILIES.includes(m.family));
+      } else {
+        list = list.filter(m => m.family === cloudProvider);
+      }
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(m =>
@@ -503,14 +606,15 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
       );
     }
     return list;
-  }, [category, search]);
+  }, [category, search, cloudProvider]);
 
   const pickCategory = (cat: typeof category) => {
     setCategory(cat);
     setScreen("models");
     setSearch("");
     setDetailModel(null);
-    setMascotText(MASCOT_MESSAGES.models);
+    setCloudProvider("all");
+    setMascotText(cat === "cloud" ? "Cloud models need an API key instead of downloading. Pick a provider! ☁️" : MASCOT_MESSAGES.models);
   };
 
   const openDetail = (idx: number) => {
@@ -599,6 +703,29 @@ export default function BrainSelectScreen({ onSelect, detectedVram = 0, onBack, 
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+
+          {/* Cloud provider filter pills */}
+          {category === "cloud" && (
+            <div className="bs-provider-pills">
+              {CLOUD_PROVIDERS.map(p => (
+                <button
+                  key={p.id}
+                  className={`bs-provider-pill ${cloudProvider === p.id ? "bs-provider-active" : ""}`}
+                  onClick={() => { setCloudProvider(p.id); setDetailModel(null); }}
+                >
+                  <span className="bs-provider-emoji">{p.emoji}</span> {p.label}
+                  <span className="bs-provider-count">
+                    {p.id === "all"
+                      ? MODELS.filter(m => m.category === "cloud").length
+                      : p.id === "other"
+                        ? MODELS.filter(m => m.category === "cloud" && !MAJOR_CLOUD_FAMILIES.includes(m.family)).length
+                        : MODELS.filter(m => m.category === "cloud" && m.family === p.id).length
+                    }
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Model grid */}
           <div className="bs-model-grid">
@@ -763,8 +890,8 @@ const css = `
   }
   .bs-sub { font-size: 14px; color: #4A3D30; margin: 0 0 48px; }
   .bs-cat-grid {
-    display: grid; grid-template-columns: repeat(3, 200px);
-    gap: 28px;
+    display: grid; grid-template-columns: repeat(4, 190px);
+    gap: 24px;
   }
   .bs-hint {
     margin-top: 48px; font-size: 11px; color: #2A2520;
@@ -1096,7 +1223,39 @@ const css = `
     pointer-events: auto;
   }
 
+  /* ═══ PROVIDER PILLS ═══ */
+  .bs-provider-pills {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    padding: 0 20px; margin-bottom: 16px;
+  }
+  .bs-provider-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 600; font-family: inherit;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: #8A7D70; cursor: pointer; transition: all 0.25s;
+  }
+  .bs-provider-pill:hover {
+    background: rgba(255,255,255,0.08); color: #F0DCC8;
+    border-color: rgba(255,255,255,0.15);
+  }
+  .bs-provider-active {
+    background: rgba(96,165,250,0.12) !important;
+    border-color: rgba(96,165,250,0.35) !important;
+    color: #60A5FA !important;
+    box-shadow: 0 0 12px rgba(96,165,250,0.15);
+  }
+  .bs-provider-emoji { font-size: 14px; }
+  .bs-provider-count {
+    font-size: 10px; opacity: 0.5;
+    padding: 1px 6px; border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+  }
+
   /* ═══ Responsive ═══ */
+  @media (max-width: 900px) {
+    .bs-cat-grid { grid-template-columns: repeat(2, 190px); }
+  }
   @media (max-width: 700px) {
     .bs-cat-grid { grid-template-columns: 1fr; max-width: 240px; }
     .bs-model-grid { grid-template-columns: 1fr; }
