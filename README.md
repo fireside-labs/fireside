@@ -51,6 +51,32 @@ curl -fsSL https://getfireside.ai/install.sh | bash
 
 ---
 
+## 🖥️ Desktop App
+
+Fireside ships as a native desktop app built with [Tauri](https://tauri.app/) — a lightweight Rust-based wrapper around the web dashboard. Installs like any normal app, no terminal needed.
+
+| | |
+|---|---|
+| **Windows** | `.exe` installer (auto-updates) |
+| **macOS** | `.app` bundle (Apple Silicon native) |
+| **Linux** | `.AppImage` (portable, no install) |
+
+**What you get when you open it:**
+
+- 🎮 **RPG-style brain picker** — browse 59+ models across 4 categories (Speed / Power / Specialist / Cloud) with stat bars, quality sliders, and VRAM fit detection
+- 🏰 **Guild Hall** — animated 2D workspace with 5 themes where your agents live and work. See them thinking, writing, and collaborating in real time
+- 💬 **Persistent chat** — conversations saved locally, searchable, with full history across sessions. Click `+` for a new chat, old ones are always there
+- 🎯 **Real-time tool usage** — watch your agent browse the web, read files, write code, and run terminal commands live in the chat
+- 🗣️ **Local voice** — Whisper STT + Kokoro TTS, fully offline. Talk to your AI without any data leaving your machine
+- 🛠️ **Pipeline builder** — create multi-stage task workflows with a conversational UI. The companion mascot narrates progress
+- 🧬 **Soul editor** — customize your AI's personality, identity, and core memories. Shape who your companion is
+- ⚙️ **Settings** — model switching, voice config, Telegram integration, mesh node management, plugin marketplace — all from the UI
+- 🔔 **System tray** — runs in background, always available
+
+**Everything runs locally.** The app bundles the FastAPI backend (Bifrost), serves the dashboard, and connects to your local inference server — no cloud dependency.
+
+---
+
 ## Features
 
 ### 🧠 Brain Installer — 59+ Models, One Click
