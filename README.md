@@ -64,7 +64,7 @@ Fireside ships as a native desktop app built with [Tauri](https://tauri.app/) �
 **What you get when you open it:**
 
 - 🎮 **RPG-style brain picker** — browse 59+ models across 4 categories (Speed / Power / Specialist / Cloud) with stat bars, quality sliders, and VRAM fit detection
-- 🏰 **Guild Hall** — animated 2D workspace with 5 themes where your agents live and work. See them thinking, writing, and collaborating in real time
+- 🐾 **Companion care** — feed, walk, and interact with your AI companion (fox, cat, dog, penguin, owl, dragon). It grows alongside you
 - 💬 **Persistent chat** — conversations saved locally, searchable, with full history across sessions. Click `+` for a new chat, old ones are always there
 - 🎯 **Real-time tool usage** — watch your agent browse the web, read files, write code, and run terminal commands live in the chat
 - 🗣️ **Local voice** — Whisper STT + Kokoro TTS, fully offline. Talk to your AI without any data leaving your machine
@@ -154,7 +154,6 @@ fireside join
 | `/` | Main chat interface |
 | `/brains` | RPG-style brain picker (4 categories: Speed/Power/Specialist/Cloud) |
 | `/companion` | Companion hub (Chat/Care/Bag/Tasks) |
-| `/guildhall` | Animated 2D guild hall (5 themes) |
 | `/pipeline` | Multi-stage task pipeline with mascot narrator |
 | `/agents` | Agent profiles (RPG cards, XP, levels, achievements) |
 | `/nodes` | Mesh node management with live GPU stats |
