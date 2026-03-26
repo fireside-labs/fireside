@@ -78,11 +78,8 @@ Full power. The companion relays to your AI:
 - ✅ Marketplace installs
 - ✅ Voice with Kokoro TTS quality
 
-### Tier 3: Hosted Mode (always-on cloud)
-For users without a home PC, or who want 24/7 uptime:
-- ✅ Everything from Tier 2, always available
-- ✅ "Atlas never sleeps"
-- 💰 $15–50/month subscription
+### Tier 3: Always-On (Future — If Demand Warrants)
+For users without a home PC, we may explore always-on options in the future. For now, Fireside is local-first by design — your hardware, your data, your privacy. This is the differentiator, not a limitation.
 
 ---
 
@@ -134,8 +131,7 @@ The feature set can be replicated. The *feeling* can't. A fox that remembers you
 | **11** | **The Anywhere Bridge** | Connection Choice (Local/Tailscale/Cloud), embedded `tsnet` node |
 | **12** | **Ember Goes Native** | iOS OS integration (Calendar, Health, Contacts, Siri, widgets, proactive alerts) |
 | **13** | **On-Device Brain** | Small LLM on phone (1.5B), offline chat, smart routing to Atlas |
-| **14** | **Hosted Mode** | RunPod containers, Supabase auth, subscription billing |
-| **15** | **Marketplace v2** | Creator toolkit, IAP on mobile, $10K creator fund |
+| **14** | **Marketplace v2** | Creator toolkit, IAP on mobile, $10K creator fund |
 
 ---
 
